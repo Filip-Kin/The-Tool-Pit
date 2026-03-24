@@ -8,6 +8,7 @@ COPY package.json bun.lock ./
 COPY packages/db/package.json ./packages/db/
 COPY packages/types/package.json ./packages/types/
 COPY apps/worker/package.json ./apps/worker/
+COPY apps/web/package.json ./apps/web/
 
 RUN bun install --frozen-lockfile
 
