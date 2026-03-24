@@ -15,7 +15,7 @@ RUN bun install --frozen-lockfile
 # ─── build stage ─────────────────────────────────────────────────────────────
 FROM base AS builder
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app .
 COPY . .
 
 RUN bun run --filter @the-tool-pit/types build
