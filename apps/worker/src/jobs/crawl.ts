@@ -3,6 +3,8 @@ import { crawlJobs, crawlCandidates } from '@the-tool-pit/db'
 import { eq } from 'drizzle-orm'
 import { FtaToolsConnector } from '../connectors/fta-tools.js'
 import { VolunteerSystemsConnector } from '../connectors/volunteer-systems.js'
+import { GitHubTopicsConnector } from '../connectors/github-topics.js'
+import { AwesomeListConnector } from '../connectors/awesome-list.js'
 import { extractMetadata, canonicalizeUrl } from '../pipeline/extract.js'
 import { checkDuplicate } from '../pipeline/deduplicate.js'
 import { enrichQueue } from '../queues.js'
@@ -12,6 +14,8 @@ import type { CrawlJobPayload } from '@the-tool-pit/types'
 const CONNECTOR_REGISTRY: Record<string, () => { run(): Promise<{ candidates: unknown[]; stats: unknown }> }> = {
   fta_tools: () => new FtaToolsConnector(),
   volunteer_systems: () => new VolunteerSystemsConnector(),
+  github_topics: () => new GitHubTopicsConnector(),
+  awesome_list: () => new AwesomeListConnector(),
 }
 
 export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {
@@ -72,6 +76,15 @@ export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {
               title: metadata.title || candidate.title,
               description: metadata.description || candidate.description,
               githubUrl: metadata.githubUrl || candidate.githubUrl,
+              homepageUrl: metadata.homepageUrl || candidate.homepageUrl,
+              // Merge keyword arrays: connector-supplied keywords (topics, section context)
+              // are especially valuable for GitHub topics connector
+              keywords: [
+                ...new Set([
+                  ...(metadata.keywords ?? []),
+                  ...(candidate.keywords ?? []),
+                ]),
+              ],
             },
             status: 'pending',
           })

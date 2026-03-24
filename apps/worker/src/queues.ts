@@ -67,6 +67,18 @@ export async function scheduleRecurringJobs() {
     data: { connector: 'volunteer_systems', jobId: 'scheduled' },
   })
 
+  // GitHub topics crawl — once per day (respects API rate limits)
+  await crawlQueue.upsertJobScheduler('crawl-github-topics', { every: 24 * 60 * 60 * 1000 }, {
+    name: 'crawl-github-topics',
+    data: { connector: 'github_topics', jobId: 'scheduled' },
+  })
+
+  // Awesome-list crawl — once per day
+  await crawlQueue.upsertJobScheduler('crawl-awesome-list', { every: 24 * 60 * 60 * 1000 }, {
+    name: 'crawl-awesome-list',
+    data: { connector: 'awesome_list', jobId: 'scheduled' },
+  })
+
   // Freshness pass every 24 hours — check all published tools
   // (individual tool freshness jobs are spawned by this scheduler job)
   await freshnessQueue.upsertJobScheduler('freshness-pass', { every: 24 * 60 * 60 * 1000 }, {

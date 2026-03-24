@@ -7,6 +7,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "db:seed": "bun src/seed.ts",
+    "db:seed-tools": "bun src/seed-tools.ts",
     "type-check": "tsc --noEmit",
     "build": "tsc"
   },
