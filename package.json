@@ -1,0 +1,27 @@
+{
+  "name": "the-tool-pit",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "type-check": "turbo type-check",
+    "db:generate": "turbo db:generate --filter=@the-tool-pit/db",
+    "db:migrate": "turbo db:migrate --filter=@the-tool-pit/db",
+    "db:push": "turbo db:push --filter=@the-tool-pit/db",
+    "db:studio": "turbo db:studio --filter=@the-tool-pit/db"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.6.0",
+    "prettier": "^3.3.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@10.8.0"
+}

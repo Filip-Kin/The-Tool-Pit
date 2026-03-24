@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run:*)",
+      "Bash(grep -rn \"from ''\\\\./.*\\\\.js''\" \"/d/NextCloud/Robots/The-Tool-Pit/packages/db/src/\")"
+    ],
+    "additionalDirectories": [
+      "D:\\NextCloud\\Robots\\The-Tool-Pit\\apps\\web\\app\\(public)\\tools"
+    ]
+  }
+}
