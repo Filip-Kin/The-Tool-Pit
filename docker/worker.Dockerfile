@@ -31,8 +31,12 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 worker
 
-# Copy only built artifacts + runtime deps
-COPY --from=builder --chown=worker:nodejs /app/node_modules ./node_modules
+# Copy runtime dependencies (bun puts workspace deps in per-package node_modules)
+COPY --from=deps --chown=worker:nodejs /app/node_modules ./node_modules
+COPY --from=deps --chown=worker:nodejs /app/apps/worker/node_modules ./apps/worker/node_modules
+COPY --from=deps --chown=worker:nodejs /app/packages/db/node_modules ./packages/db/node_modules
+
+# Copy built artifacts
 COPY --from=builder --chown=worker:nodejs /app/package.json ./
 COPY --from=builder --chown=worker:nodejs /app/packages/db/dist ./packages/db/dist
 COPY --from=builder --chown=worker:nodejs /app/packages/db/package.json ./packages/db/

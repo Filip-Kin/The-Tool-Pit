@@ -40,7 +40,8 @@ RUN addgroup --system --gid 1001 nodejs && \
 # next build --standalone copies only what's needed
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
+# public dir may not exist yet; create it so COPY doesn't fail
+RUN mkdir -p apps/web/public
 
 USER nextjs
 
