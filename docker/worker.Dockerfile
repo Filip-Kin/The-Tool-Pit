@@ -31,17 +31,20 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 worker
 
-# Copy runtime dependencies (bun puts workspace deps in per-package node_modules)
-COPY --from=deps --chown=worker:nodejs /app/node_modules ./node_modules
-COPY --from=deps --chown=worker:nodejs /app/apps/worker/node_modules ./apps/worker/node_modules
-COPY --from=deps --chown=worker:nodejs /app/packages/db/node_modules ./packages/db/node_modules
+# Copy node_modules (BuildKit preserves symlinks, so workspace links like
+# @the-tool-pit/db -> ../../../packages/db still need their targets to exist)
+COPY --from=builder --chown=worker:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=worker:nodejs /app/apps/worker/node_modules ./apps/worker/node_modules
 
-# Copy built artifacts
-COPY --from=builder --chown=worker:nodejs /app/package.json ./
-COPY --from=builder --chown=worker:nodejs /app/packages/db/dist ./packages/db/dist
+# Copy built workspace packages (symlink targets for @the-tool-pit/*)
 COPY --from=builder --chown=worker:nodejs /app/packages/db/package.json ./packages/db/
-COPY --from=builder --chown=worker:nodejs /app/packages/types/dist ./packages/types/dist
+COPY --from=builder --chown=worker:nodejs /app/packages/db/dist ./packages/db/dist
+COPY --from=builder --chown=worker:nodejs /app/packages/db/node_modules ./packages/db/node_modules
 COPY --from=builder --chown=worker:nodejs /app/packages/types/package.json ./packages/types/
+COPY --from=builder --chown=worker:nodejs /app/packages/types/dist ./packages/types/dist
+
+# Copy built worker
+COPY --from=builder --chown=worker:nodejs /app/package.json ./
 COPY --from=builder --chown=worker:nodejs /app/apps/worker/dist ./apps/worker/dist
 COPY --from=builder --chown=worker:nodejs /app/apps/worker/package.json ./apps/worker/
 
