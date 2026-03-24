@@ -24,30 +24,63 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
   const metadata = (candidate.rawMetadata ?? {}) as Record<string, unknown>
   const url = candidate.canonicalUrl ?? candidate.sourceUrl
 
-  // 1. AI classification (Haiku, background, non-blocking for UI)
-  const classification = await classifyCandidate(
-    candidate.rawMetadata ?? {},
-    url,
-  )
-
-  // 2. GitHub enrichment — fetch repo details for richer metadata
+  // 1. GitHub enrichment FIRST — so classification has full context (topics, description, etc.)
   let enrichedMetadata = { ...metadata }
   const githubUrl = metadata.githubUrl as string | undefined
 
   if (githubUrl) {
     const repoInfo = await fetchGitHubRepo(githubUrl)
     if (repoInfo) {
+      // Backfill title from repo name if missing
+      if (!enrichedMetadata.title && repoInfo.fullName) {
+        const repoName = repoInfo.fullName.split('/')[1] ?? repoInfo.fullName
+        enrichedMetadata.title = repoName.replace(/[-_]/g, ' ')
+      }
       if (!enrichedMetadata.description && repoInfo.description) {
         enrichedMetadata.description = repoInfo.description
       }
       if (repoInfo.homepage && !enrichedMetadata.homepageUrl) {
         enrichedMetadata.homepageUrl = repoInfo.homepage
       }
+      // Merge topics into keywords for classifier signal
       enrichedMetadata.keywords = [
         ...((enrichedMetadata.keywords as string[]) ?? []),
         ...repoInfo.topics,
       ]
     }
+  }
+
+  // 2. Quality gate — suppress garbage before spending API credits on classification
+  const qualityTitle = (enrichedMetadata.title as string | undefined) ?? ''
+  const qualityDesc = (enrichedMetadata.description as string | undefined) ?? ''
+  if (qualityTitle.length < 3 || qualityDesc.length < 10) {
+    await db
+      .update(crawlCandidates)
+      .set({ status: 'suppressed', updatedAt: new Date() })
+      .where(eq(crawlCandidates.id, candidateId))
+    console.log(`[enrich] candidate ${candidateId}: suppressed (low quality metadata — title=${JSON.stringify(qualityTitle)})`)
+    return
+  }
+
+  // 3. AI classification — now has full enriched context
+  const classification = await classifyCandidate(
+    enrichedMetadata,
+    url,
+  )
+
+  // 4. Program hard-override: GitHub topics / keywords are ground truth for program detection
+  if (!classification.programs?.length) {
+    const haystack = [
+      ...(enrichedMetadata.keywords as string[] ?? []),
+      qualityTitle,
+      qualityDesc,
+    ].join(' ').toLowerCase()
+
+    const programs: string[] = []
+    if (/\bfrc\b|first\s+robotics\s+competition/.test(haystack)) programs.push('frc')
+    if (/\bftc\b|first\s+tech\s+challenge/.test(haystack)) programs.push('ftc')
+    if (/\bfll\b|first\s+lego\s+league/.test(haystack)) programs.push('fll')
+    if (programs.length > 0) classification.programs = programs
   }
 
   const confidence = classification.confidence ?? 0.3

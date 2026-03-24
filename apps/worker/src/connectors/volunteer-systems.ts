@@ -7,6 +7,21 @@ import { type Connector, type ConnectorResult, type CandidateInput, politeFetch 
 
 const BASE_URL = 'https://volunteer.systems/index.html'
 
+/** Same URL quality filter as fta-tools: only allow real tool URLs, not GitHub nav/chrome */
+function isValidToolUrl(url: string): boolean {
+  if (url.includes('github.com')) {
+    if (!/^https?:\/\/github\.com\/[^/]+\/[^/]+\/?$/.test(url)) return false
+  }
+  const BLOCKED = [
+    'github.com/features', 'github.com/about', 'github.com/pricing',
+    'github.com/contact', 'github.com/login', 'github.com/signup',
+    'github.com/marketplace', 'github.com/explore', 'github.com/orgs',
+    'docs.github.com', 'help.github.com', 'status.github.com',
+    'education.github.com', 'raw.githubusercontent.com',
+  ]
+  return !BLOCKED.some(k => url.includes(k))
+}
+
 export class VolunteerSystemsConnector implements Connector {
   name = 'volunteer_systems'
 
@@ -28,6 +43,7 @@ export class VolunteerSystemsConnector implements Connector {
         const href = link.getAttribute('href')
         if (!href || href.includes('volunteer.systems')) continue
         try { new URL(href) } catch { continue }
+        if (!isValidToolUrl(href)) continue
         if (seen.has(href)) continue
         seen.add(href)
 

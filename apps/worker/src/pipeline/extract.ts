@@ -4,9 +4,33 @@
  */
 import { parse } from 'node-html-parser'
 import { politeFetch } from '../connectors/base.js'
+import { parseGitHubUrl, fetchGitHubRepo } from '../connectors/github.js'
 import type { RawCandidateMetadata } from '@the-tool-pit/db'
 
+/**
+ * Special-case GitHub repo URLs: use the GitHub API instead of HTML scraping.
+ * GitHub HTML gives us their nav/marketing chrome, not the repo data.
+ */
+async function extractGitHubMetadata(url: string): Promise<RawCandidateMetadata> {
+  const repoInfo = await fetchGitHubRepo(url)
+  if (!repoInfo) return { githubUrl: url }
+
+  const repoName = repoInfo.fullName.split('/')[1] ?? repoInfo.fullName
+  return {
+    title: repoName.replace(/[-_]/g, ' '),
+    description: repoInfo.description ?? undefined,
+    githubUrl: url,
+    ...(repoInfo.homepage ? { homepageUrl: repoInfo.homepage } : {}),
+    keywords: repoInfo.topics,
+  }
+}
+
 export async function extractMetadata(url: string): Promise<RawCandidateMetadata> {
+  // GitHub repo URLs — use API, not HTML (HTML gives GitHub's own chrome, not repo data)
+  if (parseGitHubUrl(url)) {
+    return extractGitHubMetadata(url)
+  }
+
   try {
     const res = await politeFetch(url)
     if (!res.ok) {
