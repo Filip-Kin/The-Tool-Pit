@@ -61,11 +61,11 @@ export default async function AdminToolEditPage({
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <Link href="/admin/tools" className="text-xs text-[var(--color-muted)] hover:text-[var(--color-foreground)]">
+          <Link href="/admin/tools" className="text-xs text-muted hover:text-foreground">
             ← Tools
           </Link>
-          <h1 className="mt-1 text-2xl font-bold text-[var(--color-foreground)]">{tool.name}</h1>
-          <p className="text-xs text-[var(--color-muted-2)] mt-0.5">/tools/{tool.slug}</p>
+          <h1 className="mt-1 text-2xl font-bold text-foreground">{tool.name}</h1>
+          <p className="text-xs text-muted-2 mt-0.5">/tools/{tool.slug}</p>
         </div>
 
         {/* Quick status actions */}
@@ -79,7 +79,7 @@ export default async function AdminToolEditPage({
           )}
           {tool.status !== 'draft' && (
             <form action={draftAction}>
-              <button type="submit" className="rounded-md bg-[var(--color-surface-2)] px-3 py-1.5 text-xs font-medium text-[var(--color-muted)] hover:text-[var(--color-foreground)] border border-[var(--color-border)] transition-colors">
+              <button type="submit" className="rounded-md bg-surface-2 px-3 py-1.5 text-xs font-medium text-muted hover:text-foreground border border-border transition-colors">
                 Set Draft
               </button>
             </form>
@@ -95,12 +95,12 @@ export default async function AdminToolEditPage({
       </div>
 
       {/* Edit form */}
-      <form action={saveTool} className="flex flex-col gap-6">
+      <form action={(formData) => { void saveTool(undefined, formData) }} className="flex flex-col gap-6">
         <input type="hidden" name="toolId" value={tool.id} />
 
         {/* Core fields */}
-        <section className="flex flex-col gap-4 rounded-lg border border-[var(--color-border)] p-5">
-          <h2 className="text-sm font-semibold text-[var(--color-foreground)]">Core</h2>
+        <section className="flex flex-col gap-4 rounded-lg border border-border p-5">
+          <h2 className="text-sm font-semibold text-foreground">Core</h2>
 
           <Field label="Name" required>
             <input
@@ -169,15 +169,15 @@ export default async function AdminToolEditPage({
 
           {/* Flags */}
           <div className="flex flex-wrap gap-5">
-            <label className="flex items-center gap-2 text-sm text-[var(--color-foreground)] cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
               <input type="checkbox" name="isOfficial" defaultChecked={tool.isOfficial} className="rounded" />
               Official
             </label>
-            <label className="flex items-center gap-2 text-sm text-[var(--color-foreground)] cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
               <input type="checkbox" name="isVendor" defaultChecked={tool.isVendor} className="rounded" />
               Vendor
             </label>
-            <label className="flex items-center gap-2 text-sm text-[var(--color-foreground)] cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
               <input type="checkbox" name="isRookieFriendly" defaultChecked={tool.isRookieFriendly} className="rounded" />
               Rookie Friendly
             </label>
@@ -185,8 +185,8 @@ export default async function AdminToolEditPage({
         </section>
 
         {/* Links */}
-        <section className="flex flex-col gap-4 rounded-lg border border-[var(--color-border)] p-5">
-          <h2 className="text-sm font-semibold text-[var(--color-foreground)]">Links</h2>
+        <section className="flex flex-col gap-4 rounded-lg border border-border p-5">
+          <h2 className="text-sm font-semibold text-foreground">Links</h2>
           {(['homepage', 'github', 'docs'] as const).map((type) => (
             <Field key={type} label={type.charAt(0).toUpperCase() + type.slice(1)}>
               <input
@@ -200,20 +200,20 @@ export default async function AdminToolEditPage({
           ))}
           {/* Other link types are read-only for now */}
           {tool.links.filter((l) => !['homepage', 'github', 'docs'].includes(l.linkType)).map((l) => (
-            <div key={l.id} className="flex gap-2 items-center text-xs text-[var(--color-muted)]">
+            <div key={l.id} className="flex gap-2 items-center text-xs text-muted">
               <span className="w-20 shrink-0">{l.linkType}</span>
               <a href={l.url} target="_blank" rel="noopener noreferrer" className="hover:underline truncate">{l.url}</a>
-              <span className="text-[var(--color-muted-2)]">(read-only)</span>
+              <span className="text-muted-2">(read-only)</span>
             </div>
           ))}
         </section>
 
         {/* Programs */}
-        <section className="flex flex-col gap-3 rounded-lg border border-[var(--color-border)] p-5">
-          <h2 className="text-sm font-semibold text-[var(--color-foreground)]">Programs</h2>
+        <section className="flex flex-col gap-3 rounded-lg border border-border p-5">
+          <h2 className="text-sm font-semibold text-foreground">Programs</h2>
           <div className="flex gap-4">
             {PROGRAMS.map((p) => (
-              <label key={p} className="flex items-center gap-2 text-sm text-[var(--color-foreground)] cursor-pointer">
+              <label key={p} className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
                 <input
                   type="checkbox"
                   name="programs"
@@ -228,14 +228,14 @@ export default async function AdminToolEditPage({
         </section>
 
         {/* Audience */}
-        <section className="flex flex-col gap-4 rounded-lg border border-[var(--color-border)] p-5">
-          <h2 className="text-sm font-semibold text-[var(--color-foreground)]">Audience</h2>
+        <section className="flex flex-col gap-4 rounded-lg border border-border p-5">
+          <h2 className="text-sm font-semibold text-foreground">Audience</h2>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-[var(--color-muted)]">Roles</p>
+            <p className="mb-2 text-xs font-medium text-muted">Roles</p>
             <div className="flex flex-wrap gap-x-5 gap-y-2">
               {AUDIENCE_ROLES.map((r) => (
-                <label key={r.slug} className="flex items-center gap-2 text-sm text-[var(--color-foreground)] cursor-pointer">
+                <label key={r.slug} className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
                   <input
                     type="checkbox"
                     name="audienceRoles"
@@ -250,10 +250,10 @@ export default async function AdminToolEditPage({
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-[var(--color-muted)]">Functions</p>
+            <p className="mb-2 text-xs font-medium text-muted">Functions</p>
             <div className="flex flex-wrap gap-x-5 gap-y-2">
               {AUDIENCE_FUNCTIONS.map((f) => (
-                <label key={f.slug} className="flex items-center gap-2 text-sm text-[var(--color-foreground)] cursor-pointer">
+                <label key={f.slug} className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
                   <input
                     type="checkbox"
                     name="audienceFunctions"
@@ -272,7 +272,7 @@ export default async function AdminToolEditPage({
           <Link
             href={`/tools/${tool.slug}`}
             target="_blank"
-            className="text-xs text-[var(--color-muted)] hover:underline"
+            className="text-xs text-muted hover:underline"
           >
             View public page ↗
           </Link>
@@ -294,7 +294,7 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-[var(--color-muted)]">
+      <span className="text-xs font-medium text-muted">
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </span>

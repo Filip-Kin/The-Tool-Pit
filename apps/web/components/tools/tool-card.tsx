@@ -22,7 +22,7 @@ export function ToolCard({ tool, className }: ToolCardProps) {
   return (
     <article
       className={cn(
-        'group relative flex flex-col gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-colors hover:border-[var(--color-border)]/80 hover:bg-[var(--color-surface-2)]',
+        'group relative flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border/80 hover:bg-surface-2',
         className,
       )}
     >
@@ -31,7 +31,7 @@ export function ToolCard({ tool, className }: ToolCardProps) {
         <div className="flex flex-col gap-1.5 min-w-0">
           <Link
             href={`/tools/${tool.slug}`}
-            className="truncate text-sm font-semibold text-[var(--color-foreground)] hover:text-[var(--color-primary)] transition-colors"
+            className="truncate text-sm font-semibold text-foreground hover:text-primary transition-colors"
           >
             {tool.name}
             <span className="absolute inset-0" aria-hidden />
@@ -54,7 +54,7 @@ export function ToolCard({ tool, className }: ToolCardProps) {
             href={tool.githubUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="relative z-10 shrink-0 rounded-md p-1.5 text-[var(--color-muted)] hover:text-[var(--color-foreground)] hover:bg-[var(--color-surface-3)] transition-colors"
+            className="relative z-10 shrink-0 rounded-md p-1.5 text-muted hover:text-foreground hover:bg-surface-3 transition-colors"
             aria-label={`GitHub repository for ${tool.name}`}
           >
             <Github className="h-4 w-4" />
@@ -64,7 +64,7 @@ export function ToolCard({ tool, className }: ToolCardProps) {
 
       {/* Summary */}
       {tool.summary && (
-        <p className="line-clamp-2 text-xs text-[var(--color-muted)] leading-relaxed">
+        <p className="line-clamp-2 text-xs text-muted leading-relaxed">
           {tool.summary}
         </p>
       )}
@@ -77,7 +77,7 @@ export function ToolCard({ tool, className }: ToolCardProps) {
             lastActivityAt={tool.lastActivityAt}
           />
           {tool.lastActivityAt && (
-            <span className="text-xs text-[var(--color-muted-2)]">
+            <span className="text-xs text-muted-2">
               {formatRelativeTime(tool.lastActivityAt)}
             </span>
           )}

@@ -53,7 +53,7 @@ export default async function AdminAnalyticsPage() {
 
   return (
     <div className="p-8 flex flex-col gap-8">
-      <h1 className="text-2xl font-bold text-[var(--color-foreground)]">Analytics (last 7 days)</h1>
+      <h1 className="text-2xl font-bold text-foreground">Analytics (last 7 days)</h1>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Top queries */}
@@ -92,12 +92,12 @@ function AnalyticsTable({
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <h2 className="text-base font-semibold text-[var(--color-foreground)]">{title}</h2>
-        {description && <p className="text-xs text-[var(--color-muted)] mt-0.5">{description}</p>}
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+        {description && <p className="text-xs text-muted mt-0.5">{description}</p>}
       </div>
-      <div className={`rounded-lg border overflow-hidden ${highlightEmpty ? 'border-[var(--color-official)]/30' : 'border-[var(--color-border)]'}`}>
+      <div className={`rounded-lg border overflow-hidden ${highlightEmpty ? 'border-official/30' : 'border-border'}`}>
         <table className="w-full text-sm">
-          <thead className="bg-[var(--color-surface-2)] text-[var(--color-muted)] text-xs">
+          <thead className="bg-surface-2 text-muted text-xs">
             <tr>
               {headers.map((h) => (
                 <th key={h} className="px-3 py-2 text-left">{h}</th>
@@ -107,15 +107,15 @@ function AnalyticsTable({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={headers.length} className="px-3 py-4 text-center text-xs text-[var(--color-muted)]">
+                <td colSpan={headers.length} className="px-3 py-4 text-center text-xs text-muted">
                   No data
                 </td>
               </tr>
             ) : (
               rows.map((row, i) => (
-                <tr key={i} className="border-t border-[var(--color-border-subtle)] hover:bg-[var(--color-surface)]">
+                <tr key={i} className="border-t border-border-subtle hover:bg-surface">
                   {row.map((cell, j) => (
-                    <td key={j} className={`px-3 py-2 ${j === 0 ? 'font-mono text-xs text-[var(--color-foreground)]' : 'text-xs text-[var(--color-muted)]'}`}>
+                    <td key={j} className={`px-3 py-2 ${j === 0 ? 'font-mono text-xs text-foreground' : 'text-xs text-muted'}`}>
                       {cell}
                     </td>
                   ))}

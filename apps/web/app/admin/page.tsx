@@ -44,7 +44,7 @@ export default async function AdminOverviewPage() {
 
   return (
     <div className="p-8 flex flex-col gap-8">
-      <h1 className="text-2xl font-bold text-[var(--color-foreground)]">Overview</h1>
+      <h1 className="text-2xl font-bold text-foreground">Overview</h1>
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
@@ -58,13 +58,13 @@ export default async function AdminOverviewPage() {
 
       {/* Recent crawl jobs */}
       <div className="flex flex-col gap-4">
-        <h2 className="text-lg font-semibold text-[var(--color-foreground)]">Recent Crawl Jobs</h2>
+        <h2 className="text-lg font-semibold text-foreground">Recent Crawl Jobs</h2>
         {stats.recentJobs.length === 0 ? (
-          <p className="text-sm text-[var(--color-muted)]">No crawl jobs yet.</p>
+          <p className="text-sm text-muted">No crawl jobs yet.</p>
         ) : (
-          <div className="rounded-lg border border-[var(--color-border)] overflow-hidden">
+          <div className="rounded-lg border border-border overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-[var(--color-surface-2)] text-[var(--color-muted)] text-xs">
+              <thead className="bg-surface-2 text-muted text-xs">
                 <tr>
                   <th className="px-4 py-2 text-left">Connector</th>
                   <th className="px-4 py-2 text-left">Status</th>
@@ -74,15 +74,15 @@ export default async function AdminOverviewPage() {
               </thead>
               <tbody>
                 {stats.recentJobs.map((job) => (
-                  <tr key={job.id} className="border-t border-[var(--color-border-subtle)] hover:bg-[var(--color-surface)]">
-                    <td className="px-4 py-2 font-mono text-xs text-[var(--color-foreground)]">{job.connector}</td>
+                  <tr key={job.id} className="border-t border-border-subtle hover:bg-surface">
+                    <td className="px-4 py-2 font-mono text-xs text-foreground">{job.connector}</td>
                     <td className="px-4 py-2">
                       <StatusBadge status={job.status} />
                     </td>
-                    <td className="px-4 py-2 text-xs text-[var(--color-muted)]">
+                    <td className="px-4 py-2 text-xs text-muted">
                       {job.startedAt ? new Date(job.startedAt).toLocaleString() : '—'}
                     </td>
-                    <td className="px-4 py-2 text-right text-xs text-[var(--color-muted)]">
+                    <td className="px-4 py-2 text-right text-xs text-muted">
                       {job.stats ? `${(job.stats as any).discovered ?? 0} found` : '—'}
                     </td>
                   </tr>
@@ -98,19 +98,19 @@ export default async function AdminOverviewPage() {
 
 function StatCard({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
   return (
-    <div className={`rounded-lg border p-4 ${highlight ? 'border-[var(--color-official)]/40 bg-[var(--color-official)]/5' : 'border-[var(--color-border)] bg-[var(--color-surface)]'}`}>
-      <p className="text-xs text-[var(--color-muted)]">{label}</p>
-      <p className="mt-1 text-3xl font-bold text-[var(--color-foreground)]">{value.toLocaleString()}</p>
+    <div className={`rounded-lg border p-4 ${highlight ? 'border-(--color-official)/40 bg-(--color-official)/5' : 'border-border bg-surface'}`}>
+      <p className="text-xs text-muted">{label}</p>
+      <p className="mt-1 text-3xl font-bold text-foreground">{value.toLocaleString()}</p>
     </div>
   )
 }
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
-    done: 'text-[var(--color-current)]',
-    running: 'text-[var(--color-official)]',
-    failed: 'text-[var(--color-frc)]',
-    queued: 'text-[var(--color-muted)]',
+    done: 'text-current',
+    running: 'text-official',
+    failed: 'text-frc',
+    queued: 'text-muted',
   }
-  return <span className={`text-xs font-medium ${colors[status] ?? 'text-[var(--color-muted)]'}`}>{status}</span>
+  return <span className={`text-xs font-medium ${colors[status] ?? 'text-muted'}`}>{status}</span>
 }

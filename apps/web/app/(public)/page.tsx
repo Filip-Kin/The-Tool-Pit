@@ -42,7 +42,9 @@ export default async function HomePage() {
         </div>
 
         <div className="relative w-full max-w-2xl">
-          <SearchBar autoFocus placeholder="Search tools, calculators, apps…" size="lg" />
+          <Suspense>
+            <SearchBar autoFocus placeholder="Search tools, calculators, apps…" size="lg" />
+          </Suspense>
         </div>
 
         <div className="relative flex flex-wrap justify-center gap-2">

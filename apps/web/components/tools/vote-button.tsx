@@ -44,13 +44,13 @@ export function VoteButton({ toolId, initialCount, initialVoted = false, classNa
       className={cn(
         'flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-all',
         voted
-          ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30'
-          : 'bg-[var(--color-surface-3)] text-[var(--color-muted)] border border-transparent hover:border-[var(--color-border)] hover:text-[var(--color-foreground)]',
+          ? 'bg-primary/15 text-primary border border-primary/30'
+          : 'bg-surface-3 text-muted border border-transparent hover:border-border hover:text-foreground',
         isPending && 'opacity-50 cursor-not-allowed',
         className,
       )}
     >
-      <ArrowUp className={cn('h-3 w-3', voted && 'text-[var(--color-primary)]')} />
+      <ArrowUp className={cn('h-3 w-3', voted && 'text-primary')} />
       {count > 0 && <span>{count}</span>}
     </button>
   )

@@ -8,9 +8,9 @@ interface FreshnessChipProps {
 }
 
 const labelConfig = {
-  Current: { dot: 'bg-[var(--color-current)]', text: 'text-[var(--color-current)]' },
-  Stale: { dot: 'bg-[var(--color-stale)]', text: 'text-[var(--color-stale)]' },
-  Abandoned: { dot: 'bg-[var(--color-abandoned)]', text: 'text-[var(--color-abandoned)]' },
+  Current: { dot: 'bg-current', text: 'text-current' },
+  Stale: { dot: 'bg-stale', text: 'text-stale' },
+  Abandoned: { dot: 'bg-abandoned', text: 'text-abandoned' },
 }
 
 export function FreshnessChip({ freshnessState, lastActivityAt, className }: FreshnessChipProps) {

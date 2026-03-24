@@ -22,12 +22,12 @@ export function SubmissionActions({ submissionId, status }: { submissionId: stri
         {btn(
           'Re-queue',
           () => requeueSubmission(submissionId),
-          'bg-[var(--color-primary)]/10 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20',
+          'bg-primary/10 text-primary hover:bg-primary/20',
         )}
         {btn(
           'Reject',
           () => rejectSubmission(submissionId),
-          'bg-[var(--color-surface-3)] text-[var(--color-muted)] hover:text-[var(--color-foreground)]',
+          'bg-surface-3 text-muted hover:text-foreground',
         )}
       </div>
     )
@@ -39,7 +39,7 @@ export function SubmissionActions({ submissionId, status }: { submissionId: stri
         {btn(
           'Mark Review',
           () => markNeedsReview(submissionId),
-          'bg-[var(--color-surface-3)] text-[var(--color-muted)] hover:text-[var(--color-foreground)]',
+          'bg-surface-3 text-muted hover:text-foreground',
         )}
       </div>
     )
@@ -51,11 +51,11 @@ export function SubmissionActions({ submissionId, status }: { submissionId: stri
         {btn(
           'Re-queue',
           () => requeueSubmission(submissionId),
-          'bg-[var(--color-surface-3)] text-[var(--color-muted)] hover:text-[var(--color-foreground)]',
+          'bg-surface-3 text-muted hover:text-foreground',
         )}
       </div>
     )
   }
 
-  return <span className="text-xs text-[var(--color-muted-2)]">{status}</span>
+  return <span className="text-xs text-muted-2">{status}</span>
 }

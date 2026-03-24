@@ -44,7 +44,7 @@ export async function ProgramPage({ program }: ProgramPageProps) {
     <div className="flex flex-col gap-16 pb-16">
       {/* Hero */}
       <section
-        className="border-b border-[var(--color-border-subtle)] py-12"
+        className="border-b border-border-subtle py-12"
         style={{ '--program-color': meta.color } as React.CSSProperties}
       >
         <div className="container mx-auto max-w-6xl px-4 flex flex-col gap-4">
@@ -52,12 +52,14 @@ export async function ProgramPage({ program }: ProgramPageProps) {
           <h1 className="text-4xl font-bold" style={{ color: meta.color }}>
             {meta.name}
           </h1>
-          <p className="max-w-xl text-[var(--color-muted)]">{meta.description}</p>
+          <p className="max-w-xl text-muted">{meta.description}</p>
           <div className="mt-2 max-w-lg">
-            <SearchBar
-              placeholder={`Search ${meta.name} tools…`}
-              size="md"
-            />
+            <Suspense>
+              <SearchBar
+                placeholder={`Search ${meta.name} tools…`}
+                size="md"
+              />
+            </Suspense>
           </div>
         </div>
       </section>

@@ -9,12 +9,12 @@ interface BadgeProps {
 }
 
 const variantClasses: Record<BadgeVariant, string> = {
-  official: 'bg-[var(--color-official)]/15 text-[var(--color-official)] border-[var(--color-official)]/30',
-  vendor: 'bg-[var(--color-vendor)]/15 text-[var(--color-vendor)] border-[var(--color-vendor)]/30',
-  rookie: 'bg-[var(--color-rookie)]/15 text-[var(--color-rookie)] border-[var(--color-rookie)]/30',
-  program: 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-[var(--color-primary)]/30',
-  default: 'bg-[var(--color-surface-2)] text-[var(--color-muted)] border-[var(--color-border)]',
-  muted: 'bg-transparent text-[var(--color-muted-2)] border-[var(--color-border-subtle)]',
+  official: 'bg-official/15 text-official border-official/30',
+  vendor: 'bg-vendor/15 text-vendor border-vendor/30',
+  rookie: 'bg-rookie/15 text-rookie border-rookie/30',
+  program: 'bg-primary/15 text-primary border-primary/30',
+  default: 'bg-surface-2 text-muted border-border',
+  muted: 'bg-transparent text-muted-2 border-border-subtle',
 }
 
 export function Badge({ variant = 'default', children, className }: BadgeProps) {

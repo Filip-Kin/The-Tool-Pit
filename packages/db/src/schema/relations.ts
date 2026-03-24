@@ -17,8 +17,6 @@ import {
 import { toolSources, toolUpdates } from './sources'
 import { toolVotes } from './votes'
 import { toolClickEvents } from './analytics'
-import { submissions } from './submissions'
-import { crawlJobs, crawlCandidates } from './crawl'
 
 // ---------------------------------------------------------------------------
 // Programs
@@ -46,29 +44,4 @@ export const toolsExtendedRelations = relations(tools, ({ many }) => ({
   updates: many(toolUpdates),
   votes: many(toolVotes),
   clickEvents: many(toolClickEvents),
-}))
-
-// ---------------------------------------------------------------------------
-// Submissions
-// ---------------------------------------------------------------------------
-export const submissionsRelations = relations(submissions, ({ one }) => ({
-  resolvedTool: one(tools, {
-    fields: [submissions.resolvedToolId],
-    references: [tools.id],
-  }),
-}))
-
-// ---------------------------------------------------------------------------
-// Crawl
-// ---------------------------------------------------------------------------
-export const crawlJobsRelations = relations(crawlJobs, ({ many }) => ({
-  candidates: many(crawlCandidates),
-}))
-
-export const crawlCandidatesRelations = relations(crawlCandidates, ({ one }) => ({
-  job: one(crawlJobs, { fields: [crawlCandidates.jobId], references: [crawlJobs.id] }),
-  matchedTool: one(tools, {
-    fields: [crawlCandidates.matchedToolId],
-    references: [tools.id],
-  }),
 }))

@@ -60,17 +60,21 @@ export default async function SearchPage({ searchParams }: PageProps) {
   return (
     <div className="container mx-auto max-w-6xl px-4 py-10">
       <div className="mb-8 flex flex-col gap-4">
-        <SearchBar
-          defaultValue={query}
-          placeholder="Search tools, calculators, apps…"
-          size="md"
-        />
-        <SearchFilters
-          program={params.program}
-          toolType={params.type}
-          isOfficial={params.official === 'true'}
-          isRookieFriendly={params.rookie === 'true'}
-        />
+        <Suspense>
+          <SearchBar
+            defaultValue={query}
+            placeholder="Search tools, calculators, apps…"
+            size="md"
+          />
+        </Suspense>
+        <Suspense>
+          <SearchFilters
+            program={params.program}
+            toolType={params.type}
+            isOfficial={params.official === 'true'}
+            isRookieFriendly={params.rookie === 'true'}
+          />
+        </Suspense>
       </div>
 
       <Suspense fallback={<SearchResults.Skeleton />}>

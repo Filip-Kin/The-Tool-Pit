@@ -1,15 +1,15 @@
-FROM node:22-alpine AS base
+FROM oven/bun:1-alpine AS base
 
 # ─── dependency stage ────────────────────────────────────────────────────────
 FROM base AS deps
 WORKDIR /app
 
-COPY package.json ./
+COPY package.json bun.lock ./
 COPY packages/db/package.json ./packages/db/
 COPY packages/types/package.json ./packages/types/
 COPY apps/worker/package.json ./apps/worker/
 
-RUN npm install --frozen-lockfile
+RUN bun install --frozen-lockfile
 
 # ─── build stage ─────────────────────────────────────────────────────────────
 FROM base AS builder
@@ -17,12 +17,12 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN npm run build --workspace=packages/types
-RUN npm run build --workspace=packages/db
-RUN npm run build --workspace=apps/worker
+RUN bun run --filter @the-tool-pit/types build
+RUN bun run --filter @the-tool-pit/db build
+RUN bun run --filter @the-tool-pit/worker build
 
 # ─── production runner ───────────────────────────────────────────────────────
-FROM base AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

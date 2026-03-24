@@ -10,8 +10,8 @@ interface ToolGridProps {
 export function ToolGrid({ tools, className }: ToolGridProps) {
   if (tools.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-[var(--color-border)] p-12 text-center">
-        <p className="text-sm text-[var(--color-muted)]">No tools found.</p>
+      <div className="rounded-lg border border-dashed border-border p-12 text-center">
+        <p className="text-sm text-muted">No tools found.</p>
       </div>
     )
   }
@@ -36,7 +36,7 @@ ToolGrid.Skeleton = function ToolGridSkeleton({ count = 6 }: { count?: number })
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="h-44 animate-pulse rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
+          className="h-44 animate-pulse rounded-lg border border-border bg-surface"
         />
       ))}
     </div>

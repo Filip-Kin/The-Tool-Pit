@@ -1,16 +1,16 @@
-FROM node:22-alpine AS base
+FROM oven/bun:1-alpine AS base
 
 # ─── dependency stage ────────────────────────────────────────────────────────
 FROM base AS deps
 WORKDIR /app
 
 # Copy workspace manifests only — avoids cache busting on source changes
-COPY package.json ./
+COPY package.json bun.lock ./
 COPY packages/db/package.json ./packages/db/
 COPY packages/types/package.json ./packages/types/
 COPY apps/web/package.json ./apps/web/
 
-RUN npm install --frozen-lockfile
+RUN bun install --frozen-lockfile
 
 # ─── build stage ─────────────────────────────────────────────────────────────
 FROM base AS builder
@@ -19,14 +19,15 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build shared packages first (web depends on them)
-RUN npm run build --workspace=packages/types
-RUN npm run build --workspace=packages/db
+RUN bun run --filter @the-tool-pit/types build
+RUN bun run --filter @the-tool-pit/db build
 
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build --workspace=apps/web
+ENV NEXT_OUTPUT=standalone
+RUN bun run --filter @the-tool-pit/web build
 
 # ─── production runner ───────────────────────────────────────────────────────
-FROM base AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

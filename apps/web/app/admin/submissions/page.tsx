@@ -73,14 +73,14 @@ export default async function AdminSubmissionsPage({
   return (
     <div className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[var(--color-foreground)]">Submissions</h1>
-        <p className="text-sm text-[var(--color-muted)]">
+        <h1 className="text-2xl font-bold text-foreground">Submissions</h1>
+        <p className="text-sm text-muted">
           {total.toLocaleString()} {TAB_LABELS[status].toLowerCase()}
         </p>
       </div>
 
       {/* Status tabs */}
-      <div className="flex flex-wrap gap-1 border-b border-[var(--color-border-subtle)]">
+      <div className="flex flex-wrap gap-1 border-b border-border-subtle">
         {STATUS_TABS.map((s) => {
           const count = countMap[s] ?? 0
           const isAlert = ALERT_STATUSES.includes(s) && count > 0
@@ -90,8 +90,8 @@ export default async function AdminSubmissionsPage({
               href={`/admin/submissions?status=${s}`}
               className={`flex items-center gap-1.5 px-3 py-2 text-sm transition-colors ${
                 status === s
-                  ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
-                  : 'text-[var(--color-muted)] hover:text-[var(--color-foreground)]'
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-muted hover:text-foreground'
               }`}
             >
               {TAB_LABELS[s]}
@@ -99,8 +99,8 @@ export default async function AdminSubmissionsPage({
                 <span
                   className={`rounded-full px-1.5 py-0.5 text-[10px] ${
                     isAlert
-                      ? 'bg-[var(--color-official)]/20 text-[var(--color-official)]'
-                      : 'bg-[var(--color-surface-3)] text-[var(--color-muted)]'
+                      ? 'bg-official/20 text-official'
+                      : 'bg-surface-3 text-muted'
                   }`}
                 >
                   {count}
@@ -113,11 +113,11 @@ export default async function AdminSubmissionsPage({
 
       {/* Table */}
       {rows.length === 0 ? (
-        <p className="text-sm text-[var(--color-muted)]">No {TAB_LABELS[status].toLowerCase()} submissions.</p>
+        <p className="text-sm text-muted">No {TAB_LABELS[status].toLowerCase()} submissions.</p>
       ) : (
-        <div className="rounded-lg border border-[var(--color-border)] overflow-hidden">
+        <div className="rounded-lg border border-border overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-[var(--color-surface-2)] text-[var(--color-muted)] text-xs">
+            <thead className="bg-surface-2 text-muted text-xs">
               <tr>
                 <th className="px-4 py-2 text-left">URL</th>
                 <th className="px-4 py-2 text-left">Note</th>
@@ -135,7 +135,7 @@ export default async function AdminSubmissionsPage({
                 return (
                   <tr
                     key={row.id}
-                    className="border-t border-[var(--color-border-subtle)] hover:bg-[var(--color-surface)] align-top"
+                    className="border-t border-border-subtle hover:bg-surface align-top"
                   >
                     {/* URL */}
                     <td className="px-4 py-3 max-w-xs">
@@ -143,7 +143,7 @@ export default async function AdminSubmissionsPage({
                         href={row.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-[var(--color-primary)] hover:underline break-all line-clamp-2"
+                        className="text-xs text-primary hover:underline break-all line-clamp-2"
                       >
                         {row.url}
                       </a>
@@ -160,9 +160,9 @@ export default async function AdminSubmissionsPage({
                     {/* Submitter note */}
                     <td className="px-4 py-3 max-w-[180px]">
                       {row.submitterNote ? (
-                        <p className="text-xs text-[var(--color-muted)] line-clamp-3">{row.submitterNote}</p>
+                        <p className="text-xs text-muted line-clamp-3">{row.submitterNote}</p>
                       ) : (
-                        <span className="text-xs text-[var(--color-muted-2)]">—</span>
+                        <span className="text-xs text-muted-2">—</span>
                       )}
                     </td>
 
@@ -172,24 +172,24 @@ export default async function AdminSubmissionsPage({
                         <div>
                           <div className="flex items-center gap-1.5">
                             <LogDot logStatus={lastLog.status} />
-                            <span className="text-xs text-[var(--color-muted)] font-mono">{lastLog.stage}</span>
+                            <span className="text-xs text-muted font-mono">{lastLog.stage}</span>
                           </div>
                           {lastLog.message && (
-                            <p className="mt-0.5 text-[10px] text-[var(--color-muted-2)] line-clamp-2">
+                            <p className="mt-0.5 text-[10px] text-muted-2 line-clamp-2">
                               {lastLog.message}
                             </p>
                           )}
                         </div>
                       ) : (
-                        <span className="text-xs text-[var(--color-muted-2)]">—</span>
+                        <span className="text-xs text-muted-2">—</span>
                       )}
                     </td>
 
                     {/* Submitted at */}
-                    <td className="px-4 py-3 text-xs text-[var(--color-muted)] whitespace-nowrap">
+                    <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
                       {new Date(row.createdAt).toLocaleDateString()}
                       <br />
-                      <span className="text-[var(--color-muted-2)]">
+                      <span className="text-muted-2">
                         {new Date(row.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </td>
@@ -212,18 +212,18 @@ export default async function AdminSubmissionsPage({
           {page > 1 && (
             <Link
               href={`/admin/submissions?status=${status}&page=${page - 1}`}
-              className="rounded border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-foreground)] transition-colors"
+              className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
             >
               ← Prev
             </Link>
           )}
-          <span className="px-3 py-1.5 text-xs text-[var(--color-muted)]">
+          <span className="px-3 py-1.5 text-xs text-muted">
             {page} / {totalPages}
           </span>
           {page < totalPages && (
             <Link
               href={`/admin/submissions?status=${status}&page=${page + 1}`}
-              className="rounded border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-foreground)] transition-colors"
+              className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
             >
               Next →
             </Link>
@@ -239,7 +239,7 @@ function LogDot({ logStatus }: { logStatus: 'ok' | 'warn' | 'error' | 'skip' }) 
     ok: 'bg-green-500',
     warn: 'bg-yellow-500',
     error: 'bg-red-500',
-    skip: 'bg-[var(--color-muted-2)]',
+    skip: 'bg-muted-2',
   }
   return <span className={`inline-block h-1.5 w-1.5 rounded-full ${colors[logStatus]}`} />
 }

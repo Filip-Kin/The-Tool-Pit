@@ -50,27 +50,27 @@ export default async function AdminCandidatesPage({
   return (
     <div className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[var(--color-foreground)]">Candidates</h1>
-        <p className="text-sm text-[var(--color-muted)]">
+        <h1 className="text-2xl font-bold text-foreground">Candidates</h1>
+        <p className="text-sm text-muted">
           {total.toLocaleString()} {status}
         </p>
       </div>
 
       {/* Status tabs */}
-      <div className="flex gap-1 border-b border-[var(--color-border-subtle)]">
+      <div className="flex gap-1 border-b border-border-subtle">
         {STATUS_TABS.map((s) => (
           <Link
             key={s}
             href={`/admin/candidates?status=${s}`}
             className={`flex items-center gap-1.5 px-3 py-2 text-sm transition-colors capitalize ${
               status === s
-                ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
-                : 'text-[var(--color-muted)] hover:text-[var(--color-foreground)]'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-muted hover:text-foreground'
             }`}
           >
             {s}
             {countMap[s] != null && (
-              <span className="rounded-full bg-[var(--color-surface-3)] px-1.5 py-0.5 text-[10px] text-[var(--color-muted)]">
+              <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] text-muted">
                 {countMap[s]}
               </span>
             )}
@@ -80,11 +80,11 @@ export default async function AdminCandidatesPage({
 
       {/* Table */}
       {rows.length === 0 ? (
-        <p className="text-sm text-[var(--color-muted)]">No {status} candidates.</p>
+        <p className="text-sm text-muted">No {status} candidates.</p>
       ) : (
-        <div className="rounded-lg border border-[var(--color-border)] overflow-hidden">
+        <div className="rounded-lg border border-border overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-[var(--color-surface-2)] text-[var(--color-muted)] text-xs">
+            <thead className="bg-surface-2 text-muted text-xs">
               <tr>
                 <th className="px-4 py-2 text-left">URL</th>
                 <th className="px-4 py-2 text-left">Classification</th>
@@ -102,7 +102,7 @@ export default async function AdminCandidatesPage({
                 return (
                   <tr
                     key={row.id}
-                    className="border-t border-[var(--color-border-subtle)] hover:bg-[var(--color-surface)] align-top"
+                    className="border-t border-border-subtle hover:bg-surface align-top"
                   >
                     {/* URL + title */}
                     <td className="px-4 py-3 max-w-xs">
@@ -110,17 +110,17 @@ export default async function AdminCandidatesPage({
                         href={displayUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-[var(--color-primary)] hover:underline break-all line-clamp-1"
+                        className="text-xs text-primary hover:underline break-all line-clamp-1"
                       >
                         {displayUrl}
                       </a>
                       {meta.title && (
-                        <p className="mt-0.5 text-xs text-[var(--color-foreground)] line-clamp-1">{meta.title}</p>
+                        <p className="mt-0.5 text-xs text-foreground line-clamp-1">{meta.title}</p>
                       )}
                       {cls.summary && (
-                        <p className="mt-1 text-xs text-[var(--color-muted)] line-clamp-2">{cls.summary}</p>
+                        <p className="mt-1 text-xs text-muted line-clamp-2">{cls.summary}</p>
                       )}
-                      <p className="mt-1 text-[10px] text-[var(--color-muted-2)]">
+                      <p className="mt-1 text-[10px] text-muted-2">
                         {new Date(row.createdAt).toLocaleDateString()}
                       </p>
                     </td>
@@ -139,7 +139,7 @@ export default async function AdminCandidatesPage({
                         {cls.isRookieFriendly && <Tag color="rookie">rookie</Tag>}
                       </div>
                       {cls.reasoning && (
-                        <p className="mt-1.5 text-[10px] text-[var(--color-muted-2)] line-clamp-2 italic">
+                        <p className="mt-1.5 text-[10px] text-muted-2 line-clamp-2 italic">
                           {cls.reasoning}
                         </p>
                       )}
@@ -168,18 +168,18 @@ export default async function AdminCandidatesPage({
           {page > 1 && (
             <Link
               href={`/admin/candidates?status=${status}&page=${page - 1}`}
-              className="rounded border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-foreground)] transition-colors"
+              className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
             >
               ← Prev
             </Link>
           )}
-          <span className="px-3 py-1.5 text-xs text-[var(--color-muted)]">
+          <span className="px-3 py-1.5 text-xs text-muted">
             {page} / {totalPages}
           </span>
           {page < totalPages && (
             <Link
               href={`/admin/candidates?status=${status}&page=${page + 1}`}
-              className="rounded border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-foreground)] transition-colors"
+              className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
             >
               Next →
             </Link>
@@ -199,11 +199,11 @@ function Tag({
 }) {
   const base = 'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium border'
   const variants = {
-    program: 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] border-[var(--color-primary)]/20',
-    official: 'bg-[var(--color-official)]/10 text-[var(--color-official)] border-[var(--color-official)]/20',
-    vendor: 'bg-[var(--color-vendor)]/10 text-[var(--color-vendor)] border-[var(--color-vendor)]/20',
-    rookie: 'bg-[var(--color-rookie)]/10 text-[var(--color-rookie)] border-[var(--color-rookie)]/20',
-    default: 'bg-[var(--color-surface-3)] text-[var(--color-muted)] border-[var(--color-border)]',
+    program: 'bg-primary/10 text-primary border-primary/20',
+    official: 'bg-official/10 text-official border-official/20',
+    vendor: 'bg-vendor/10 text-vendor border-vendor/20',
+    rookie: 'bg-rookie/10 text-rookie border-rookie/20',
+    default: 'bg-surface-3 text-muted border-border',
   }
   return (
     <span className={`${base} ${variants[color ?? 'default']}`}>{children}</span>
@@ -215,8 +215,8 @@ function ConfidenceBar({ value }: { value: number }) {
   const color = pct >= 70 ? 'bg-green-500' : pct >= 40 ? 'bg-yellow-500' : 'bg-red-500'
   return (
     <div className="flex flex-col items-end gap-1">
-      <span className="text-xs font-mono text-[var(--color-foreground)]">{pct}%</span>
-      <div className="h-1 w-16 rounded-full bg-[var(--color-surface-3)]">
+      <span className="text-xs font-mono text-foreground">{pct}%</span>
+      <div className="h-1 w-16 rounded-full bg-surface-3">
         <div className={`h-1 rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
     </div>

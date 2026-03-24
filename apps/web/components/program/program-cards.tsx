@@ -35,7 +35,7 @@ export function ProgramCards() {
         <Link
           key={p.slug}
           href={p.href}
-          className="group flex flex-col gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 transition-all hover:border-[var(--color-border)]/80 hover:bg-[var(--color-surface-2)]"
+          className="group flex flex-col gap-3 rounded-lg border border-border bg-surface p-6 transition-all hover:border-border/80 hover:bg-surface-2"
           style={{ '--program-color': p.color } as React.CSSProperties}
         >
           <div
@@ -44,9 +44,9 @@ export function ProgramCards() {
           />
           <div className="flex flex-col gap-1">
             <span className="text-xl font-bold" style={{ color: p.color }}>{p.name}</span>
-            <span className="text-sm font-medium text-[var(--color-foreground)]">{p.fullName}</span>
+            <span className="text-sm font-medium text-foreground">{p.fullName}</span>
           </div>
-          <p className="text-xs text-[var(--color-muted)] leading-relaxed">{p.description}</p>
+          <p className="text-xs text-muted leading-relaxed">{p.description}</p>
         </Link>
       ))}
     </div>

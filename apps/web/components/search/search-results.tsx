@@ -17,7 +17,7 @@ export function SearchResults({ results, total, query, page, pageSize }: SearchR
   return (
     <div className="flex flex-col gap-6">
       {/* Result count */}
-      <div className="text-sm text-[var(--color-muted)]">
+      <div className="text-sm text-muted">
         {total === 0 ? (
           query ? (
             <span>No results for &ldquo;{query}&rdquo;</span>
@@ -29,7 +29,7 @@ export function SearchResults({ results, total, query, page, pageSize }: SearchR
             {total.toLocaleString()} {total === 1 ? 'tool' : 'tools'}
             {query && (
               <>
-                {' '}for <span className="font-medium text-[var(--color-foreground)]">&ldquo;{query}&rdquo;</span>
+                {' '}for <span className="font-medium text-foreground">&ldquo;{query}&rdquo;</span>
               </>
             )}
           </span>
@@ -37,11 +37,11 @@ export function SearchResults({ results, total, query, page, pageSize }: SearchR
       </div>
 
       {results.length === 0 && query && (
-        <div className="rounded-lg border border-dashed border-[var(--color-border)] p-12 text-center">
-          <p className="text-sm font-medium text-[var(--color-foreground)] mb-1">No tools found</p>
-          <p className="text-xs text-[var(--color-muted)]">
+        <div className="rounded-lg border border-dashed border-border p-12 text-center">
+          <p className="text-sm font-medium text-foreground mb-1">No tools found</p>
+          <p className="text-xs text-muted">
             Try a different search term, or{' '}
-            <Link href="/submit" className="text-[var(--color-primary)] hover:underline">
+            <Link href="/submit" className="text-primary hover:underline">
               submit it
             </Link>
             .
@@ -80,8 +80,8 @@ function PaginationLink({ page, currentPage, query }: { page: number; currentPag
       className={cn(
         'flex h-8 w-8 items-center justify-center rounded-md text-sm transition-colors',
         page === currentPage
-          ? 'bg-[var(--color-primary)] text-white'
-          : 'text-[var(--color-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-foreground)]',
+          ? 'bg-primary text-white'
+          : 'text-muted hover:bg-surface-2 hover:text-foreground',
       )}
     >
       {page}
@@ -92,10 +92,10 @@ function PaginationLink({ page, currentPage, query }: { page: number; currentPag
 SearchResults.Skeleton = function SearchResultsSkeleton() {
   return (
     <div className="flex flex-col gap-6">
-      <div className="h-4 w-32 animate-pulse rounded-md bg-[var(--color-surface-2)]" />
+      <div className="h-4 w-32 animate-pulse rounded-md bg-surface-2" />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-44 animate-pulse rounded-lg bg-[var(--color-surface)]" />
+          <div key={i} className="h-44 animate-pulse rounded-lg bg-surface" />
         ))}
       </div>
     </div>

@@ -55,11 +55,11 @@ NODE_ENV=production
 - [ ] Redis service healthy
 - [ ] Run DB migrations via Coolify console:
   ```bash
-  cd /app && npm run db:migrate --workspace=packages/db
+  cd /app && bun run --filter @the-tool-pit/db db:migrate
   ```
 - [ ] Seed reference data (programs + audience taxonomy):
   ```bash
-  cd /app && npx tsx packages/db/src/seed.ts
+  cd /app && bun run packages/db/src/seed.ts
   ```
 - [ ] Deploy web app — verify homepage loads
 - [ ] Deploy worker — check logs for "started with concurrency=N"

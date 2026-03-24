@@ -24,19 +24,19 @@ export default function AdminLoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center">
-      <form onSubmit={handleSubmit} className="flex w-80 flex-col gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
+      <form onSubmit={handleSubmit} className="flex w-80 flex-col gap-4 rounded-lg border border-border bg-surface p-6">
         <h1 className="text-lg font-semibold">Admin Login</h1>
         <input
           type="password"
           value={secret}
           onChange={(e) => setSecret(e.target.value)}
           placeholder="Admin secret"
-          className="h-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 text-sm outline-none focus:border-[var(--color-primary)]"
+          className="h-10 rounded-lg border border-border bg-surface-2 px-3 text-sm outline-none focus:border-primary"
         />
-        {error && <p className="text-xs text-[var(--color-frc)]">{error}</p>}
+        {error && <p className="text-xs text-frc">{error}</p>}
         <button
           type="submit"
-          className="h-10 rounded-lg bg-[var(--color-primary)] text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] transition-colors"
+          className="h-10 rounded-lg bg-primary text-sm font-medium text-white hover:bg-primary-hover transition-colors"
         >
           Sign In
         </button>

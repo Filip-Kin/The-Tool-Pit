@@ -21,7 +21,10 @@ try {
 
 const nextConfig: NextConfig = {
   transpilePackages: ['@the-tool-pit/db', '@the-tool-pit/types'],
-  output: 'standalone',
+  // Standalone output is required for Docker/Coolify deployment.
+  // Disabled locally on Windows because bun's symlink-based module cache
+  // causes EPERM errors when Next.js tries to copy traced files.
+  output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
   images: {
     domains: ['avatars.githubusercontent.com', 'github.com'],
   },

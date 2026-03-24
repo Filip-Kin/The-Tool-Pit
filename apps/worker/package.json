@@ -12,7 +12,7 @@
     "@the-tool-pit/db": "*",
     "@the-tool-pit/types": "*",
     "bullmq": "^5.8.0",
-    "ioredis": "^5.4.0",
+    "ioredis": "5.9.3",
     "drizzle-orm": "^0.36.0",
     "node-html-parser": "^6.1.0",
     "undici": "^6.19.0",

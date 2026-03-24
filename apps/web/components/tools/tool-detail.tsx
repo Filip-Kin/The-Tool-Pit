@@ -60,10 +60,10 @@ export function ToolDetail({ tool }: ToolDetailProps) {
               {tool.isRookieFriendly && <Badge variant="rookie">Rookie Friendly</Badge>}
             </div>
 
-            <h1 className="text-3xl font-bold text-[var(--color-foreground)]">{tool.name}</h1>
+            <h1 className="text-3xl font-bold text-foreground">{tool.name}</h1>
 
             {tool.summary && (
-              <p className="text-lg text-[var(--color-muted)] leading-relaxed">{tool.summary}</p>
+              <p className="text-lg text-muted leading-relaxed">{tool.summary}</p>
             )}
 
             <div className="flex items-center gap-4 flex-wrap">
@@ -72,7 +72,7 @@ export function ToolDetail({ tool }: ToolDetailProps) {
                 lastActivityAt={tool.lastActivityAt}
               />
               {tool.lastActivityAt && (
-                <span className="text-sm text-[var(--color-muted-2)]">
+                <span className="text-sm text-muted-2">
                   Updated {formatRelativeTime(tool.lastActivityAt)}
                 </span>
               )}
@@ -97,8 +97,8 @@ export function ToolDetail({ tool }: ToolDetailProps) {
                     className={cn(
                       'flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors',
                       isGithub
-                        ? 'border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-foreground)] hover:bg-[var(--color-surface-3)]'
-                        : 'border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20',
+                        ? 'border-border bg-surface-2 text-foreground hover:bg-surface-3'
+                        : 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20',
                     )}
                   >
                     <Icon className="h-4 w-4" />
@@ -112,7 +112,7 @@ export function ToolDetail({ tool }: ToolDetailProps) {
 
           {/* Description */}
           {tool.description && (
-            <div className="prose prose-invert max-w-none text-[var(--color-muted)]">
+            <div className="prose prose-invert max-w-none text-muted">
               <p className="whitespace-pre-wrap leading-relaxed">{tool.description}</p>
             </div>
           )}
@@ -120,7 +120,7 @@ export function ToolDetail({ tool }: ToolDetailProps) {
           {/* Other links */}
           {otherLinks.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-sm font-medium text-[var(--color-muted)]">More links</h3>
+              <h3 className="text-sm font-medium text-muted">More links</h3>
               <div className="flex flex-wrap gap-2">
                 {otherLinks.map((link) => {
                   const cfg = LINK_CONFIG[link.linkType] ?? LINK_CONFIG.other
@@ -132,7 +132,7 @@ export function ToolDetail({ tool }: ToolDetailProps) {
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() => trackClick(tool.id, link.linkType)}
-                      className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-foreground)] hover:bg-[var(--color-surface-2)] transition-colors"
+                      className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs text-muted hover:text-foreground hover:bg-surface-2 transition-colors"
                     >
                       <Icon className="h-3.5 w-3.5" />
                       {link.label ?? cfg.label}
@@ -146,7 +146,7 @@ export function ToolDetail({ tool }: ToolDetailProps) {
 
         {/* Sidebar */}
         <aside className="flex flex-col gap-6">
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 flex flex-col gap-4">
+          <div className="rounded-lg border border-border bg-surface p-4 flex flex-col gap-4">
             <MetaRow label="Type" value={formatToolType(tool.toolType)} />
             {tool.audienceRoles.length > 0 && (
               <MetaTagRow label="Audience" tags={tool.audienceRoles.map((r) => ROLE_LABELS[r] ?? r)} />
@@ -164,8 +164,8 @@ export function ToolDetail({ tool }: ToolDetailProps) {
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs text-[var(--color-muted-2)]">{label}</span>
-      <span className="text-sm text-[var(--color-foreground)]">{value}</span>
+      <span className="text-xs text-muted-2">{label}</span>
+      <span className="text-sm text-foreground">{value}</span>
     </div>
   )
 }
@@ -173,12 +173,12 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 function MetaTagRow({ label, tags }: { label: string; tags: string[] }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-xs text-[var(--color-muted-2)]">{label}</span>
+      <span className="text-xs text-muted-2">{label}</span>
       <div className="flex flex-wrap gap-1">
         {tags.map((tag) => (
           <span
             key={tag}
-            className="rounded-md bg-[var(--color-surface-2)] px-2 py-0.5 text-xs text-[var(--color-muted)]"
+            className="rounded-md bg-surface-2 px-2 py-0.5 text-xs text-muted"
           >
             {tag}
           </span>

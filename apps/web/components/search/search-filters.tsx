@@ -58,7 +58,7 @@ export function SearchFilters({ program, toolType, isOfficial, isRookieFriendly 
         </FilterChip>
       ))}
 
-      <div className="h-4 w-px bg-[var(--color-border)]" />
+      <div className="h-4 w-px bg-border" />
 
       {/* Tool type filter */}
       {TOOL_TYPES.map((t) => (
@@ -71,7 +71,7 @@ export function SearchFilters({ program, toolType, isOfficial, isRookieFriendly 
         </FilterChip>
       ))}
 
-      <div className="h-4 w-px bg-[var(--color-border)]" />
+      <div className="h-4 w-px bg-border" />
 
       <FilterChip active={!!isOfficial} onClick={() => toggleBool('official', !!isOfficial)}>
         FIRST Official
@@ -100,8 +100,8 @@ function FilterChip({
       className={cn(
         'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-all',
         active
-          ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
-          : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] hover:border-[var(--color-border)]/80 hover:text-[var(--color-foreground)]',
+          ? 'border-primary bg-primary/15 text-primary'
+          : 'border-border bg-surface text-muted hover:border-border/80 hover:text-foreground',
       )}
       style={accentColor ? ({ '--accent': accentColor } as React.CSSProperties) : undefined}
     >
