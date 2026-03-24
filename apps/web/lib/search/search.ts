@@ -1,6 +1,6 @@
-import { sql, and, eq, ilike, inArray } from 'drizzle-orm'
+import { sql, and, eq, inArray, desc } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { tools, toolPrograms, toolLinks, programs } from '@the-tool-pit/db'
+import { tools, toolPrograms, toolLinks, toolVotes, programs } from '@the-tool-pit/db'
 import type { SearchParams } from '@the-tool-pit/types'
 
 // Content-type weights for ranking boost
@@ -61,6 +61,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     toolType,
     isOfficial,
     isRookieFriendly,
+    sort,
     page = 1,
     pageSize = 20,
   } = params
@@ -190,13 +191,11 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
         ),
       ),
 
-    // Vote counts via aggregate — using raw SQL for simplicity
-    db.execute(sql`
-      select tool_id, count(*)::int as vote_count
-      from tool_votes
-      where tool_id = any(${sql.raw("ARRAY['" + toolIds.join("','") + "']::uuid[]")})
-      group by tool_id
-    `),
+    db
+      .select({ toolId: toolVotes.toolId, voteCount: sql<number>`count(*)::int` })
+      .from(toolVotes)
+      .where(inArray(toolVotes.toolId, toolIds))
+      .groupBy(toolVotes.toolId),
   ])
 
   const programsByTool = new Map<string, string[]>()
@@ -212,8 +211,8 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
   }
 
   const votesByTool = new Map<string, number>()
-  for (const row of voteCountRows as Array<{ tool_id: string; vote_count: number }>) {
-    votesByTool.set(row.tool_id, row.vote_count)
+  for (const row of voteCountRows) {
+    votesByTool.set(row.toolId, row.voteCount)
   }
 
   // Count total matching (for pagination)

@@ -1,6 +1,6 @@
 import { Queue } from 'bullmq'
 import { getRedis } from './redis.js'
-import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, ReindexPayload } from '@the-tool-pit/types'
+import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, ReindexPayload, SubmissionJobPayload } from '@the-tool-pit/types'
 
 // One Redis connection for all queues
 const connection = getRedis()
@@ -40,6 +40,16 @@ export const reindexQueue = new Queue<ReindexPayload>('reindex', {
   defaultJobOptions: {
     attempts: 2,
     removeOnComplete: { count: 50 },
+  },
+})
+
+export const submissionQueue = new Queue<SubmissionJobPayload>('submission', {
+  connection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 5000 },
+    removeOnComplete: { count: 500 },
+    removeOnFail: { count: 500 },
   },
 })
 

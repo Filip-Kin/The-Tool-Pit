@@ -1,5 +1,7 @@
+import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { submissions } from '@the-tool-pit/db'
+import { getSubmissionQueue } from './queue'
 import type { SubmitToolResponse } from '@the-tool-pit/types'
 
 interface CreateSubmissionInput {
@@ -19,12 +21,8 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Su
   const [existing] = await db
     .select({ id: submissions.id, status: submissions.status, resolvedToolId: submissions.resolvedToolId })
     .from(submissions)
-    .where(
-      // @ts-expect-error -- using raw SQL for URL comparison
-      (table: typeof submissions) => table.url === input.url,
-    )
+    .where(eq(submissions.url, input.url))
     .limit(1)
-    .catch(() => [null])
 
   if (existing && existing.status === 'published' && existing.resolvedToolId) {
     return {
@@ -52,7 +50,8 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Su
     })
     .returning({ id: submissions.id })
 
-  // TODO: enqueue worker job here (BullMQ publish via Redis)
+  // Enqueue worker job — worker handles extract → classify → publish
+  await getSubmissionQueue().add('process-submission', { submissionId: created.id })
 
   return {
     submissionId: created.id,

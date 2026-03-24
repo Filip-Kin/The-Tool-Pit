@@ -9,7 +9,8 @@ import { scheduleRecurringJobs } from './queues.js'
 import { processCrawlJob } from './jobs/crawl.js'
 import { processEnrichJob } from './jobs/enrich.js'
 import { processFreshnessJob } from './jobs/freshness.js'
-import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload } from '@the-tool-pit/types'
+import { processSubmissionJob } from './jobs/submission.js'
+import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, SubmissionJobPayload } from '@the-tool-pit/types'
 
 const connection = getRedis()
 const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY ?? '2', 10)
@@ -41,8 +42,17 @@ const freshnessWorker = new Worker<FreshnessCheckPayload>(
   { connection, concurrency: 4 },
 )
 
+const submissionWorker = new Worker<SubmissionJobPayload>(
+  'submission',
+  async (job) => {
+    console.log(`[submission] processing submission ${job.data.submissionId}`)
+    await processSubmissionJob(job.data)
+  },
+  { connection, concurrency: CONCURRENCY },
+)
+
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, submissionWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -65,6 +75,7 @@ async function shutdown() {
     crawlWorker.close(),
     enrichWorker.close(),
     freshnessWorker.close(),
+    submissionWorker.close(),
   ])
   process.exit(0)
 }

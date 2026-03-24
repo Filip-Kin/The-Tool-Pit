@@ -7,6 +7,8 @@
 // Search
 // ---------------------------------------------------------------------------
 
+export type SearchSort = 'relevance' | 'popular' | 'newest' | 'updated'
+
 export interface SearchParams {
   query: string
   program?: 'frc' | 'ftc' | 'fll'
@@ -16,6 +18,7 @@ export interface SearchParams {
   isOfficial?: boolean
   isVendor?: boolean
   isRookieFriendly?: boolean
+  sort?: SearchSort
   page?: number
   pageSize?: number
 }
@@ -90,4 +93,8 @@ export interface FreshnessCheckPayload {
 
 export interface ReindexPayload {
   toolId?: string // if undefined, reindex all published tools
+}
+
+export interface SubmissionJobPayload {
+  submissionId: string
 }

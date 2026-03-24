@@ -2,15 +2,19 @@
  * Publishing stage: if a candidate has sufficient confidence,
  * create or update a tool record in the database.
  */
-import { eq, sql } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import {
   tools,
   toolLinks,
   toolPrograms,
+  toolAudiencePrimaryRoles,
+  toolAudienceFunctions,
   toolSources,
   crawlCandidates,
   programs,
+  audiencePrimaryRoles,
+  audienceFunctions,
 } from '@the-tool-pit/db'
 import type { NewTool } from '@the-tool-pit/db'
 
@@ -107,17 +111,47 @@ export async function publishCandidate(candidateId: string): Promise<PublishResu
   }
 
   // Link programs
-  const programSlugs = (classification.programs as string[]) ?? []
+  const programSlugs = (classification.programs as string[] | undefined) ?? []
   if (programSlugs.length > 0) {
     const programRows = await db
-      .select({ id: programs.id, slug: programs.slug })
+      .select({ id: programs.id })
       .from(programs)
-      .where(sql`${programs.slug} = any(${programSlugs})`)
+      .where(inArray(programs.slug, programSlugs))
 
     if (programRows.length > 0) {
       await db
         .insert(toolPrograms)
         .values(programRows.map((p) => ({ toolId: newTool.id, programId: p.id })))
+    }
+  }
+
+  // Link audience primary roles
+  const audienceRoleSlugs = (classification.audienceRoles as string[] | undefined) ?? []
+  if (audienceRoleSlugs.length > 0) {
+    const roleRows = await db
+      .select({ id: audiencePrimaryRoles.id })
+      .from(audiencePrimaryRoles)
+      .where(inArray(audiencePrimaryRoles.slug, audienceRoleSlugs))
+
+    if (roleRows.length > 0) {
+      await db
+        .insert(toolAudiencePrimaryRoles)
+        .values(roleRows.map((r) => ({ toolId: newTool.id, roleId: r.id })))
+    }
+  }
+
+  // Link audience functions
+  const audienceFunctionSlugs = (classification.audienceFunctions as string[] | undefined) ?? []
+  if (audienceFunctionSlugs.length > 0) {
+    const functionRows = await db
+      .select({ id: audienceFunctions.id })
+      .from(audienceFunctions)
+      .where(inArray(audienceFunctions.slug, audienceFunctionSlugs))
+
+    if (functionRows.length > 0) {
+      await db
+        .insert(toolAudienceFunctions)
+        .values(functionRows.map((f) => ({ toolId: newTool.id, functionId: f.id })))
     }
   }
 
