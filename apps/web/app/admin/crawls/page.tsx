@@ -1,6 +1,7 @@
 import { getDb } from '@/lib/db'
 import { crawlJobs } from '@the-tool-pit/db'
 import { desc } from 'drizzle-orm'
+import type { CrawlJobStats } from '@the-tool-pit/types'
 
 async function getCrawlJobs() {
   const db = getDb()
@@ -26,13 +27,13 @@ export default async function CrawlJobsPage() {
                 <th className="px-4 py-2 text-left">Started</th>
                 <th className="px-4 py-2 text-left">Finished</th>
                 <th className="px-4 py-2 text-right">Discovered</th>
-                <th className="px-4 py-2 text-right">Published</th>
+                <th className="px-4 py-2 text-right">New</th>
                 <th className="px-4 py-2 text-left">Error</th>
               </tr>
             </thead>
             <tbody>
               {jobs.map((job) => {
-                const stats = (job.stats ?? {}) as Record<string, number>
+                const stats = (job.stats ?? {}) as CrawlJobStats
                 return (
                   <tr key={job.id} className="border-t border-border-subtle hover:bg-surface">
                     <td className="px-4 py-2 font-mono text-xs text-foreground">{job.connector}</td>
@@ -46,7 +47,7 @@ export default async function CrawlJobsPage() {
                       {job.finishedAt ? new Date(job.finishedAt).toLocaleString() : '—'}
                     </td>
                     <td className="px-4 py-2 text-right text-xs text-muted">{stats.discovered ?? '—'}</td>
-                    <td className="px-4 py-2 text-right text-xs text-muted">{stats.published ?? '—'}</td>
+                    <td className="px-4 py-2 text-right text-xs text-muted">{stats.new ?? '—'}</td>
                     <td className="px-4 py-2 text-xs text-muted max-w-xs truncate">
                       {job.error ?? '—'}
                     </td>

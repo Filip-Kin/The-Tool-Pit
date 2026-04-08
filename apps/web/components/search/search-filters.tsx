@@ -69,7 +69,7 @@ export function SearchFilters({ program, toolType, isOfficial, isRookieFriendly,
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex items-center gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-x-visible">
       {/* Program filter */}
       {PROGRAMS.map((p) => (
         <FilterChip

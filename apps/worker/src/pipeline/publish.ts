@@ -21,6 +21,17 @@ import type { NewTool } from '@the-tool-pit/db'
 /** Confidence threshold to auto-publish (0.0–1.0) */
 const PUBLISH_THRESHOLD = 0.7
 
+/** Build a URL-safe slug from a raw title string. Pure function — does not check uniqueness. */
+export function buildSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 80)
+    .replace(/^-+|-+$/g, '')
+}
+
 export interface PublishResult {
   toolId: string
   action: 'created' | 'updated' | 'skipped'
@@ -52,12 +63,7 @@ export async function publishCandidate(candidateId: string, sourceType = 'manual
   const meta = (candidate.rawMetadata ?? {}) as Record<string, unknown>
 
   // Build a URL-safe slug from the title
-  const titleBase = ((meta.title as string) ?? 'tool')
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .slice(0, 80)
+  const titleBase = buildSlug((meta.title as string) ?? 'tool')
 
   // Ensure uniqueness (checked outside transaction to avoid long locks)
   let slug = titleBase

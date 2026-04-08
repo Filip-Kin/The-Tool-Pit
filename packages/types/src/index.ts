@@ -112,3 +112,13 @@ export interface SubmissionJobPayload {
 export interface LinkCheckPayload {
   toolId: string
 }
+
+/** Shape of the stats object stored in crawl_jobs.stats */
+export interface CrawlJobStats {
+  discovered?: number
+  new?: number
+  updated?: number
+  skipped?: number
+  failed?: number
+  errors?: number
+}

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Github, ExternalLink, BookOpen, Bug, FileText, Globe } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { FreshnessChip } from '@/components/ui/freshness-chip'
@@ -44,8 +45,18 @@ export function ToolDetail({ tool }: ToolDetailProps) {
     (l) => l.linkType !== 'github' && l.linkType !== 'homepage' && !l.isBroken,
   )
 
+  const breadcrumbHref = tool.isTeamCode
+    ? '/robot-code'
+    : tool.programs[0] ? `/${tool.programs[0]}` : '/search'
+  const breadcrumbLabel = tool.isTeamCode
+    ? 'Robot Code'
+    : tool.programs[0] ? tool.programs[0].toUpperCase() : 'Search'
+
   return (
     <div className="container mx-auto max-w-4xl px-4 py-12">
+      <Link href={breadcrumbHref} className="mb-4 inline-block text-xs text-muted hover:text-foreground transition-colors">
+        ← {breadcrumbLabel}
+      </Link>
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_280px]">
         {/* Main content */}
         <div className="flex flex-col gap-6">

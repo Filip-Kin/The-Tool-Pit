@@ -20,6 +20,46 @@ const VALID_AUDIENCE_FUNCTIONS = new Set([
   'field_technical', 'inspection', 'judging',
 ])
 
+/**
+ * Validate and sanitize the raw parsed classification output.
+ * Filters unknown enum values, clamps numeric fields. Pure function — no I/O.
+ */
+export function validateClassificationOutput(
+  parsed: Partial<CandidateClassification>,
+): Partial<CandidateClassification> {
+  const out = { ...parsed }
+
+  if (out.toolType && !VALID_TOOL_TYPES.has(out.toolType)) {
+    console.warn(`[classify] unknown toolType "${out.toolType}" — falling back to "other"`)
+    out.toolType = 'other'
+  }
+  if (Array.isArray(out.programs)) {
+    const before = out.programs
+    out.programs = out.programs.filter((p) => VALID_PROGRAMS.has(p))
+    if (out.programs.length < before.length) {
+      console.warn(`[classify] filtered invalid programs: ${before.filter((p) => !VALID_PROGRAMS.has(p)).join(', ')}`)
+    }
+  }
+  if (Array.isArray(out.audienceRoles)) {
+    out.audienceRoles = out.audienceRoles.filter((r) => VALID_AUDIENCE_ROLES.has(r))
+  }
+  if (Array.isArray(out.audienceFunctions)) {
+    out.audienceFunctions = out.audienceFunctions.filter((f) => VALID_AUDIENCE_FUNCTIONS.has(f))
+  }
+  if (out.isTeamCode) {
+    const t = out.teamNumber
+    if (t !== null && t !== undefined && (!Number.isInteger(t) || t < 1 || t > 99999)) {
+      out.teamNumber = null
+    }
+    const y = out.seasonYear
+    const now = new Date().getFullYear()
+    if (y !== null && y !== undefined && (!Number.isInteger(y) || y < 2000 || y > now + 1)) {
+      out.seasonYear = null
+    }
+  }
+  return out
+}
+
 let _client: Anthropic | undefined
 
 function getClient(): Anthropic {
@@ -87,37 +127,7 @@ Has GitHub link: ${metadata.githubUrl ? 'yes (' + metadata.githubUrl + ')' : 'no
     // Strip markdown code fences Claude sometimes wraps around JSON
     const clean = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
     const parsed = JSON.parse(clean) as CandidateClassification
-
-    // Validate and filter enum fields — silently drop unknown values
-    if (parsed.toolType && !VALID_TOOL_TYPES.has(parsed.toolType)) {
-      console.warn(`[classify] unknown toolType "${parsed.toolType}" — falling back to "other"`)
-      parsed.toolType = 'other'
-    }
-    if (Array.isArray(parsed.programs)) {
-      const before = parsed.programs
-      parsed.programs = parsed.programs.filter((p) => VALID_PROGRAMS.has(p))
-      if (parsed.programs.length < before.length) {
-        console.warn(`[classify] filtered invalid programs: ${before.filter(p => !VALID_PROGRAMS.has(p)).join(', ')}`)
-      }
-    }
-    if (Array.isArray(parsed.audienceRoles)) {
-      parsed.audienceRoles = parsed.audienceRoles.filter((r) => VALID_AUDIENCE_ROLES.has(r))
-    }
-    if (Array.isArray(parsed.audienceFunctions)) {
-      parsed.audienceFunctions = parsed.audienceFunctions.filter((f) => VALID_AUDIENCE_FUNCTIONS.has(f))
-    }
-
-    if (parsed.isTeamCode) {
-      const t = parsed.teamNumber
-      if (t !== null && t !== undefined && (!Number.isInteger(t) || t < 1 || t > 99999))
-        parsed.teamNumber = null
-      const y = parsed.seasonYear
-      const now = new Date().getFullYear()
-      if (y !== null && y !== undefined && (!Number.isInteger(y) || y < 2000 || y > now + 1))
-        parsed.seasonYear = null
-    }
-
-    return parsed
+    return validateClassificationOutput(parsed) as CandidateClassification
   } catch (err) {
     console.error('[classify] error:', err)
     return { confidence: 0.3, reasoning: 'Classification failed' }

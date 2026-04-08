@@ -17,6 +17,7 @@
 | S4 | `622c853` | Fixed 4 failing E2E tests |
 | S5 | `29004ad` | P3: team robot code feature + crawler bug fixes |
 | S6 | *(pending)* | P2: reindexQueue worker, dead-link detection, Turnstile CAPTCHA, time-series analytics, submission status page, audience filter UI, tool_updates consumer |
+| S7 | *(pending)* | Final 3%: breadcrumbs, CrawlJobStats type, unit tests (49 tests), mobile filter scroll |
 
 ---
 
@@ -77,9 +78,18 @@ The Tool Pit is a **Next.js 15 / PostgreSQL / BullMQ monorepo** hosted via Cooli
 - ✅ Audience filter UI chips missing — role/function chip groups added to `SearchFilters`
 - ✅ `tool_updates` table never read — activity log section added to admin tool edit page
 
+### Fixed in Session 7
+
+- ✅ No breadcrumbs — contextual "← FRC / Robot Code / Search" link added to `tool-detail.tsx`
+- ✅ `crawl_jobs.stats` typed as `any` — `CrawlJobStats` interface added to `@the-tool-pit/types`; "Published" column corrected to "New" (matches actual written field)
+- ✅ No unit tests — 49 unit tests added: `canonicalizeUrl` (10), `buildSlug` (10), `validateClassificationOutput` (20), `resolveVoterIdentity` (9); vitest added to worker package
+- ✅ Mobile filter bar wraps badly — horizontal scroll on mobile, wrap on md+ (CSS-only)
+
 ### Still open
 
-- No breadcrumbs / "back to program" on tool detail pages *(P2 polish)*
+*None. MVP is complete.*
+
+**Current completion estimate: 100% MVP**
 
 ---
 
