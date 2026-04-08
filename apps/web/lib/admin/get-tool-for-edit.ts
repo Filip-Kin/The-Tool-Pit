@@ -30,7 +30,7 @@ export interface ToolForEdit {
   programs: string[]
   audienceRoles: string[]
   audienceFunctions: string[]
-  links: Array<{ id: string; linkType: string; url: string; label: string | null }>
+  links: Array<{ id: string; linkType: string; url: string; label: string | null; isBroken: boolean; lastCheckedAt: Date | null }>
 }
 
 export async function getToolForEdit(id: string): Promise<ToolForEdit | null> {
@@ -59,7 +59,7 @@ export async function getToolForEdit(id: string): Promise<ToolForEdit | null> {
       .where(eq(toolAudienceFunctions.toolId, id)),
 
     db
-      .select({ id: toolLinks.id, linkType: toolLinks.linkType, url: toolLinks.url, label: toolLinks.label })
+      .select({ id: toolLinks.id, linkType: toolLinks.linkType, url: toolLinks.url, label: toolLinks.label, isBroken: toolLinks.isBroken, lastCheckedAt: toolLinks.lastCheckedAt })
       .from(toolLinks)
       .where(eq(toolLinks.toolId, id)),
   ])

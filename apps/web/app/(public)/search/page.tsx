@@ -79,6 +79,8 @@ export default async function SearchPage({ searchParams }: PageProps) {
             toolType={params.type}
             isOfficial={params.official === 'true'}
             isRookieFriendly={params.rookie === 'true'}
+            audienceRole={params.role}
+            audienceFunction={params.fn}
           />
         </Suspense>
       </div>

@@ -1,6 +1,6 @@
 import { Queue } from 'bullmq'
 import { getRedis } from './redis.js'
-import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, ReindexPayload, SubmissionJobPayload } from '@the-tool-pit/types'
+import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload } from '@the-tool-pit/types'
 
 // One Redis connection for all queues
 const connection = getRedis()
@@ -40,6 +40,16 @@ export const reindexQueue = new Queue<ReindexPayload>('reindex', {
   defaultJobOptions: {
     attempts: 2,
     removeOnComplete: { count: 50 },
+  },
+})
+
+export const linkCheckQueue = new Queue<LinkCheckPayload>('link-check', {
+  connection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'fixed', delay: 5000 },
+    removeOnComplete: { count: 50 },
+    removeOnFail: { count: 100 },
   },
 })
 
@@ -83,6 +93,12 @@ export async function scheduleRecurringJobs() {
   // (individual tool freshness jobs are spawned by this scheduler job)
   await freshnessQueue.upsertJobScheduler('freshness-pass', { every: 24 * 60 * 60 * 1000 }, {
     name: 'freshness-pass-trigger',
+    data: { toolId: '__all__' },
+  })
+
+  // Dead-link check pass — once per week
+  await linkCheckQueue.upsertJobScheduler('link-check-pass', { every: 7 * 24 * 60 * 60 * 1000 }, {
+    name: 'link-check-pass-trigger',
     data: { toolId: '__all__' },
   })
 }

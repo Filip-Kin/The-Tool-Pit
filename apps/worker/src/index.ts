@@ -9,8 +9,10 @@ import { scheduleRecurringJobs } from './queues.js'
 import { processCrawlJob } from './jobs/crawl.js'
 import { processEnrichJob } from './jobs/enrich.js'
 import { processFreshnessJob } from './jobs/freshness.js'
+import { processLinkCheckerJob } from './jobs/link-checker.js'
+import { processReindexJob } from './jobs/reindex.js'
 import { processSubmissionJob } from './jobs/submission.js'
-import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, SubmissionJobPayload } from '@the-tool-pit/types'
+import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload } from '@the-tool-pit/types'
 
 const connection = getRedis()
 const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY ?? '2', 10)
@@ -42,6 +44,24 @@ const freshnessWorker = new Worker<FreshnessCheckPayload>(
   { connection, concurrency: 4 },
 )
 
+const linkCheckWorker = new Worker<LinkCheckPayload>(
+  'link-check',
+  async (job) => {
+    console.log(`[link-check] checking tool ${job.data.toolId}`)
+    await processLinkCheckerJob(job.data)
+  },
+  { connection, concurrency: 4 },
+)
+
+const reindexWorker = new Worker<ReindexPayload>(
+  'reindex',
+  async (job) => {
+    console.log(`[reindex] processing job ${job.id} toolId=${job.data.toolId ?? 'all'}`)
+    await processReindexJob(job.data)
+  },
+  { connection, concurrency: 1 },
+)
+
 const submissionWorker = new Worker<SubmissionJobPayload>(
   'submission',
   async (job) => {
@@ -52,7 +72,7 @@ const submissionWorker = new Worker<SubmissionJobPayload>(
 )
 
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, submissionWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, linkCheckWorker, reindexWorker, submissionWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -75,6 +95,8 @@ async function shutdown() {
     crawlWorker.close(),
     enrichWorker.close(),
     freshnessWorker.close(),
+    linkCheckWorker.close(),
+    reindexWorker.close(),
     submissionWorker.close(),
   ])
   process.exit(0)

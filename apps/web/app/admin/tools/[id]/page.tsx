@@ -4,7 +4,7 @@ import { getToolForEdit } from '@/lib/admin/get-tool-for-edit'
 import { saveTool, setToolStatus } from './actions'
 import { SaveButton } from './save-button'
 import { getDb } from '@/lib/db'
-import { toolSources } from '@the-tool-pit/db'
+import { toolSources, toolUpdates } from '@the-tool-pit/db'
 import { eq, desc } from 'drizzle-orm'
 
 const TOOL_TYPES = [
@@ -53,13 +53,22 @@ export default async function AdminToolEditPage({
   if (!tool) notFound()
 
   const db = getDb()
-  const sources = await db
-    .select()
-    .from(toolSources)
-    .where(eq(toolSources.toolId, id))
-    .orderBy(desc(toolSources.discoveredAt))
+  const [sources, activityLog] = await Promise.all([
+    db
+      .select()
+      .from(toolSources)
+      .where(eq(toolSources.toolId, id))
+      .orderBy(desc(toolSources.discoveredAt)),
+    db
+      .select()
+      .from(toolUpdates)
+      .where(eq(toolUpdates.toolId, id))
+      .orderBy(desc(toolUpdates.signalAt))
+      .limit(20),
+  ])
 
   const linkByType = Object.fromEntries(tool.links.map((l) => [l.linkType, l.url]))
+  const linkStatusByType = Object.fromEntries(tool.links.map((l) => [l.linkType, { isBroken: l.isBroken, lastCheckedAt: l.lastCheckedAt }]))
 
   const suppressAction = setToolStatus.bind(null, id, 'suppressed')
   const publishAction = setToolStatus.bind(null, id, 'published')
@@ -227,23 +236,47 @@ export default async function AdminToolEditPage({
         {/* Links */}
         <section className="flex flex-col gap-4 rounded-lg border border-border p-5">
           <h2 className="text-sm font-semibold text-foreground">Links</h2>
-          {(['homepage', 'github', 'docs'] as const).map((type) => (
-            <Field key={type} label={type.charAt(0).toUpperCase() + type.slice(1)}>
-              <input
-                name={`link_${type}`}
-                defaultValue={linkByType[type] ?? ''}
-                type="url"
-                className="input"
-                placeholder={`https://`}
-              />
-            </Field>
-          ))}
+          {(['homepage', 'github', 'docs'] as const).map((type) => {
+            const status = linkStatusByType[type]
+            return (
+              <div key={type} className="flex flex-col gap-1">
+                <Field label={type.charAt(0).toUpperCase() + type.slice(1)}>
+                  <input
+                    name={`link_${type}`}
+                    defaultValue={linkByType[type] ?? ''}
+                    type="url"
+                    className="input"
+                    placeholder={`https://`}
+                  />
+                </Field>
+                {status?.isBroken && (
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    ⚠ Broken link detected
+                    {status.lastCheckedAt && (
+                      <span className="text-muted-2">
+                        · checked {new Date(status.lastCheckedAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </p>
+                )}
+                {status && !status.isBroken && status.lastCheckedAt && (
+                  <p className="text-xs text-muted-2">
+                    Checked {new Date(status.lastCheckedAt).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+            )
+          })}
           {/* Other link types are read-only for now */}
           {tool.links.filter((l) => !['homepage', 'github', 'docs'].includes(l.linkType)).map((l) => (
             <div key={l.id} className="flex gap-2 items-center text-xs text-muted">
               <span className="w-20 shrink-0">{l.linkType}</span>
               <a href={l.url} target="_blank" rel="noopener noreferrer" className="hover:underline truncate">{l.url}</a>
-              <span className="text-muted-2">(read-only)</span>
+              {l.isBroken ? (
+                <span className="shrink-0 text-red-500">⚠ broken</span>
+              ) : (
+                <span className="text-muted-2 shrink-0">(read-only)</span>
+              )}
             </div>
           ))}
         </section>
@@ -341,6 +374,30 @@ export default async function AdminToolEditPage({
           </div>
         </section>
       )}
+
+      {/* Activity log — signals recorded by freshness / link-checker jobs */}
+      <section className="flex flex-col gap-3 rounded-lg border border-border p-5">
+        <h2 className="text-sm font-semibold text-foreground">Activity Log</h2>
+        {activityLog.length === 0 ? (
+          <p className="text-xs text-muted-2">No activity recorded yet.</p>
+        ) : (
+          <div className="flex flex-col gap-0 divide-y divide-border-subtle">
+            {activityLog.map((entry) => (
+              <div key={entry.id} className="flex flex-wrap items-center gap-3 py-2 text-xs text-muted first:pt-0 last:pb-0">
+                <span className="font-mono bg-surface-2 px-1.5 py-0.5 rounded shrink-0 text-foreground">
+                  {entry.signalType.replace(/_/g, ' ')}
+                </span>
+                <span className="text-muted-2 shrink-0">
+                  {new Date(entry.signalAt).toLocaleString(undefined, {
+                    month: 'short', day: 'numeric', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                  })}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   )
 }

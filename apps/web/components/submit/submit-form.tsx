@@ -1,15 +1,77 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import Link from 'next/link'
+
+// Extend Window to hold the Turnstile API injected by Cloudflare's script
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (container: HTMLElement | string, opts: {
+        sitekey: string
+        callback: (token: string) => void
+        'error-callback': () => void
+        'expired-callback': () => void
+        theme?: 'light' | 'dark' | 'auto'
+      }) => string
+      reset: (widgetId: string) => void
+    }
+  }
+}
+
+const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
 
 export function SubmitForm() {
   const [url, setUrl] = useState('')
   const [note, setNote] = useState('')
-  const [result, setResult] = useState<{ status: string; message: string } | null>(null)
+  const [result, setResult] = useState<{ submissionId?: string; status: string; message: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const turnstileRef = useRef<HTMLDivElement>(null)
+  const widgetIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!SITE_KEY || !turnstileRef.current) return
+
+    function renderWidget() {
+      if (!turnstileRef.current || !window.turnstile) return
+      widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
+        sitekey: SITE_KEY,
+        callback: (token) => setTurnstileToken(token),
+        'error-callback': () => setTurnstileToken(null),
+        'expired-callback': () => setTurnstileToken(null),
+        theme: 'auto',
+      })
+    }
+
+    if (window.turnstile) {
+      renderWidget()
+      return
+    }
+
+    // Inject the Cloudflare script once
+    if (!document.getElementById('cf-turnstile-script')) {
+      const script = document.createElement('script')
+      script.id = 'cf-turnstile-script'
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
+      script.async = true
+      script.defer = true
+      script.onload = renderWidget
+      document.head.appendChild(script)
+    } else {
+      // Script already injected but not yet loaded — poll briefly
+      const poll = setInterval(() => {
+        if (window.turnstile) {
+          clearInterval(poll)
+          renderWidget()
+        }
+      }, 100)
+      return () => clearInterval(poll)
+    }
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -21,16 +83,30 @@ export function SubmitForm() {
       return
     }
 
+    if (SITE_KEY && !turnstileToken) {
+      setError('Please complete the CAPTCHA.')
+      return
+    }
+
     startTransition(async () => {
       try {
         const res = await fetch('/api/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: url.trim(), note: note.trim() || undefined }),
+          body: JSON.stringify({
+            url: url.trim(),
+            note: note.trim() || undefined,
+            turnstileToken: turnstileToken ?? undefined,
+          }),
         })
         const data = await res.json()
         if (!res.ok) {
           setError(data.error ?? 'Submission failed.')
+          // Reset Turnstile widget so user can retry
+          if (window.turnstile && widgetIdRef.current) {
+            window.turnstile.reset(widgetIdRef.current)
+            setTurnstileToken(null)
+          }
         } else {
           setResult(data)
           setUrl('')
@@ -44,12 +120,21 @@ export function SubmitForm() {
 
   if (result && result.status !== 'rejected') {
     return (
-      <div className="flex items-start gap-3 rounded-lg border border-rookie/30 bg-rookie/10 p-4">
-        <CheckCircle className="h-5 w-5 shrink-0 text-rookie mt-0.5" />
-        <div>
-          <p className="text-sm font-medium text-foreground">Submitted!</p>
-          <p className="text-sm text-muted mt-0.5">{result.message}</p>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start gap-3 rounded-lg border border-rookie/30 bg-rookie/10 p-4">
+          <CheckCircle className="h-5 w-5 shrink-0 text-rookie mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-foreground">Submitted!</p>
+            <p className="text-sm text-muted mt-0.5">{result.message}</p>
+          </div>
         </div>
+        {result.submissionId && (
+          <p className="text-xs text-muted text-center">
+            <Link href={`/submissions/${result.submissionId}`} className="underline hover:text-foreground">
+              Check submission status →
+            </Link>
+          </p>
+        )}
       </div>
     )
   }
@@ -85,6 +170,11 @@ export function SubmitForm() {
         />
       </div>
 
+      {/* Cloudflare Turnstile widget — only rendered when site key is configured */}
+      {SITE_KEY && (
+        <div ref={turnstileRef} className="min-h-[65px]" />
+      )}
+
       {error && (
         <div className="flex items-start gap-2 rounded-lg border border-frc/30 bg-frc/10 p-3">
           <AlertCircle className="h-4 w-4 shrink-0 text-frc mt-0.5" />
@@ -94,7 +184,7 @@ export function SubmitForm() {
 
       <button
         type="submit"
-        disabled={isPending}
+        disabled={isPending || (!!SITE_KEY && !turnstileToken)}
         className="flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isPending && <Loader2 className="h-4 w-4 animate-spin" />}

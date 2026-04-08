@@ -108,3 +108,7 @@ export interface ReindexPayload {
 export interface SubmissionJobPayload {
   submissionId: string
 }
+
+export interface LinkCheckPayload {
+  toolId: string
+}

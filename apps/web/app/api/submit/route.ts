@@ -6,7 +6,7 @@ import { checkSubmissionRateLimit } from '@/lib/submissions/rate-limit'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { url, note } = body as { url: string; note?: string }
+    const { url, note, turnstileToken } = body as { url: string; note?: string; turnstileToken?: string }
 
     if (!url || typeof url !== 'string') {
       return NextResponse.json({ error: 'url required' }, { status: 400 })
@@ -25,6 +25,23 @@ export async function POST(req: NextRequest) {
     const allowed = await checkSubmissionRateLimit(ipHash)
     if (!allowed) {
       return NextResponse.json({ error: 'Too many submissions. Please wait.' }, { status: 429 })
+    }
+
+    // Validate Turnstile CAPTCHA when secret key is configured
+    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY
+    if (turnstileSecret) {
+      if (!turnstileToken) {
+        return NextResponse.json({ error: 'CAPTCHA required' }, { status: 400 })
+      }
+      const verification = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: turnstileSecret, response: turnstileToken }),
+      })
+      const cfResult = await verification.json() as { success: boolean }
+      if (!cfResult.success) {
+        return NextResponse.json({ error: 'CAPTCHA verification failed. Please try again.' }, { status: 400 })
+      }
     }
 
     const result = await createSubmission({ url, note, submitterIpHash: ipHash })
