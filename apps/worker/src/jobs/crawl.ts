@@ -91,7 +91,7 @@ export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {
           .returning({ id: crawlCandidates.id })
 
         // Enqueue for AI enrichment + publish decision
-        await enrichQueue.add('enrich', { candidateId: stored.id })
+        await enrichQueue.add('enrich', { candidateId: stored.id, sourceType: connectorName })
         totalNew++
       } catch (err) {
         totalFailed++

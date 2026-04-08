@@ -21,7 +21,7 @@ async function resolveSubmission(
 
 export async function processEnrichJob(payload: EnrichJobPayload): Promise<void> {
   const db = getDb()
-  const { candidateId, submissionId } = payload
+  const { candidateId, submissionId, sourceType } = payload
 
   const [candidate] = await db
     .select()
@@ -114,7 +114,7 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
 
   // 4. Auto-publish if confidence is sufficient
   if (confidence >= 0.7) {
-    const result = await publishCandidate(candidateId)
+    const result = await publishCandidate(candidateId, sourceType)
     console.log(
       `[enrich] candidate ${candidateId}: ${result.action}` +
         (result.reason ? ` (${result.reason})` : ` (confidence=${confidence.toFixed(2)})`),

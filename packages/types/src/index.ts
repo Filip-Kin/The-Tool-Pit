@@ -87,6 +87,8 @@ export interface EnrichJobPayload {
   toolId?: string
   /** When set, the submission record is updated after the pipeline decides. */
   submissionId?: string
+  /** Connector name that produced this candidate (e.g. 'fta_tools', 'github_topics'). */
+  sourceType?: string
 }
 
 export interface FreshnessCheckPayload {

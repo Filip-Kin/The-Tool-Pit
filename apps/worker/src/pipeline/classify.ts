@@ -6,6 +6,20 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
 
+const VALID_TOOL_TYPES = new Set([
+  'web_app', 'desktop_app', 'mobile_app', 'calculator', 'spreadsheet',
+  'github_project', 'browser_extension', 'api', 'resource', 'other',
+])
+const VALID_PROGRAMS = new Set(['frc', 'ftc', 'fll'])
+const VALID_AUDIENCE_ROLES = new Set([
+  'student', 'mentor', 'volunteer', 'parent_newcomer', 'organizer_staff',
+])
+const VALID_AUDIENCE_FUNCTIONS = new Set([
+  'programmer', 'scouter', 'strategist', 'cad', 'mechanical', 'electrical',
+  'drive_team', 'awards', 'outreach', 'team_management', 'event_ops',
+  'field_technical', 'inspection', 'judging',
+])
+
 let _client: Anthropic | undefined
 
 function getClient(): Anthropic {
@@ -64,6 +78,26 @@ Has GitHub link: ${metadata.githubUrl ? 'yes (' + metadata.githubUrl + ')' : 'no
     // Strip markdown code fences Claude sometimes wraps around JSON
     const clean = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
     const parsed = JSON.parse(clean) as CandidateClassification
+
+    // Validate and filter enum fields — silently drop unknown values
+    if (parsed.toolType && !VALID_TOOL_TYPES.has(parsed.toolType)) {
+      console.warn(`[classify] unknown toolType "${parsed.toolType}" — falling back to "other"`)
+      parsed.toolType = 'other'
+    }
+    if (Array.isArray(parsed.programs)) {
+      const before = parsed.programs
+      parsed.programs = parsed.programs.filter((p) => VALID_PROGRAMS.has(p))
+      if (parsed.programs.length < before.length) {
+        console.warn(`[classify] filtered invalid programs: ${before.filter(p => !VALID_PROGRAMS.has(p)).join(', ')}`)
+      }
+    }
+    if (Array.isArray(parsed.audienceRoles)) {
+      parsed.audienceRoles = parsed.audienceRoles.filter((r) => VALID_AUDIENCE_ROLES.has(r))
+    }
+    if (Array.isArray(parsed.audienceFunctions)) {
+      parsed.audienceFunctions = parsed.audienceFunctions.filter((f) => VALID_AUDIENCE_FUNCTIONS.has(f))
+    }
+
     return parsed
   } catch (err) {
     console.error('[classify] error:', err)

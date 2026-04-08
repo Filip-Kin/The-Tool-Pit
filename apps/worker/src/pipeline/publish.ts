@@ -27,7 +27,7 @@ export interface PublishResult {
   reason?: string
 }
 
-export async function publishCandidate(candidateId: string): Promise<PublishResult> {
+export async function publishCandidate(candidateId: string, sourceType = 'manual'): Promise<PublishResult> {
   const db = getDb()
 
   const [candidate] = await db
@@ -42,7 +42,6 @@ export async function publishCandidate(candidateId: string): Promise<PublishResu
   const classification = (candidate.classification ?? {}) as Record<string, unknown>
 
   if (confidence < PUBLISH_THRESHOLD) {
-    // Leave in pending state for admin review
     return {
       toolId: '',
       action: 'skipped',
@@ -60,7 +59,7 @@ export async function publishCandidate(candidateId: string): Promise<PublishResu
     .replace(/-+/g, '-')
     .slice(0, 80)
 
-  // Ensure uniqueness
+  // Ensure uniqueness (checked outside transaction to avoid long locks)
   let slug = titleBase
   let attempt = 0
   while (true) {
@@ -74,11 +73,17 @@ export async function publishCandidate(candidateId: string): Promise<PublishResu
     slug = `${titleBase}-${attempt}`
   }
 
+  // summary ≤ 300 chars; description gets the full text when longer
+  const rawSummary = (classification.summary as string) ?? (meta.description as string) ?? ''
+  const rawDescription = (meta.description as string) ?? ''
+  const summary = rawSummary.slice(0, 300) || null
+  const description = rawDescription.length > 300 ? rawDescription : null
+
   const toolData: NewTool = {
     slug,
     name: (meta.title as string) ?? 'Untitled Tool',
-    summary:
-      ((classification.summary as string) ?? (meta.description as string) ?? '').slice(0, 300) || null,
+    summary,
+    description,
     toolType: (classification.toolType as string) ?? 'other',
     status: 'published',
     isOfficial: Boolean(classification.isOfficial),
@@ -89,85 +94,89 @@ export async function publishCandidate(candidateId: string): Promise<PublishResu
     publishedAt: new Date(),
   }
 
-  const [newTool] = await db.insert(tools).values(toolData).returning({ id: tools.id })
+  const toolId = await db.transaction(async (tx) => {
+    const [newTool] = await tx.insert(tools).values(toolData).returning({ id: tools.id })
 
-  // Insert primary link
-  if (candidate.canonicalUrl) {
-    await db.insert(toolLinks).values({
+    // Insert primary link
+    if (candidate.canonicalUrl) {
+      await tx.insert(toolLinks).values({
+        toolId: newTool.id,
+        linkType: 'homepage',
+        url: candidate.canonicalUrl,
+      })
+    }
+
+    // Insert GitHub link if present
+    const githubUrl = meta.githubUrl as string | undefined
+    if (githubUrl) {
+      await tx.insert(toolLinks).values({
+        toolId: newTool.id,
+        linkType: 'github',
+        url: githubUrl,
+      })
+    }
+
+    // Link programs
+    const programSlugs = (classification.programs as string[] | undefined) ?? []
+    if (programSlugs.length > 0) {
+      const programRows = await tx
+        .select({ id: programs.id })
+        .from(programs)
+        .where(inArray(programs.slug, programSlugs))
+
+      if (programRows.length > 0) {
+        await tx
+          .insert(toolPrograms)
+          .values(programRows.map((p) => ({ toolId: newTool.id, programId: p.id })))
+      }
+    }
+
+    // Link audience primary roles
+    const audienceRoleSlugs = (classification.audienceRoles as string[] | undefined) ?? []
+    if (audienceRoleSlugs.length > 0) {
+      const roleRows = await tx
+        .select({ id: audiencePrimaryRoles.id })
+        .from(audiencePrimaryRoles)
+        .where(inArray(audiencePrimaryRoles.slug, audienceRoleSlugs))
+
+      if (roleRows.length > 0) {
+        await tx
+          .insert(toolAudiencePrimaryRoles)
+          .values(roleRows.map((r) => ({ toolId: newTool.id, roleId: r.id })))
+      }
+    }
+
+    // Link audience functions
+    const audienceFunctionSlugs = (classification.audienceFunctions as string[] | undefined) ?? []
+    if (audienceFunctionSlugs.length > 0) {
+      const functionRows = await tx
+        .select({ id: audienceFunctions.id })
+        .from(audienceFunctions)
+        .where(inArray(audienceFunctions.slug, audienceFunctionSlugs))
+
+      if (functionRows.length > 0) {
+        await tx
+          .insert(toolAudienceFunctions)
+          .values(functionRows.map((f) => ({ toolId: newTool.id, functionId: f.id })))
+      }
+    }
+
+    // Record source evidence with the real connector name
+    await tx.insert(toolSources).values({
       toolId: newTool.id,
-      linkType: 'homepage',
-      url: candidate.canonicalUrl,
+      sourceType,
+      sourceUrl: candidate.sourceUrl,
+      rawMetadata: candidate.rawMetadata,
     })
-  }
 
-  // Insert GitHub link if present
-  const githubUrl = meta.githubUrl as string | undefined
-  if (githubUrl) {
-    await db.insert(toolLinks).values({
-      toolId: newTool.id,
-      linkType: 'github',
-      url: githubUrl,
-    })
-  }
+    // Mark candidate as published
+    await tx
+      .update(crawlCandidates)
+      .set({ status: 'published', matchedToolId: newTool.id, updatedAt: new Date() })
+      .where(eq(crawlCandidates.id, candidateId))
 
-  // Link programs
-  const programSlugs = (classification.programs as string[] | undefined) ?? []
-  if (programSlugs.length > 0) {
-    const programRows = await db
-      .select({ id: programs.id })
-      .from(programs)
-      .where(inArray(programs.slug, programSlugs))
-
-    if (programRows.length > 0) {
-      await db
-        .insert(toolPrograms)
-        .values(programRows.map((p) => ({ toolId: newTool.id, programId: p.id })))
-    }
-  }
-
-  // Link audience primary roles
-  const audienceRoleSlugs = (classification.audienceRoles as string[] | undefined) ?? []
-  if (audienceRoleSlugs.length > 0) {
-    const roleRows = await db
-      .select({ id: audiencePrimaryRoles.id })
-      .from(audiencePrimaryRoles)
-      .where(inArray(audiencePrimaryRoles.slug, audienceRoleSlugs))
-
-    if (roleRows.length > 0) {
-      await db
-        .insert(toolAudiencePrimaryRoles)
-        .values(roleRows.map((r) => ({ toolId: newTool.id, roleId: r.id })))
-    }
-  }
-
-  // Link audience functions
-  const audienceFunctionSlugs = (classification.audienceFunctions as string[] | undefined) ?? []
-  if (audienceFunctionSlugs.length > 0) {
-    const functionRows = await db
-      .select({ id: audienceFunctions.id })
-      .from(audienceFunctions)
-      .where(inArray(audienceFunctions.slug, audienceFunctionSlugs))
-
-    if (functionRows.length > 0) {
-      await db
-        .insert(toolAudienceFunctions)
-        .values(functionRows.map((f) => ({ toolId: newTool.id, functionId: f.id })))
-    }
-  }
-
-  // Record source evidence
-  await db.insert(toolSources).values({
-    toolId: newTool.id,
-    sourceType: 'fta_tools', // overridden by enrich job if needed
-    sourceUrl: candidate.sourceUrl,
-    rawMetadata: candidate.rawMetadata,
+    return newTool.id
   })
 
-  // Mark candidate as published
-  await db
-    .update(crawlCandidates)
-    .set({ status: 'published', matchedToolId: newTool.id, updatedAt: new Date() })
-    .where(eq(crawlCandidates.id, candidateId))
-
-  return { toolId: newTool.id, action: 'created' }
+  return { toolId, action: 'created' }
 }

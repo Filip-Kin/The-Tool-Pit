@@ -59,6 +59,8 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     query,
     program,
     toolType,
+    audienceRole,
+    audienceFunction,
     isOfficial,
     isRookieFriendly,
     sort,
@@ -105,6 +107,14 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
   // Popularity (normalized 0–1 assuming max score ~1000)
   const popularityNorm = sql<number>`least(${tools.popularityScore} / 1000.0, 1.0) * 0.3`
 
+  // Type weight boost — preferred tool types rank higher
+  const typeWeightExpr = sql<number>`case ${tools.toolType}
+    when 'web_app' then 1.0 when 'calculator' then 1.0
+    when 'desktop_app' then 0.9 when 'github_project' then 0.85
+    when 'browser_extension' then 0.8 when 'mobile_app' then 0.8
+    when 'api' then 0.7 when 'spreadsheet' then 0.4
+    when 'resource' then 0.35 else 0.5 end * 0.15`
+
   const rankScore = sql<number>`(
     ${tsRank} * 1.0
     + ${exactTitleBoost}
@@ -112,6 +122,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     + ${freshnessScore}
     + ${officialBoost}
     + ${popularityNorm}
+    + ${typeWeightExpr}
   )`
 
   // WHERE conditions
@@ -136,6 +147,26 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
         select 1 from tool_programs tp
         join programs p on p.id = tp.program_id
         where tp.tool_id = ${tools.id} and p.slug = ${program}
+      )`,
+    )
+  }
+
+  if (audienceRole) {
+    conditions.push(
+      sql`exists (
+        select 1 from tool_audience_primary_roles tar
+        join audience_primary_roles apr on apr.id = tar.role_id
+        where tar.tool_id = ${tools.id} and apr.slug = ${audienceRole}
+      )`,
+    )
+  }
+
+  if (audienceFunction) {
+    conditions.push(
+      sql`exists (
+        select 1 from tool_audience_functions taf
+        join audience_functions af on af.id = taf.function_id
+        where taf.tool_id = ${tools.id} and af.slug = ${audienceFunction}
       )`,
     )
   }
