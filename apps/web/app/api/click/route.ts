@@ -5,6 +5,8 @@ import { getDb } from '@/lib/db'
 import { tools } from '@the-tool-pit/db'
 import { eq } from 'drizzle-orm'
 
+const SESSION_COOKIE = 'tp_sid'
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -22,7 +24,8 @@ export async function POST(req: NextRequest) {
     }
 
     const ip = req.headers.get('x-forwarded-for') ?? ''
-    recordClickEvent({ toolId, linkType, ipHash: getIpHash(ip) }).catch(() => {})
+    const sessionId = req.cookies.get(SESSION_COOKIE)?.value
+    recordClickEvent({ toolId, linkType, sessionId, ipHash: getIpHash(ip) }).catch(() => {})
 
     return NextResponse.json({ ok: true })
   } catch {

@@ -1,5 +1,7 @@
 import Link from 'next/link'
-import { cn } from '@/lib/utils/cn'
+import { getDb } from '@/lib/db'
+import { tools, toolPrograms, programs } from '@the-tool-pit/db'
+import { eq, and, sql } from 'drizzle-orm'
 
 const PROGRAMS = [
   {
@@ -28,7 +30,20 @@ const PROGRAMS = [
   },
 ]
 
-export function ProgramCards() {
+async function getToolCountsByProgram(): Promise<Record<string, number>> {
+  const db = getDb()
+  const rows = await db
+    .select({ slug: programs.slug, count: sql<number>`count(distinct ${toolPrograms.toolId})::int` })
+    .from(programs)
+    .leftJoin(toolPrograms, eq(toolPrograms.programId, programs.id))
+    .leftJoin(tools, and(eq(tools.id, toolPrograms.toolId), eq(tools.status, 'published')))
+    .groupBy(programs.slug)
+  return Object.fromEntries(rows.map((r) => [r.slug, r.count]))
+}
+
+export async function ProgramCards() {
+  const counts = await getToolCountsByProgram()
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       {PROGRAMS.map((p) => (
@@ -47,6 +62,9 @@ export function ProgramCards() {
             <span className="text-sm font-medium text-foreground">{p.fullName}</span>
           </div>
           <p className="text-xs text-muted leading-relaxed">{p.description}</p>
+          {counts[p.slug] != null && counts[p.slug] > 0 && (
+            <p className="text-xs text-muted-2 mt-auto">{counts[p.slug]} tools</p>
+          )}
         </Link>
       ))}
     </div>

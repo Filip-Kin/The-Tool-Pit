@@ -62,5 +62,18 @@ export async function checkDuplicate(
     }
   } catch {}
 
+  // 4. Name-similarity deduplication via pg_trgm
+  if (title && title.length >= 3) {
+    const [similarTool] = await db
+      .select({ id: tools.id })
+      .from(tools)
+      .where(sql`similarity(${tools.name}, ${title}) > 0.7`)
+      .limit(1)
+
+    if (similarTool) {
+      return { isDuplicate: true, matchedToolId: similarTool.id, method: 'name_similarity' }
+    }
+  }
+
   return { isDuplicate: false }
 }

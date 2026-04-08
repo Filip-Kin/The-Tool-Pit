@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { getToolForEdit } from '@/lib/admin/get-tool-for-edit'
 import { saveTool, setToolStatus } from './actions'
 import { SaveButton } from './save-button'
+import { getDb } from '@/lib/db'
+import { toolSources } from '@the-tool-pit/db'
+import { eq, desc } from 'drizzle-orm'
 
 const TOOL_TYPES = [
   'web_app', 'desktop_app', 'mobile_app', 'calculator', 'spreadsheet',
@@ -48,6 +51,13 @@ export default async function AdminToolEditPage({
   const { id } = await params
   const tool = await getToolForEdit(id)
   if (!tool) notFound()
+
+  const db = getDb()
+  const sources = await db
+    .select()
+    .from(toolSources)
+    .where(eq(toolSources.toolId, id))
+    .orderBy(desc(toolSources.discoveredAt))
 
   const linkByType = Object.fromEntries(tool.links.map((l) => [l.linkType, l.url]))
 
@@ -279,6 +289,28 @@ export default async function AdminToolEditPage({
           <SaveButton />
         </div>
       </form>
+
+      {/* Sources — read-only evidence records */}
+      {sources.length > 0 && (
+        <section className="flex flex-col gap-3 rounded-lg border border-border p-5">
+          <h2 className="text-sm font-semibold text-foreground">Sources</h2>
+          <div className="flex flex-col gap-2">
+            {sources.map((s) => (
+              <div key={s.id} className="flex flex-wrap gap-3 text-xs text-muted border-t border-border-subtle pt-2 first:border-t-0 first:pt-0">
+                <span className="font-mono bg-surface-2 px-1.5 py-0.5 rounded shrink-0">{s.sourceType}</span>
+                {s.sourceUrl ? (
+                  <a href={s.sourceUrl} target="_blank" rel="noopener noreferrer" className="hover:underline truncate flex-1">
+                    {s.sourceUrl}
+                  </a>
+                ) : <span className="text-muted-2 flex-1">—</span>}
+                <span className="text-muted-2 shrink-0">
+                  {s.discoveredAt ? new Date(s.discoveredAt).toLocaleDateString() : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
