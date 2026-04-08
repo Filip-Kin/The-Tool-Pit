@@ -36,11 +36,28 @@ interface ToolDetailProps {
   tool: ToolDetailData
 }
 
+function normalizeUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    return (u.hostname + u.pathname).toLowerCase().replace(/\/+$/, '')
+  } catch {
+    return url.toLowerCase().replace(/\/+$/, '')
+  }
+}
+
 export function ToolDetail({ tool }: ToolDetailProps) {
   const githubLink = tool.links.find((l) => l.linkType === 'github')
-  const prominentLinks = tool.links.filter(
-    (l) => (l.linkType === 'github' || l.linkType === 'homepage') && !l.isBroken,
-  )
+  const githubNorm = githubLink ? normalizeUrl(githubLink.url) : null
+  const prominentLinks = tool.links.filter((l) => {
+    if (l.isBroken) return false
+    if (l.linkType === 'github') return true
+    if (l.linkType === 'homepage') {
+      // Suppress homepage button when it points to the same URL as github
+      if (githubNorm && normalizeUrl(l.url) === githubNorm) return false
+      return true
+    }
+    return false
+  })
   const otherLinks = tool.links.filter(
     (l) => l.linkType !== 'github' && l.linkType !== 'homepage' && !l.isBroken,
   )

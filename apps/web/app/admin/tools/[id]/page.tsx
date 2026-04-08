@@ -204,6 +204,10 @@ export default async function AdminToolEditPage({
               <input type="checkbox" name="isTeamCode" defaultChecked={tool.isTeamCode} className="rounded" />
               Team Robot Code
             </label>
+            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+              <input type="checkbox" name="isTeamCad" defaultChecked={tool.isTeamCad} className="rounded" />
+              Team Robot CAD
+            </label>
           </div>
 
           {/* Team Info — shown when isTeamCode might be checked */}
@@ -352,6 +356,24 @@ export default async function AdminToolEditPage({
           <SaveButton />
         </div>
       </form>
+
+      {/* Admin Notes — internal only */}
+      <section className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-5">
+        <h2 className="text-sm font-semibold text-foreground">Admin Notes <span className="text-xs font-normal text-muted">(internal only)</span></h2>
+        <form action={(formData) => { void saveTool(undefined, formData) }}>
+          <input type="hidden" name="toolId" value={tool.id} />
+          <textarea
+            name="adminNotes"
+            defaultValue={tool.adminNotes ?? ''}
+            rows={3}
+            placeholder="Reason for suppression, review notes, etc."
+            className="input w-full resize-y text-sm"
+          />
+          <div className="mt-2 flex justify-end">
+            <SaveButton label="Save Notes" />
+          </div>
+        </form>
+      </section>
 
       {/* Sources — read-only evidence records */}
       {sources.length > 0 && (

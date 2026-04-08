@@ -25,6 +25,9 @@ const TOPIC_TARGETS = [
 /** Max repos to fetch per topic. 100 is the GitHub Search API maximum per page. */
 const PER_TOPIC = 100
 
+/** CAD-related keywords used to detect robot CAD repos. */
+const CAD_KEYWORDS = ['cad', 'onshape', 'solidworks', 'fusion', 'step', 'stp', 'design', 'mechanical']
+
 interface GitHubSearchRepo {
   html_url: string
   full_name: string
@@ -35,6 +38,57 @@ interface GitHubSearchRepo {
   topics: string[]
   pushed_at: string
   archived: boolean
+}
+
+/**
+ * Extracts team number and season year metadata from a repo's full_name,
+ * name, topics, and description. Returns structured keyword strings so the
+ * publish pipeline can store `isTeamCad` and relate repos to specific teams.
+ *
+ * Examples:
+ *   full_name "frc1678/2024Robot"  → ['team:1678', 'year:2024', 'team_code']
+ *   topics    ['frc-4099', 'cad']  → ['team:4099', 'team_cad']
+ */
+function extractRepoKeywords(repo: GitHubSearchRepo, program: string): string[] {
+  const extra: string[] = []
+
+  const [orgPart] = repo.full_name.split('/')
+  const nameLower = repo.name.toLowerCase()
+  const descLower = (repo.description ?? '').toLowerCase()
+  const topicsLower = repo.topics.map((t) => t.toLowerCase())
+  const combinedText = `${nameLower} ${descLower} ${topicsLower.join(' ')}`
+
+  // --- Team number ---
+  // 1. frc-NNNN topic pattern (most reliable)
+  let teamNumber: number | null = null
+  for (const t of topicsLower) {
+    const m = t.match(/^frc-(\d{1,5})$/)
+    if (m) { teamNumber = parseInt(m[1], 10); break }
+  }
+  // 2. Org name pattern like "frc1678" or "team1678"
+  if (!teamNumber) {
+    const m = orgPart.match(/(?:frc|team)(\d{1,5})/i)
+    if (m) teamNumber = parseInt(m[1], 10)
+  }
+  if (teamNumber) extra.push(`team:${teamNumber}`)
+
+  // --- Season year ---
+  const yearMatch = repo.name.match(/\b(20\d{2})\b/)
+  if (yearMatch) extra.push(`year:${yearMatch[1]}`)
+
+  // --- CAD vs code detection ---
+  const isCad = CAD_KEYWORDS.some((k) => combinedText.includes(k))
+  if (isCad) {
+    extra.push('team_cad')
+  } else if (teamNumber || yearMatch) {
+    // Only tag team_code when we also detected a team/year (likely a robot code repo)
+    extra.push('team_code')
+  }
+
+  // Always add the program keyword if not already in topics
+  if (!repo.topics.includes(program)) extra.push(program)
+
+  return extra
 }
 
 export class GitHubTopicsConnector implements Connector {
@@ -76,6 +130,7 @@ export class GitHubTopicsConnector implements Connector {
           if (seen.has(repoUrl)) continue
           seen.add(repoUrl)
 
+          const extraKeywords = extractRepoKeywords(repo, program)
           candidates.push({
             sourceUrl: `https://github.com/topics/${topic}`,
             canonicalUrl: repoUrl,
@@ -83,8 +138,8 @@ export class GitHubTopicsConnector implements Connector {
             title: repo.name.replace(/[-_]/g, ' '),
             description: repo.description ?? undefined,
             ...(repo.homepage ? { homepageUrl: repo.homepage } : {}),
-            // Pre-seed keywords with all topics — helps the program classifier
-            keywords: [program, ...repo.topics],
+            // Pre-seed keywords: GitHub topics + extracted team/year/CAD metadata
+            keywords: [...new Set([...repo.topics, ...extraKeywords])],
           })
         }
 

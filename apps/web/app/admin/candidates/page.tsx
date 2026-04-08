@@ -106,17 +106,20 @@ export default async function AdminCandidatesPage({
                   >
                     {/* URL + title */}
                     <td className="px-4 py-3 max-w-xs">
+                      <Link
+                        href={`/admin/candidates/${row.id}`}
+                        className="text-xs text-primary hover:underline break-all line-clamp-1 font-medium"
+                      >
+                        {meta.title ?? displayUrl}
+                      </Link>
                       <a
                         href={displayUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-primary hover:underline break-all line-clamp-1"
+                        className="mt-0.5 text-[10px] text-muted hover:underline break-all line-clamp-1 block"
                       >
                         {displayUrl}
                       </a>
-                      {meta.title && (
-                        <p className="mt-0.5 text-xs text-foreground line-clamp-1">{meta.title}</p>
-                      )}
                       {cls.summary && (
                         <p className="mt-1 text-xs text-muted line-clamp-2">{cls.summary}</p>
                       )}

@@ -46,10 +46,12 @@ export async function saveTool(_prev: unknown, formData: FormData) {
       isVendor: formData.get('isVendor') === 'on',
       isRookieFriendly: formData.get('isRookieFriendly') === 'on',
       isTeamCode: formData.get('isTeamCode') === 'on',
+      isTeamCad: formData.get('isTeamCad') === 'on',
       teamNumber: formData.get('teamNumber') ? parseInt(formData.get('teamNumber') as string, 10) : null,
       seasonYear: formData.get('seasonYear') ? parseInt(formData.get('seasonYear') as string, 10) : null,
       vendorName: (formData.get('vendorName') as string)?.trim() || null,
       freshnessState: (formData.get('freshnessState') as string) || 'unknown',
+      adminNotes: (formData.get('adminNotes') as string)?.trim() || null,
       updatedAt: new Date(),
     })
     .where(eq(tools.id, toolId))

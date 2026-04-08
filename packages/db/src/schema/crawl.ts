@@ -53,6 +53,8 @@ export const crawlCandidates = pgTable(
      * pending | matched | merged | published | suppressed | duplicate
      */
     status: text('status').notNull().default('pending'),
+    /** Admin-recorded reason when suppressing a candidate (e.g. "spam", "duplicate of X"). */
+    rejectionReason: text('rejection_reason'),
     matchedToolId: uuid('matched_tool_id').references(() => tools.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -97,6 +99,9 @@ export interface RawCandidateMetadata {
   homepageUrl?: string
   docsUrl?: string
   keywords?: string[]
+  githubStars?: number
+  chiefDelphiLikes?: number
+  chiefDelphiThreadUrl?: string
   rawHtml?: string // truncated
 }
 
@@ -109,6 +114,7 @@ export interface CandidateClassification {
   isOfficial?: boolean
   isVendor?: boolean
   isTeamCode?: boolean
+  isTeamCad?: boolean
   teamNumber?: number | null
   seasonYear?: number | null
   summary?: string

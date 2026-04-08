@@ -51,6 +51,11 @@ export const tools = pgTable(
      * a general-purpose tool or library used by many teams.
      */
     isTeamCode: boolean('is_team_code').notNull().default(false),
+    /**
+     * True if this is a specific team's own robot CAD repository (e.g. Onshape, STEP export).
+     * Can coexist with isTeamCode on the same tool if repo contains both.
+     */
+    isTeamCad: boolean('is_team_cad').notNull().default(false),
     /** FIRST team number (1–99999), e.g. 254, 1114. Nullable. */
     teamNumber: integer('team_number'),
     /** Season year the code was written for, e.g. 2024. Nullable. */
@@ -63,6 +68,10 @@ export const tools = pgTable(
      */
     confidenceScore: real('confidence_score').default(0),
     popularityScore: real('popularity_score').notNull().default(0),
+    /** Cached GitHub star count. Added to popularityScore as external upvotes. */
+    githubStars: integer('github_stars').notNull().default(0),
+    /** Like count on the primary ChiefDelphi thread for this tool. Added to popularityScore. */
+    chiefDelphiLikes: integer('chief_delphi_likes').notNull().default(0),
 
     /**
      * Internal freshness state (collapsed to Current/Stale/Abandoned for UI).
@@ -70,6 +79,9 @@ export const tools = pgTable(
      */
     freshnessState: text('freshness_state').default('unknown'),
     lastActivityAt: timestamp('last_activity_at', { withTimezone: true }),
+
+    /** Internal admin-only notes, e.g. why a tool was suppressed or flagged. */
+    adminNotes: text('admin_notes'),
 
     publishedAt: timestamp('published_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -87,6 +99,7 @@ export const tools = pgTable(
     index('tools_popularity_idx').on(table.popularityScore),
     index('tools_published_at_idx').on(table.publishedAt),
     index('tools_is_team_code_idx').on(table.isTeamCode),
+    index('tools_is_team_cad_idx').on(table.isTeamCad),
     index('tools_team_number_idx').on(table.teamNumber),
     index('tools_season_year_idx').on(table.seasonYear),
   ],

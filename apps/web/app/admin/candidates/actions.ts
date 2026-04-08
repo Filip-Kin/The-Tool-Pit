@@ -18,17 +18,23 @@ export async function approveCandidate(candidateId: string): Promise<{ error?: s
   await assertAdmin()
   const result = await adminPublishCandidate(candidateId)
   revalidatePath('/admin/candidates')
+  revalidatePath(`/admin/candidates/${candidateId}`)
   revalidatePath('/admin/tools')
   if ('error' in result) return { error: result.error }
   return {}
 }
 
-export async function suppressCandidate(candidateId: string): Promise<void> {
+export async function suppressCandidate(candidateId: string, rejectionReason?: string): Promise<void> {
   await assertAdmin()
   const db = getDb()
   await db
     .update(crawlCandidates)
-    .set({ status: 'suppressed', updatedAt: new Date() })
+    .set({
+      status: 'suppressed',
+      rejectionReason: rejectionReason?.trim() || null,
+      updatedAt: new Date(),
+    })
     .where(eq(crawlCandidates.id, candidateId))
   revalidatePath('/admin/candidates')
+  revalidatePath(`/admin/candidates/${candidateId}`)
 }

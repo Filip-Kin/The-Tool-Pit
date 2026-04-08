@@ -2,7 +2,7 @@
 
 import { useFormStatus } from 'react-dom'
 
-export function SaveButton() {
+export function SaveButton({ label = 'Save Changes' }: { label?: string }) {
   const { pending } = useFormStatus()
   return (
     <button
@@ -10,7 +10,7 @@ export function SaveButton() {
       disabled={pending}
       className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover transition-colors disabled:opacity-50"
     >
-      {pending ? 'Saving…' : 'Save Changes'}
+      {pending ? 'Saving…' : label}
     </button>
   )
 }

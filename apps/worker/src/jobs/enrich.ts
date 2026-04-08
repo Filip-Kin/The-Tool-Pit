@@ -40,10 +40,12 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
   // 1. GitHub enrichment FIRST — so classification has full context (topics, description, etc.)
   let enrichedMetadata = { ...metadata }
   const githubUrl = metadata.githubUrl as string | undefined
+  let githubStars = 0
 
   if (githubUrl) {
     const repoInfo = await fetchGitHubRepo(githubUrl)
     if (repoInfo) {
+      githubStars = repoInfo.stars
       // Backfill title from repo name if missing
       if (!enrichedMetadata.title && repoInfo.fullName) {
         const repoName = repoInfo.fullName.split('/')[1] ?? repoInfo.fullName
@@ -60,6 +62,8 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
         ...((enrichedMetadata.keywords as string[]) ?? []),
         ...repoInfo.topics,
       ]
+      // Store star count so publishCandidate can write it to the tool record
+      enrichedMetadata.githubStars = repoInfo.stars
     }
   }
 

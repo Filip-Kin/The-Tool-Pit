@@ -5,6 +5,8 @@ import { FtaToolsConnector } from '../connectors/fta-tools.js'
 import { VolunteerSystemsConnector } from '../connectors/volunteer-systems.js'
 import { GitHubTopicsConnector } from '../connectors/github-topics.js'
 import { AwesomeListConnector } from '../connectors/awesome-list.js'
+import { ChiefDelphiConnector } from '../connectors/chief-delphi.js'
+import { TbaTeamsConnector } from '../connectors/tba-teams.js'
 import { extractMetadata, canonicalizeUrl } from '../pipeline/extract.js'
 import { checkDuplicateByUrl, checkDuplicateByName } from '../pipeline/deduplicate.js'
 import { enrichQueue } from '../queues.js'
@@ -16,6 +18,8 @@ const CONNECTOR_REGISTRY: Record<string, () => { run(): Promise<{ candidates: un
   volunteer_systems: () => new VolunteerSystemsConnector(),
   github_topics: () => new GitHubTopicsConnector(),
   awesome_list: () => new AwesomeListConnector(),
+  chief_delphi: () => new ChiefDelphiConnector(),
+  tba_teams: () => new TbaTeamsConnector(),
 }
 
 export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {

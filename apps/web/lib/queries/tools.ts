@@ -57,7 +57,7 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
     freshnessState: r.freshnessState,
     lastActivityAt: r.lastActivityAt,
     popularityScore: r.popularityScore,
-    voteCount: voteMap.get(r.id) ?? 0,
+    voteCount: (voteMap.get(r.id) ?? 0) + (r.githubStars ?? 0) + (r.chiefDelphiLikes ?? 0),
     programs: progMap.get(r.id) ?? [],
     githubUrl: githubMap.get(r.id) ?? null,
   }))
@@ -202,6 +202,6 @@ export async function getToolBySlug(slug: string): Promise<ToolDetailData | null
     audienceRoles: roleRows.map((r) => r.slug),
     audienceFunctions: functionRows.map((r) => r.slug),
     links: linkRows,
-    voteCount: voteCountResult[0]?.count ?? 0,
+    voteCount: (voteCountResult[0]?.count ?? 0) + (tool.githubStars ?? 0) + (tool.chiefDelphiLikes ?? 0),
   }
 }

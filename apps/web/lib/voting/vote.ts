@@ -44,11 +44,21 @@ export async function toggleVote(input: ToggleVoteInput): Promise<VoteResponse> 
     .from(toolVotes)
     .where(sql`${toolVotes.toolId} = ${toolId}::uuid`)
 
-  // Denormalize popularity score (simple: vote count * 1.0 + click events contribute separately)
+  // Fetch external upvotes (GitHub stars + ChiefDelphi likes)
+  const [toolRow] = await db
+    .select({ githubStars: tools.githubStars, chiefDelphiLikes: tools.chiefDelphiLikes })
+    .from(tools)
+    .where(sql`${tools.id} = ${toolId}::uuid`)
+    .limit(1)
+
+  const externalUpvotes = (toolRow?.githubStars ?? 0) + (toolRow?.chiefDelphiLikes ?? 0)
+  const combinedScore = count + externalUpvotes
+
+  // Denormalize popularity score (vote count + external upvotes + click events contribute separately)
   await db
     .update(tools)
-    .set({ popularityScore: count, updatedAt: new Date() })
+    .set({ popularityScore: combinedScore, updatedAt: new Date() })
     .where(sql`${tools.id} = ${toolId}::uuid`)
 
-  return { voted, voteCount: count }
+  return { voted, voteCount: combinedScore }
 }

@@ -14,7 +14,7 @@ export const toolSources = pgTable(
       .notNull()
       .references(() => tools.id, { onDelete: 'cascade' }),
     /**
-     * fta_tools | volunteer_systems | github | chief_delphi |
+     * fta_tools | volunteer_systems | github | chief_delphi | tba |
      * submission | official_first | manual
      */
     sourceType: text('source_type').notNull(),

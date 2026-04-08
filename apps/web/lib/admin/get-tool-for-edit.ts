@@ -23,10 +23,12 @@ export interface ToolForEdit {
   isVendor: boolean
   isRookieFriendly: boolean
   isTeamCode: boolean
+  isTeamCad: boolean
   teamNumber: number | null
   seasonYear: number | null
   vendorName: string | null
   freshnessState: string | null
+  adminNotes: string | null
   programs: string[]
   audienceRoles: string[]
   audienceFunctions: string[]
@@ -76,10 +78,12 @@ export async function getToolForEdit(id: string): Promise<ToolForEdit | null> {
     isVendor: tool.isVendor,
     isRookieFriendly: tool.isRookieFriendly,
     isTeamCode: tool.isTeamCode,
+    isTeamCad: tool.isTeamCad,
     teamNumber: tool.teamNumber ?? null,
     seasonYear: tool.seasonYear ?? null,
     vendorName: tool.vendorName,
     freshnessState: tool.freshnessState,
+    adminNotes: tool.adminNotes,
     programs: programRows.map((r) => r.slug),
     audienceRoles: roleRows.map((r) => r.slug),
     audienceFunctions: fnRows.map((r) => r.slug),

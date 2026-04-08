@@ -213,6 +213,8 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
       freshnessState: tools.freshnessState,
       lastActivityAt: tools.lastActivityAt,
       popularityScore: tools.popularityScore,
+      githubStars: tools.githubStars,
+      chiefDelphiLikes: tools.chiefDelphiLikes,
       score: rankScore,
     })
     .from(tools)
@@ -249,7 +251,10 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
       ),
 
     db
-      .select({ toolId: toolVotes.toolId, voteCount: sql<number>`count(*)::int` })
+      .select({
+        toolId: toolVotes.toolId,
+        voteCount: sql<number>`count(*)::int`,
+      })
       .from(toolVotes)
       .where(inArray(toolVotes.toolId, toolIds))
       .groupBy(toolVotes.toolId),
@@ -282,7 +287,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     ...row,
     programs: programsByTool.get(row.id) ?? [],
     githubUrl: githubByTool.get(row.id) ?? null,
-    voteCount: votesByTool.get(row.id) ?? 0,
+    voteCount: (votesByTool.get(row.id) ?? 0) + (row.githubStars ?? 0) + (row.chiefDelphiLikes ?? 0),
     lastActivityAt: row.lastActivityAt ?? null,
     isTeamCode: row.isTeamCode,
     teamNumber: row.teamNumber ?? null,

@@ -96,8 +96,13 @@ export async function publishCandidate(candidateId: string, sourceType = 'manual
     isVendor: Boolean(classification.isVendor),
     isRookieFriendly: Boolean(classification.isRookieFriendly),
     isTeamCode: Boolean(classification.isTeamCode),
+    isTeamCad: Boolean(classification.isTeamCad),
     teamNumber: typeof classification.teamNumber === 'number' ? classification.teamNumber : null,
     seasonYear: typeof classification.seasonYear === 'number' ? classification.seasonYear : null,
+    githubStars: typeof meta.githubStars === 'number' ? meta.githubStars : 0,
+    chiefDelphiLikes: typeof meta.chiefDelphiLikes === 'number' ? meta.chiefDelphiLikes : 0,
+    popularityScore: (typeof meta.githubStars === 'number' ? meta.githubStars : 0) +
+                     (typeof meta.chiefDelphiLikes === 'number' ? meta.chiefDelphiLikes : 0),
     confidenceScore: confidence,
     freshnessState: 'unknown',
     publishedAt: new Date(),
