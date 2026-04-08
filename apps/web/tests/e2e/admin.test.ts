@@ -127,11 +127,13 @@ describe('admin analytics', () => {
     expect(bodyText).toMatch(/Zero.Result/i)
   })
 
-  it('shows top clicked tools table [REQUIRES BUG FIX]', async () => {
+  it('shows top clicked tools table', async () => {
+    // Wait for all streaming SSR chunks to render (analytics fetches data server-side)
+    await page.waitForFunction(
+      () => document.body.textContent?.includes('Top Clicked') || document.body.textContent?.includes('Clicked Tools'),
+      { timeout: 10000 },
+    ).catch(() => {})
     const bodyText = await page.$eval('body', (el) => el.textContent ?? '')
-    // This WILL FAIL until the analytics render bug is fixed:
-    // getAnalytics() fetches topClicked but the JSX never renders it.
-    // Once fixed, this section should appear on the analytics page.
     expect(bodyText).toMatch(/Top Clicked|Clicked Tools/i)
   })
 })

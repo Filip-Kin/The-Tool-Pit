@@ -43,7 +43,7 @@ afterAll(async () => {
 describe('search — basic', () => {
   it('navigates to /search when typing in the hero search bar', async () => {
     await goto(page, '/')
-    const input = await page.waitForSelector('input[type="text"], input:not([type])')
+    const input = await page.waitForSelector('input[type="search"], input[type="text"], input:not([type])')
     await input!.click({ clickCount: 3 })
     await input!.type('scouting')
     await page.keyboard.press('Enter')

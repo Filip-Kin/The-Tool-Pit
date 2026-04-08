@@ -51,7 +51,7 @@ export function VoteButton({ toolId, initialCount, initialVoted = false, classNa
       )}
     >
       <ArrowUp className={cn('h-3 w-3', voted && 'text-primary')} />
-      {count > 0 && <span>{count}</span>}
+      <span>{count}</span>
     </button>
   )
 }

@@ -74,7 +74,10 @@ export function SearchBar({
   }
 
   return (
-    <form onSubmit={handleSubmit} className={cn('relative', className)}>
+    <form action="/search" onSubmit={handleSubmit} className={cn('relative', className)}>
+      {/* Hidden inputs ensure the program filter survives native form submission
+          (before React hydrates or when JS is unavailable). */}
+      {defaultProgram && <input type="hidden" name="program" value={defaultProgram} />}
       <Search
         className={cn(
           'pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-2',
@@ -84,6 +87,7 @@ export function SearchBar({
       <input
         ref={inputRef}
         type="search"
+        name="q"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={placeholder}
