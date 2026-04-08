@@ -108,6 +108,9 @@ export interface CandidateClassification {
   isRookieFriendly?: boolean
   isOfficial?: boolean
   isVendor?: boolean
+  isTeamCode?: boolean
+  teamNumber?: number | null
+  seasonYear?: number | null
   summary?: string
   confidence?: number
   reasoning?: string

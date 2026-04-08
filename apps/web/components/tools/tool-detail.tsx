@@ -58,6 +58,12 @@ export function ToolDetail({ tool }: ToolDetailProps) {
               {tool.isOfficial && <Badge variant="official">FIRST Official</Badge>}
               {tool.isVendor && <Badge variant="vendor">Vendor{tool.vendorName ? ` · ${tool.vendorName}` : ''}</Badge>}
               {tool.isRookieFriendly && <Badge variant="rookie">Rookie Friendly</Badge>}
+              {tool.isTeamCode && (
+                <Badge variant="team">{tool.teamNumber ? `Team ${tool.teamNumber}` : 'Team Robot Code'}</Badge>
+              )}
+              {tool.isTeamCode && tool.seasonYear && (
+                <Badge variant="season">{tool.seasonYear} Season</Badge>
+              )}
             </div>
 
             <h1 className="text-3xl font-bold text-foreground">{tool.name}</h1>
@@ -153,6 +159,13 @@ export function ToolDetail({ tool }: ToolDetailProps) {
             )}
             {tool.audienceFunctions.length > 0 && (
               <MetaTagRow label="Roles" tags={tool.audienceFunctions.map((f) => FUNCTION_LABELS[f] ?? f)} />
+            )}
+            {tool.teamNumber && <MetaRow label="Team" value={`#${tool.teamNumber}`} />}
+            {tool.seasonYear && <MetaRow label="Season" value={String(tool.seasonYear)} />}
+            {tool.isTeamCode && tool.teamNumber && (
+              <a href={`/robot-code?team=${tool.teamNumber}`} className="text-xs text-primary hover:underline">
+                More from this team ↗
+              </a>
             )}
           </div>
         </aside>

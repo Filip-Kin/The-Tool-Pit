@@ -46,6 +46,15 @@ export const tools = pgTable(
     isOfficial: boolean('is_official').notNull().default(false),
     isVendor: boolean('is_vendor').notNull().default(false),
     isRookieFriendly: boolean('is_rookie_friendly').notNull().default(false),
+    /**
+     * True if this is a specific team's own robot code repository rather than
+     * a general-purpose tool or library used by many teams.
+     */
+    isTeamCode: boolean('is_team_code').notNull().default(false),
+    /** FIRST team number (1–99999), e.g. 254, 1114. Nullable. */
+    teamNumber: integer('team_number'),
+    /** Season year the code was written for, e.g. 2024. Nullable. */
+    seasonYear: integer('season_year'),
     vendorName: text('vendor_name'),
 
     /**
@@ -77,6 +86,9 @@ export const tools = pgTable(
     index('tools_status_idx').on(table.status),
     index('tools_popularity_idx').on(table.popularityScore),
     index('tools_published_at_idx').on(table.publishedAt),
+    index('tools_is_team_code_idx').on(table.isTeamCode),
+    index('tools_team_number_idx').on(table.teamNumber),
+    index('tools_season_year_idx').on(table.seasonYear),
   ],
 )
 

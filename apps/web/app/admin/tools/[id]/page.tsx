@@ -191,6 +191,36 @@ export default async function AdminToolEditPage({
               <input type="checkbox" name="isRookieFriendly" defaultChecked={tool.isRookieFriendly} className="rounded" />
               Rookie Friendly
             </label>
+            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+              <input type="checkbox" name="isTeamCode" defaultChecked={tool.isTeamCode} className="rounded" />
+              Team Robot Code
+            </label>
+          </div>
+
+          {/* Team Info — shown when isTeamCode might be checked */}
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Team Number">
+              <input
+                name="teamNumber"
+                type="number"
+                min="1"
+                max="99999"
+                defaultValue={tool.teamNumber ?? ''}
+                placeholder="e.g. 254"
+                className="input"
+              />
+            </Field>
+            <Field label="Season Year">
+              <input
+                name="seasonYear"
+                type="number"
+                min="2000"
+                max="2030"
+                defaultValue={tool.seasonYear ?? ''}
+                placeholder="e.g. 2024"
+                className="input"
+              />
+            </Field>
           </div>
         </section>
 

@@ -26,6 +26,9 @@ export interface SearchResultRow {
   isOfficial: boolean
   isVendor: boolean
   isRookieFriendly: boolean
+  isTeamCode: boolean
+  teamNumber: number | null
+  seasonYear: number | null
   freshnessState: string | null
   lastActivityAt: Date | null
   popularityScore: number
@@ -63,6 +66,9 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     audienceFunction,
     isOfficial,
     isRookieFriendly,
+    isTeamCode,
+    teamNumber,
+    seasonYear,
     sort,
     page = 1,
     pageSize = 20,
@@ -115,6 +121,11 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     when 'api' then 0.7 when 'spreadsheet' then 0.4
     when 'resource' then 0.35 else 0.5 end * 0.15`
 
+  // Team code penalty — demotes team repos in general search without zeroing them
+  const teamCodePenalty = isTeamCode === undefined
+    ? sql<number>`case when ${tools.isTeamCode} then -0.25 else 0 end`
+    : sql<number>`0`
+
   const rankScore = sql<number>`(
     ${tsRank} * 1.0
     + ${exactTitleBoost}
@@ -123,6 +134,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     + ${officialBoost}
     + ${popularityNorm}
     + ${typeWeightExpr}
+    + ${teamCodePenalty}
   )`
 
   // WHERE conditions
@@ -140,6 +152,9 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
   if (toolType) conditions.push(eq(tools.toolType, toolType))
   if (isOfficial !== undefined) conditions.push(eq(tools.isOfficial, isOfficial))
   if (isRookieFriendly !== undefined) conditions.push(eq(tools.isRookieFriendly, isRookieFriendly))
+  if (isTeamCode !== undefined) conditions.push(eq(tools.isTeamCode, isTeamCode))
+  if (teamNumber !== undefined) conditions.push(eq(tools.teamNumber, teamNumber))
+  if (seasonYear !== undefined) conditions.push(eq(tools.seasonYear, seasonYear))
 
   if (program) {
     conditions.push(
@@ -192,6 +207,9 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
       isOfficial: tools.isOfficial,
       isVendor: tools.isVendor,
       isRookieFriendly: tools.isRookieFriendly,
+      isTeamCode: tools.isTeamCode,
+      teamNumber: tools.teamNumber,
+      seasonYear: tools.seasonYear,
       freshnessState: tools.freshnessState,
       lastActivityAt: tools.lastActivityAt,
       popularityScore: tools.popularityScore,
@@ -266,6 +284,9 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     githubUrl: githubByTool.get(row.id) ?? null,
     voteCount: votesByTool.get(row.id) ?? 0,
     lastActivityAt: row.lastActivityAt ?? null,
+    isTeamCode: row.isTeamCode,
+    teamNumber: row.teamNumber ?? null,
+    seasonYear: row.seasonYear ?? null,
   }))
 
   return { tools: result, total: count, page, pageSize }

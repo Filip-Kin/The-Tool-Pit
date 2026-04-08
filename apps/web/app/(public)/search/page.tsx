@@ -19,6 +19,9 @@ interface PageProps {
     rookie?: string
     sort?: string
     page?: string
+    teamcode?: string
+    team?: string
+    year?: string
   }>
 }
 
@@ -42,6 +45,9 @@ export default async function SearchPage({ searchParams }: PageProps) {
     audienceFunction: params.fn,
     isOfficial: params.official === 'true' ? true : undefined,
     isRookieFriendly: params.rookie === 'true' ? true : undefined,
+    isTeamCode: params.teamcode === 'true' ? true : params.teamcode === 'false' ? false : undefined,
+    teamNumber: params.team ? parseInt(params.team, 10) : undefined,
+    seasonYear: params.year ? parseInt(params.year, 10) : undefined,
     page,
     pageSize: 20,
   })

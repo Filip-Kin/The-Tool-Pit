@@ -42,6 +42,12 @@ export function ToolCard({ tool, className }: ToolCardProps) {
             {tool.isOfficial && <Badge variant="official">FIRST Official</Badge>}
             {tool.isVendor && <Badge variant="vendor">Vendor</Badge>}
             {tool.isRookieFriendly && <Badge variant="rookie">Rookie Friendly</Badge>}
+            {tool.isTeamCode && tool.teamNumber && (
+              <Badge variant="team">Team {tool.teamNumber}</Badge>
+            )}
+            {tool.isTeamCode && tool.seasonYear && (
+              <Badge variant="season">{tool.seasonYear}</Badge>
+            )}
             {tool.programs.map((p) => (
               <Badge key={p} variant="program">{PROGRAM_LABELS[p] ?? p.toUpperCase()}</Badge>
             ))}

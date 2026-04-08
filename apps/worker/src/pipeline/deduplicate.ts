@@ -14,10 +14,8 @@ export interface DedupeResult {
   method?: 'url_exact' | 'url_hostname' | 'name_similarity'
 }
 
-export async function checkDuplicate(
-  canonicalUrl: string,
-  title?: string,
-): Promise<DedupeResult> {
+/** Steps 1-3: exact URL match in tool_links, exact URL in crawlCandidates, hostname soft match */
+export async function checkDuplicateByUrl(canonicalUrl: string): Promise<DedupeResult> {
   const db = getDb()
 
   // 1. Exact URL match in tool_links
@@ -62,17 +60,38 @@ export async function checkDuplicate(
     }
   } catch {}
 
-  // 4. Name-similarity deduplication via pg_trgm
-  if (title && title.length >= 3) {
-    const [similarTool] = await db
-      .select({ id: tools.id })
-      .from(tools)
-      .where(sql`similarity(${tools.name}, ${title}) > 0.7`)
-      .limit(1)
+  return { isDuplicate: false }
+}
 
-    if (similarTool) {
-      return { isDuplicate: true, matchedToolId: similarTool.id, method: 'name_similarity' }
-    }
+/** Step 4: pg_trgm similarity(tools.name, title) > 0.7 */
+export async function checkDuplicateByName(title: string): Promise<DedupeResult> {
+  if (!title || title.length < 3) return { isDuplicate: false }
+
+  const db = getDb()
+  const [similarTool] = await db
+    .select({ id: tools.id })
+    .from(tools)
+    .where(sql`similarity(${tools.name}, ${title}) > 0.7`)
+    .limit(1)
+
+  if (similarTool) {
+    return { isDuplicate: true, matchedToolId: similarTool.id, method: 'name_similarity' }
+  }
+
+  return { isDuplicate: false }
+}
+
+/** Backward-compatible wrapper for submission pipeline */
+export async function checkDuplicate(
+  canonicalUrl: string,
+  title?: string,
+): Promise<DedupeResult> {
+  const urlResult = await checkDuplicateByUrl(canonicalUrl)
+  if (urlResult.isDuplicate) return urlResult
+
+  if (title) {
+    const nameResult = await checkDuplicateByName(title)
+    if (nameResult.isDuplicate) return nameResult
   }
 
   return { isDuplicate: false }

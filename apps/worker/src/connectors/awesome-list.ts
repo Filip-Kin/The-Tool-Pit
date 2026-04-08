@@ -19,10 +19,12 @@ interface AwesomeListSource {
   path?: string
   /** Default program to tag candidates with if we can't infer from context */
   program: 'frc' | 'ftc' | 'fll'
+  /** Default branch name — raw.githubusercontent.com does not support /HEAD/ */
+  branch?: string
 }
 
 const AWESOME_LISTS: AwesomeListSource[] = [
-  { repo: 'andrewda/awesome-frc', path: 'readme.md', program: 'frc' },
+  { repo: 'andrewda/awesome-frc', path: 'readme.md', program: 'frc', branch: 'master' },
 ]
 
 /** Markdown link: [text](url) */
@@ -70,8 +72,8 @@ export class AwesomeListConnector implements Connector {
 
     for (const source of AWESOME_LISTS) {
       const path = source.path ?? 'readme.md'
-      // Use the default branch shortcut via raw.githubusercontent.com
-      const rawUrl = `https://raw.githubusercontent.com/${source.repo}/HEAD/${path}`
+      const branch = source.branch ?? 'master'
+      const rawUrl = `https://raw.githubusercontent.com/${source.repo}/${branch}/${path}`
 
       try {
         const res = await politeFetch(rawUrl)

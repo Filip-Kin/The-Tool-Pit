@@ -40,6 +40,15 @@ Given information about a tool or resource, output a JSON object with the follow
 - isOfficial: boolean — true ONLY if clearly from FIRST organization itself (firstinspires.org, etc.)
 - isVendor: boolean — true if from a commercial vendor selling to robotics teams
 - summary: a 1-2 sentence description of what the tool does and who it's for
+- isTeamCode: boolean — true if this is a specific team's own robot code repo (not a general-purpose
+  library or reusable tool). Signals: repo named "2024-robot", "frc254", "Team1114-Crescendo",
+  GitHub org follows "frcNNNN" / "ftcNNNN" pattern, description says "Team NNN's YYYY robot code".
+  False for: libraries (WPILib, AdvantageKit), scouting apps, vendor tools, any tool used by many teams.
+- teamNumber: integer or null — FIRST team number (1–99999). Extract from repo name, org name,
+  description, or README title. GitHub orgs often follow "frc254" or "ftc12345" pattern.
+- seasonYear: integer or null — season year (2000–2030). Look in repo name, description, branch names,
+  release tags, or season game names (e.g., "Charged Up" = 2023, "Crescendo" = 2024).
+  If isTeamCode=true, set toolType="github_project".
 - confidence: 0.0 to 1.0 — how confident you are this is a legitimate, useful FIRST robotics tool
 - reasoning: brief explanation of your classification
 
@@ -68,7 +77,7 @@ Has GitHub link: ${metadata.githubUrl ? 'yes (' + metadata.githubUrl + ')' : 'no
   try {
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001', // Use Haiku for cost-efficient classification
-      max_tokens: 500,
+      max_tokens: 600,
       system: CLASSIFICATION_PROMPT,
       messages: [{ role: 'user', content: userContent }],
     })
@@ -96,6 +105,16 @@ Has GitHub link: ${metadata.githubUrl ? 'yes (' + metadata.githubUrl + ')' : 'no
     }
     if (Array.isArray(parsed.audienceFunctions)) {
       parsed.audienceFunctions = parsed.audienceFunctions.filter((f) => VALID_AUDIENCE_FUNCTIONS.has(f))
+    }
+
+    if (parsed.isTeamCode) {
+      const t = parsed.teamNumber
+      if (t !== null && t !== undefined && (!Number.isInteger(t) || t < 1 || t > 99999))
+        parsed.teamNumber = null
+      const y = parsed.seasonYear
+      const now = new Date().getFullYear()
+      if (y !== null && y !== undefined && (!Number.isInteger(y) || y < 2000 || y > now + 1))
+        parsed.seasonYear = null
     }
 
     return parsed

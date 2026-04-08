@@ -18,6 +18,9 @@ export interface SearchParams {
   isOfficial?: boolean
   isVendor?: boolean
   isRookieFriendly?: boolean
+  isTeamCode?: boolean
+  teamNumber?: number
+  seasonYear?: number
   sort?: SearchSort
   page?: number
   pageSize?: number
@@ -32,6 +35,9 @@ export interface SearchResult {
   isOfficial: boolean
   isVendor: boolean
   isRookieFriendly: boolean
+  isTeamCode: boolean
+  teamNumber: number | null
+  seasonYear: number | null
   programs: string[] // program slugs
   githubUrl: string | null
   publicFreshnessLabel: 'Current' | 'Stale' | 'Abandoned' | null

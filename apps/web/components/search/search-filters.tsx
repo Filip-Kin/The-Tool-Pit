@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { cn } from '@/lib/utils/cn'
 
 interface SearchFiltersProps {
@@ -79,6 +80,15 @@ export function SearchFilters({ program, toolType, isOfficial, isRookieFriendly 
       <FilterChip active={!!isRookieFriendly} onClick={() => toggleBool('rookie', !!isRookieFriendly)}>
         Rookie Friendly
       </FilterChip>
+
+      <div className="h-4 w-px bg-border mx-1" />
+
+      <Link
+        href="/robot-code"
+        className="rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs font-medium text-muted hover:border-border/80 hover:text-foreground transition-all"
+      >
+        Robot Code Archive ↗
+      </Link>
     </div>
   )
 }

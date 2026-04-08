@@ -51,6 +51,9 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
     isOfficial: r.isOfficial,
     isVendor: r.isVendor,
     isRookieFriendly: r.isRookieFriendly,
+    isTeamCode: r.isTeamCode,
+    teamNumber: r.teamNumber ?? null,
+    seasonYear: r.seasonYear ?? null,
     freshnessState: r.freshnessState,
     lastActivityAt: r.lastActivityAt,
     popularityScore: r.popularityScore,
@@ -118,6 +121,9 @@ export interface ToolDetailData {
   isOfficial: boolean
   isVendor: boolean
   isRookieFriendly: boolean
+  isTeamCode: boolean
+  teamNumber: number | null
+  seasonYear: number | null
   vendorName: string | null
   freshnessState: string | null
   lastActivityAt: Date | null
@@ -185,6 +191,9 @@ export async function getToolBySlug(slug: string): Promise<ToolDetailData | null
     isOfficial: tool.isOfficial,
     isVendor: tool.isVendor,
     isRookieFriendly: tool.isRookieFriendly,
+    isTeamCode: tool.isTeamCode,
+    teamNumber: tool.teamNumber ?? null,
+    seasonYear: tool.seasonYear ?? null,
     vendorName: tool.vendorName,
     freshnessState: tool.freshnessState,
     lastActivityAt: tool.lastActivityAt,

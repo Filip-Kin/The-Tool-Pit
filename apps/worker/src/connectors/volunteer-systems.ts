@@ -24,6 +24,8 @@ function isValidToolUrl(url: string): boolean {
 
 export class VolunteerSystemsConnector implements Connector {
   name = 'volunteer_systems'
+  /** Disabled: volunteer.systems returns 0 results (site unavailable or changed structure) */
+  disabled = true
 
   async run(): Promise<ConnectorResult> {
     const candidates: CandidateInput[] = []

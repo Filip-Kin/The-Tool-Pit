@@ -6,7 +6,7 @@ import { VolunteerSystemsConnector } from '../connectors/volunteer-systems.js'
 import { GitHubTopicsConnector } from '../connectors/github-topics.js'
 import { AwesomeListConnector } from '../connectors/awesome-list.js'
 import { extractMetadata, canonicalizeUrl } from '../pipeline/extract.js'
-import { checkDuplicate } from '../pipeline/deduplicate.js'
+import { checkDuplicateByUrl, checkDuplicateByName } from '../pipeline/deduplicate.js'
 import { enrichQueue } from '../queues.js'
 import { delay } from '../connectors/base.js'
 import type { CrawlJobPayload } from '@the-tool-pit/types'
@@ -40,6 +40,16 @@ export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {
 
   try {
     const connector = factory()
+
+    if ('disabled' in connector && connector.disabled) {
+      console.log(`[crawl] connector ${connectorName} is disabled — skipping`)
+      await db
+        .update(crawlJobs)
+        .set({ status: 'done', finishedAt: new Date(), stats: { discovered: 0, new: 0, updated: 0, skipped: 0, failed: 0 } })
+        .where(eq(crawlJobs.id, jobId))
+      return
+    }
+
     const result = await connector.run()
     const candidates = result.candidates as Array<Record<string, string | undefined>>
 
@@ -50,18 +60,25 @@ export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {
 
         const canonicalUrl = canonicalizeUrl(rawUrl)
 
-        // Skip duplicates
-        const dupeCheck = await checkDuplicate(canonicalUrl, candidate.title)
-        if (dupeCheck.isDuplicate) {
+        // 1. URL dedup (no metadata needed, no delay)
+        const urlDupe = await checkDuplicateByUrl(canonicalUrl)
+        if (urlDupe.isDuplicate) {
           totalSkipped++
           continue
         }
 
-        // Be polite — wait between requests
+        // 2. Fetch metadata first, THEN name dedup
         await delay(500)
-
-        // Fetch and extract page metadata
         const metadata = await extractMetadata(canonicalUrl)
+
+        const resolvedTitle = metadata.title || candidate.title
+        if (resolvedTitle) {
+          const nameDupe = await checkDuplicateByName(resolvedTitle as string)
+          if (nameDupe.isDuplicate) {
+            totalSkipped++
+            continue
+          }
+        }
 
         // Persist the candidate
         const [stored] = await db

@@ -26,6 +26,7 @@ export function SiteHeader() {
           <NavLink href="/frc" label="FRC" color="var(--color-frc)" />
           <NavLink href="/ftc" label="FTC" color="var(--color-ftc)" />
           <NavLink href="/fll" label="FLL" color="var(--color-fll)" />
+          <NavLink href="/robot-code" label="Robot Code" color="var(--color-foreground)" />
           <Link
             href="/submit"
             className="ml-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
