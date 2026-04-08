@@ -11,6 +11,8 @@ interface SearchBarProps {
   size?: 'sm' | 'md' | 'lg'
   autoFocus?: boolean
   className?: string
+  /** When set, appends program=<value> to the search URL if not already present. */
+  defaultProgram?: string
 }
 
 const sizeClasses = {
@@ -31,6 +33,7 @@ export function SearchBar({
   size = 'md',
   autoFocus,
   className,
+  defaultProgram,
 }: SearchBarProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -49,10 +52,16 @@ export function SearchBar({
     const q = value.trim()
     if (!q) return
 
-    // Preserve existing program filter if on a program page
+    // Preserve existing search params (e.g. program filter already in URL)
     const params = new URLSearchParams(searchParams.toString())
     params.set('q', q)
     params.delete('page')
+
+    // If a defaultProgram was passed (e.g. from a program page) and there is
+    // no program filter in the current URL, carry it over to the search page.
+    if (defaultProgram && !params.has('program')) {
+      params.set('program', defaultProgram)
+    }
 
     startTransition(() => {
       router.push(`/search?${params.toString()}`)

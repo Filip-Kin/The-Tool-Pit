@@ -1,6 +1,6 @@
 import { getDb } from '@/lib/db'
-import { searchEvents, toolClickEvents } from '@the-tool-pit/db'
-import { sql, desc, gte } from 'drizzle-orm'
+import { searchEvents, toolClickEvents, tools } from '@the-tool-pit/db'
+import { sql, gte, eq } from 'drizzle-orm'
 
 async function getAnalytics() {
   const db = getDb()
@@ -32,15 +32,17 @@ async function getAnalytics() {
       .orderBy(sql`count(*) desc`)
       .limit(20),
 
-    // Top clicked tools
+    // Top clicked tools (joined with tool name)
     db
       .select({
         toolId: toolClickEvents.toolId,
+        toolName: tools.name,
         count: sql<number>`count(*)::int`,
       })
       .from(toolClickEvents)
+      .leftJoin(tools, eq(tools.id, toolClickEvents.toolId))
       .where(gte(toolClickEvents.createdAt, sevenDaysAgo))
-      .groupBy(toolClickEvents.toolId)
+      .groupBy(toolClickEvents.toolId, tools.name)
       .orderBy(sql`count(*) desc`)
       .limit(20),
   ])
@@ -70,6 +72,14 @@ export default async function AdminAnalyticsPage() {
           headers={['Query', 'Count']}
           rows={data.zeroResultQueries.map((r) => [r.query, r.count])}
           highlightEmpty
+        />
+
+        {/* Top clicked tools */}
+        <AnalyticsTable
+          title="Top Clicked Tools"
+          description="Tools with the most link clicks in the last 7 days"
+          headers={['Tool', 'Clicks']}
+          rows={data.topClicked.map((r) => [r.toolName ?? r.toolId, r.count])}
         />
       </div>
     </div>

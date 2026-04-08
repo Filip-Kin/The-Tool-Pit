@@ -58,6 +58,7 @@ export async function ProgramPage({ program }: ProgramPageProps) {
               <SearchBar
                 placeholder={`Search ${meta.name} tools…`}
                 size="md"
+                defaultProgram={program}
               />
             </Suspense>
           </div>

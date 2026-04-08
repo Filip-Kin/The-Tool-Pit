@@ -1,14 +1,27 @@
 import { eq } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
-import { crawlCandidates } from '@the-tool-pit/db'
+import { crawlCandidates, submissions } from '@the-tool-pit/db'
 import { classifyCandidate } from '../pipeline/classify.js'
 import { fetchGitHubRepo } from '../connectors/github.js'
 import { publishCandidate } from '../pipeline/publish.js'
 import type { EnrichJobPayload } from '@the-tool-pit/types'
 
+/** Updates the originating submission record when a candidate-backed submission resolves. */
+async function resolveSubmission(
+  submissionId: string,
+  status: 'published' | 'needs_review',
+  resolvedToolId?: string,
+): Promise<void> {
+  const db = getDb()
+  await db
+    .update(submissions)
+    .set({ status, resolvedToolId: resolvedToolId ?? null, updatedAt: new Date() })
+    .where(eq(submissions.id, submissionId))
+}
+
 export async function processEnrichJob(payload: EnrichJobPayload): Promise<void> {
   const db = getDb()
-  const { candidateId } = payload
+  const { candidateId, submissionId } = payload
 
   const [candidate] = await db
     .select()
@@ -59,6 +72,7 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
       .set({ status: 'suppressed', updatedAt: new Date() })
       .where(eq(crawlCandidates.id, candidateId))
     console.log(`[enrich] candidate ${candidateId}: suppressed (low quality metadata — title=${JSON.stringify(qualityTitle)})`)
+    if (submissionId) await resolveSubmission(submissionId, 'needs_review')
     return
   }
 
@@ -105,7 +119,16 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
       `[enrich] candidate ${candidateId}: ${result.action}` +
         (result.reason ? ` (${result.reason})` : ` (confidence=${confidence.toFixed(2)})`),
     )
+    if (submissionId) {
+      if (result.action === 'created') {
+        await resolveSubmission(submissionId, 'published', result.toolId)
+      } else {
+        // 'skipped' means confidence was below threshold inside publishCandidate
+        await resolveSubmission(submissionId, 'needs_review')
+      }
+    }
   } else {
     console.log(`[enrich] candidate ${candidateId}: suppressed (confidence=${confidence.toFixed(2)})`)
+    if (submissionId) await resolveSubmission(submissionId, 'needs_review')
   }
 }

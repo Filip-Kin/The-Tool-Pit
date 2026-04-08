@@ -1,24 +1,33 @@
 import { type NextRequest } from 'next/server'
-import { createHash } from 'crypto'
-import { cookies } from 'next/headers'
+import { createHash, randomUUID } from 'crypto'
 
-const COOKIE_NAME = 'tp_vid'
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 2 // 2 years
+export const VOTE_COOKIE_NAME = 'tp_vid'
+export const VOTE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 2 // 2 years
+
+export interface VoterIdentity {
+  /** Hashed fingerprint stored in the DB — never the raw cookie value. */
+  fingerprint: string
+  /** Raw UUID stored in the cookie. */
+  cookieValue: string
+  /** True when no cookie existed on the request — caller must set the cookie. */
+  isNewCookie: boolean
+}
 
 /**
- * Derives a stable voter fingerprint from the request's signed vote-id cookie.
- * The fingerprint is a one-way hash — we never store the raw cookie value.
+ * Resolves or creates a stable voter identity from the request cookie.
+ *
+ * If a tp_vid cookie is present its value is hashed to produce the fingerprint.
+ * If absent a fresh UUID is generated — the caller is responsible for setting
+ * the cookie in the response so subsequent requests reuse the same fingerprint.
  */
-export function getVoterFingerprint(req: NextRequest): string {
-  const cookieValue = req.cookies.get(COOKIE_NAME)?.value
-  if (!cookieValue) {
-    // No cookie yet — return a temporary fingerprint. The client should
-    // send a Set-Cookie after the first vote; handled in the response.
-    const ua = req.headers.get('user-agent') ?? ''
-    const ip = req.headers.get('x-forwarded-for') ?? ''
-    return hashFingerprint(`anon:${ua}:${ip}`)
+export function resolveVoterIdentity(req: NextRequest): VoterIdentity {
+  const existing = req.cookies.get(VOTE_COOKIE_NAME)?.value
+  const cookieValue = existing ?? randomUUID()
+  return {
+    fingerprint: hashFingerprint(cookieValue),
+    cookieValue,
+    isNewCookie: !existing,
   }
-  return hashFingerprint(cookieValue)
 }
 
 function hashFingerprint(input: string): string {
@@ -28,6 +37,3 @@ function hashFingerprint(input: string): string {
     .digest('hex')
     .slice(0, 48)
 }
-
-/** Returns the vote-id cookie name for client-side handling. */
-export const VOTE_COOKIE_NAME = COOKIE_NAME

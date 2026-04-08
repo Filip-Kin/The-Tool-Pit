@@ -84,8 +84,9 @@ export async function processSubmissionJob(payload: SubmissionJobPayload): Promi
     })
     .where(eq(submissions.id, submissionId))
 
-  // Enqueue for AI enrichment + publish decision (same path as crawled tools)
-  await enrichQueue.add('enrich', { candidateId: candidate.id })
+  // Enqueue for AI enrichment + publish decision (same path as crawled tools).
+  // Pass submissionId so the enrich job can update the submission status when done.
+  await enrichQueue.add('enrich', { candidateId: candidate.id, submissionId })
 
   console.log(`[submission] ${submissionId} → candidate ${candidate.id} queued for enrichment`)
 }

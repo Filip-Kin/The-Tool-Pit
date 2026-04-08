@@ -142,6 +142,14 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
 
   const where = and(...conditions)
 
+  // Build ORDER BY based on sort param
+  const orderBy =
+    sort === 'popular'
+      ? desc(tools.popularityScore)
+      : sort === 'updated'
+        ? sql`${tools.lastActivityAt} desc nulls last`
+        : sql`${rankScore} desc`
+
   // Main query — fetch tool IDs ranked by score
   const rankedRows = await db
     .select({
@@ -160,7 +168,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     })
     .from(tools)
     .where(where)
-    .orderBy(sql`${rankScore} desc`)
+    .orderBy(orderBy)
     .limit(pageSize)
     .offset(offset)
 

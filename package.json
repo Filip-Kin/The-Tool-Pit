@@ -13,7 +13,9 @@
     "db:generate": "turbo db:generate --filter=@the-tool-pit/db",
     "db:migrate": "turbo db:migrate --filter=@the-tool-pit/db",
     "db:push": "turbo db:push --filter=@the-tool-pit/db",
-    "db:studio": "turbo db:studio --filter=@the-tool-pit/db"
+    "db:studio": "turbo db:studio --filter=@the-tool-pit/db",
+    "test": "turbo test --filter=@the-tool-pit/web",
+    "test:watch": "turbo test:watch --filter=@the-tool-pit/web"
   },
   "devDependencies": {
     "turbo": "^2.3.0",

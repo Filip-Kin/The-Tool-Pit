@@ -12,7 +12,7 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
   const db = getDb()
   const ids = rows.map((r) => r.id)
 
-  const [programRows, linkRows] = await Promise.all([
+  const [programRows, linkRows, voteRows] = await Promise.all([
     db
       .select({ toolId: toolPrograms.toolId, slug: programs.slug })
       .from(toolPrograms)
@@ -22,6 +22,11 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
       .select({ toolId: toolLinks.toolId, url: toolLinks.url })
       .from(toolLinks)
       .where(and(inArray(toolLinks.toolId, ids), eq(toolLinks.linkType, 'github'))),
+    db
+      .select({ toolId: toolVotes.toolId, count: sql<number>`count(*)::int` })
+      .from(toolVotes)
+      .where(inArray(toolVotes.toolId, ids))
+      .groupBy(toolVotes.toolId),
   ])
 
   const progMap = new Map<string, string[]>()
@@ -33,6 +38,9 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
 
   const githubMap = new Map<string, string>()
   for (const r of linkRows) githubMap.set(r.toolId, r.url)
+
+  const voteMap = new Map<string, number>()
+  for (const r of voteRows) voteMap.set(r.toolId, r.count)
 
   return rows.map((r) => ({
     id: r.id,
@@ -46,7 +54,7 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
     freshnessState: r.freshnessState,
     lastActivityAt: r.lastActivityAt,
     popularityScore: r.popularityScore,
-    voteCount: 0, // loaded separately if needed
+    voteCount: voteMap.get(r.id) ?? 0,
     programs: progMap.get(r.id) ?? [],
     githubUrl: githubMap.get(r.id) ?? null,
   }))

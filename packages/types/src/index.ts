@@ -85,6 +85,8 @@ export interface CrawlJobPayload {
 export interface EnrichJobPayload {
   candidateId: string
   toolId?: string
+  /** When set, the submission record is updated after the pipeline decides. */
+  submissionId?: string
 }
 
 export interface FreshnessCheckPayload {
