@@ -27,6 +27,7 @@ const TOOL_TYPES = [
   { value: 'spreadsheet', label: 'Spreadsheet' },
   { value: 'resource', label: 'Resource' },
   { value: 'vendor_website', label: 'Vendor Site' },
+  { value: 'offseason_event', label: 'Offseason Event' },
 ]
 
 const AUDIENCE_ROLES = [

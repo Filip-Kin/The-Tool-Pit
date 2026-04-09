@@ -236,6 +236,8 @@ export const TOOL_TYPES = [
   'browser_extension',
   'api',
   'resource',
+  'vendor_website',
+  'offseason_event',
   'other',
 ] as const
 export type ToolType = (typeof TOOL_TYPES)[number]
@@ -283,5 +285,7 @@ export const TOOL_TYPE_WEIGHTS: Record<ToolType, number> = {
   api: 0.7,
   spreadsheet: 0.4,
   resource: 0.35,
+  vendor_website: 0.5,
+  offseason_event: 0.3,
   other: 0.5,
 }

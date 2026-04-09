@@ -10,7 +10,8 @@ import { eq, desc } from 'drizzle-orm'
 
 const TOOL_TYPES = [
   'web_app', 'desktop_app', 'mobile_app', 'calculator', 'spreadsheet',
-  'github_project', 'browser_extension', 'api', 'resource', 'vendor_website', 'other',
+  'github_project', 'browser_extension', 'api', 'resource', 'vendor_website',
+  'offseason_event', 'other',
 ] as const
 
 const FRESHNESS_STATES = [

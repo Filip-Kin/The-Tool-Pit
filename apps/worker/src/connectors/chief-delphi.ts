@@ -107,6 +107,24 @@ function canonicalToolUrl(raw: string): string | null {
 
   if (DOMAIN_BLOCKLIST.some((b) => host === b || host.endsWith('.' + b))) return null
 
+  // The Blue Alliance — index the site itself but not individual event/match/team-event pages
+  if (host === 'thebluealliance.com' || host === 'www.thebluealliance.com') {
+    if (/^\/(event|match|team\/\d+\/event)\//.test(u.pathname)) return null
+    return 'https://www.thebluealliance.com'
+  }
+
+  // FTC Events — index the root only, not individual season/event result pages
+  if (host === 'ftc-events.com' || host === 'www.ftc-events.com') {
+    if (u.pathname.length > 1) return null
+    return 'https://ftc-events.com'
+  }
+
+  // Statbotics — index the site itself but not individual event/team/match pages
+  if (host === 'statbotics.io' || host === 'www.statbotics.io') {
+    if (/^\/(events?|teams?|matches?)\//.test(u.pathname)) return null
+    return 'https://www.statbotics.io'
+  }
+
   // GitHub: must have owner/repo (at least two path segments)
   if (host === 'github.com' || host === 'www.github.com') {
     const parts = u.pathname.split('/').filter(Boolean)

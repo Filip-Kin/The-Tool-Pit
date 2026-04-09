@@ -1,12 +1,26 @@
 import { eq } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
-import { crawlCandidates, submissions } from '@the-tool-pit/db'
+import { crawlCandidates, submissions, tools } from '@the-tool-pit/db'
 import type { PipelineLogEntry } from '@the-tool-pit/db'
 import { classifyCandidate } from '../pipeline/classify.js'
 import { fetchGitHubRepo } from '../connectors/github.js'
 import { publishCandidate } from '../pipeline/publish.js'
 import { extractMetadata } from '../pipeline/extract.js'
 import type { EnrichJobPayload } from '@the-tool-pit/types'
+
+/**
+ * When a re-classification decides a candidate should be suppressed, also suppress the
+ * tool it was previously linked to (so it disappears from the public directory).
+ * Only acts if matchedToolId is set — i.e. this candidate was the one that created the tool.
+ */
+async function suppressMatchedTool(matchedToolId: string, reason: string): Promise<void> {
+  const db = getDb()
+  await db
+    .update(tools)
+    .set({ status: 'suppressed', adminNotes: `Auto-suppressed on re-classification: ${reason}`, updatedAt: new Date() })
+    .where(eq(tools.id, matchedToolId))
+  console.log(`[enrich] suppressed tool ${matchedToolId}: ${reason}`)
+}
 
 /** Updates the originating submission record when a candidate-backed submission resolves. */
 async function resolveSubmission(
@@ -124,6 +138,19 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
     url,
   )
 
+  // 4a. Hard-reject team websites — no point processing further
+  if (classification.isTeamWebsite) {
+    const reason = 'Team website — not a reusable tool'
+    await db
+      .update(crawlCandidates)
+      .set({ classification, confidenceScore: 0, status: 'suppressed', rejectionReason: reason, updatedAt: new Date() })
+      .where(eq(crawlCandidates.id, candidateId))
+    console.log(`[enrich] candidate ${candidateId}: suppressed (${reason})`)
+    if (candidate.matchedToolId) await suppressMatchedTool(candidate.matchedToolId, reason)
+    if (submissionId) await resolveSubmission(submissionId, 'needs_review', undefined, reason)
+    return
+  }
+
   // 4. Program hard-override: GitHub topics / keywords are ground truth for program detection
   if (!classification.programs?.length) {
     const desc = (enrichedMetadata.description as string | undefined) ?? ''
@@ -176,6 +203,7 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
     }
   } else {
     console.log(`[enrich] candidate ${candidateId}: suppressed (confidence=${confidence.toFixed(2)})`)
+    if (candidate.matchedToolId) await suppressMatchedTool(candidate.matchedToolId, lowConfReason ?? 'confidence too low')
     if (submissionId) await resolveSubmission(submissionId, 'needs_review', undefined, lowConfReason)
   }
 }

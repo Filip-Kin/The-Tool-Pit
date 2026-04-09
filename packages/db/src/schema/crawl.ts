@@ -118,6 +118,8 @@ export interface CandidateClassification {
   isVendor?: boolean
   isTeamCode?: boolean
   isTeamCad?: boolean
+  /** True if this is a team's home/about website (not robot code). Always suppressed. */
+  isTeamWebsite?: boolean
   teamNumber?: number | null
   seasonYear?: number | null
   summary?: string

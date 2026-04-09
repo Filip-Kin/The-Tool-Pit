@@ -16,7 +16,8 @@ import { isYouTubeUrl } from './extract.js'
 
 const VALID_TOOL_TYPES = new Set([
   'web_app', 'desktop_app', 'mobile_app', 'calculator', 'spreadsheet',
-  'github_project', 'browser_extension', 'api', 'resource', 'vendor_website', 'other',
+  'github_project', 'browser_extension', 'api', 'resource', 'vendor_website',
+  'offseason_event', 'other',
 ])
 const VALID_PROGRAMS = new Set(['frc', 'ftc', 'fll'])
 const VALID_AUDIENCE_ROLES = new Set([
@@ -65,6 +66,10 @@ export function validateClassificationOutput(
       out.seasonYear = null
     }
   }
+  // Team websites are never indexable — override confidence to 0.0 regardless of what the AI said
+  if (out.isTeamWebsite) {
+    out.confidence = 0.0
+  }
   return out
 }
 
@@ -79,6 +84,9 @@ function getClient(): Anthropic {
 
 const SYSTEM_PROMPT = `You are classifying tools for a FIRST Robotics directory (FRC, FTC, FLL).
 
+This directory indexes tools, apps, and resources that are broadly useful to the FIRST robotics community.
+It does NOT index team-specific content, event results, or transient pages.
+
 You will receive the URL, any available meta fields, and the full visible text content of the page.
 Use all of this to understand what the tool does.
 
@@ -86,18 +94,48 @@ If the page content is clearly a JavaScript SPA shell (essentially empty body, f
 no real text about the tool), call the render_with_playwright tool to get the fully rendered content.
 Only call the tool once — if the rendered content still seems empty, classify based on what you have.
 
+CRITICAL — set confidence=0.0 immediately for ANY of the following (these are not indexable tools):
+- Individual competition event pages: The Blue Alliance event bracket/schedule/match result pages
+  (e.g. thebluealliance.com/event/2024xxx or /match/...), FTC Events season/event pages,
+  Statbotics event pages, or any page whose content is purely a specific competition's results/schedule.
+  NOTE: The Blue Alliance itself (thebluealliance.com home) IS a tool — only individual event pages are excluded.
+- Team home pages / team websites: Pages whose primary purpose is "welcome to Team NNN" —
+  team news, bios, sponsors list, awards history, team photo galleries. These are not reusable tools.
+  Even if they mention FRC/FTC, if a different team gets zero value from visiting this page, confidence=0.0.
+- Team-internal documents not useful to others: shop tour slide decks, member onboarding materials,
+  meeting trackers, internal training docs, team budget spreadsheets, team management docs created
+  for one specific team's internal use. Ask: "Would a completely different team benefit from this?"
+  If the answer is no, confidence=0.0.
+- Registration forms or sign-up pages for a single competition event (e.g. "2025 Clash in the Corn:
+  FRC Team Registration"). These are transient and team-external.
+- Redirect pages, "you will be redirected" pages, error pages, parked domains, login walls
+  with no real content about a tool.
+- A team's build thread or competition debrief post on Chief Delphi — unless the post links to
+  a separately hosted tool (code, app, spreadsheet). The post itself is not a tool.
+
 Once you have enough information, output a JSON object with these fields:
-- toolType: one of "web_app", "desktop_app", "mobile_app", "calculator", "spreadsheet", "github_project", "browser_extension", "api", "resource", "vendor_website", "other"
+- toolType: one of "web_app", "desktop_app", "mobile_app", "calculator", "spreadsheet",
+  "github_project", "browser_extension", "api", "resource", "vendor_website", "offseason_event", "other"
   IMPORTANT type distinctions:
-  - "vendor_website": use when isVendor=true AND the site is a product page, store, or marketing/documentation site for hardware or software sold commercially to robotics teams (e.g. motor controllers, sensors, cameras, game-piece suppliers). These are sites users browse or purchase from, not interactive applications.
-  - "web_app": ONLY for interactive web applications where users perform tasks in-browser (scouting dashboards, pit display apps, field timers, match schedule tools). Do NOT use for product pages or vendor sites, even if they have some interactive elements like a product configurator.
+  - "vendor_website": use when isVendor=true AND the site is a product page, store, or marketing/documentation
+    site for hardware or software sold commercially to robotics teams (e.g. motor controllers, sensors, cameras,
+    game-piece suppliers). These are sites users browse or purchase from, not interactive applications.
+  - "web_app": ONLY for interactive web applications where users perform tasks in-browser (scouting dashboards,
+    pit display apps, field timers, match schedule tools). Do NOT use for product pages or vendor sites.
+  - "offseason_event": an independently organized off-season FRC/FTC/FLL competition (not run by FIRST).
+    Use for the event's own main website/page — NOT for registration forms or individual match results.
+    Example: clashinthecorn.com (the event site itself), NOT a form link to register for it.
   - If isVendor=true and the site primarily lists, markets, or sells products → use "vendor_website", not "web_app".
 - programs: array of "frc", "ftc", "fll" (can be multiple, or empty if unknown)
 - audienceRoles: array from ["student", "mentor", "volunteer", "parent_newcomer", "organizer_staff"]
-- audienceFunctions: array from ["programmer", "scouter", "strategist", "cad", "mechanical", "electrical", "drive_team", "awards", "outreach", "team_management", "event_ops", "field_technical", "inspection", "judging"]
+- audienceFunctions: array from ["programmer", "scouter", "strategist", "cad", "mechanical", "electrical",
+  "drive_team", "awards", "outreach", "team_management", "event_ops", "field_technical", "inspection", "judging"]
 - isRookieFriendly: boolean — true if clearly targeted at new/beginner teams
 - isOfficial: boolean — true ONLY if clearly from FIRST organization itself (firstinspires.org, etc.)
 - isVendor: boolean — true if from a commercial vendor selling to robotics teams
+- isTeamWebsite: boolean — true if this is an FRC/FTC/FLL team's own home page or "about us" website
+  (not their robot code repo, not a reusable tool). Examples: team581.com, blazingbulldogs.org,
+  a "Welcome to Team NNN" page. If isTeamWebsite=true, also set confidence=0.0.
 - summary: a 1-2 sentence description of what the tool does and who it's for
 - isTeamCode: boolean — true if this is a specific team's own robot code repo (not a general-purpose
   library or reusable tool). Signals: repo named "2024-robot", "frc254", "Team1114-Crescendo",
@@ -108,7 +146,7 @@ Once you have enough information, output a JSON object with these fields:
 - seasonYear: integer or null — season year (2000–2030). Look in repo name, description, branch names,
   release tags, or season game names (e.g., "Charged Up" = 2023, "Crescendo" = 2024).
   If isTeamCode=true, set toolType="github_project".
-- confidence: 0.0 to 1.0 — how confident you are this is a legitimate, useful FIRST robotics tool
+- confidence: 0.0 to 1.0 — how confident you are this is a legitimate, broadly useful FIRST robotics tool
 - reasoning: brief explanation of your classification
 
 If this is clearly not a FIRST robotics tool, junk, or spam, set confidence to 0.0.
