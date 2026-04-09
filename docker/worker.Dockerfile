@@ -31,10 +31,15 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 worker
 
-# Copy node_modules (BuildKit preserves symlinks, so workspace links like
-# @the-tool-pit/db -> ../../../packages/db still need their targets to exist)
-COPY --from=builder --chown=worker:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=worker:nodejs /app/apps/worker/node_modules ./apps/worker/node_modules
+# Copy node_modules as root first so playwright CLI is available for install
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/worker/node_modules ./apps/worker/node_modules
+
+# Install Playwright system dependencies and chromium browser (must run as root)
+RUN node node_modules/playwright/cli.js install --with-deps chromium
+
+# Chown node_modules to worker after installation
+RUN chown -R worker:nodejs node_modules apps/worker/node_modules
 
 # Copy built workspace packages (symlink targets for @the-tool-pit/*)
 COPY --from=builder --chown=worker:nodejs /app/packages/db/package.json ./packages/db/
