@@ -21,6 +21,7 @@ try {
 
 const nextConfig: NextConfig = {
   transpilePackages: ['@the-tool-pit/db', '@the-tool-pit/types'],
+  serverExternalPackages: ['bullmq'],
   // Standalone output is required for Docker/Coolify deployment.
   // Disabled locally on Windows because bun's symlink-based module cache
   // causes EPERM errors when Next.js tries to copy traced files.
