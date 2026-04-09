@@ -1,15 +1,16 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getToolForEdit } from '@/lib/admin/get-tool-for-edit'
-import { saveTool, setToolStatus } from './actions'
+import { saveTool, setToolStatus, reClassifyTool } from './actions'
 import { SaveButton } from './save-button'
+import { ReClassifyButton } from './re-classify-button'
 import { getDb } from '@/lib/db'
 import { toolSources, toolUpdates } from '@the-tool-pit/db'
 import { eq, desc } from 'drizzle-orm'
 
 const TOOL_TYPES = [
   'web_app', 'desktop_app', 'mobile_app', 'calculator', 'spreadsheet',
-  'github_project', 'browser_extension', 'api', 'resource', 'other',
+  'github_project', 'browser_extension', 'api', 'resource', 'vendor_website', 'other',
 ] as const
 
 const FRESHNESS_STATES = [
@@ -73,6 +74,7 @@ export default async function AdminToolEditPage({
   const suppressAction = setToolStatus.bind(null, id, 'suppressed')
   const publishAction = setToolStatus.bind(null, id, 'published')
   const draftAction = setToolStatus.bind(null, id, 'draft')
+  const reClassifyAction = reClassifyTool.bind(null, id)
 
   return (
     <div className="p-8 max-w-3xl flex flex-col gap-8">
@@ -110,6 +112,7 @@ export default async function AdminToolEditPage({
               </button>
             </form>
           )}
+          <ReClassifyButton action={reClassifyAction} />
         </div>
       </div>
 

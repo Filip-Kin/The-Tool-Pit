@@ -26,6 +26,7 @@ const TOOL_TYPES = [
   { value: 'github_project', label: 'GitHub Project' },
   { value: 'spreadsheet', label: 'Spreadsheet' },
   { value: 'resource', label: 'Resource' },
+  { value: 'vendor_website', label: 'Vendor Site' },
 ]
 
 const AUDIENCE_ROLES = [

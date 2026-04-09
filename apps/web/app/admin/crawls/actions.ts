@@ -145,3 +145,43 @@ export async function triggerReindex(): Promise<{ error?: string }> {
     return { error: String(err) }
   }
 }
+
+/**
+ * Re-scrape and re-classify every published candidate using the latest pipeline.
+ * Resets their status to pending and enqueues an enrich job with rescrape=true.
+ */
+export async function triggerReEnrichPublished(): Promise<{ error?: string; count?: number }> {
+  await assertAdmin()
+  const db = getDb()
+
+  try {
+    const published = await db
+      .select({ id: crawlCandidates.id, submissionId: crawlCandidates.submissionId })
+      .from(crawlCandidates)
+      .where(eq(crawlCandidates.status, 'published'))
+
+    const queue = getQueue<EnrichJobPayload>('enrich')
+    for (const c of published) {
+      await db
+        .update(crawlCandidates)
+        .set({
+          status: 'pending',
+          classification: null,
+          confidenceScore: null,
+          rejectionReason: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(crawlCandidates.id, c.id))
+      await queue.add('enrich', {
+        candidateId: c.id,
+        submissionId: c.submissionId ?? undefined,
+        rescrape: true,
+      })
+    }
+
+    revalidatePath('/admin/candidates')
+    return { count: published.length }
+  } catch (err) {
+    return { error: String(err) }
+  }
+}

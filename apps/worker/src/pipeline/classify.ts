@@ -14,7 +14,7 @@ import { renderPage } from '../connectors/playwright-render.js'
 
 const VALID_TOOL_TYPES = new Set([
   'web_app', 'desktop_app', 'mobile_app', 'calculator', 'spreadsheet',
-  'github_project', 'browser_extension', 'api', 'resource', 'other',
+  'github_project', 'browser_extension', 'api', 'resource', 'vendor_website', 'other',
 ])
 const VALID_PROGRAMS = new Set(['frc', 'ftc', 'fll'])
 const VALID_AUDIENCE_ROLES = new Set([
@@ -85,7 +85,11 @@ no real text about the tool), call the render_with_playwright tool to get the fu
 Only call the tool once — if the rendered content still seems empty, classify based on what you have.
 
 Once you have enough information, output a JSON object with these fields:
-- toolType: one of "web_app", "desktop_app", "mobile_app", "calculator", "spreadsheet", "github_project", "browser_extension", "api", "resource", "other"
+- toolType: one of "web_app", "desktop_app", "mobile_app", "calculator", "spreadsheet", "github_project", "browser_extension", "api", "resource", "vendor_website", "other"
+  IMPORTANT type distinctions:
+  - "vendor_website": use when isVendor=true AND the site is a product page, store, or marketing/documentation site for hardware or software sold commercially to robotics teams (e.g. motor controllers, sensors, cameras, game-piece suppliers). These are sites users browse or purchase from, not interactive applications.
+  - "web_app": ONLY for interactive web applications where users perform tasks in-browser (scouting dashboards, pit display apps, field timers, match schedule tools). Do NOT use for product pages or vendor sites, even if they have some interactive elements like a product configurator.
+  - If isVendor=true and the site primarily lists, markets, or sells products → use "vendor_website", not "web_app".
 - programs: array of "frc", "ftc", "fll" (can be multiple, or empty if unknown)
 - audienceRoles: array from ["student", "mentor", "volunteer", "parent_newcomer", "organizer_staff"]
 - audienceFunctions: array from ["programmer", "scouter", "strategist", "cad", "mechanical", "electrical", "drive_team", "awards", "outreach", "team_management", "event_ops", "field_technical", "inspection", "judging"]

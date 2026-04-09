@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { triggerCrawl, triggerFreshnessCheckAll, triggerReindex, triggerReEnrichSuppressed, triggerRequeueNeedsReview } from './actions'
+import { triggerCrawl, triggerFreshnessCheckAll, triggerReindex, triggerReEnrichSuppressed, triggerRequeueNeedsReview, triggerReEnrichPublished } from './actions'
 
 const CONNECTORS: { key: string; label: string; description: string }[] = [
   { key: 'github_topics', label: 'GitHub Topics', description: 'Repos tagged frc/ftc/fll' },
@@ -36,6 +36,7 @@ export function AdminJobTriggers() {
   const freshness = useAction(triggerFreshnessCheckAll)
   const reindex = useAction(triggerReindex)
   const reEnrich = useAction(triggerReEnrichSuppressed)
+  const reEnrichPublished = useAction(triggerReEnrichPublished)
   const requeueReview = useAction(triggerRequeueNeedsReview)
   const crawl = useAction(triggerCrawl)
   const [lastCrawlConnector, setLastCrawlConnector] = useState<string | null>(null)
@@ -46,6 +47,13 @@ export function AdminJobTriggers() {
       <section className="rounded-lg border border-border p-4">
         <h2 className="mb-3 text-sm font-semibold text-foreground">Maintenance</h2>
         <div className="flex flex-wrap gap-3">
+          <TriggerButton
+            label="Re-classify All Published"
+            description="Re-scrapes and re-classifies every published candidate with the latest pipeline (picks up new types like vendor_website)"
+            pending={reEnrichPublished.pending}
+            result={reEnrichPublished.result}
+            onClick={() => reEnrichPublished.run()}
+          />
           <TriggerButton
             label="Re-enrich All Suppressed"
             description="Re-scrapes every suppressed candidate and re-runs classification with the latest pipeline"

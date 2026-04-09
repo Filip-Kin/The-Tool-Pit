@@ -3,8 +3,10 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { eq, and, inArray } from 'drizzle-orm'
+import { eq, and, inArray, desc } from 'drizzle-orm'
+import { Queue } from 'bullmq'
 import { getDb } from '@/lib/db'
+import { getRedis } from '@/lib/redis'
 import {
   tools,
   toolPrograms,
@@ -14,7 +16,9 @@ import {
   programs,
   audiencePrimaryRoles,
   audienceFunctions,
+  crawlCandidates,
 } from '@the-tool-pit/db'
+import type { EnrichJobPayload } from '@the-tool-pit/types'
 
 async function assertAdmin() {
   const cookieStore = await cookies()
@@ -132,4 +136,42 @@ export async function setToolStatus(toolId: string, status: 'published' | 'suppr
     .where(eq(tools.id, toolId))
   revalidatePath(`/admin/tools`)
   revalidatePath(`/admin/tools/${toolId}`)
+}
+
+/** Re-queue the most recent candidate for this tool through the full pipeline (rescrape + re-classify). */
+export async function reClassifyTool(toolId: string): Promise<{ error?: string }> {
+  await assertAdmin()
+  const db = getDb()
+
+  const [candidate] = await db
+    .select({ id: crawlCandidates.id })
+    .from(crawlCandidates)
+    .where(eq(crawlCandidates.matchedToolId, toolId))
+    .orderBy(desc(crawlCandidates.updatedAt))
+    .limit(1)
+
+  if (!candidate) {
+    return { error: 'No linked candidate found for this tool' }
+  }
+
+  await db
+    .update(crawlCandidates)
+    .set({
+      status: 'pending',
+      classification: null,
+      confidenceScore: null,
+      rejectionReason: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(crawlCandidates.id, candidate.id))
+
+  const queue = new Queue<EnrichJobPayload>('enrich', {
+    connection: getRedis(),
+    defaultJobOptions: { removeOnComplete: { count: 100 }, removeOnFail: { count: 200 } },
+  })
+  await queue.add('enrich', { candidateId: candidate.id, rescrape: true })
+
+  revalidatePath(`/admin/tools/${toolId}`)
+  revalidatePath('/admin/candidates')
+  return {}
 }

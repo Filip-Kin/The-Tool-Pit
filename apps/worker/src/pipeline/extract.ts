@@ -31,6 +31,16 @@ export async function extractMetadata(url: string): Promise<RawCandidateMetadata
     return extractGitHubMetadata(url)
   }
 
+  // Chrome Web Store — derive extension name from the URL slug before HTML extraction.
+  // CWS serves generic meta tags ("Chrome Web Store") instead of the extension name.
+  let cwsDerivedTitle: string | undefined
+  const cwsMatch = url.match(/^https?:\/\/chrome\.google\.com\/webstore\/detail\/([^/?#]+)/)
+  if (cwsMatch?.[1]) {
+    cwsDerivedTitle = cwsMatch[1]
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+  }
+
   try {
     const res = await politeFetch(url)
     if (!res.ok) {
@@ -41,10 +51,12 @@ export async function extractMetadata(url: string): Promise<RawCandidateMetadata
     const html = await res.text()
     const root = parse(html)
 
-    // Title: prefer og:title > title tag
+    // Title: prefer og:title > title tag; fall back to CWS-derived slug title if generic
     const ogTitle = root.querySelector('meta[property="og:title"]')?.getAttribute('content')
     const titleTag = root.querySelector('title')?.innerText
-    const title = (ogTitle ?? titleTag ?? '').trim().slice(0, 300)
+    const rawTitle = (ogTitle ?? titleTag ?? '').trim().slice(0, 300)
+    const isGenericCwsTitle = cwsDerivedTitle && (!rawTitle || /^chrome web store$/i.test(rawTitle))
+    const title = isGenericCwsTitle ? cwsDerivedTitle! : rawTitle
 
     // Description
     const ogDesc = root.querySelector('meta[property="og:description"]')?.getAttribute('content')
