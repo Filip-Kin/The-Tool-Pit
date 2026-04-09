@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Github, ExternalLink, BookOpen, Bug, FileText, Globe } from 'lucide-react'
+import { Github, ExternalLink, BookOpen, Bug, FileText, Globe, MessageCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { FreshnessChip } from '@/components/ui/freshness-chip'
 import { VoteButton } from '@/components/tools/vote-button'
@@ -28,6 +28,7 @@ const LINK_CONFIG: Record<string, { icon: React.ElementType; label: string; prom
   docs: { icon: BookOpen, label: 'Documentation' },
   issues: { icon: Bug, label: 'Issue Tracker' },
   changelog: { icon: FileText, label: 'Changelog' },
+  forum: { icon: MessageCircle, label: 'Chief Delphi' },
   other: { icon: ExternalLink, label: 'Link' },
   source: { icon: ExternalLink, label: 'Source' },
 }

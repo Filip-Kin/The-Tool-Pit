@@ -105,9 +105,9 @@ export async function saveTool(formData: FormData) {
     }
   }
 
-  // Sync primary link types (homepage, github, docs)
+  // Sync primary link types (homepage, github, docs, forum)
   // Delete existing entries for these types and re-insert non-empty ones
-  const PRIMARY_LINK_TYPES = ['homepage', 'github', 'docs'] as const
+  const PRIMARY_LINK_TYPES = ['homepage', 'github', 'docs', 'forum'] as const
   for (const linkType of PRIMARY_LINK_TYPES) {
     const url = (formData.get(`link_${linkType}`) as string)?.trim()
     await db

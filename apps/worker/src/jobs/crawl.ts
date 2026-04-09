@@ -1,6 +1,6 @@
 import { getDb } from '@the-tool-pit/db'
-import { crawlJobs, crawlCandidates } from '@the-tool-pit/db'
-import { eq } from 'drizzle-orm'
+import { crawlJobs, crawlCandidates, toolLinks } from '@the-tool-pit/db'
+import { eq, and } from 'drizzle-orm'
 import { FtaToolsConnector } from '../connectors/fta-tools.js'
 import { VolunteerSystemsConnector } from '../connectors/volunteer-systems.js'
 import { GitHubTopicsConnector } from '../connectors/github-topics.js'
@@ -67,6 +67,31 @@ export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {
         // 1. URL dedup (no metadata needed, no delay)
         const urlDupe = await checkDuplicateByUrl(canonicalUrl)
         if (urlDupe.isDuplicate) {
+          // If this candidate came from a CD thread and we have the matched tool,
+          // associate the thread URL as a forum link if not already present.
+          if (urlDupe.matchedToolId && candidate.sourceUrl?.includes('chiefdelphi.com')) {
+            const db = getDb()
+            const [existingForumLink] = await db
+              .select({ id: toolLinks.id })
+              .from(toolLinks)
+              .where(
+                and(
+                  eq(toolLinks.toolId, urlDupe.matchedToolId),
+                  eq(toolLinks.url, candidate.sourceUrl),
+                ),
+              )
+              .limit(1)
+            if (!existingForumLink) {
+              await db.insert(toolLinks).values({
+                toolId: urlDupe.matchedToolId,
+                linkType: 'forum',
+                url: candidate.sourceUrl,
+              })
+              console.log(
+                `[crawl] linked CD thread ${candidate.sourceUrl} → tool ${urlDupe.matchedToolId}`,
+              )
+            }
+          }
           totalSkipped++
           continue
         }

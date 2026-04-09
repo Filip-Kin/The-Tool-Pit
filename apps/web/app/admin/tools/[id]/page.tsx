@@ -243,11 +243,12 @@ export default async function AdminToolEditPage({
         {/* Links */}
         <section className="flex flex-col gap-4 rounded-lg border border-border p-5">
           <h2 className="text-sm font-semibold text-foreground">Links</h2>
-          {(['homepage', 'github', 'docs'] as const).map((type) => {
+          {(['homepage', 'github', 'docs', 'forum'] as const).map((type) => {
             const status = linkStatusByType[type]
+            const typeLabel = type === 'forum' ? 'Chief Delphi Thread' : type.charAt(0).toUpperCase() + type.slice(1)
             return (
               <div key={type} className="flex flex-col gap-1">
-                <Field label={type.charAt(0).toUpperCase() + type.slice(1)}>
+                <Field label={typeLabel}>
                   <input
                     name={`link_${type}`}
                     defaultValue={linkByType[type] ?? ''}

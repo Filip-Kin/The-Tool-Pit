@@ -130,6 +130,15 @@ export async function publishCandidate(candidateId: string, sourceType = 'manual
       })
     }
 
+    // Insert Chief Delphi thread link if this candidate was discovered via a CD post
+    if (candidate.sourceUrl?.includes('chiefdelphi.com')) {
+      await tx.insert(toolLinks).values({
+        toolId: newTool.id,
+        linkType: 'forum',
+        url: candidate.sourceUrl,
+      })
+    }
+
     // Link programs
     const programSlugs = (classification.programs as string[] | undefined) ?? []
     if (programSlugs.length > 0) {

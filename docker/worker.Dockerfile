@@ -36,8 +36,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/worker/node_modules ./apps/worker/node_modules
 
 # Install Playwright system dependencies and chromium browser (must run as root)
-RUN node node_modules/playwright/cli.js install --with-deps chromium
-
+RUN node apps/worker/node_modules/playwright/cli.js install --with-deps chromium
 # Chown node_modules to worker after installation
 RUN chown -R worker:nodejs node_modules apps/worker/node_modules
 
