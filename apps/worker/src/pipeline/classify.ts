@@ -145,8 +145,10 @@ function buildUserContent(metadata: RawCandidateMetadata, url: string): string {
 }
 
 function parseClassification(text: string): CandidateClassification {
-  const clean = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
-  const parsed = JSON.parse(clean) as CandidateClassification
+  // Extract JSON from a fenced code block anywhere in the response (Claude often adds prose before/after)
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  const jsonText = fenceMatch ? fenceMatch[1].trim() : text.trim()
+  const parsed = JSON.parse(jsonText) as CandidateClassification
   return validateClassificationOutput(parsed) as CandidateClassification
 }
 
