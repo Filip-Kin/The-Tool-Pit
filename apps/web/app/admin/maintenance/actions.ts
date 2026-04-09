@@ -320,7 +320,7 @@ ${groupSummaries.join('\n\n')}`
 
     const text = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? ''
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return { error: 'AI returned an unexpected response' }
+    if (!jsonMatch) return { error: `AI returned an unexpected response: ${JSON.stringify(text.slice(0, 500))}` }
 
     const raw = JSON.parse(jsonMatch[0]) as Record<string, string>
 
