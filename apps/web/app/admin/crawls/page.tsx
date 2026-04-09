@@ -2,7 +2,6 @@ import { getDb } from '@/lib/db'
 import { crawlJobs } from '@the-tool-pit/db'
 import { desc } from 'drizzle-orm'
 import type { CrawlJobStats } from '@the-tool-pit/types'
-import { AdminJobTriggers } from './job-triggers'
 import { ClickableRow } from '@/components/admin/clickable-row'
 
 async function getCrawlJobs() {
@@ -16,8 +15,6 @@ export default async function CrawlJobsPage() {
   return (
     <div className="p-8 flex flex-col gap-6">
       <h1 className="text-2xl font-bold text-foreground">Crawl Jobs</h1>
-
-      <AdminJobTriggers />
 
       <div>
         <h2 className="mb-3 text-sm font-semibold text-foreground">Recent Jobs</h2>

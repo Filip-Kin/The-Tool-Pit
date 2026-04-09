@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { href: '/admin/candidates', label: 'Candidates' },
   { href: '/admin/submissions', label: 'Submissions' },
   { href: '/admin/crawls', label: 'Crawl Jobs' },
+  { href: '/admin/maintenance', label: 'Maintenance' },
   { href: '/admin/analytics', label: 'Analytics' },
   { href: '/admin/sources', label: 'Sources' },
 ]

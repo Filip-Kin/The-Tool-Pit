@@ -66,6 +66,7 @@ services:
       REDIS_URL: redis://redis:6379
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
       NODE_ENV: production
     depends_on:

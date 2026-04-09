@@ -2,7 +2,7 @@
  * Publishing stage: if a candidate has sufficient confidence,
  * create or update a tool record in the database.
  */
-import { eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import {
   tools,
@@ -62,6 +62,99 @@ export async function publishCandidate(candidateId: string, sourceType = 'manual
 
   const meta = (candidate.rawMetadata ?? {}) as Record<string, unknown>
 
+  // summary ≤ 300 chars; description gets the full text when longer
+  const rawSummary = (classification.summary as string) ?? (meta.description as string) ?? ''
+  const rawDescription = (meta.description as string) ?? ''
+  const summary = rawSummary.slice(0, 300) || null
+  const description = rawDescription.length > 300 ? rawDescription : null
+
+  // If this candidate already maps to a tool, update it rather than creating a duplicate.
+  if (candidate.matchedToolId) {
+    const existingToolId = candidate.matchedToolId
+    await db.transaction(async (tx) => {
+      await tx
+        .update(tools)
+        .set({
+          name: (meta.title as string) ?? 'Untitled Tool',
+          summary,
+          description,
+          toolType: (classification.toolType as string) ?? 'other',
+          isOfficial: Boolean(classification.isOfficial),
+          isVendor: Boolean(classification.isVendor),
+          isRookieFriendly: Boolean(classification.isRookieFriendly),
+          isTeamCode: Boolean(classification.isTeamCode),
+          isTeamCad: Boolean(classification.isTeamCad),
+          teamNumber: typeof classification.teamNumber === 'number' ? classification.teamNumber : null,
+          seasonYear: typeof classification.seasonYear === 'number' ? classification.seasonYear : null,
+          githubStars: typeof meta.githubStars === 'number' ? meta.githubStars : 0,
+          chiefDelphiLikes: typeof meta.chiefDelphiLikes === 'number' ? meta.chiefDelphiLikes : 0,
+          popularityScore: (typeof meta.githubStars === 'number' ? meta.githubStars : 0) +
+                           (typeof meta.chiefDelphiLikes === 'number' ? meta.chiefDelphiLikes : 0),
+          confidenceScore: confidence,
+          updatedAt: new Date(),
+        })
+        .where(eq(tools.id, existingToolId))
+
+      // Sync links: delete auto-managed types and re-insert
+      const AUTO_LINK_TYPES = ['homepage', 'github', 'forum'] as const
+      for (const linkType of AUTO_LINK_TYPES) {
+        await tx.delete(toolLinks).where(
+          and(eq(toolLinks.toolId, existingToolId), eq(toolLinks.linkType, linkType)),
+        )
+      }
+      if (candidate.canonicalUrl) {
+        await tx.insert(toolLinks).values({ toolId: existingToolId, linkType: 'homepage', url: candidate.canonicalUrl })
+      }
+      const githubUrlUpd = meta.githubUrl as string | undefined
+      if (githubUrlUpd) {
+        await tx.insert(toolLinks).values({ toolId: existingToolId, linkType: 'github', url: githubUrlUpd })
+      }
+      if (candidate.sourceUrl?.includes('chiefdelphi.com')) {
+        await tx.insert(toolLinks).values({ toolId: existingToolId, linkType: 'forum', url: candidate.sourceUrl })
+      }
+
+      // Sync programs
+      await tx.delete(toolPrograms).where(eq(toolPrograms.toolId, existingToolId))
+      const programSlugsUpd = (classification.programs as string[] | undefined) ?? []
+      if (programSlugsUpd.length > 0) {
+        const programRows = await tx.select({ id: programs.id }).from(programs).where(inArray(programs.slug, programSlugsUpd))
+        if (programRows.length > 0) {
+          await tx.insert(toolPrograms).values(programRows.map((p) => ({ toolId: existingToolId, programId: p.id })))
+        }
+      }
+
+      // Sync audience roles
+      await tx.delete(toolAudiencePrimaryRoles).where(eq(toolAudiencePrimaryRoles.toolId, existingToolId))
+      const audienceRoleSlugsUpd = (classification.audienceRoles as string[] | undefined) ?? []
+      if (audienceRoleSlugsUpd.length > 0) {
+        const roleRows = await tx.select({ id: audiencePrimaryRoles.id }).from(audiencePrimaryRoles).where(inArray(audiencePrimaryRoles.slug, audienceRoleSlugsUpd))
+        if (roleRows.length > 0) {
+          await tx.insert(toolAudiencePrimaryRoles).values(roleRows.map((r) => ({ toolId: existingToolId, roleId: r.id })))
+        }
+      }
+
+      // Sync audience functions
+      await tx.delete(toolAudienceFunctions).where(eq(toolAudienceFunctions.toolId, existingToolId))
+      const audienceFunctionSlugsUpd = (classification.audienceFunctions as string[] | undefined) ?? []
+      if (audienceFunctionSlugsUpd.length > 0) {
+        const functionRows = await tx.select({ id: audienceFunctions.id }).from(audienceFunctions).where(inArray(audienceFunctions.slug, audienceFunctionSlugsUpd))
+        if (functionRows.length > 0) {
+          await tx.insert(toolAudienceFunctions).values(functionRows.map((f) => ({ toolId: existingToolId, functionId: f.id })))
+        }
+      }
+
+      // Mark candidate as published
+      await tx
+        .update(crawlCandidates)
+        .set({ status: 'published', updatedAt: new Date() })
+        .where(eq(crawlCandidates.id, candidateId))
+    })
+
+    return { toolId: existingToolId, action: 'updated' }
+  }
+
+  // --- New tool path ---
+
   // Build a URL-safe slug from the title
   const titleBase = buildSlug((meta.title as string) ?? 'tool')
 
@@ -78,12 +171,6 @@ export async function publishCandidate(candidateId: string, sourceType = 'manual
     attempt++
     slug = `${titleBase}-${attempt}`
   }
-
-  // summary ≤ 300 chars; description gets the full text when longer
-  const rawSummary = (classification.summary as string) ?? (meta.description as string) ?? ''
-  const rawDescription = (meta.description as string) ?? ''
-  const summary = rawSummary.slice(0, 300) || null
-  const description = rawDescription.length > 300 ? rawDescription : null
 
   const toolData: NewTool = {
     slug,

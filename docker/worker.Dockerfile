@@ -22,6 +22,15 @@ RUN bun run --filter @the-tool-pit/types build
 RUN bun run --filter @the-tool-pit/db build
 RUN bun run --filter @the-tool-pit/worker build
 
+# ─── playwright browser download (cached unless playwright version changes) ───
+FROM node:22-bookworm-slim AS playwright-browsers
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/worker/node_modules ./apps/worker/node_modules
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.playwright
+# Download browsers only – no system deps needed just for the download
+RUN node apps/worker/node_modules/playwright/cli.js install chromium
+
 # ─── production runner ───────────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS runner
 WORKDIR /app
@@ -32,14 +41,21 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/app/.playwright
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 worker
 
-# Copy node_modules as root first so playwright CLI is available for install
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/apps/worker/node_modules ./apps/worker/node_modules
+# Copy node_modules from the deps stage (not builder) so these layers – and the
+# playwright install-deps step below – are cache-hit on every code-only deploy.
+# They only re-run when bun.lock / package.json files change.
+COPY --from=deps --chown=worker:nodejs /app/node_modules ./node_modules
+COPY --from=deps --chown=worker:nodejs /app/apps/worker/node_modules ./apps/worker/node_modules
 
-# Install Playwright system dependencies and chromium browser (must run as root)
-RUN node apps/worker/node_modules/playwright/cli.js install --with-deps chromium
-# Chown node_modules and browser cache to worker after installation
-RUN chown -R worker:nodejs node_modules apps/worker/node_modules .playwright
+# Install Playwright system dependencies only (no browser download).
+# BuildKit cache mounts keep apt packages on the host so repeat builds skip downloads.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    node apps/worker/node_modules/playwright/cli.js install-deps chromium
+
+# Copy pre-downloaded browsers from the cached playwright-browsers stage.
+# --chown avoids a separate chown pass over the binary files.
+COPY --from=playwright-browsers --chown=worker:nodejs /app/.playwright ./.playwright
 
 # Copy built workspace packages (symlink targets for @the-tool-pit/*)
 COPY --from=builder --chown=worker:nodejs /app/packages/db/package.json ./packages/db/

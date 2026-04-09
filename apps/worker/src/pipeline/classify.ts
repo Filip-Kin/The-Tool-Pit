@@ -11,6 +11,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
 import { renderPage } from '../connectors/playwright-render.js'
+import { parseGitHubUrl } from '../connectors/github.js'
+import { isYouTubeUrl } from './extract.js'
 
 const VALID_TOOL_TYPES = new Set([
   'web_app', 'desktop_app', 'mobile_app', 'calculator', 'spreadsheet',
@@ -166,6 +168,12 @@ export async function classifyCandidate(
     { role: 'user', content: buildUserContent(metadata, url) },
   ]
 
+  // For URLs where we already have structured API data (GitHub, YouTube), there is no
+  // point offering the Playwright tool — the API provides better data than a rendered page
+  // and skipping the tool saves a round-trip and avoids noisy Playwright calls.
+  const hasStructuredData = Boolean(parseGitHubUrl(url)) || isYouTubeUrl(url)
+  const toolsForRequest: Anthropic.Tool[] = hasStructuredData ? [] : [RENDER_TOOL]
+
   // Tool use loop — at most 2 turns (one optional tool call + final answer)
   for (let turn = 0; turn < 3; turn++) {
     let response: Awaited<ReturnType<typeof client.messages.create>>
@@ -174,7 +182,7 @@ export async function classifyCandidate(
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 2048,
         system: SYSTEM_PROMPT,
-        tools: [RENDER_TOOL],
+        ...(toolsForRequest.length > 0 ? { tools: toolsForRequest } : {}),
         messages,
       })
     } catch (err) {
