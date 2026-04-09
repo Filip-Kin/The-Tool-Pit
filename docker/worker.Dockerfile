@@ -27,6 +27,7 @@ FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.playwright
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 worker
@@ -37,8 +38,8 @@ COPY --from=builder /app/apps/worker/node_modules ./apps/worker/node_modules
 
 # Install Playwright system dependencies and chromium browser (must run as root)
 RUN node apps/worker/node_modules/playwright/cli.js install --with-deps chromium
-# Chown node_modules to worker after installation
-RUN chown -R worker:nodejs node_modules apps/worker/node_modules
+# Chown node_modules and browser cache to worker after installation
+RUN chown -R worker:nodejs node_modules apps/worker/node_modules .playwright
 
 # Copy built workspace packages (symlink targets for @the-tool-pit/*)
 COPY --from=builder --chown=worker:nodejs /app/packages/db/package.json ./packages/db/
