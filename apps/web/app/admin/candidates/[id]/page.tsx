@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getDb } from '@/lib/db'
-import { crawlCandidates, crawlJobs, tools } from '@the-tool-pit/db'
+import { crawlCandidates, crawlJobs, tools, submissions } from '@the-tool-pit/db'
 import { eq } from 'drizzle-orm'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
 import { CandidateDetailActions } from './candidate-detail-actions'
@@ -26,14 +26,18 @@ export default async function AdminCandidateDetailPage({
   const meta = (candidate.rawMetadata ?? {}) as RawCandidateMetadata
   const confidence = candidate.confidenceScore ?? cls.confidence ?? 0
 
-  // Fetch related job + matched tool in parallel
-  const [jobRow, toolRow] = await Promise.all([
+  // Fetch related job, matched tool, and originating submission in parallel
+  const [jobRow, toolRow, submissionRow] = await Promise.all([
     candidate.jobId
       ? db.select().from(crawlJobs).where(eq(crawlJobs.id, candidate.jobId)).limit(1).then((r) => r[0] ?? null)
       : Promise.resolve(null),
     candidate.matchedToolId
       ? db.select({ id: tools.id, name: tools.name, slug: tools.slug })
           .from(tools).where(eq(tools.id, candidate.matchedToolId)).limit(1).then((r) => r[0] ?? null)
+      : Promise.resolve(null),
+    candidate.submissionId
+      ? db.select({ id: submissions.id, url: submissions.url, status: submissions.status })
+          .from(submissions).where(eq(submissions.id, candidate.submissionId)).limit(1).then((r) => r[0] ?? null)
       : Promise.resolve(null),
   ])
 
@@ -155,6 +159,19 @@ export default async function AdminCandidateDetailPage({
           <dd><a href={candidate.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{candidate.sourceUrl}</a></dd>
           <dt className="text-muted shrink-0">Created</dt>
           <dd className="text-muted">{new Date(candidate.createdAt).toLocaleString()}</dd>
+          {submissionRow && (
+            <>
+              <dt className="text-muted shrink-0">Submission</dt>
+              <dd>
+                <Link
+                  href={`/admin/submissions?status=${submissionRow.status}`}
+                  className="text-primary hover:underline text-xs"
+                >
+                  Manual submission ({submissionRow.status})
+                </Link>
+              </dd>
+            </>
+          )}
           {jobRow && (
             <>
               <dt className="text-muted shrink-0">Crawl Job</dt>

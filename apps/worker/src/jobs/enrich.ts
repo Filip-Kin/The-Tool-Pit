@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import { crawlCandidates, submissions } from '@the-tool-pit/db'
+import type { PipelineLogEntry } from '@the-tool-pit/db'
 import { classifyCandidate } from '../pipeline/classify.js'
 import { fetchGitHubRepo } from '../connectors/github.js'
 import { publishCandidate } from '../pipeline/publish.js'
@@ -11,12 +12,33 @@ async function resolveSubmission(
   submissionId: string,
   status: 'published' | 'needs_review',
   resolvedToolId?: string,
+  logMessage?: string,
 ): Promise<void> {
   const db = getDb()
-  await db
-    .update(submissions)
-    .set({ status, resolvedToolId: resolvedToolId ?? null, updatedAt: new Date() })
-    .where(eq(submissions.id, submissionId))
+
+  if (logMessage) {
+    const [sub] = await db
+      .select({ pipelineLog: submissions.pipelineLog })
+      .from(submissions)
+      .where(eq(submissions.id, submissionId))
+      .limit(1)
+    const existingLog = (sub?.pipelineLog ?? []) as PipelineLogEntry[]
+    const newEntry: PipelineLogEntry = { stage: 'enrich', status: 'warn', message: logMessage, timestamp: new Date().toISOString() }
+    await db
+      .update(submissions)
+      .set({
+        status,
+        resolvedToolId: resolvedToolId ?? null,
+        updatedAt: new Date(),
+        pipelineLog: [...existingLog, newEntry],
+      })
+      .where(eq(submissions.id, submissionId))
+  } else {
+    await db
+      .update(submissions)
+      .set({ status, resolvedToolId: resolvedToolId ?? null, updatedAt: new Date() })
+      .where(eq(submissions.id, submissionId))
+  }
 }
 
 export async function processEnrichJob(payload: EnrichJobPayload): Promise<void> {
@@ -71,12 +93,15 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
   const qualityTitle = (enrichedMetadata.title as string | undefined) ?? ''
   const qualityDesc = (enrichedMetadata.description as string | undefined) ?? ''
   if (qualityTitle.length < 3 || qualityDesc.length < 10) {
+    const reason = qualityTitle.length < 3
+      ? 'Low quality metadata — title missing or too short'
+      : 'Low quality metadata — description missing or too short'
     await db
       .update(crawlCandidates)
-      .set({ status: 'suppressed', updatedAt: new Date() })
+      .set({ status: 'suppressed', rejectionReason: reason, updatedAt: new Date() })
       .where(eq(crawlCandidates.id, candidateId))
-    console.log(`[enrich] candidate ${candidateId}: suppressed (low quality metadata — title=${JSON.stringify(qualityTitle)})`)
-    if (submissionId) await resolveSubmission(submissionId, 'needs_review')
+    console.log(`[enrich] candidate ${candidateId}: suppressed (${reason})`)
+    if (submissionId) await resolveSubmission(submissionId, 'needs_review', undefined, reason)
     return
   }
 
@@ -104,6 +129,9 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
   const confidence = classification.confidence ?? 0.3
 
   // 3. Update candidate record
+  const lowConfReason = confidence < 0.7
+    ? `AI confidence too low (${Math.round(confidence * 100)}%) — requires manual review`
+    : undefined
   await db
     .update(crawlCandidates)
     .set({
@@ -112,6 +140,7 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
       confidenceScore: confidence,
       // Suppress low-confidence candidates rather than publishing
       status: confidence >= 0.7 ? 'pending' : 'suppressed',
+      rejectionReason: confidence >= 0.7 ? null : (lowConfReason ?? null),
       updatedAt: new Date(),
     })
     .where(eq(crawlCandidates.id, candidateId))
@@ -133,6 +162,6 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
     }
   } else {
     console.log(`[enrich] candidate ${candidateId}: suppressed (confidence=${confidence.toFixed(2)})`)
-    if (submissionId) await resolveSubmission(submissionId, 'needs_review')
+    if (submissionId) await resolveSubmission(submissionId, 'needs_review', undefined, lowConfReason)
   }
 }

@@ -15,6 +15,13 @@
       "when": 1775690574555,
       "tag": "0001_cooing_starfox",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775699195199,
+      "tag": "0002_daffy_ink",
+      "breakpoints": true
     }
   ]
 }

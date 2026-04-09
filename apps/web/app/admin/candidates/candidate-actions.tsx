@@ -7,7 +7,7 @@ export function CandidateActions({ candidateId, status }: { candidateId: string;
   const [approvePending, startApprove] = useTransition()
   const [suppressPending, startSuppress] = useTransition()
 
-  if (status !== 'pending') {
+  if (status !== 'pending' && status !== 'suppressed') {
     return <span className="text-xs text-muted-2">{status}</span>
   }
 
@@ -20,13 +20,15 @@ export function CandidateActions({ candidateId, status }: { candidateId: string;
       >
         {approvePending ? '…' : 'Approve'}
       </button>
-      <button
-        disabled={approvePending || suppressPending}
-        onClick={() => startSuppress(() => { void suppressCandidate(candidateId) })}
-        className="rounded bg-surface-3 px-2.5 py-1 text-xs font-medium text-muted hover:text-foreground transition-colors disabled:opacity-40"
-      >
-        {suppressPending ? '…' : 'Suppress'}
-      </button>
+      {status === 'pending' && (
+        <button
+          disabled={approvePending || suppressPending}
+          onClick={() => startSuppress(() => { void suppressCandidate(candidateId) })}
+          className="rounded bg-surface-3 px-2.5 py-1 text-xs font-medium text-muted hover:text-foreground transition-colors disabled:opacity-40"
+        >
+          {suppressPending ? '…' : 'Suppress'}
+        </button>
+      )}
     </div>
   )
 }

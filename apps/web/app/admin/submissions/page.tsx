@@ -1,5 +1,5 @@
 import { getDb } from '@/lib/db'
-import { submissions, tools } from '@the-tool-pit/db'
+import { submissions, tools, crawlCandidates } from '@the-tool-pit/db'
 import { eq, desc, sql, inArray } from 'drizzle-orm'
 import Link from 'next/link'
 import { SubmissionActions } from './submission-actions'
@@ -66,6 +66,17 @@ export default async function AdminSubmissionsPage({
       : []
   const resolvedMap = new Map(resolvedTools.map((t) => [t.id, t]))
 
+  // Load linked candidates for needs_review submissions so we can show a direct link
+  const submissionIds = rows.map((r) => r.id)
+  const linkedCandidates =
+    submissionIds.length > 0
+      ? await db
+          .select({ submissionId: crawlCandidates.submissionId, id: crawlCandidates.id, status: crawlCandidates.status })
+          .from(crawlCandidates)
+          .where(inArray(crawlCandidates.submissionId, submissionIds))
+      : []
+  const candidateMap = new Map(linkedCandidates.map((c) => [c.submissionId, c]))
+
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   const ALERT_STATUSES: TabStatus[] = ['pending', 'needs_review']
@@ -131,6 +142,7 @@ export default async function AdminSubmissionsPage({
                 const log = (row.pipelineLog ?? []) as PipelineLogEntry[]
                 const lastLog = log[log.length - 1]
                 const resolvedTool = row.resolvedToolId ? resolvedMap.get(row.resolvedToolId) : null
+                const linkedCandidate = candidateMap.get(row.id)
 
                 return (
                   <tr
@@ -153,6 +165,14 @@ export default async function AdminSubmissionsPage({
                           className="mt-1 block text-[10px] text-green-400 hover:underline"
                         >
                           → {resolvedTool.name}
+                        </Link>
+                      )}
+                      {linkedCandidate && !resolvedTool && (
+                        <Link
+                          href={`/admin/candidates/${linkedCandidate.id}`}
+                          className="mt-1 block text-[10px] text-primary hover:underline"
+                        >
+                          → View candidate ({linkedCandidate.status})
                         </Link>
                       )}
                     </td>

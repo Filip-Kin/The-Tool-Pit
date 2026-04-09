@@ -28,7 +28,7 @@ export function CandidateDetailActions({
       )}
 
       {/* Approval */}
-      {status === 'pending' && (
+      {(status === 'pending' || status === 'suppressed') && (
         <button
           disabled={approvePending || suppressPending}
           onClick={() =>

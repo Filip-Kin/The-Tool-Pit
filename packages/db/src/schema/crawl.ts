@@ -55,6 +55,8 @@ export const crawlCandidates = pgTable(
     status: text('status').notNull().default('pending'),
     /** Admin-recorded reason when suppressing a candidate (e.g. "spam", "duplicate of X"). */
     rejectionReason: text('rejection_reason'),
+    /** Originating submission ID if this candidate was created from a manual submission. */
+    submissionId: uuid('submission_id'),
     matchedToolId: uuid('matched_tool_id').references(() => tools.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -63,6 +65,7 @@ export const crawlCandidates = pgTable(
     index('crawl_candidates_job_id_idx').on(table.jobId),
     index('crawl_candidates_status_idx').on(table.status),
     index('crawl_candidates_canonical_url_idx').on(table.canonicalUrl),
+    index('crawl_candidates_submission_id_idx').on(table.submissionId),
   ],
 )
 

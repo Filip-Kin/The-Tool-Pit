@@ -56,16 +56,41 @@ export async function processSubmissionJob(payload: SubmissionJobPayload): Promi
   // Extract page metadata
   const metadata = await extractMetadata(canonicalUrl)
 
-  // Create a crawl candidate so the standard enrich pipeline can process it
-  const [candidate] = await db
-    .insert(crawlCandidates)
-    .values({
-      sourceUrl: submission.url,
-      canonicalUrl,
-      rawMetadata: metadata,
-      status: 'pending',
-    })
-    .returning({ id: crawlCandidates.id })
+  // Upsert crawl candidate — reuse existing record on requeue rather than creating duplicates
+  const [existingCandidate] = await db
+    .select({ id: crawlCandidates.id })
+    .from(crawlCandidates)
+    .where(eq(crawlCandidates.canonicalUrl, canonicalUrl))
+    .limit(1)
+
+  let candidateId: string
+  if (existingCandidate) {
+    await db
+      .update(crawlCandidates)
+      .set({
+        rawMetadata: metadata,
+        status: 'pending',
+        rejectionReason: null,
+        confidenceScore: null,
+        classification: null,
+        submissionId: submissionId,
+        updatedAt: new Date(),
+      })
+      .where(eq(crawlCandidates.id, existingCandidate.id))
+    candidateId = existingCandidate.id
+  } else {
+    const [candidate] = await db
+      .insert(crawlCandidates)
+      .values({
+        sourceUrl: submission.url,
+        canonicalUrl,
+        rawMetadata: metadata,
+        status: 'pending',
+        submissionId: submissionId,
+      })
+      .returning({ id: crawlCandidates.id })
+    candidateId = candidate.id
+  }
 
   // Update submission with log entry
   await db
@@ -77,7 +102,7 @@ export async function processSubmissionJob(payload: SubmissionJobPayload): Promi
         {
           stage: 'extract',
           status: 'ok' as const,
-          message: `Extracted metadata; candidate ${candidate.id} created`,
+          message: `Extracted metadata; candidate ${candidateId} ${existingCandidate ? 'reset' : 'created'}`,
           timestamp: new Date().toISOString(),
         },
       ],
@@ -86,7 +111,7 @@ export async function processSubmissionJob(payload: SubmissionJobPayload): Promi
 
   // Enqueue for AI enrichment + publish decision (same path as crawled tools).
   // Pass submissionId so the enrich job can update the submission status when done.
-  await enrichQueue.add('enrich', { candidateId: candidate.id, submissionId })
+  await enrichQueue.add('enrich', { candidateId, submissionId })
 
-  console.log(`[submission] ${submissionId} → candidate ${candidate.id} queued for enrichment`)
+  console.log(`[submission] ${submissionId} → candidate ${candidateId} queued for enrichment`)
 }

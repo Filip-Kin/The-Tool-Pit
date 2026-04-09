@@ -1,0 +1,2 @@
+ALTER TABLE "crawl_candidates" ADD COLUMN "submission_id" uuid;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "crawl_candidates_submission_id_idx" ON "crawl_candidates" USING btree ("submission_id");
