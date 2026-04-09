@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { eq, sql, and, ne } from 'drizzle-orm'
+import { eq, sql, and, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import {
   tools,
@@ -11,7 +11,6 @@ import {
   toolPrograms,
   toolAudiencePrimaryRoles,
   toolAudienceFunctions,
-  toolSources,
   toolVotes,
   crawlCandidates,
 } from '@the-tool-pit/db'
@@ -70,12 +69,12 @@ export async function scanDuplicates(): Promise<{ error?: string; groups?: DupeG
     const allIds = new Set<string>()
     const allPairs: { a: string; b: string; method: 'url' | 'name' }[] = []
 
-    for (const row of urlDupePairs.rows) {
+    for (const row of urlDupePairs) {
       allIds.add(row.tool_id_a)
       allIds.add(row.tool_id_b)
       allPairs.push({ a: row.tool_id_a, b: row.tool_id_b, method: 'url' })
     }
-    for (const row of nameDupePairs.rows) {
+    for (const row of nameDupePairs) {
       allIds.add(row.tool_id_a)
       allIds.add(row.tool_id_b)
       // Skip if already captured as a URL dupe
@@ -99,24 +98,18 @@ export async function scanDuplicates(): Promise<{ error?: string; groups?: DupeG
         publishedAt: tools.publishedAt,
       })
       .from(tools)
-      .where(sql`${tools.id} = ANY(${sql.raw(`ARRAY[${idList.map((id) => `'${id}'`).join(',')}]::uuid[]`)})`)
+      .where(inArray(tools.id, idList))
 
     const linkRows = await db
       .select({ toolId: toolLinks.toolId, url: toolLinks.url })
       .from(toolLinks)
-      .where(
-        and(
-          sql`${toolLinks.toolId} = ANY(${sql.raw(`ARRAY[${idList.map((id) => `'${id}'`).join(',')}]::uuid[]`)})`,
-          eq(toolLinks.linkType, 'homepage'),
-        ),
-      )
+      .where(and(inArray(toolLinks.toolId, idList), eq(toolLinks.linkType, 'homepage')))
 
-    const voteRows = await db.execute<{ tool_id: string; cnt: string }>(sql`
-      SELECT tool_id, COUNT(*)::int AS cnt
-      FROM tool_votes
-      WHERE tool_id = ANY(${sql.raw(`ARRAY[${idList.map((id) => `'${id}'`).join(',')}]::uuid[]`)})
-      GROUP BY tool_id
-    `)
+    const voteRows = await db
+      .select({ toolId: toolVotes.toolId, cnt: sql<number>`count(*)::int` })
+      .from(toolVotes)
+      .where(inArray(toolVotes.toolId, idList))
+      .groupBy(toolVotes.toolId)
 
     const toolMap = new Map<string, DupeTool>()
     for (const t of toolRows) {
@@ -126,9 +119,9 @@ export async function scanDuplicates(): Promise<{ error?: string; groups?: DupeG
       const t = toolMap.get(l.toolId)
       if (t) t.homepageUrl = l.url
     }
-    for (const v of voteRows.rows) {
-      const t = toolMap.get(v.tool_id)
-      if (t) t.votes = Number(v.cnt)
+    for (const v of voteRows) {
+      const t = toolMap.get(v.toolId)
+      if (t) t.votes = v.cnt
     }
 
     // Build groups: for each pair, group into a DupeGroup
