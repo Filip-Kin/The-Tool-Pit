@@ -43,7 +43,7 @@ export async function processSubmissionJob(payload: SubmissionJobPayload): Promi
           {
             stage: 'deduplicate',
             status: 'warn' as const,
-            message: `Duplicate detected via ${dupeCheck.method ?? 'url_exact'}`,
+            message: `Duplicate detected via ${dupeCheck.method ?? 'url_exact'}${dupeCheck.matchedToolId ? ` (tool: ${dupeCheck.matchedToolId})` : dupeCheck.matchedCandidateId ? ` (candidate: ${dupeCheck.matchedCandidateId})` : ''}${dupeCheck.matchedUrl ? ` — matched URL: ${dupeCheck.matchedUrl}` : ''}`,
             timestamp: new Date().toISOString(),
           },
         ],

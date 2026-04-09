@@ -3,7 +3,7 @@
  * Checks if a candidate already exists in the database as a tool or prior candidate.
  * Strategy: URL normalization first, then name similarity check.
  */
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, isNotNull, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import { tools, toolLinks, crawlCandidates } from '@the-tool-pit/db'
 
@@ -11,6 +11,7 @@ export interface DedupeResult {
   isDuplicate: boolean
   matchedToolId?: string
   matchedCandidateId?: string
+  matchedUrl?: string
   method?: 'url_exact' | 'url_hostname' | 'name_similarity'
 }
 
@@ -20,27 +21,30 @@ export async function checkDuplicateByUrl(canonicalUrl: string): Promise<DedupeR
 
   // 1. Exact URL match in tool_links
   const [existingLink] = await db
-    .select({ toolId: toolLinks.toolId })
+    .select({ toolId: toolLinks.toolId, url: toolLinks.url })
     .from(toolLinks)
     .where(eq(toolLinks.url, canonicalUrl))
     .limit(1)
 
   if (existingLink) {
-    return { isDuplicate: true, matchedToolId: existingLink.toolId, method: 'url_exact' }
+    return { isDuplicate: true, matchedToolId: existingLink.toolId, matchedUrl: existingLink.url, method: 'url_exact' }
   }
 
-  // 2. Existing candidate with same URL
-  const [existingCandidate] = await db
-    .select({ id: crawlCandidates.id, matchedToolId: crawlCandidates.matchedToolId })
+  // 2. Existing candidate with same URL that was actually published (has a matchedToolId).
+  //    Pending/suppressed candidates are NOT considered duplicates — they are prior attempts
+  //    at the same URL that can be reset and retried (e.g. on requeue).
+  const [publishedCandidate] = await db
+    .select({ id: crawlCandidates.id, matchedToolId: crawlCandidates.matchedToolId, canonicalUrl: crawlCandidates.canonicalUrl })
     .from(crawlCandidates)
-    .where(eq(crawlCandidates.canonicalUrl, canonicalUrl))
+    .where(and(eq(crawlCandidates.canonicalUrl, canonicalUrl), isNotNull(crawlCandidates.matchedToolId)))
     .limit(1)
 
-  if (existingCandidate) {
+  if (publishedCandidate) {
     return {
       isDuplicate: true,
-      matchedCandidateId: existingCandidate.id,
-      matchedToolId: existingCandidate.matchedToolId ?? undefined,
+      matchedCandidateId: publishedCandidate.id,
+      matchedToolId: publishedCandidate.matchedToolId ?? undefined,
+      matchedUrl: publishedCandidate.canonicalUrl ?? undefined,
       method: 'url_exact',
     }
   }
@@ -49,13 +53,13 @@ export async function checkDuplicateByUrl(canonicalUrl: string): Promise<DedupeR
   try {
     const hostname = new URL(canonicalUrl).hostname
     const [hostMatch] = await db
-      .select({ toolId: toolLinks.toolId })
+      .select({ toolId: toolLinks.toolId, url: toolLinks.url })
       .from(toolLinks)
       .where(sql`${toolLinks.url} like ${'%' + hostname + '%'}`)
       .limit(1)
 
     if (hostMatch) {
-      return { isDuplicate: false, matchedToolId: hostMatch.toolId, method: 'url_hostname' }
+      return { isDuplicate: false, matchedToolId: hostMatch.toolId, matchedUrl: hostMatch.url, method: 'url_hostname' }
       // Note: not marking as full duplicate — same domain might be a different tool
     }
   } catch {}
