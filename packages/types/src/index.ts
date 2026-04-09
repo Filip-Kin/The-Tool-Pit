@@ -95,6 +95,8 @@ export interface EnrichJobPayload {
   submissionId?: string
   /** Connector name that produced this candidate (e.g. 'fta_tools', 'github_topics'). */
   sourceType?: string
+  /** When true, re-fetches the candidate URL before classifying (picks up rawHtml etc). */
+  rescrape?: boolean
 }
 
 export interface FreshnessCheckPayload {

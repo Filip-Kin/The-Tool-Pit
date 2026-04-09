@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { triggerCrawl, triggerFreshnessCheckAll, triggerReindex } from './actions'
+import { triggerCrawl, triggerFreshnessCheckAll, triggerReindex, triggerReEnrichSuppressed, triggerRequeueNeedsReview } from './actions'
 
 const CONNECTORS: { key: string; label: string; description: string }[] = [
   { key: 'github_topics', label: 'GitHub Topics', description: 'Repos tagged frc/ftc/fll' },
@@ -35,6 +35,8 @@ function useAction<T extends (...args: never[]) => Promise<{ error?: string }>>(
 export function AdminJobTriggers() {
   const freshness = useAction(triggerFreshnessCheckAll)
   const reindex = useAction(triggerReindex)
+  const reEnrich = useAction(triggerReEnrichSuppressed)
+  const requeueReview = useAction(triggerRequeueNeedsReview)
   const crawl = useAction(triggerCrawl)
   const [lastCrawlConnector, setLastCrawlConnector] = useState<string | null>(null)
 
@@ -44,6 +46,20 @@ export function AdminJobTriggers() {
       <section className="rounded-lg border border-border p-4">
         <h2 className="mb-3 text-sm font-semibold text-foreground">Maintenance</h2>
         <div className="flex flex-wrap gap-3">
+          <TriggerButton
+            label="Re-enrich All Suppressed"
+            description="Re-scrapes every suppressed candidate and re-runs classification with the latest pipeline"
+            pending={reEnrich.pending}
+            result={reEnrich.result}
+            onClick={() => reEnrich.run()}
+          />
+          <TriggerButton
+            label="Requeue All Needs Review"
+            description="Runs every needs_review submission back through the full pipeline (re-scrape + re-classify)"
+            pending={requeueReview.pending}
+            result={requeueReview.result}
+            onClick={() => requeueReview.run()}
+          />
           <TriggerButton
             label="Check Freshness (All Tools)"
             description="Re-fetches GitHub metadata for every published tool and updates star counts & freshness state"

@@ -4,11 +4,16 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { Queue } from 'bullmq'
+import { eq } from 'drizzle-orm'
 import { getRedis } from '@/lib/redis'
+import { getDb } from '@/lib/db'
+import { crawlCandidates, submissions } from '@the-tool-pit/db'
 import type {
   CrawlJobPayload,
+  EnrichJobPayload,
   FreshnessCheckPayload,
   ReindexPayload,
+  SubmissionJobPayload,
 } from '@the-tool-pit/types'
 
 async function assertAdmin() {
@@ -59,6 +64,70 @@ export async function triggerFreshnessCheckAll(): Promise<{ error?: string }> {
     const queue = getQueue<FreshnessCheckPayload>('freshness')
     await queue.add('check-freshness', { toolId: '__all__' })
     return {}
+  } catch (err) {
+    return { error: String(err) }
+  }
+}
+
+/**
+ * Re-scrape and re-enrich every suppressed candidate using the latest pipeline.
+ * Resets their status to pending and enqueues an enrich job with rescrape=true.
+ */
+export async function triggerReEnrichSuppressed(): Promise<{ error?: string; count?: number }> {
+  await assertAdmin()
+  const db = getDb()
+
+  try {
+    const suppressed = await db
+      .select({ id: crawlCandidates.id, submissionId: crawlCandidates.submissionId })
+      .from(crawlCandidates)
+      .where(eq(crawlCandidates.status, 'suppressed'))
+
+    const queue = getQueue<EnrichJobPayload>('enrich')
+    for (const c of suppressed) {
+      await db
+        .update(crawlCandidates)
+        .set({ status: 'pending', updatedAt: new Date() })
+        .where(eq(crawlCandidates.id, c.id))
+      await queue.add('enrich', {
+        candidateId: c.id,
+        submissionId: c.submissionId ?? undefined,
+        rescrape: true,
+      })
+    }
+
+    revalidatePath('/admin/candidates')
+    return { count: suppressed.length }
+  } catch (err) {
+    return { error: String(err) }
+  }
+}
+
+/**
+ * Requeue every needs_review submission through the full pipeline.
+ * This re-scrapes the URL, picks up rawHtml, and re-classifies.
+ */
+export async function triggerRequeueNeedsReview(): Promise<{ error?: string; count?: number }> {
+  await assertAdmin()
+  const db = getDb()
+
+  try {
+    const needsReview = await db
+      .select({ id: submissions.id })
+      .from(submissions)
+      .where(eq(submissions.status, 'needs_review'))
+
+    const queue = getQueue<SubmissionJobPayload>('submission')
+    for (const s of needsReview) {
+      await db
+        .update(submissions)
+        .set({ status: 'pending', updatedAt: new Date() })
+        .where(eq(submissions.id, s.id))
+      await queue.add('process-submission', { submissionId: s.id })
+    }
+
+    revalidatePath('/admin/submissions')
+    return { count: needsReview.length }
   } catch (err) {
     return { error: String(err) }
   }

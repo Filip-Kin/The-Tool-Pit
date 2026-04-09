@@ -5,6 +5,7 @@ import type { PipelineLogEntry } from '@the-tool-pit/db'
 import { classifyCandidate } from '../pipeline/classify.js'
 import { fetchGitHubRepo } from '../connectors/github.js'
 import { publishCandidate } from '../pipeline/publish.js'
+import { extractMetadata } from '../pipeline/extract.js'
 import type { EnrichJobPayload } from '@the-tool-pit/types'
 
 /** Updates the originating submission record when a candidate-backed submission resolves. */
@@ -56,8 +57,21 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
     return
   }
 
-  const metadata = (candidate.rawMetadata ?? {}) as Record<string, unknown>
+  let metadata = (candidate.rawMetadata ?? {}) as Record<string, unknown>
   const url = candidate.canonicalUrl ?? candidate.sourceUrl
+
+  // When rescrape=true (e.g. triggered from admin "re-enrich") re-fetch the page so we
+  // pick up rawHtml and any content changes since the candidate was first created.
+  if (payload.rescrape) {
+    const fresh = await extractMetadata(url)
+    // Merge: fresh values win, but keep any existing fields the scraper didn't return
+    metadata = { ...metadata, ...Object.fromEntries(Object.entries(fresh).filter(([, v]) => v !== undefined)) }
+    await db
+      .update(crawlCandidates)
+      .set({ rawMetadata: metadata, rejectionReason: null, confidenceScore: null, classification: null, updatedAt: new Date() })
+      .where(eq(crawlCandidates.id, candidateId))
+    console.log(`[enrich] candidate ${candidateId}: rescraped ${url}`)
+  }
 
   // 1. GitHub enrichment FIRST — so classification has full context (topics, description, etc.)
   let enrichedMetadata = { ...metadata }
