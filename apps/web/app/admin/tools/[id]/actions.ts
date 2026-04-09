@@ -22,17 +22,17 @@ async function assertAdmin() {
   if (!authed) redirect('/admin/login')
 }
 
-export async function saveTool(_prev: unknown, formData: FormData) {
+export async function saveTool(formData: FormData) {
   await assertAdmin()
 
   const toolId = formData.get('toolId') as string
-  if (!toolId) return { error: 'Missing tool ID' }
+  if (!toolId) return
 
   const db = getDb()
 
   // Core fields
-  const name = (formData.get('name') as string).trim()
-  if (!name) return { error: 'Name is required' }
+  const name = (formData.get('name') as string)?.trim()
+  if (!name) return
 
   await db
     .update(tools)
@@ -117,8 +117,6 @@ export async function saveTool(_prev: unknown, formData: FormData) {
   revalidatePath(`/admin/tools`)
   revalidatePath(`/admin/tools/${toolId}`)
   revalidatePath(`/tools`)
-
-  return { success: true }
 }
 
 export async function setToolStatus(toolId: string, status: 'published' | 'suppressed' | 'draft') {

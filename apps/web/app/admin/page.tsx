@@ -6,7 +6,7 @@ import { ClickableRow } from '@/components/admin/clickable-row'
 
 async function getStats() {
   const db = getDb()
-  const oneDayAgo = new Date(Date.now() - 86_400_000).toISOString()
+  const oneDayAgo = new Date(Date.now() - 86_400_000)
 
   const [
     [totalPublished],

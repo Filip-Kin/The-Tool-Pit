@@ -1,10 +1,10 @@
 import { getDb } from '@/lib/db'
 import { searchEvents, toolClickEvents, tools } from '@the-tool-pit/db'
-import { sql, gte, eq } from 'drizzle-orm'
+import { sql, gte, eq, and } from 'drizzle-orm'
 
 async function getAnalytics() {
   const db = getDb()
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000)
 
   const [topQueries, zeroResultQueries, topClicked, searchesPerDay, clicksPerDay] = await Promise.all([
     // Top search queries in last 7 days
@@ -27,7 +27,7 @@ async function getAnalytics() {
         count: sql<number>`count(*)::int`,
       })
       .from(searchEvents)
-      .where(sql`${searchEvents.resultCount} = 0 and ${searchEvents.createdAt} >= ${sevenDaysAgo}`)
+      .where(and(eq(searchEvents.resultCount, 0), gte(searchEvents.createdAt, sevenDaysAgo)))
       .groupBy(searchEvents.query)
       .orderBy(sql`count(*) desc`)
       .limit(20),
