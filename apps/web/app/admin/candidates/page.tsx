@@ -4,8 +4,9 @@ import { eq, desc, sql } from 'drizzle-orm'
 import Link from 'next/link'
 import { CandidateActions } from './candidate-actions'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
+import { ClickableRow } from '@/components/admin/clickable-row'
 
-const STATUS_TABS = ['pending', 'published', 'suppressed', 'duplicate'] as const
+const STATUS_TABS = ['pending', 'suppressed', 'duplicate'] as const
 type TabStatus = (typeof STATUS_TABS)[number]
 
 const PAGE_SIZE = 30
@@ -100,8 +101,9 @@ export default async function AdminCandidatesPage({
                 const confidence = row.confidenceScore ?? cls.confidence ?? 0
 
                 return (
-                  <tr
+                  <ClickableRow
                     key={row.id}
+                    href={`/admin/candidates/${row.id}`}
                     className="border-t border-border-subtle hover:bg-surface align-top"
                   >
                     {/* URL + title */}
@@ -157,7 +159,7 @@ export default async function AdminCandidatesPage({
                     <td className="px-4 py-3 text-right">
                       <CandidateActions candidateId={row.id} status={row.status} />
                     </td>
-                  </tr>
+                  </ClickableRow>
                 )
               })}
             </tbody>

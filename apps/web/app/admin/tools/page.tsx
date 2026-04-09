@@ -4,6 +4,7 @@ import { eq, sql, desc, inArray } from 'drizzle-orm'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { FreshnessChip } from '@/components/ui/freshness-chip'
+import { ClickableRow } from '@/components/admin/clickable-row'
 
 export default async function AdminToolsPage({
   searchParams,
@@ -82,12 +83,11 @@ export default async function AdminToolsPage({
               <th className="px-4 py-2 text-left">Type</th>
               <th className="px-4 py-2 text-left">Freshness</th>
               <th className="px-4 py-2 text-right">Score</th>
-              <th className="px-4 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((tool) => (
-              <tr key={tool.id} className="border-t border-border-subtle hover:bg-surface">
+              <ClickableRow key={tool.id} href={`/admin/tools/${tool.id}`} className="border-t border-border-subtle hover:bg-surface">
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-foreground">{tool.name}</span>
@@ -112,15 +112,7 @@ export default async function AdminToolsPage({
                 <td className="px-4 py-2 text-right text-xs text-muted">
                   {tool.popularityScore.toFixed(0)}
                 </td>
-                <td className="px-4 py-2 text-right">
-                  <Link
-                    href={`/admin/tools/${tool.id}`}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    Edit
-                  </Link>
-                </td>
-              </tr>
+              </ClickableRow>
             ))}
           </tbody>
         </table>

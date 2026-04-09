@@ -4,7 +4,7 @@ import { sql, gte, eq } from 'drizzle-orm'
 
 async function getAnalytics() {
   const db = getDb()
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000)
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
 
   const [topQueries, zeroResultQueries, topClicked, searchesPerDay, clicksPerDay] = await Promise.all([
     // Top search queries in last 7 days

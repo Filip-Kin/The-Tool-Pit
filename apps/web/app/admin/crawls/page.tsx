@@ -3,6 +3,7 @@ import { crawlJobs } from '@the-tool-pit/db'
 import { desc } from 'drizzle-orm'
 import type { CrawlJobStats } from '@the-tool-pit/types'
 import { AdminJobTriggers } from './job-triggers'
+import { ClickableRow } from '@/components/admin/clickable-row'
 
 async function getCrawlJobs() {
   const db = getDb()
@@ -40,7 +41,7 @@ export default async function CrawlJobsPage() {
                 {jobs.map((job) => {
                   const stats = (job.stats ?? {}) as CrawlJobStats
                   return (
-                    <tr key={job.id} className="border-t border-border-subtle hover:bg-surface">
+                    <ClickableRow key={job.id} href={`/admin/crawls/${job.id}`} className="border-t border-border-subtle hover:bg-surface">
                       <td className="px-4 py-2 font-mono text-xs text-foreground">{job.connector}</td>
                       <td className="px-4 py-2">
                         <StatusBadge status={job.status} />
@@ -56,7 +57,7 @@ export default async function CrawlJobsPage() {
                       <td className="px-4 py-2 text-xs text-muted max-w-xs truncate">
                         {job.error ?? '—'}
                       </td>
-                    </tr>
+                    </ClickableRow>
                   )
                 })}
               </tbody>

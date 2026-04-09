@@ -114,7 +114,7 @@ export default async function AdminToolEditPage({
       </div>
 
       {/* Edit form */}
-      <form action={(formData) => { void saveTool(undefined, formData) }} className="flex flex-col gap-6">
+      <form action={saveTool.bind(null, undefined)} className="flex flex-col gap-6">
         <input type="hidden" name="toolId" value={tool.id} />
 
         {/* Core fields */}
@@ -360,7 +360,7 @@ export default async function AdminToolEditPage({
       {/* Admin Notes — internal only */}
       <section className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-5">
         <h2 className="text-sm font-semibold text-foreground">Admin Notes <span className="text-xs font-normal text-muted">(internal only)</span></h2>
-        <form action={(formData) => { void saveTool(undefined, formData) }}>
+        <form action={saveTool.bind(null, undefined)}>
           <input type="hidden" name="toolId" value={tool.id} />
           <textarea
             name="adminNotes"

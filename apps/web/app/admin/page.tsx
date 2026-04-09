@@ -1,10 +1,12 @@
 import { getDb } from '@/lib/db'
 import { tools, submissions, crawlJobs, toolVotes, searchEvents } from '@the-tool-pit/db'
 import { eq, sql, desc, gte } from 'drizzle-orm'
+import Link from 'next/link'
+import { ClickableRow } from '@/components/admin/clickable-row'
 
 async function getStats() {
   const db = getDb()
-  const oneDayAgo = new Date(Date.now() - 86_400_000)
+  const oneDayAgo = new Date(Date.now() - 86_400_000).toISOString()
 
   const [
     [totalPublished],
@@ -48,12 +50,12 @@ export default async function AdminOverviewPage() {
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        <StatCard label="Published Tools" value={stats.totalPublished} />
-        <StatCard label="Draft / Pending" value={stats.totalDraft} />
-        <StatCard label="Pending Submissions" value={stats.pendingSubmissions} highlight={stats.pendingSubmissions > 0} />
-        <StatCard label="Total Votes" value={stats.totalVotes} />
-        <StatCard label="Searches Today" value={stats.searchesToday} />
-        <StatCard label="Crawls (24h)" value={stats.recentCrawls} />
+        <StatCard label="Published Tools" value={stats.totalPublished} href="/admin/tools?status=published" />
+        <StatCard label="Draft / Pending" value={stats.totalDraft} href="/admin/candidates?status=pending" />
+        <StatCard label="Pending Submissions" value={stats.pendingSubmissions} href="/admin/submissions?status=pending" highlight={stats.pendingSubmissions > 0} />
+        <StatCard label="Total Votes" value={stats.totalVotes} href="/admin/votes" />
+        <StatCard label="Searches Today" value={stats.searchesToday} href="/admin/analytics" />
+        <StatCard label="Crawls (24h)" value={stats.recentCrawls} href="/admin/crawls" />
       </div>
 
       {/* Recent crawl jobs */}
@@ -74,7 +76,7 @@ export default async function AdminOverviewPage() {
               </thead>
               <tbody>
                 {stats.recentJobs.map((job) => (
-                  <tr key={job.id} className="border-t border-border-subtle hover:bg-surface">
+                  <ClickableRow key={job.id} href={`/admin/crawls/${job.id}`} className="border-t border-border-subtle hover:bg-surface">
                     <td className="px-4 py-2 font-mono text-xs text-foreground">{job.connector}</td>
                     <td className="px-4 py-2">
                       <StatusBadge status={job.status} />
@@ -85,7 +87,7 @@ export default async function AdminOverviewPage() {
                     <td className="px-4 py-2 text-right text-xs text-muted">
                       {job.stats ? `${(job.stats as any).discovered ?? 0} found` : '—'}
                     </td>
-                  </tr>
+                  </ClickableRow>
                 ))}
               </tbody>
             </table>
@@ -96,12 +98,15 @@ export default async function AdminOverviewPage() {
   )
 }
 
-function StatCard({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
+function StatCard({ label, value, highlight, href }: { label: string; value: number; highlight?: boolean; href: string }) {
   return (
-    <div className={`rounded-lg border p-4 ${highlight ? 'border-(--color-official)/40 bg-(--color-official)/5' : 'border-border bg-surface'}`}>
+    <Link
+      href={href}
+      className={`rounded-lg border p-4 transition-colors hover:bg-surface-2 ${highlight ? 'border-(--color-official)/40 bg-(--color-official)/5' : 'border-border bg-surface'}`}
+    >
       <p className="text-xs text-muted">{label}</p>
       <p className="mt-1 text-3xl font-bold text-foreground">{value.toLocaleString()}</p>
-    </div>
+    </Link>
   )
 }
 
