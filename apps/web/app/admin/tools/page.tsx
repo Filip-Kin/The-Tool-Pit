@@ -1,6 +1,6 @@
 import { getDb } from '@/lib/db'
 import { tools, toolPrograms, programs } from '@the-tool-pit/db'
-import { eq, sql, desc, inArray } from 'drizzle-orm'
+import { eq, sql, desc, inArray, ilike, and } from 'drizzle-orm'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { FreshnessChip } from '@/components/ui/freshness-chip'
@@ -9,22 +9,35 @@ import { ClickableRow } from '@/components/admin/clickable-row'
 export default async function AdminToolsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; page?: string }>
+  searchParams: Promise<{ status?: string; page?: string; q?: string }>
 }) {
   const params = await searchParams
   const status = params.status ?? 'published'
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
+  const q = params.q?.trim() ?? ''
   const pageSize = 50
   const offset = (page - 1) * pageSize
 
   const db = getDb()
-  const rows = await db
-    .select()
-    .from(tools)
-    .where(eq(tools.status, status))
-    .orderBy(desc(tools.updatedAt))
-    .limit(pageSize)
-    .offset(offset)
+
+  const whereClause = q
+    ? and(eq(tools.status, status), ilike(tools.name, `%${q}%`))
+    : eq(tools.status, status)
+
+  const [rows, [{ total }]] = await Promise.all([
+    db
+      .select()
+      .from(tools)
+      .where(whereClause)
+      .orderBy(desc(tools.updatedAt))
+      .limit(pageSize)
+      .offset(offset),
+
+    db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(tools)
+      .where(whereClause),
+  ])
 
   const ids = rows.map((r) => r.id)
   const programRows = ids.length
@@ -43,6 +56,7 @@ export default async function AdminToolsPage({
   }
 
   const STATUS_TABS = ['published', 'draft', 'suppressed']
+  const totalPages = Math.ceil(total / pageSize)
 
   return (
     <div className="p-8 flex flex-col gap-6">
@@ -71,6 +85,21 @@ export default async function AdminToolsPage({
             {s}
           </Link>
         ))}
+      </div>
+
+      {/* Search + count */}
+      <div className="flex items-center gap-3">
+        <form method="GET" action="/admin/tools" className="flex-1 max-w-sm">
+          <input type="hidden" name="status" value={status} />
+          <input
+            type="search"
+            name="q"
+            defaultValue={q}
+            placeholder="Search by name…"
+            className="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </form>
+        <span className="text-xs text-muted">{total.toLocaleString()} {status}</span>
       </div>
 
       {/* Table */}
@@ -117,6 +146,31 @@ export default async function AdminToolsPage({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex gap-2 justify-center">
+          {page > 1 && (
+            <Link
+              href={`/admin/tools?status=${status}&page=${page - 1}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
+              className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
+            >
+              ← Prev
+            </Link>
+          )}
+          <span className="px-3 py-1.5 text-xs text-muted">
+            {page} / {totalPages}
+          </span>
+          {page < totalPages && (
+            <Link
+              href={`/admin/tools?status=${status}&page=${page + 1}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
+              className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
+            >
+              Next →
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   )
 }

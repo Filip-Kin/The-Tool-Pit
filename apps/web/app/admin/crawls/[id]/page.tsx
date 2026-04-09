@@ -2,27 +2,61 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getDb } from '@/lib/db'
 import { crawlJobs, crawlCandidates } from '@the-tool-pit/db'
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, and, sql } from 'drizzle-orm'
 import type { CrawlJobStats } from '@the-tool-pit/types'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
 
+const CANDIDATE_STATUSES = ['all', 'pending', 'matched', 'merged', 'published', 'suppressed', 'duplicate'] as const
+type CandidateStatus = (typeof CANDIDATE_STATUSES)[number]
+const PAGE_SIZE = 50
+
 export default async function CrawlJobDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ status?: string; page?: string }>
 }) {
   const { id } = await params
+  const sp = await searchParams
+  const status = (CANDIDATE_STATUSES.includes(sp.status as CandidateStatus) ? sp.status : 'all') as CandidateStatus
+  const page = Math.max(1, parseInt(sp.page ?? '1', 10))
+  const offset = (page - 1) * PAGE_SIZE
+
   const db = getDb()
 
   const [job] = await db.select().from(crawlJobs).where(eq(crawlJobs.id, id)).limit(1)
   if (!job) notFound()
 
-  const candidates = await db
-    .select()
-    .from(crawlCandidates)
-    .where(eq(crawlCandidates.jobId, id))
-    .orderBy(desc(crawlCandidates.createdAt))
-    .limit(200)
+  const whereJobId = eq(crawlCandidates.jobId, id)
+  const whereClause = status === 'all'
+    ? whereJobId
+    : and(whereJobId, eq(crawlCandidates.status, status))
+
+  const [candidates, [{ total }], counts] = await Promise.all([
+    db
+      .select()
+      .from(crawlCandidates)
+      .where(whereClause)
+      .orderBy(desc(crawlCandidates.createdAt))
+      .limit(PAGE_SIZE)
+      .offset(offset),
+
+    db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(crawlCandidates)
+      .where(whereClause),
+
+    db
+      .select({ status: crawlCandidates.status, count: sql<number>`count(*)::int` })
+      .from(crawlCandidates)
+      .where(whereJobId)
+      .groupBy(crawlCandidates.status),
+  ])
+
+  const countMap = Object.fromEntries(counts.map((r) => [r.status, r.count]))
+  const totalAll = counts.reduce((sum, r) => sum + r.count, 0)
+  const totalPages = Math.ceil(total / PAGE_SIZE)
 
   const stats = (job.stats ?? {}) as CrawlJobStats
 
@@ -83,11 +117,36 @@ export default async function CrawlJobDetailPage({
       <section className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Discovered Candidates</h2>
-          <span className="text-xs text-muted">{candidates.length} shown</span>
+          <span className="text-xs text-muted">{total.toLocaleString()} {status === 'all' ? 'total' : status}</span>
+        </div>
+
+        {/* Status filter tabs */}
+        <div className="flex gap-1 border-b border-border-subtle flex-wrap">
+          {CANDIDATE_STATUSES.map((s) => {
+            const count = s === 'all' ? totalAll : (countMap[s] ?? 0)
+            return (
+              <Link
+                key={s}
+                href={`/admin/crawls/${id}?status=${s}`}
+                className={`flex items-center gap-1.5 px-3 py-2 text-sm transition-colors capitalize ${
+                  status === s
+                    ? 'border-b-2 border-primary text-primary'
+                    : 'text-muted hover:text-foreground'
+                }`}
+              >
+                {s}
+                {count > 0 && (
+                  <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] text-muted">
+                    {count}
+                  </span>
+                )}
+              </Link>
+            )
+          })}
         </div>
 
         {candidates.length === 0 ? (
-          <p className="text-sm text-muted">No candidates recorded for this job.</p>
+          <p className="text-sm text-muted">No {status === 'all' ? '' : status + ' '}candidates recorded for this job.</p>
         ) : (
           <div className="rounded-lg border border-border overflow-hidden">
             <table className="w-full text-sm">
@@ -143,6 +202,31 @@ export default async function CrawlJobDetailPage({
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex gap-2 justify-center">
+            {page > 1 && (
+              <Link
+                href={`/admin/crawls/${id}?status=${status}&page=${page - 1}`}
+                className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
+              >
+                ← Prev
+              </Link>
+            )}
+            <span className="px-3 py-1.5 text-xs text-muted">
+              {page} / {totalPages}
+            </span>
+            {page < totalPages && (
+              <Link
+                href={`/admin/crawls/${id}?status=${status}&page=${page + 1}`}
+                className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
+              >
+                Next →
+              </Link>
+            )}
           </div>
         )}
       </section>
