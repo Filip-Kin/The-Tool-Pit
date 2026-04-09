@@ -314,15 +314,21 @@ ${groupSummaries.join('\n\n')}`
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }],
     })
 
     const text = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? ''
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return { error: `AI returned an unexpected response: ${JSON.stringify(text.slice(0, 500))}` }
 
-    const raw = JSON.parse(jsonMatch[0]) as Record<string, string>
+    // Extract individual "index": "uuid" pairs directly — tolerates truncated responses
+    const raw: Record<string, string> = {}
+    const pairRe = /"(\d+)"\s*:\s*"([0-9a-f-]{36})"/g
+    let m: RegExpExecArray | null
+    while ((m = pairRe.exec(text)) !== null) {
+      raw[m[1]!] = m[2]!
+    }
+    if (Object.keys(raw).length === 0)
+      return { error: `AI returned an unexpected response: ${JSON.stringify(text.slice(0, 500))}` }
 
     // Validate: every returned ID must belong to the stated group
     const selections: Record<number, string> = {}
