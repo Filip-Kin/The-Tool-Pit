@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { scanDuplicates, mergeDuplicate } from './actions'
+import { scanDuplicates, mergeDuplicate, resolveWithAI } from './actions'
 import type { DupeGroup } from './actions'
 
 export function DedupPanel() {
   const [scanning, startScan] = useTransition()
   const [merging, startMerge] = useTransition()
+  const [resolving, startResolve] = useTransition()
   const [groups, setGroups] = useState<DupeGroup[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Map of groupIndex → chosen canonical ID
@@ -25,15 +26,10 @@ export function DedupPanel() {
         setError(res.error)
       } else {
         setGroups(res.groups ?? [])
-        // Default canonical = oldest publishedAt in each group
+        // Default canonical = first tool in each group (server sorts oldest first)
         const defaults: Record<number, string> = {}
         for (const [i, g] of (res.groups ?? []).entries()) {
-          const oldest = [...g.tools].sort(
-            (a, b) =>
-              (a.publishedAt ? new Date(a.publishedAt).getTime() : Infinity) -
-              (b.publishedAt ? new Date(b.publishedAt).getTime() : Infinity),
-          )[0]
-          defaults[i] = oldest?.id ?? g.tools[0]?.id ?? ''
+          defaults[i] = g.tools[0]?.id ?? ''
         }
         setSelections(defaults)
       }
@@ -45,12 +41,12 @@ export function DedupPanel() {
     if (!group) return
     const canonicalId = selections[groupIndex]
     if (!canonicalId) return
-    const duplicateId = group.tools.find((t) => t.id !== canonicalId)?.id
-    if (!duplicateId) return
+    const duplicateIds = group.tools.filter((t) => t.id !== canonicalId).map((t) => t.id)
+    if (duplicateIds.length === 0) return
 
     setMergeError((prev) => ({ ...prev, [groupIndex]: '' }))
     startMerge(async () => {
-      const res = await mergeDuplicate(canonicalId, duplicateId)
+      const res = await mergeDuplicate(canonicalId, duplicateIds)
       if (res.error) {
         setMergeError((prev) => ({ ...prev, [groupIndex]: res.error! }))
       } else {
@@ -61,6 +57,26 @@ export function DedupPanel() {
 
   const pendingGroups = groups?.filter((_, i) => !mergedIndices.has(i)) ?? []
 
+  function handleResolveWithAI() {
+    if (!groups || groups.length === 0) return
+    const pending = groups.filter((_, i) => !mergedIndices.has(i))
+    const pendingIndices = groups.map((_, i) => i).filter((i) => !mergedIndices.has(i))
+    startResolve(async () => {
+      const res = await resolveWithAI(pending)
+      if (res.error) {
+        setError(res.error)
+      } else if (res.selections) {
+        // Map from pending-group index back to original group index
+        const newSelections: Record<number, string> = { ...selections }
+        for (const [pendingIdx, toolId] of Object.entries(res.selections)) {
+          const origIdx = pendingIndices[parseInt(pendingIdx, 10)]
+          if (origIdx !== undefined) newSelections[origIdx] = toolId
+        }
+        setSelections(newSelections)
+      }
+    })
+  }
+
   return (
     <section className="rounded-lg border border-border p-4 flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -70,13 +86,24 @@ export function DedupPanel() {
             Finds published tools sharing the same homepage URL or a very similar name (&gt;85% similarity).
           </p>
         </div>
-        <button
-          onClick={handleScan}
-          disabled={scanning}
-          className="rounded-md bg-surface-2 border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface transition-colors disabled:opacity-50"
-        >
-          {scanning ? 'Scanning…' : 'Scan for Duplicates'}
-        </button>
+        <div className="flex items-center gap-2">
+          {pendingGroups.length > 0 && (
+            <button
+              onClick={handleResolveWithAI}
+              disabled={resolving || merging}
+              className="rounded-md bg-surface-2 border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface transition-colors disabled:opacity-50"
+            >
+              {resolving ? 'Thinking…' : '✨ Auto-pick with AI'}
+            </button>
+          )}
+          <button
+            onClick={handleScan}
+            disabled={scanning}
+            className="rounded-md bg-surface-2 border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface transition-colors disabled:opacity-50"
+          >
+            {scanning ? 'Scanning…' : 'Scan for Duplicates'}
+          </button>
+        </div>
       </div>
 
       {error && <p className="text-xs text-frc">{error}</p>}
