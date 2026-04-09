@@ -1,5 +1,4 @@
 import { Queue } from 'bullmq'
-import { getRedis } from '@/lib/redis'
 
 const QUEUE_NAMES = ['crawl', 'enrich', 'freshness', 'reindex', 'link-check', 'submission'] as const
 
@@ -12,18 +11,17 @@ type JobCounts = {
 }
 
 async function fetchQueueCounts(): Promise<{ name: string; counts: JobCounts }[]> {
+  const redisUrl = process.env.REDIS_URL
+  if (!redisUrl) return []
   const results: { name: string; counts: JobCounts }[] = []
 
   for (const name of QUEUE_NAMES) {
-    const q = new Queue(name, {
-      connection: getRedis(),
-    })
+    const q = new Queue(name, { connection: { url: redisUrl } })
     try {
       const counts = await q.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed')
       results.push({ name, counts: counts as JobCounts })
     } finally {
-      // Don't close the shared ioredis connection — just detach the queue wrapper
-      await q.disconnect()
+      await q.close()
     }
   }
 
