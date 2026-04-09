@@ -23,7 +23,7 @@ RUN bun run --filter @the-tool-pit/db build
 RUN bun run --filter @the-tool-pit/worker build
 
 # ─── production runner ───────────────────────────────────────────────────────
-FROM node:22-alpine AS runner
+FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
