@@ -9,22 +9,25 @@
  *
  * Currently configured lists:
  *   andrewda/awesome-frc  (FRC tools)
+ *
+ * Branch: use 'HEAD' so the fetch always resolves to the default branch regardless
+ * of whether the repo uses 'main' or 'master'. raw.githubusercontent.com supports /HEAD/.
  */
 import { type Connector, type ConnectorResult, type CandidateInput, politeFetch, delay } from './base.js'
 
 interface AwesomeListSource {
   /** e.g. "andrewda/awesome-frc" */
   repo: string
-  /** Path to the README inside the repo, e.g. "readme.md" */
+  /** Path to the README inside the repo, e.g. "README.md" */
   path?: string
   /** Default program to tag candidates with if we can't infer from context */
   program: 'frc' | 'ftc' | 'fll'
-  /** Default branch name — raw.githubusercontent.com does not support /HEAD/ */
+  /** Branch — use 'HEAD' to always resolve to the default branch */
   branch?: string
 }
 
 const AWESOME_LISTS: AwesomeListSource[] = [
-  { repo: 'andrewda/awesome-frc', path: 'readme.md', program: 'frc', branch: 'master' },
+  { repo: 'andrewda/awesome-frc', path: 'README.md', program: 'frc', branch: 'HEAD' },
 ]
 
 /** Markdown link: [text](url) */

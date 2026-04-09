@@ -75,6 +75,18 @@ export async function extractMetadata(url: string): Promise<RawCandidateMetadata
       .filter(Boolean)
       .slice(0, 2)
 
+    // Extract readable page text for AI classification.
+    // Remove non-content elements first, then get structured text.
+    const bodyClone = root.querySelector('body') ?? root
+    for (const el of bodyClone.querySelectorAll('script, style, noscript, svg, iframe, nav, footer')) {
+      el.remove()
+    }
+    const pageText = bodyClone.structuredText
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+      .slice(0, 20000)
+
     return {
       title,
       description,
@@ -82,6 +94,7 @@ export async function extractMetadata(url: string): Promise<RawCandidateMetadata
       githubUrl,
       docsUrl: docsLinks[0],
       keywords,
+      rawHtml: pageText || undefined,
     }
   } catch (err) {
     console.error(`[extract] error for ${url}:`, err)

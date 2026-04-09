@@ -89,13 +89,12 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
     }
   }
 
-  // 2. Quality gate — suppress garbage before spending API credits on classification
+  // 2. Quality gate — suppress garbage before spending API credits on classification.
+  //    Only require a title — many legitimate SPAs serve no meta description server-side.
+  //    The AI classifier handles empty descriptions fine and generates its own summary.
   const qualityTitle = (enrichedMetadata.title as string | undefined) ?? ''
-  const qualityDesc = (enrichedMetadata.description as string | undefined) ?? ''
-  if (qualityTitle.length < 3 || qualityDesc.length < 10) {
-    const reason = qualityTitle.length < 3
-      ? 'Low quality metadata — title missing or too short'
-      : 'Low quality metadata — description missing or too short'
+  if (qualityTitle.length < 3) {
+    const reason = 'Low quality metadata — title missing or too short'
     await db
       .update(crawlCandidates)
       .set({ status: 'suppressed', rejectionReason: reason, updatedAt: new Date() })
@@ -113,10 +112,11 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
 
   // 4. Program hard-override: GitHub topics / keywords are ground truth for program detection
   if (!classification.programs?.length) {
+    const desc = (enrichedMetadata.description as string | undefined) ?? ''
     const haystack = [
       ...(enrichedMetadata.keywords as string[] ?? []),
       qualityTitle,
-      qualityDesc,
+      desc,
     ].join(' ').toLowerCase()
 
     const programs: string[] = []

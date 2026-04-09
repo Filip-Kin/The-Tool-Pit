@@ -27,6 +27,18 @@ const SEARCH_QUERIES = [
 
 const GITHUB_URL_RE = /https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/g
 
+/** Extract unique owner/repo GitHub URLs from arbitrary text. */
+function extractGitHubUrls(text: string): string[] {
+  const matches = text.match(GITHUB_URL_RE) ?? []
+  return matches
+    .map((u) => {
+      const parts = u.replace(/\/$/, '').split('/')
+      return parts.slice(0, 5).join('/') // keep up to owner/repo only
+    })
+    .filter((u) => u.split('/').filter(Boolean).length >= 4)
+    .filter((u, i, arr) => arr.indexOf(u) === i) // deduplicate
+}
+
 interface DiscourseSearchTopic {
   id: number
   title: string
@@ -43,6 +55,12 @@ interface DiscourseSearchResult {
     topic_id: number
     like_count: number
   }>
+}
+
+interface DiscourseTopicDetail {
+  post_stream?: {
+    posts?: Array<{ cooked?: string; raw?: string }>
+  }
 }
 
 export class ChiefDelphiConnector implements Connector {
@@ -89,24 +107,28 @@ export class ChiefDelphiConnector implements Connector {
           const threadUrl = `${BASE}/t/${topic.slug}/${topic.id}`
           const likeCount = likesMap.get(topic.id) ?? topic.like_count ?? 0
 
-          // Extract GitHub repo URLs from the blurb snippet
-          const blurb = topic.blurb ?? ''
-          const githubMatches = blurb.match(GITHUB_URL_RE) ?? []
+          // Try to extract GitHub repo URLs from the blurb first.
+          // The blurb is a truncated snippet — if it doesn't contain a GitHub URL,
+          // fetch the full topic to get the first post's complete content.
+          let searchText = topic.blurb ?? ''
+          let githubUrls = extractGitHubUrls(searchText)
 
-          // Clean up matched URLs (strip trailing punctuation / path noise)
-          const githubUrls = githubMatches
-            .map((u) => {
-              // Only keep up to owner/repo — strip deeper paths
-              const parts = u.replace(/\/$/, '').split('/')
-              // github.com / owner / repo = 3 segments after splitting 'https://github.com'
-              const repoPath = parts.slice(0, 5).join('/') // ['https:', '', 'github.com', owner, repo]
-              return repoPath
-            })
-            .filter((u) => {
-              const segments = u.split('/').filter(Boolean)
-              // Must be: protocol, hostname, owner, repo — 4 segments
-              return segments.length >= 4
-            })
+          if (githubUrls.length === 0) {
+            try {
+              await delay(1000) // Respect Discourse rate limit
+              const topicRes = await politeFetch(`${BASE}/t/${topic.id}.json`)
+              if (topicRes.ok) {
+                const topicData = await topicRes.json() as DiscourseTopicDetail
+                const firstPost = topicData.post_stream?.posts?.[0]
+                // Use cooked (HTML) or raw — extract URLs from whichever has them
+                const postContent = (firstPost?.cooked ?? '') + ' ' + (firstPost?.raw ?? '')
+                searchText = postContent
+                githubUrls = extractGitHubUrls(postContent)
+              }
+            } catch {
+              // Silently skip — we'll just get no GitHub URL for this topic
+            }
+          }
 
           if (githubUrls.length === 0) continue
 
@@ -124,7 +146,7 @@ export class ChiefDelphiConnector implements Connector {
             canonicalUrl: primaryGithub,
             githubUrl: primaryGithub,
             title: topic.title || undefined,
-            description: blurb || undefined,
+            description: topic.blurb || undefined,
             keywords,
           })
         }

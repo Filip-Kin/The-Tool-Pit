@@ -11,15 +11,16 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.0",
     "@the-tool-pit/db": "*",
     "@the-tool-pit/types": "*",
     "bullmq": "^5.8.0",
-    "ioredis": "5.9.3",
-    "drizzle-orm": "^0.36.0",
-    "node-html-parser": "^6.1.0",
-    "undici": "^6.19.0",
-    "@anthropic-ai/sdk": "^0.27.0",
     "date-fns": "^4.1.0",
+    "drizzle-orm": "^0.36.0",
+    "ioredis": "5.9.3",
+    "node-html-parser": "^6.1.0",
+    "playwright": "^1.59.1",
+    "undici": "^6.19.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

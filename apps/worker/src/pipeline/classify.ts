@@ -1,10 +1,16 @@
 /**
  * AI-powered classification of tool candidates.
  * Uses Claude to infer program(s), audience, tool type, summary, and flags.
- * Always runs after deterministic extraction — AI is enrichment, not source of truth.
+ *
+ * Flow:
+ *   1. Pass full page text (from static HTML extraction) + meta fields to Claude.
+ *   2. If the page text is thin (SPA shell), Claude may call render_with_playwright
+ *      to get the JS-rendered content and try again.
+ *   3. Claude returns a JSON classification object.
  */
 import Anthropic from '@anthropic-ai/sdk'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
+import { renderPage } from '../connectors/playwright-render.js'
 
 const VALID_TOOL_TYPES = new Set([
   'web_app', 'desktop_app', 'mobile_app', 'calculator', 'spreadsheet',
@@ -69,9 +75,16 @@ function getClient(): Anthropic {
   return _client
 }
 
-const CLASSIFICATION_PROMPT = `You are classifying tools for a FIRST Robotics directory (FRC, FTC, FLL).
+const SYSTEM_PROMPT = `You are classifying tools for a FIRST Robotics directory (FRC, FTC, FLL).
 
-Given information about a tool or resource, output a JSON object with the following fields:
+You will receive the URL, any available meta fields, and the full visible text content of the page.
+Use all of this to understand what the tool does.
+
+If the page content is clearly a JavaScript SPA shell (essentially empty body, framework boilerplate only,
+no real text about the tool), call the render_with_playwright tool to get the fully rendered content.
+Only call the tool once — if the rendered content still seems empty, classify based on what you have.
+
+Once you have enough information, output a JSON object with these fields:
 - toolType: one of "web_app", "desktop_app", "mobile_app", "calculator", "spreadsheet", "github_project", "browser_extension", "api", "resource", "other"
 - programs: array of "frc", "ftc", "fll" (can be multiple, or empty if unknown)
 - audienceRoles: array from ["student", "mentor", "volunteer", "parent_newcomer", "organizer_staff"]
@@ -93,9 +106,45 @@ Given information about a tool or resource, output a JSON object with the follow
 - reasoning: brief explanation of your classification
 
 If this is clearly not a FIRST robotics tool, junk, or spam, set confidence to 0.0.
-If the content is too thin to classify, set confidence below 0.3.
+If the content is too thin to classify even after rendering, set confidence below 0.3.
 
-Return ONLY valid JSON. No markdown, no explanation outside the JSON.`
+Return ONLY valid JSON (no markdown fences, no text outside the JSON object).`
+
+const RENDER_TOOL: Anthropic.Tool = {
+  name: 'render_with_playwright',
+  description:
+    'Use a headless browser to render a JavaScript-heavy page and return its visible text content. ' +
+    'Call this when the page HTML is clearly a SPA shell with little or no readable content about the tool.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      url: { type: 'string', description: 'The URL to render with a headless browser' },
+    },
+    required: ['url'],
+  },
+}
+
+function buildUserContent(metadata: RawCandidateMetadata, url: string): string {
+  const lines: string[] = [`URL: ${url}`]
+
+  if (metadata.title) lines.push(`Title: ${metadata.title}`)
+  if (metadata.githubUrl) lines.push(`GitHub: ${metadata.githubUrl}`)
+  if (metadata.keywords?.length) lines.push(`Keywords: ${metadata.keywords.join(', ')}`)
+
+  if (metadata.rawHtml) {
+    lines.push('', 'Page content:', metadata.rawHtml)
+  } else {
+    lines.push('', '(No page content available — static extraction returned nothing)')
+  }
+
+  return lines.join('\n')
+}
+
+function parseClassification(text: string): CandidateClassification {
+  const clean = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
+  const parsed = JSON.parse(clean) as CandidateClassification
+  return validateClassificationOutput(parsed) as CandidateClassification
+}
 
 export async function classifyCandidate(
   metadata: RawCandidateMetadata,
@@ -107,29 +156,70 @@ export async function classifyCandidate(
   }
 
   const client = getClient()
+  const messages: Anthropic.MessageParam[] = [
+    { role: 'user', content: buildUserContent(metadata, url) },
+  ]
 
-  const userContent = `URL: ${url}
-Title: ${metadata.title ?? 'N/A'}
-Description: ${metadata.description ?? 'N/A'}
-Keywords: ${(metadata.keywords ?? []).join(', ') || 'N/A'}
-Has GitHub link: ${metadata.githubUrl ? 'yes (' + metadata.githubUrl + ')' : 'no'}`
+  // Tool use loop — at most 2 turns (one optional tool call + final answer)
+  for (let turn = 0; turn < 3; turn++) {
+    let response: Awaited<ReturnType<typeof client.messages.create>>
+    try {
+      response = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 2048,
+        system: SYSTEM_PROMPT,
+        tools: [RENDER_TOOL],
+        messages,
+      })
+    } catch (err) {
+      console.error('[classify] API error:', err)
+      return { confidence: 0.3, reasoning: 'Classification failed' }
+    }
 
-  try {
-    const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001', // Use Haiku for cost-efficient classification
-      max_tokens: 600,
-      system: CLASSIFICATION_PROMPT,
-      messages: [{ role: 'user', content: userContent }],
-    })
+    // Claude finished — parse the JSON classification from the text block
+    if (response.stop_reason === 'end_turn') {
+      const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')
+      if (!textBlock) return { confidence: 0.3, reasoning: 'No text in response' }
+      try {
+        return parseClassification(textBlock.text)
+      } catch {
+        console.error('[classify] failed to parse JSON:', textBlock.text.slice(0, 200))
+        return { confidence: 0.3, reasoning: 'JSON parse failed' }
+      }
+    }
 
-    const text = message.content[0]?.type === 'text' ? message.content[0].text : ''
+    // Claude wants to use a tool
+    if (response.stop_reason === 'tool_use') {
+      const toolUse = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
+      if (!toolUse) break
 
-    // Strip markdown code fences Claude sometimes wraps around JSON
-    const clean = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
-    const parsed = JSON.parse(clean) as CandidateClassification
-    return validateClassificationOutput(parsed) as CandidateClassification
-  } catch (err) {
-    console.error('[classify] error:', err)
-    return { confidence: 0.3, reasoning: 'Classification failed' }
+      messages.push({ role: 'assistant', content: response.content })
+
+      if (toolUse.name === 'render_with_playwright') {
+        const input = toolUse.input as { url?: string }
+        const targetUrl = input.url ?? url
+        console.log(`[classify] rendering ${targetUrl} with Playwright`)
+
+        const rendered = await renderPage(targetUrl)
+        messages.push({
+          role: 'user',
+          content: [{
+            type: 'tool_result',
+            tool_use_id: toolUse.id,
+            content: rendered
+              ? `Rendered page content:\n${rendered}`
+              : 'Playwright rendering failed or returned no content.',
+          }],
+        })
+      } else {
+        // Unknown tool — return empty result so loop terminates
+        messages.push({
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Unknown tool.' }],
+        })
+      }
+    }
   }
+
+  return { confidence: 0.3, reasoning: 'Classification loop exhausted' }
 }
