@@ -12,7 +12,9 @@ import { processFreshnessJob } from './jobs/freshness.js'
 import { processLinkCheckerJob } from './jobs/link-checker.js'
 import { processReindexJob } from './jobs/reindex.js'
 import { processSubmissionJob } from './jobs/submission.js'
-import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload } from '@the-tool-pit/types'
+import { processAlbumIngestJob } from './jobs/album-ingest.js'
+import { processAlbumEnrichJob } from './jobs/album-enrich.js'
+import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload, AlbumIngestPayload, AlbumEnrichPayload } from '@the-tool-pit/types'
 
 const connection = getRedis()
 const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY ?? '2', 10)
@@ -71,8 +73,26 @@ const submissionWorker = new Worker<SubmissionJobPayload>(
   { connection, concurrency: CONCURRENCY },
 )
 
+const albumIngestWorker = new Worker<AlbumIngestPayload>(
+  'album-ingest',
+  async (job) => {
+    console.log(`[album-ingest] processing job ${job.id} connector=${job.data.connector}`)
+    await processAlbumIngestJob(job.data)
+  },
+  { connection, concurrency: CONCURRENCY },
+)
+
+const albumEnrichWorker = new Worker<AlbumEnrichPayload>(
+  'album-enrich',
+  async (job) => {
+    console.log(`[album-enrich] processing candidate ${job.data.candidateId}`)
+    await processAlbumEnrichJob(job.data)
+  },
+  { connection, concurrency: CONCURRENCY },
+)
+
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, linkCheckWorker, reindexWorker, submissionWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -98,6 +118,8 @@ async function shutdown() {
     linkCheckWorker.close(),
     reindexWorker.close(),
     submissionWorker.close(),
+    albumIngestWorker.close(),
+    albumEnrichWorker.close(),
   ])
   process.exit(0)
 }

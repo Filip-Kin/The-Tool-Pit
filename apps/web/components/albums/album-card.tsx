@@ -1,0 +1,55 @@
+import { ExternalLink, Camera, Images } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import type { AlbumDTO } from '@the-tool-pit/types'
+import { providerLabel } from './format'
+
+export function AlbumCard({ album }: { album: AlbumDTO }) {
+  const title = album.title || providerLabel(album.provider)
+  return (
+    <a
+      href={album.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:border-primary/50"
+    >
+      <div className="relative aspect-[3/2] w-full overflow-hidden bg-surface-2">
+        {album.coverImageUrl ? (
+          // Cover images live on many photographer-owned hosts; use a plain img
+          // (lazy-loaded) rather than next/image to avoid remote-host config churn.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={album.coverImageUrl}
+            alt={title}
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted-2">
+            <Images className="h-10 w-10" />
+          </div>
+        )}
+        <span className="absolute left-2 top-2">
+          <Badge variant="program">{providerLabel(album.provider)}</Badge>
+        </span>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-1 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors">
+            {title}
+          </h3>
+          <ExternalLink className="h-4 w-4 shrink-0 text-muted-2 group-hover:text-primary" />
+        </div>
+        {album.photographer && (
+          <span className="flex items-center gap-1.5 text-xs text-muted">
+            <Camera className="h-3 w-3 shrink-0" />
+            {album.photographer}
+          </span>
+        )}
+        {album.photoCount != null && (
+          <span className="text-xs text-muted-2">{album.photoCount} photos</span>
+        )}
+      </div>
+    </a>
+  )
+}

@@ -124,3 +124,67 @@ export interface CrawlJobStats {
   failed?: number
   errors?: number
 }
+
+// ---------------------------------------------------------------------------
+// Photo album aggregator — worker queue job payloads
+// ---------------------------------------------------------------------------
+
+export interface AlbumIngestPayload {
+  /** tba_events | fim_albums | chief_delphi_albums */
+  connector: string
+  /** Season year for tba_events / fim_albums. Defaults to current season. */
+  year?: number
+  jobId?: string
+  options?: Record<string, unknown>
+}
+
+export interface AlbumEnrichPayload {
+  candidateId: string
+  /** When set, the album_submissions record is updated after the pipeline decides. */
+  submissionId?: string
+  /** When true, re-fetches the album URL for OG metadata before matching. */
+  rescrape?: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Photo album aggregator — public DTOs
+// ---------------------------------------------------------------------------
+
+export interface AlbumSearchParams {
+  query: string
+  year?: number
+  page?: number
+  pageSize?: number
+}
+
+export interface EventSearchResult {
+  id: string
+  tbaKey: string
+  eventCode: string
+  name: string
+  year: number
+  startDate: string | null
+  endDate: string | null
+  week: number | null
+  city: string | null
+  stateProv: string | null
+  country: string | null
+  albumCount: number
+}
+
+export interface AlbumDTO {
+  id: string
+  url: string
+  provider: string
+  title: string | null
+  photographer: string | null
+  description: string | null
+  coverImageUrl: string | null
+  photoCount: number | null
+  eventCode: string
+}
+
+export interface TeamEventsResult {
+  teamNumber: number
+  events: EventSearchResult[]
+}

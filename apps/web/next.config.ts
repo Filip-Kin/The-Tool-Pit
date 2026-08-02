@@ -27,7 +27,17 @@ const nextConfig: NextConfig = {
   // causes EPERM errors when Next.js tries to copy traced files.
   output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
   images: {
-    domains: ['avatars.githubusercontent.com', 'github.com'],
+    remotePatterns: [
+      { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
+      { protocol: 'https', hostname: 'github.com' },
+      // Photo album hosts (cover thumbnails)
+      { protocol: 'https', hostname: '**.smugmug.com' },
+      { protocol: 'https', hostname: 'live.staticflickr.com' },
+      { protocol: 'https', hostname: 'farm*.staticflickr.com' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
+      { protocol: 'https', hostname: '**.pixieset.com' },
+      { protocol: 'https', hostname: 'firstinmichigan.us' },
+    ],
   },
 }
 

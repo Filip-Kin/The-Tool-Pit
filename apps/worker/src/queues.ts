@@ -1,6 +1,6 @@
 import { Queue } from 'bullmq'
 import { getRedis } from './redis.js'
-import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload } from '@the-tool-pit/types'
+import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload, AlbumIngestPayload, AlbumEnrichPayload } from '@the-tool-pit/types'
 
 // One Redis connection for all queues
 const connection = getRedis()
@@ -63,6 +63,27 @@ export const submissionQueue = new Queue<SubmissionJobPayload>('submission', {
   },
 })
 
+// Photo album aggregator queues
+export const albumIngestQueue = new Queue<AlbumIngestPayload>('album-ingest', {
+  connection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 5000 },
+    removeOnComplete: { count: 100 },
+    removeOnFail: { count: 200 },
+  },
+})
+
+export const albumEnrichQueue = new Queue<AlbumEnrichPayload>('album-enrich', {
+  connection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'fixed', delay: 3000 },
+    removeOnComplete: { count: 200 },
+    removeOnFail: { count: 500 },
+  },
+})
+
 /** Schedule recurring jobs. Call once on worker startup. */
 export async function scheduleRecurringJobs() {
   // Re-crawl fta.tools every 6 hours
@@ -100,5 +121,26 @@ export async function scheduleRecurringJobs() {
   await linkCheckQueue.upsertJobScheduler('link-check-pass', { every: 7 * 24 * 60 * 60 * 1000 }, {
     name: 'link-check-pass-trigger',
     data: { toolId: '__all__' },
+  })
+
+  // --- Photo album aggregator ---
+  const currentSeasonYear = new Date().getFullYear()
+
+  // Sync FRC events + team rosters from TBA — once per day
+  await albumIngestQueue.upsertJobScheduler('album-sync-tba', { every: 24 * 60 * 60 * 1000 }, {
+    name: 'album-sync-tba',
+    data: { connector: 'tba_events', year: currentSeasonYear, jobId: 'scheduled' },
+  })
+
+  // Scrape First in Michigan event photo links — every 12 hours
+  await albumIngestQueue.upsertJobScheduler('album-crawl-fim', { every: 12 * 60 * 60 * 1000 }, {
+    name: 'album-crawl-fim',
+    data: { connector: 'fim_albums', year: currentSeasonYear, jobId: 'scheduled' },
+  })
+
+  // Search Chief Delphi for album links — once per day
+  await albumIngestQueue.upsertJobScheduler('album-crawl-cd', { every: 24 * 60 * 60 * 1000 }, {
+    name: 'album-crawl-cd',
+    data: { connector: 'chief_delphi_albums', year: currentSeasonYear, jobId: 'scheduled' },
   })
 }
