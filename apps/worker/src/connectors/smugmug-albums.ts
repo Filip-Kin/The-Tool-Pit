@@ -33,6 +33,58 @@ const MAX_NODES = 4000
 /** Gallery names that aren't event albums. */
 const SKIP_NAME = /\b(robot gallery|photo booth|volunteers?|awards? (gallery|ceremony)|headshots?|portraits?|misc|test)\b/i
 
+/** A pure year folder ("2026") or a "Pre-2022"-style bucket. */
+function isYearName(name: string): boolean {
+  return /^(?:pre[- ]?)?(?:19|20)\d{2}$/i.test(name.trim())
+}
+
+/** Program label folders ("FIRST Robotics Competition", "FTC") are not events. */
+function detectProgram(text: string): 'frc' | 'ftc' | 'fll' | undefined {
+  const n = text.toLowerCase()
+  if (/tech[-\s]*chall|\bftc\b/.test(n)) return 'ftc'
+  if (/lego|\bfll\b/.test(n)) return 'fll'
+  if (/robotics[-\s]*comp|\bfrc\b/.test(n)) return 'frc'
+  return undefined
+}
+
+/**
+ * Generic leaf gallery names that carry no event identity - the event name has
+ * to come from an ancestor folder instead. Covers "Event Photos", "Event Photos
+ * B", "Photos", "Gallery 111625-329-PM", bare years, "2025 A", single letters.
+ */
+function isGenericLeaf(name: string): boolean {
+  const n = name.trim()
+  return (
+    /^(event\s+)?photos(\s*[-#]?\s*[a-z0-9]{1,3})?$/i.test(n) ||
+    /^gallery\b/i.test(n) ||
+    /^(?:19|20)\d{2}(?:[-\s]*[a-z0-9]{1,3})?$/i.test(n) ||
+    /^[a-z]$/i.test(n)
+  )
+}
+
+interface PathContext {
+  /** Meaningful ancestor folder names (event location), root/year/program stripped. */
+  names: string[]
+  year?: number
+  program?: 'frc' | 'ftc' | 'fll'
+}
+
+/** Extend the path context by descending into a folder named `name`. */
+function descend(ctx: PathContext, name: string): PathContext {
+  const prog = detectProgram(name)
+  const next: PathContext = { names: ctx.names, year: ctx.year, program: prog ?? ctx.program }
+  const yearMatch = name.match(/\b((?:19|20)\d{2})\b/)
+  if (isYearName(name)) {
+    if (yearMatch) next.year = parseInt(yearMatch[1], 10)
+  } else if (prog) {
+    // program-label folder: sets program, not a location name
+  } else {
+    next.names = [...ctx.names, name]
+    if (yearMatch) next.year = parseInt(yearMatch[1], 10)
+  }
+  return next
+}
+
 interface SmugNode {
   Type: 'Folder' | 'Album' | string
   Name: string
@@ -60,27 +112,33 @@ export class SmugmugAlbumsConnector implements AlbumConnector {
           errors.push(`[smugmug] could not resolve start node for ${root}`)
           continue
         }
+        // Program context can come from the root path itself (e.g. a
+        // ".../FIRST-Robotics-Competition" root is unambiguously FRC).
+        const rootCtx: PathContext = { names: [], year: undefined, program: detectProgram(new URL(root).pathname) }
+
         // A root can itself be a single gallery (e.g. one team's event album)
         // rather than a folder of galleries - emit it directly.
         if (start.node && start.node.Type === 'Album') {
-          const cand = this.albumToCandidate(start.node, root)
+          const cand = this.albumToCandidate(start.node, root, rootCtx)
           if (cand && !seenUrls.has(cand.canonicalUrl)) {
             seenUrls.add(cand.canonicalUrl)
             candidates.push(cand)
           }
           continue
         }
-        // BFS over the folder tree from this root.
-        const queue: { id: string; depth: number }[] = [{ id: start.id, depth: 0 }]
+        // BFS over the folder tree, carrying the meaningful folder path so an
+        // album whose own name is generic ("Event Photos", "2025 A") still gets
+        // its event name (e.g. "Glendale") from an ancestor folder.
+        const queue: { id: string; depth: number; ctx: PathContext }[] = [{ id: start.id, depth: 0, ctx: rootCtx }]
         while (queue.length > 0 && nodesVisited < MAX_NODES) {
-          const { id, depth } = queue.shift()!
+          const { id, depth, ctx } = queue.shift()!
           nodesVisited++
           const children = await this.children(id)
           for (const child of children) {
             if (child.Type === 'Folder') {
-              if (depth + 1 <= MAX_DEPTH) queue.push({ id: child.NodeID, depth: depth + 1 })
+              if (depth + 1 <= MAX_DEPTH) queue.push({ id: child.NodeID, depth: depth + 1, ctx: descend(ctx, child.Name) })
             } else if (child.Type === 'Album') {
-              const cand = this.albumToCandidate(child, root)
+              const cand = this.albumToCandidate(child, root, ctx)
               if (cand && !seenUrls.has(cand.canonicalUrl)) {
                 seenUrls.add(cand.canonicalUrl)
                 candidates.push(cand)
@@ -160,20 +218,30 @@ export class SmugmugAlbumsConnector implements AlbumConnector {
     return data.Response?.Node ?? []
   }
 
-  private albumToCandidate(node: SmugNode, sourceUrl: string): AlbumCandidateInput | null {
+  private albumToCandidate(node: SmugNode, sourceUrl: string, ctx: PathContext): AlbumCandidateInput | null {
     if (SKIP_NAME.test(node.Name)) return null
     const canonical = canonicalizeAlbumUrl(node.WebUri)
     if (!canonical) return null
-    // Year from a path segment (e.g. .../2026/...) first, else from the album name.
-    const fromPath = node.UrlPath.match(/\/((?:19|20)\d{2})(?:\/|$)/)
-    const fromName = node.Name.match(/\b((?:19|20)\d{2})\b/)
-    const year = fromPath ? parseInt(fromPath[1], 10) : fromName ? parseInt(fromName[1], 10) : undefined
+
+    // The event name is the meaningful ancestor folders + the leaf name if the
+    // leaf itself carries identity (skip generic "Event Photos" / "2025 A").
+    const parts = [...ctx.names]
+    if (!isGenericLeaf(node.Name) && !ctx.names.includes(node.Name)) parts.push(node.Name)
+
+    // Year: prefer a year already on the path/leaf; else read one from the leaf.
+    const fromLeaf = node.Name.match(/\b((?:19|20)\d{2})\b/)
+    const year = ctx.year ?? (fromLeaf ? parseInt(fromLeaf[1], 10) : undefined)
+
+    let title = parts.join(' ').replace(/\s+/g, ' ').trim()
+    if (year && !new RegExp(`\\b${year}\\b`).test(title)) title = `${title} ${year}`.trim()
+    if (!title) title = node.Name
+
     return {
       sourceUrl,
       canonicalUrl: canonical.canonicalUrl,
       provider: 'smugmug',
       targetEventYear: year,
-      rawMetadata: { title: node.Name },
+      rawMetadata: { title, targetProgram: ctx.program },
     }
   }
 }

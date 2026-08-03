@@ -293,6 +293,12 @@ export interface AlbumCandidateMetadata {
   dateText?: string
   coverImageUrl?: string
   host?: string
+  /**
+   * FIRST program (frc/ftc/fll) the album belongs to, when the source makes it
+   * unambiguous (e.g. a SmugMug "FIRST Robotics Competition" folder). Constrains
+   * event matching so an FRC album can't match an FTC event of the same year.
+   */
+  targetProgram?: 'frc' | 'ftc' | 'fll'
   /** CD-specific */
   threadUrl?: string
   threadTitle?: string

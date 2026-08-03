@@ -68,14 +68,18 @@ export function AlbumCandidateActions({
     <div className="flex flex-col items-end gap-1.5">
       {canModerate && (
         <div className="flex gap-2">
-          <button
-            disabled={pending || !hasEvent}
-            title={hasEvent ? 'Publish this album' : 'Set an event first'}
-            onClick={() => run(() => approveAlbumCandidate(candidateId))}
-            className="rounded bg-green-700/20 px-2.5 py-1 text-xs font-medium text-green-400 hover:bg-green-700/40 transition-colors disabled:opacity-40"
-          >
-            {pending ? '…' : 'Approve'}
-          </button>
+          {/* Approve only shows once an event is set - without one there's
+              nothing to approve (setting the event below auto-publishes). */}
+          {hasEvent && (
+            <button
+              disabled={pending}
+              title="Publish this album"
+              onClick={() => run(() => approveAlbumCandidate(candidateId))}
+              className="rounded bg-green-700/20 px-2.5 py-1 text-xs font-medium text-green-400 hover:bg-green-700/40 transition-colors disabled:opacity-40"
+            >
+              {pending ? '…' : 'Approve'}
+            </button>
+          )}
           {status !== 'suppressed' && (
             <button
               disabled={pending}
@@ -98,10 +102,11 @@ export function AlbumCandidateActions({
         />
         <button
           disabled={pending || !code.trim()}
+          title={hasEvent ? 'Change the matched event' : 'Set the event and publish this album'}
           onClick={() => run(() => setAlbumEventMatch(candidateId, code))}
           className="rounded border border-border px-2 py-1 text-xs text-muted hover:text-foreground disabled:opacity-40"
         >
-          {hasEvent ? 'Change event' : 'Set event'}
+          {hasEvent ? 'Change event' : 'Set & publish'}
         </button>
       </div>
 

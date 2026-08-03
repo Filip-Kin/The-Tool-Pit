@@ -133,6 +133,13 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
   // An album can never belong to an event that has not happened yet.
   const notFuture = sql`(${events.startDate} is null or ${events.startDate} <= now())`
 
+  // When the source pins the FIRST program (e.g. a SmugMug FRC folder), only
+  // consider events of that program, so an FRC album can't match an FTC event
+  // of the same year (and vice versa).
+  const programFilter = meta.targetProgram
+    ? sql`${events.program} = ${meta.targetProgram}`
+    : sql`true`
+
   // 2. Resolve the event.
   let matchedEventId: string | null = null
   let confidence = 0
@@ -142,7 +149,7 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
     const [ev] = await db
       .select({ id: events.id })
       .from(events)
-      .where(and(eq(events.eventCode, cand.targetEventCode), eq(events.year, year), notFuture))
+      .where(and(eq(events.eventCode, cand.targetEventCode), eq(events.year, year), notFuture, programFilter))
       .limit(1)
     if (ev) {
       matchedEventId = ev.id
@@ -161,7 +168,7 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
       const [ev] = await db
         .select({ id: events.id, eventCode: events.eventCode })
         .from(events)
-        .where(and(eq(events.year, year), inArray(events.eventCode, tokens), notFuture))
+        .where(and(eq(events.year, year), inArray(events.eventCode, tokens), notFuture, programFilter))
         .limit(1)
       if (ev) {
         matchedEventId = ev.id
@@ -187,7 +194,7 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
         wsim: sql<number>`word_similarity(${matchText}, ${events.name})`,
       })
       .from(events)
-      .where(and(eq(events.year, year), notFuture))
+      .where(and(eq(events.year, year), notFuture, programFilter))
       .orderBy(desc(sql`word_similarity(${matchText}, ${events.name})`))
       .limit(1)
     if (top) {
@@ -215,7 +222,7 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
         stateProv: events.stateProv,
       })
       .from(events)
-      .where(and(eq(events.year, year), notFuture))
+      .where(and(eq(events.year, year), notFuture, programFilter))
       .orderBy(desc(sql`similarity(${events.name}, ${matchText})`))
       .limit(15)) as EventCandidate[]
 
@@ -227,7 +234,7 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
       const [ev] = await db
         .select({ id: events.id })
         .from(events)
-        .where(and(eq(events.eventCode, ai.eventCode), eq(events.year, year), notFuture))
+        .where(and(eq(events.eventCode, ai.eventCode), eq(events.year, year), notFuture, programFilter))
         .limit(1)
       if (ev) {
         matchedEventId = ev.id

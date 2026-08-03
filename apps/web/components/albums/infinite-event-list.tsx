@@ -70,8 +70,15 @@ export function InfiniteEventList({
     const lastY = { current: window.scrollY }
     let restoring = true
 
+    // Only restore the saved feed + scroll on a back/forward navigation. On a
+    // fresh load or reload we keep the server-fresh `initial` (which reflects
+    // just-approved albums / cover changes), so admin edits show up immediately.
+    const navType = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type
+    const isBackForward = navType === 'back_forward'
+
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY)
+      const raw = isBackForward ? sessionStorage.getItem(STORAGE_KEY) : null
+      if (!isBackForward) sessionStorage.removeItem(STORAGE_KEY)
       if (raw) {
         const saved = JSON.parse(raw) as Persisted
         if (saved.events?.length && saved.scrollY > 0) {

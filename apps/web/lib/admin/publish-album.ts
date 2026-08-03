@@ -16,7 +16,7 @@ const CONNECTOR_SOURCE_TYPE: Record<string, string> = {
 
 export async function adminPublishAlbum(
   candidateId: string,
-): Promise<{ albumId: string; eventCode?: string; tbaKey?: string } | { error: string }> {
+): Promise<{ albumId: string; eventId: string; eventCode?: string; tbaKey?: string } | { error: string }> {
   const db = getDb()
 
   const [candidate] = await db
@@ -90,5 +90,5 @@ export async function adminPublishAlbum(
       .where(eq(albumSubmissions.id, candidate.submissionId))
   }
 
-  return { albumId, eventCode: event?.eventCode, tbaKey: event?.tbaKey }
+  return { albumId, eventId: candidate.matchedEventId, eventCode: event?.eventCode, tbaKey: event?.tbaKey }
 }

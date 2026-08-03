@@ -14,6 +14,29 @@ async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
 }
 
+const CMP_DIVISION_TYPES = new Set([3, 5])
+
+/**
+ * Bust the public caches an album on this event affects: the home feed, the
+ * event's own page, and - if the event is a championship division - the parent
+ * championship page, since the division's albums are rolled up and shown there.
+ */
+async function revalidateEventPublic(eventId: string | null | undefined) {
+  revalidatePath('/photos')
+  if (!eventId) return
+  const db = getDb()
+  const [ev] = await db
+    .select({ tbaKey: events.tbaKey, eventCode: events.eventCode, year: events.year, eventType: events.eventType })
+    .from(events)
+    .where(eq(events.id, eventId))
+    .limit(1)
+  if (!ev) return
+  revalidatePath(`/photos/event/${ev.tbaKey}`)
+  if (CMP_DIVISION_TYPES.has(ev.eventType ?? -1) && /\d$/.test(ev.eventCode)) {
+    revalidatePath(`/photos/event/${ev.year}${ev.eventCode.replace(/\d+$/, '')}`)
+  }
+}
+
 /**
  * Load a published candidate's live album + its event key (for revalidation).
  * Returns an error string if the candidate isn't a published album.
@@ -50,7 +73,7 @@ export async function renameAlbumTitle(candidateId: string, title: string): Prom
   if (!clean) return { error: 'Title cannot be empty.' }
   const loaded = await loadPublishedAlbum(candidateId)
   if ('error' in loaded) return loaded
-  const { db, cand, album, tbaKey } = loaded
+  const { db, cand, album } = loaded
 
   await db.update(albums).set({ title: clean, updatedAt: new Date() }).where(eq(albums.id, album.id))
   const meta = (cand.rawMetadata ?? {}) as AlbumCandidateMetadata
@@ -60,8 +83,7 @@ export async function renameAlbumTitle(candidateId: string, title: string): Prom
     .where(eq(albumCandidates.id, candidateId))
 
   revalidatePath('/admin/album-candidates')
-  revalidatePath('/photos')
-  if (tbaKey) revalidatePath(`/photos/event/${tbaKey}`)
+  await revalidateEventPublic(album.eventId)
   return {}
 }
 
@@ -70,7 +92,7 @@ export async function refetchAlbumCover(candidateId: string): Promise<{ error?: 
   await assertAdmin()
   const loaded = await loadPublishedAlbum(candidateId)
   if ('error' in loaded) return loaded
-  const { db, cand, album, tbaKey } = loaded
+  const { db, cand, album } = loaded
 
   const image = await fetchOgImage(album.canonicalUrl ?? album.url)
   if (!image) return { error: 'Could not find a cover image on the album host.' }
@@ -83,8 +105,7 @@ export async function refetchAlbumCover(candidateId: string): Promise<{ error?: 
     .where(eq(albumCandidates.id, candidateId))
 
   revalidatePath('/admin/album-candidates')
-  revalidatePath('/photos')
-  if (tbaKey) revalidatePath(`/photos/event/${tbaKey}`)
+  await revalidateEventPublic(album.eventId)
   return {}
 }
 
@@ -104,7 +125,7 @@ export async function uploadAlbumCover(candidateId: string, formData: FormData):
 
   const loaded = await loadPublishedAlbum(candidateId)
   if ('error' in loaded) return loaded
-  const { db, album, tbaKey } = loaded
+  const { db, album } = loaded
 
   const bytes = Buffer.from(await file.arrayBuffer())
   await db
@@ -119,8 +140,7 @@ export async function uploadAlbumCover(candidateId: string, formData: FormData):
   await db.update(albums).set({ coverImageUrl: coverUrl, updatedAt: new Date() }).where(eq(albums.id, album.id))
 
   revalidatePath('/admin/album-candidates')
-  revalidatePath('/photos')
-  if (tbaKey) revalidatePath(`/photos/event/${tbaKey}`)
+  await revalidateEventPublic(album.eventId)
   return {}
 }
 
@@ -133,7 +153,7 @@ export async function deletePublishedAlbum(candidateId: string): Promise<{ error
   await assertAdmin()
   const loaded = await loadPublishedAlbum(candidateId)
   if ('error' in loaded) return loaded
-  const { db, album, tbaKey } = loaded
+  const { db, album } = loaded
 
   await db
     .update(albumCandidates)
@@ -143,8 +163,7 @@ export async function deletePublishedAlbum(candidateId: string): Promise<{ error
   await db.delete(albums).where(eq(albums.id, album.id))
 
   revalidatePath('/admin/album-candidates')
-  revalidatePath('/photos')
-  if (tbaKey) revalidatePath(`/photos/event/${tbaKey}`)
+  await revalidateEventPublic(album.eventId)
   return {}
 }
 
@@ -153,10 +172,8 @@ export async function approveAlbumCandidate(candidateId: string): Promise<{ erro
   const result = await adminPublishAlbum(candidateId)
   revalidatePath('/admin/album-candidates')
   if ('error' in result) return { error: result.error }
-  // Refresh the public pages so the new album shows without a manual reload.
-  revalidatePath('/photos')
-  if (result.tbaKey) revalidatePath(`/photos/event/${result.tbaKey}`)
-  if (result.eventCode) revalidatePath(`/photos/event/${result.eventCode}`)
+  // Refresh the public pages (incl. the parent championship if a division).
+  await revalidateEventPublic(result.eventId)
   return {}
 }
 
@@ -214,12 +231,21 @@ export async function setAlbumEventMatch(candidateId: string, eventKey: string):
     })
     .where(eq(albumCandidates.id, candidateId))
 
-  // If it's already published, repoint the live album and refresh both pages.
+  // If it's already published, repoint the live album and refresh both pages
+  // (old + new, each parent-aware for championship divisions).
   if (cand.matchedAlbumId) {
     await db.update(albums).set({ eventId: event.id, updatedAt: new Date() }).where(eq(albums.id, cand.matchedAlbumId))
-    revalidatePath('/photos')
-    revalidatePath(`/photos/event/${event.tbaKey}`)
+    await revalidateEventPublic(event.id)
     if (oldKey && oldKey !== event.tbaKey) revalidatePath(`/photos/event/${oldKey}`)
+  } else if (cand.status !== 'published') {
+    // Setting the event on a not-yet-published candidate IS the approval:
+    // publish it straight away so there's no separate approve step.
+    const result = await adminPublishAlbum(candidateId)
+    if ('error' in result) {
+      revalidatePath('/admin/album-candidates')
+      return { error: result.error }
+    }
+    await revalidateEventPublic(result.eventId)
   }
 
   revalidatePath('/admin/album-candidates')
