@@ -19,6 +19,15 @@ export const OIDC_ENDPOINTS = {
 /** LLDAP group that grants admin access. */
 export const ADMIN_GROUP = 'admins'
 
+/**
+ * Build a public URL for a redirect. Behind Coolify/Traefik, request.url reports
+ * the internal container address (http://0.0.0.0:3000), so redirects must be
+ * based on the public origin - derived from the (public) OIDC redirect URI.
+ */
+export function publicUrl(path: string): URL {
+  return new URL(path, OIDC.redirectUri)
+}
+
 /** Short-lived cookies carrying the PKCE verifier + CSRF state across the redirect. */
 export const OIDC_STATE_COOKIE = 'oidc_state'
 export const OIDC_VERIFIER_COOKIE = 'oidc_verifier'

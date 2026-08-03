@@ -5,10 +5,11 @@ import {
   ADMIN_GROUP,
   OIDC_STATE_COOKIE,
   OIDC_VERIFIER_COOKIE,
+  publicUrl,
 } from '@/lib/admin/oidc'
 
-function fail(req: NextRequest, reason: string) {
-  const url = new URL('/admin/login', req.url)
+function fail(_req: NextRequest, reason: string) {
+  const url = publicUrl('/admin/login')
   url.searchParams.set('error', reason)
   return NextResponse.redirect(url)
 }
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
     if (!groups.includes(ADMIN_GROUP)) return fail(req, 'denied')
 
     // 3. Grant the admin session (same cookie isAdmin/middleware already trust).
-    const res = NextResponse.redirect(new URL('/admin', req.url))
+    const res = NextResponse.redirect(publicUrl('/admin'))
     res.cookies.set('admin_token', process.env.ADMIN_SECRET!, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
