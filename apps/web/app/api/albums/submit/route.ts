@@ -6,10 +6,13 @@ import { createAlbumSubmission } from '@/lib/albums/create-submission'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { url, eventHint, year, photographer, note, turnstileToken } = body as {
+    const { url, eventHint, code, year, program, tbaKey, photographer, note, turnstileToken } = body as {
       url: string
       eventHint?: string
+      code?: string
       year?: number
+      program?: string
+      tbaKey?: string
       photographer?: string
       note?: string
       turnstileToken?: string
@@ -45,7 +48,10 @@ export async function POST(req: NextRequest) {
     const result = await createAlbumSubmission({
       url,
       eventHint,
+      code,
       year: typeof year === 'number' && Number.isInteger(year) ? year : undefined,
+      program: program === 'ftc' ? 'ftc' : program === 'frc' ? 'frc' : undefined,
+      tbaKey,
       photographerHint: photographer,
       note,
       submitterIpHash: ipHash,

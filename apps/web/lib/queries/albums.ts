@@ -1,4 +1,4 @@
-import { sql, eq, and, or, ilike, desc, inArray, isNotNull } from 'drizzle-orm'
+import { sql, eq, and, or, ilike, desc, inArray, isNotNull, type SQL } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { events, albums, eventTeams } from '@the-tool-pit/db'
 import type { Event, Album } from '@the-tool-pit/db'
@@ -376,6 +376,80 @@ export async function getTeamEvents(teamNumber: number): Promise<EventSearchResu
     publishedAlbumUrls(eventRows.map((e) => e.id)),
   ])
   return collapseDivisions(eventRows, counts, covers, urls)
+}
+
+export interface EventPickerResult {
+  tbaKey: string
+  eventCode: string
+  year: number
+  name: string
+  program: string
+  city: string | null
+  stateProv: string | null
+}
+
+/**
+ * Event autocomplete for the submission form. Unlike suggestEvents this searches
+ * ALL events (not just ones that already have albums - the whole point of a
+ * submission is an event with none yet), scoped to a program, excluding events
+ * that haven't happened. Returns enough to auto-fill the code + year.
+ */
+export async function searchEventsForSubmission(
+  q: string,
+  program: 'frc' | 'ftc',
+  limit = 8,
+): Promise<EventPickerResult[]> {
+  const db = getDb()
+  const query = q.trim()
+  if (query.length < 2) return []
+  const yearMatch = query.match(/\b(19|20)\d{2}\b/)
+  const year = yearMatch ? parseInt(yearMatch[0], 10) : undefined
+  const text = query.replace(/\b(19|20)\d{2}\b/, '').trim()
+  const pattern = `%${text}%`
+
+  const filters: SQL[] = [
+    eq(events.program, program),
+    sql`(${events.startDate} is null or ${events.startDate} <= now())`,
+  ]
+  if (text) filters.push(or(ilike(events.name, pattern), ilike(events.eventCode, pattern))!)
+  if (year) filters.push(eq(events.year, year))
+
+  const rows = await db
+    .select({
+      tbaKey: events.tbaKey,
+      eventCode: events.eventCode,
+      year: events.year,
+      name: events.name,
+      program: events.program,
+      city: events.city,
+      stateProv: events.stateProv,
+    })
+    .from(events)
+    .where(and(...filters))
+    .orderBy(desc(sql`similarity(${events.name}, ${text})`), desc(events.startDate))
+    .limit(limit)
+  return rows
+}
+
+/** Resolve a full TBA key to the fields a submission needs. */
+export async function eventForSubmission(tbaKey: string): Promise<EventPickerResult | null> {
+  const value = tbaKey.trim().toLowerCase()
+  if (!/^(19|20)\d{2}[a-z0-9]+$/.test(value)) return null
+  const db = getDb()
+  const [row] = await db
+    .select({
+      tbaKey: events.tbaKey,
+      eventCode: events.eventCode,
+      year: events.year,
+      name: events.name,
+      program: events.program,
+      city: events.city,
+      stateProv: events.stateProv,
+    })
+    .from(events)
+    .where(eq(events.tbaKey, value))
+    .limit(1)
+  return row ?? null
 }
 
 /** Lightweight autocomplete: top event name/code matches. */

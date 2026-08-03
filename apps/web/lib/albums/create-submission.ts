@@ -1,14 +1,20 @@
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { albums, albumSubmissions, albumCandidates, canonicalizeAlbumUrl } from '@the-tool-pit/db'
+import { albums, albumSubmissions, albumCandidates, events, canonicalizeAlbumUrl } from '@the-tool-pit/db'
 import { getAlbumEnrichQueue } from './queue'
 import { notifyNewSubmission } from './notify'
 
 interface CreateAlbumSubmissionInput {
   url: string
   eventHint?: string
+  /** Event code typed or auto-filled from a picked event. */
+  code?: string
   /** Season year the submitter says the album is from. */
   year?: number
+  /** FIRST program (frc/ftc) from the toggle. */
+  program?: 'frc' | 'ftc'
+  /** Full TBA key when the submitter picked a real event - the strongest signal. */
+  tbaKey?: string
   photographerHint?: string
   note?: string
   submitterIpHash: string
@@ -52,11 +58,37 @@ export async function createAlbumSubmission(
   }
 
   const hint = input.eventHint?.trim()
-  const targetEventCode = hint && CODE_HINT_RE.test(hint) ? hint.toLowerCase() : undefined
-  // Use the submitter's year if it's a plausible season; else fall back to the
-  // code's current-season default (enrich still refines from the album itself).
+  const typedCode = input.code?.trim().toLowerCase()
   const validYear = input.year && input.year >= 1992 && input.year <= new Date().getFullYear() + 1 ? input.year : undefined
-  const targetEventYear = validYear ?? (targetEventCode ? new Date().getFullYear() : undefined)
+
+  // Strongest signal: the submitter picked a real event (full TBA key). Resolve
+  // it to the exact code/year/program so enrich matches by exact code.
+  let targetEventCode: string | undefined
+  let targetEventYear: number | undefined
+  let targetProgram: 'frc' | 'ftc' | undefined = input.program
+  let resolvedName: string | undefined
+
+  const key = input.tbaKey?.trim().toLowerCase()
+  if (key && /^(19|20)\d{2}[a-z0-9]+$/.test(key)) {
+    const [ev] = await db
+      .select({ eventCode: events.eventCode, year: events.year, program: events.program, name: events.name })
+      .from(events)
+      .where(eq(events.tbaKey, key))
+      .limit(1)
+    if (ev) {
+      targetEventCode = ev.eventCode
+      targetEventYear = ev.year
+      targetProgram = ev.program === 'ftc' ? 'ftc' : 'frc'
+      resolvedName = ev.name
+    }
+  }
+
+  // Otherwise fall back to a typed code (or a code-shaped hint) + year.
+  if (!targetEventCode) {
+    const codeCandidate = typedCode || (hint && CODE_HINT_RE.test(hint) ? hint.toLowerCase() : undefined)
+    targetEventCode = codeCandidate
+    targetEventYear = validYear ?? (codeCandidate ? new Date().getFullYear() : undefined)
+  }
 
   const [submission] = await db
     .insert(albumSubmissions)
@@ -73,9 +105,10 @@ export async function createAlbumSubmission(
     })
     .returning({ id: albumSubmissions.id })
 
-  // A free-text event hint (a name, not a bare code) seeds the matcher's title
-  // so name-matching can work even when the album URL carries no event name.
-  const nameHint = hint && !targetEventCode ? hint : undefined
+  // Title seeds the matcher (and admin display): the resolved event name if we
+  // have one, else the free-text hint (when it's a name, not a bare code).
+  const nameHint = hint && !CODE_HINT_RE.test(hint) ? hint : undefined
+  const title = resolvedName ?? (nameHint ? (targetEventYear ? `${nameHint} ${targetEventYear}` : nameHint) : undefined)
   const [candidate] = await db
     .insert(albumCandidates)
     .values({
@@ -87,7 +120,8 @@ export async function createAlbumSubmission(
       submissionId: submission.id,
       rawMetadata: {
         photographer: input.photographerHint,
-        ...(nameHint ? { title: validYear ? `${nameHint} ${validYear}` : nameHint } : {}),
+        ...(targetProgram ? { targetProgram } : {}),
+        ...(title ? { title } : {}),
         ...(input.note ? { blurb: input.note } : {}),
       },
       status: 'pending',
