@@ -28,9 +28,10 @@ export default async function AdminAlbumSubmissionsPage({
         <p className="text-sm text-muted">{total.toLocaleString()} total</p>
       </div>
       <p className="text-sm text-muted">
-        Submitted albums become candidates. Moderate them under{' '}
-        <Link href="/admin/album-candidates" className="text-primary hover:underline">
-          Album Candidates
+        This is the raw submission log. Moderate submitted albums (set an event and
+        publish) under{' '}
+        <Link href="/admin/album-candidates?status=submitted" className="text-primary hover:underline">
+          Album Candidates → Submitted
         </Link>
         .
       </p>

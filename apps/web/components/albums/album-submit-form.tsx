@@ -2,9 +2,12 @@
 
 import { useState } from 'react'
 
+const CURRENT_YEAR = new Date().getFullYear()
+
 export function AlbumSubmitForm() {
   const [url, setUrl] = useState('')
   const [eventHint, setEventHint] = useState('')
+  const [year, setYear] = useState('')
   const [photographer, setPhotographer] = useState('')
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -19,13 +22,20 @@ export function AlbumSubmitForm() {
       const res = await fetch('/api/albums/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim(), eventHint: eventHint.trim(), photographer: photographer.trim(), note: note.trim() }),
+        body: JSON.stringify({
+          url: url.trim(),
+          eventHint: eventHint.trim(),
+          year: year ? parseInt(year, 10) : undefined,
+          photographer: photographer.trim(),
+          note: note.trim(),
+        }),
       })
       const data = (await res.json()) as { message?: string; error?: string }
       if (res.ok) {
         setResult({ ok: true, message: data.message ?? 'Submitted.' })
         setUrl('')
         setEventHint('')
+        setYear('')
         setPhotographer('')
         setNote('')
       } else {
@@ -50,14 +60,32 @@ export function AlbumSubmitForm() {
           className="input"
         />
       </Field>
-      <Field label="Event code or name" hint="Like mimid, or “Midland”. Helps us match it to the right event.">
-        <input
-          value={eventHint}
-          onChange={(e) => setEventHint(e.target.value)}
-          placeholder="mimid"
-          className="input"
-        />
-      </Field>
+      <div className="flex gap-3">
+        <div className="flex-1">
+          <Field label="Event name or code" hint="Like “Midland” or mimid.">
+            <input
+              value={eventHint}
+              onChange={(e) => setEventHint(e.target.value)}
+              placeholder="Midland"
+              className="input"
+            />
+          </Field>
+        </div>
+        <div className="w-28">
+          <Field label="Year" hint="Season year.">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1992}
+              max={CURRENT_YEAR}
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+              placeholder={String(CURRENT_YEAR)}
+              className="input"
+            />
+          </Field>
+        </div>
+      </div>
       <Field label="Photographer" hint="Who took the photos (optional).">
         <input value={photographer} onChange={(e) => setPhotographer(e.target.value)} className="input" />
       </Field>

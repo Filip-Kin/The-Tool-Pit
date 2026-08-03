@@ -2,10 +2,13 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { albums, albumSubmissions, albumCandidates, canonicalizeAlbumUrl } from '@the-tool-pit/db'
 import { getAlbumEnrichQueue } from './queue'
+import { notifyNewSubmission } from './notify'
 
 interface CreateAlbumSubmissionInput {
   url: string
   eventHint?: string
+  /** Season year the submitter says the album is from. */
+  year?: number
   photographerHint?: string
   note?: string
   submitterIpHash: string
@@ -50,7 +53,10 @@ export async function createAlbumSubmission(
 
   const hint = input.eventHint?.trim()
   const targetEventCode = hint && CODE_HINT_RE.test(hint) ? hint.toLowerCase() : undefined
-  const targetEventYear = targetEventCode ? new Date().getFullYear() : undefined
+  // Use the submitter's year if it's a plausible season; else fall back to the
+  // code's current-season default (enrich still refines from the album itself).
+  const validYear = input.year && input.year >= 1992 && input.year <= new Date().getFullYear() + 1 ? input.year : undefined
+  const targetEventYear = validYear ?? (targetEventCode ? new Date().getFullYear() : undefined)
 
   const [submission] = await db
     .insert(albumSubmissions)
@@ -67,6 +73,9 @@ export async function createAlbumSubmission(
     })
     .returning({ id: albumSubmissions.id })
 
+  // A free-text event hint (a name, not a bare code) seeds the matcher's title
+  // so name-matching can work even when the album URL carries no event name.
+  const nameHint = hint && !targetEventCode ? hint : undefined
   const [candidate] = await db
     .insert(albumCandidates)
     .values({
@@ -76,12 +85,24 @@ export async function createAlbumSubmission(
       targetEventCode,
       targetEventYear,
       submissionId: submission.id,
-      rawMetadata: { photographer: input.photographerHint },
+      rawMetadata: {
+        photographer: input.photographerHint,
+        ...(nameHint ? { title: validYear ? `${nameHint} ${validYear}` : nameHint } : {}),
+        ...(input.note ? { blurb: input.note } : {}),
+      },
       status: 'pending',
     })
     .returning({ id: albumCandidates.id })
 
   await getAlbumEnrichQueue().add('album-enrich', { candidateId: candidate.id, submissionId: submission.id })
+
+  // Best-effort Discord ping so a moderator sees new submissions promptly.
+  void notifyNewSubmission({
+    url: input.url,
+    eventHint: input.eventHint,
+    photographer: input.photographerHint,
+    note: input.note,
+  })
 
   return {
     submissionId: submission.id,

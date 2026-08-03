@@ -1,16 +1,18 @@
 import Link from 'next/link'
-import { eq, and, or, ilike, isNull, desc, sql, type SQL } from 'drizzle-orm'
+import { eq, and, or, ilike, isNull, isNotNull, desc, sql, type SQL } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { albumCandidates, albums, events } from '@the-tool-pit/db'
 import type { AlbumCandidateMetadata, AlbumEventMatch } from '@the-tool-pit/db'
 import { AlbumCandidateActions } from './candidate-actions'
 
-// Real candidate statuses plus a "no_cover" view = published albums missing a
-// cover image (Drive/Dropbox/blocked-Flickr that couldn't be OG-scraped).
-const STATUS_TABS = ['pending', 'matched', 'no_cover', 'suppressed', 'duplicate', 'published'] as const
+// Real candidate statuses plus two views: "submitted" = candidates from public
+// submissions (any status), and "no_cover" = published albums missing a cover
+// image (Drive/Dropbox/blocked-Flickr that couldn't be OG-scraped).
+const STATUS_TABS = ['pending', 'submitted', 'matched', 'no_cover', 'suppressed', 'duplicate', 'published'] as const
 type TabStatus = (typeof STATUS_TABS)[number]
 const TAB_LABELS: Record<TabStatus, string> = {
   pending: 'pending',
+  submitted: 'submitted',
   matched: 'matched',
   no_cover: 'no cover',
   suppressed: 'suppressed',
@@ -32,11 +34,14 @@ export default async function AdminAlbumCandidatesPage({
 
   const db = getDb()
 
-  // The "no_cover" tab is published rows whose album has no cover image.
+  // "no_cover" = published rows whose album has no cover image; "submitted" =
+  // candidates that came from a public submission (any status).
   const statusFilter: SQL =
     status === 'no_cover'
       ? and(eq(albumCandidates.status, 'published'), isNull(albums.coverImageUrl))!
-      : eq(albumCandidates.status, status)
+      : status === 'submitted'
+        ? isNotNull(albumCandidates.submissionId)
+        : eq(albumCandidates.status, status)
 
   const searchFilter: SQL | undefined = q
     ? or(
@@ -49,7 +54,7 @@ export default async function AdminAlbumCandidatesPage({
     : undefined
   const where = searchFilter ? and(statusFilter, searchFilter)! : statusFilter
 
-  const [rows, [{ total }], counts, [{ noCover }]] = await Promise.all([
+  const [rows, [{ total }], counts, [{ noCover }], submittedCount] = await Promise.all([
     db
       .select({
         candidate: albumCandidates,
@@ -81,10 +86,15 @@ export default async function AdminAlbumCandidatesPage({
       .from(albumCandidates)
       .leftJoin(albums, eq(albums.id, albumCandidates.matchedAlbumId))
       .where(and(eq(albumCandidates.status, 'published'), isNull(albums.coverImageUrl))),
+    db
+      .select({ submitted: sql<number>`count(*)::int` })
+      .from(albumCandidates)
+      .where(isNotNull(albumCandidates.submissionId)),
   ])
 
   const countMap: Record<string, number> = Object.fromEntries(counts.map((r) => [r.status, r.count]))
   countMap.no_cover = noCover
+  countMap.submitted = submittedCount[0]?.submitted ?? 0
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   return (
