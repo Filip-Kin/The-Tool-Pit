@@ -189,11 +189,14 @@ export function AlbumSearchBar({
                 href={`/event/${s.tbaKey}`}
                 onClick={() => setShowSuggestions(false)}
                 className={cn(
-                  'flex items-center justify-between gap-2 px-4 py-2.5 text-sm transition-colors',
+                  'flex items-center gap-2 px-4 py-2.5 text-sm transition-colors',
                   i === activeIndex ? 'bg-primary/10 text-foreground' : 'hover:bg-surface-2 text-foreground',
                 )}
               >
-                <span className="font-medium">{s.name}</span>
+                <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 font-mono text-xs font-bold text-primary">
+                  {s.year}
+                </span>
+                <span className="min-w-0 flex-1 truncate font-medium">{s.name}</span>
                 <span className="shrink-0 font-mono text-xs text-muted-2">{s.eventCode}</span>
               </Link>
             </li>

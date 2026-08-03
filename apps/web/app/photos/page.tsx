@@ -1,15 +1,13 @@
-import { ScrollRestorer } from '@/components/albums/scroll-restorer'
 import { AlbumSearchBar } from '@/components/albums/album-search-bar'
 import { SectionHeader } from '@/components/ui/section-header'
-import { EventList } from '@/components/albums/event-list'
-import { getEventsByDate } from '@/lib/queries/albums'
+import { InfiniteEventList } from '@/components/albums/infinite-event-list'
+import { getEventsByDatePage } from '@/lib/queries/albums'
 
 export default async function PhotosHomePage() {
-  const events = await getEventsByDate(60)
+  const first = await getEventsByDatePage({ limit: 30, offset: 0 })
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-10">
-      <ScrollRestorer />
       <section className="mx-auto mb-12 flex max-w-2xl flex-col items-center gap-4 text-center">
         <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           FRC event photos
@@ -23,10 +21,11 @@ export default async function PhotosHomePage() {
       </section>
 
       <section>
-        <SectionHeader title="Recent events" description="Events with photos, newest first." />
-        <EventList
-          events={events}
-          emptyMessage="No albums yet. Submit one to get it started."
+        <SectionHeader title="All events" description="Every event with photos, newest first." />
+        <InfiniteEventList
+          initial={first.events}
+          initialOffset={first.rawCount}
+          initialHasMore={first.hasMore}
         />
       </section>
     </div>

@@ -2,7 +2,14 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { approveAlbumCandidate, suppressAlbumCandidate, setAlbumEventMatch } from './actions'
+import {
+  approveAlbumCandidate,
+  suppressAlbumCandidate,
+  setAlbumEventMatch,
+  renameAlbumTitle,
+  refetchAlbumCover,
+  deletePublishedAlbum,
+} from './actions'
 
 export function AlbumCandidateActions({
   candidateId,
@@ -11,6 +18,7 @@ export function AlbumCandidateActions({
   targetEventCode,
   targetEventYear,
   matchedEventKey,
+  albumTitle,
 }: {
   candidateId: string
   status: string
@@ -18,6 +26,7 @@ export function AlbumCandidateActions({
   targetEventCode: string | null
   targetEventYear: number | null
   matchedEventKey: string | null
+  albumTitle: string
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
@@ -27,6 +36,7 @@ export function AlbumCandidateActions({
   const [code, setCode] = useState(
     matchedEventKey ?? (targetEventCode ? `${targetEventYear ?? ''}${targetEventCode}` : ''),
   )
+  const [title, setTitle] = useState(albumTitle)
 
   if (status === 'duplicate') {
     return <span className="text-xs text-muted-2">duplicate</span>
@@ -83,6 +93,46 @@ export function AlbumCandidateActions({
           {hasEvent ? 'Change event' : 'Set event'}
         </button>
       </div>
+
+      {status === 'published' && (
+        <div className="mt-1 flex w-full flex-col items-end gap-1.5 border-t border-border-subtle pt-2">
+          <div className="flex gap-1">
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Album title"
+              className="w-40 rounded border border-border bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+            />
+            <button
+              disabled={pending || !title.trim() || title.trim() === albumTitle}
+              onClick={() => run(() => renameAlbumTitle(candidateId, title))}
+              className="rounded border border-border px-2 py-1 text-xs text-muted hover:text-foreground disabled:opacity-40"
+            >
+              Rename
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button
+              disabled={pending}
+              onClick={() => run(() => refetchAlbumCover(candidateId))}
+              className="rounded border border-border px-2 py-1 text-xs text-muted hover:text-foreground disabled:opacity-40"
+            >
+              {pending ? '…' : 'Refetch cover'}
+            </button>
+            <button
+              disabled={pending}
+              onClick={() => {
+                if (confirm('Remove this published album? It will be unpublished and returned to the queue.')) {
+                  run(() => deletePublishedAlbum(candidateId))
+                }
+              }}
+              className="rounded bg-frc/15 px-2 py-1 text-xs font-medium text-frc hover:bg-frc/25 transition-colors disabled:opacity-40"
+            >
+              {pending ? '…' : 'Remove'}
+            </button>
+          </div>
+        </div>
+      )}
       {error && <p className="max-w-[12rem] text-right text-[10px] text-frc">{error}</p>}
     </div>
   )

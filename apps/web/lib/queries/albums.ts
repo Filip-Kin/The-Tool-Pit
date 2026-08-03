@@ -14,12 +14,22 @@ const hasPublishedAlbum = sql`exists (select 1 from albums a where a.event_id = 
 // Mappers
 // ---------------------------------------------------------------------------
 
+/**
+ * Display name for an event. TBA event_type 4 is the Championship Finals, whose
+ * TBA name is just "Einstein Field" - but album photos there span the whole
+ * championship, so we present it as the world championship instead.
+ */
+export function displayEventName(e: Pick<Event, 'name' | 'eventType' | 'year'>): string {
+  if (e.eventType === 4) return `${e.year} FRC World Championship`
+  return e.name
+}
+
 function toEventResult(e: Event, albumCount: number, coverImages: string[] = []): EventSearchResult {
   return {
     id: e.id,
     tbaKey: e.tbaKey,
     eventCode: e.eventCode,
-    name: e.name,
+    name: displayEventName(e),
     year: e.year,
     startDate: e.startDate,
     endDate: e.endDate,
@@ -150,27 +160,36 @@ async function collapseDivisions(
 // Queries
 // ---------------------------------------------------------------------------
 
-/** Events that have at least one published album, most recent first. */
-export async function getEventsByDate(limit = 60): Promise<EventSearchResult[]> {
+/**
+ * A page of events that have at least one published album, newest first, for the
+ * infinite-scroll home page. Paginates over the raw event rows (offset counts raw
+ * rows, not collapsed groups) so the caller can keep advancing; `rawCount` is how
+ * many raw rows this page consumed and `hasMore` whether another page may exist.
+ * Championship divisions still collapse into their parent, so the caller should
+ * dedupe appended events by tbaKey.
+ */
+export async function getEventsByDatePage(
+  opts: { limit?: number; offset?: number } = {},
+): Promise<{ events: EventSearchResult[]; rawCount: number; hasMore: boolean }> {
   const db = getDb()
-  const counts = await db
-    .select({ eventId: albums.eventId, count: sql<number>`count(*)::int` })
-    .from(albums)
-    .where(eq(albums.status, 'published'))
-    .groupBy(albums.eventId)
-  if (counts.length === 0) return []
-  const countMap = new Map(counts.map((c) => [c.eventId, c.count]))
-  const ids = [...countMap.keys()]
+  const limit = opts.limit ?? 30
+  const offset = opts.offset ?? 0
 
   const rows = await db
     .select()
     .from(events)
-    .where(inArray(events.id, ids))
+    .where(hasPublishedAlbum)
     .orderBy(desc(events.startDate))
     .limit(limit)
+    .offset(offset)
 
-  const covers = await publishedAlbumCovers(rows.map((e) => e.id))
-  return collapseDivisions(rows, countMap, covers)
+  const ids = rows.map((e) => e.id)
+  const [counts, covers] = await Promise.all([publishedAlbumCounts(ids), publishedAlbumCovers(ids)])
+  return {
+    events: await collapseDivisions(rows, counts, covers),
+    rawCount: rows.length,
+    hasMore: rows.length === limit,
+  }
 }
 
 export async function searchEvents(params: {
@@ -310,14 +329,14 @@ export async function getEventPage(tbaKey: string): Promise<EventPageData | null
   return { event: parent, parentTbaKey: parent.tbaKey, albums: parentAlbums, divisions }
 }
 
-/** Events a team attended, most recent first, with album counts. */
+/** Events a team attended that have at least one published album, newest first. */
 export async function getTeamEvents(teamNumber: number): Promise<EventSearchResult[]> {
   const db = getDb()
   const rows = await db
     .select({ event: events })
     .from(eventTeams)
     .innerJoin(events, eq(events.id, eventTeams.eventId))
-    .where(eq(eventTeams.teamNumber, teamNumber))
+    .where(and(eq(eventTeams.teamNumber, teamNumber), hasPublishedAlbum))
     .orderBy(desc(events.startDate))
   const eventRows = rows.map((r) => r.event)
   const [counts, covers] = await Promise.all([

@@ -4,7 +4,7 @@ import { Calendar, MapPin, ExternalLink } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { AlbumGrid } from '@/components/albums/album-grid'
 import { formatEventDates, formatLocation } from '@/components/albums/format'
-import { getEventPage } from '@/lib/queries/albums'
+import { getEventPage, displayEventName } from '@/lib/queries/albums'
 
 interface PageProps {
   params: Promise<{ code: string }>
@@ -14,9 +14,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { code } = await params
   const data = await getEventPage(code)
   if (!data) return { title: 'Event not found' }
+  const name = displayEventName(data.event)
   return {
-    title: `${data.event.name} Photos`,
-    description: `Photo albums from ${data.event.name} (${data.event.eventCode}, ${data.event.year}).`,
+    title: `${name} Photos`,
+    description: `Photo albums from ${name} (${data.event.eventCode}, ${data.event.year}).`,
   }
 }
 
@@ -28,9 +29,15 @@ export default async function EventPage({ params }: PageProps) {
   if (data.parentTbaKey !== code) redirect(`/event/${data.parentTbaKey}`)
 
   const { event, albums, divisions } = data
+  // If this event resolves to exactly one album, skip the list and send the
+  // visitor straight to that album on its host.
+  const allAlbums = [...albums, ...divisions.flatMap((d) => d.albums)]
+  if (allAlbums.length === 1) redirect(allAlbums[0].url)
+
+  const name = displayEventName(event)
   const dates = formatEventDates(event.startDate, event.endDate)
   const location = formatLocation(event.city, event.stateProv, event.country)
-  const totalAlbums = albums.length + divisions.reduce((s, d) => s + d.albums.length, 0)
+  const totalAlbums = allAlbums.length
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-10">
@@ -46,7 +53,7 @@ export default async function EventPage({ params }: PageProps) {
             <Badge variant="season" className="whitespace-nowrap">Week {event.week}</Badge>
           ) : null}
         </div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">{event.name}</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">{name}</h1>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted">
           {dates && (
             <span className="flex items-center gap-1.5">

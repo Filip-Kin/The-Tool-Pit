@@ -134,6 +134,7 @@ export default async function AdminAlbumCandidatesPage({
                         targetEventCode={row.targetEventCode}
                         targetEventYear={row.targetEventYear}
                         matchedEventKey={eventCode && eventYear ? `${eventYear}${eventCode}` : null}
+                        albumTitle={meta.title ?? ''}
                       />
                     </td>
                   </tr>
