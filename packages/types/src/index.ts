@@ -174,6 +174,12 @@ export interface EventSearchResult {
   albumCount: number
   /** Cover images of the first few published albums, for previews. */
   coverImages: string[]
+  /**
+   * If the event has exactly one published album, its external URL - so cards
+   * and suggestions can link straight to it instead of an event page with a
+   * single item.
+   */
+  soleAlbumUrl?: string | null
 }
 
 export interface AlbumDTO {

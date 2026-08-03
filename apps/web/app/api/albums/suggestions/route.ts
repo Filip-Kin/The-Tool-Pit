@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
       eventCode: e.eventCode,
       name: e.name,
       year: e.year,
+      soleAlbumUrl: e.soleAlbumUrl ?? null,
     }))
     return NextResponse.json(suggestions, { headers: { 'Cache-Control': 'no-store' } })
   } catch {

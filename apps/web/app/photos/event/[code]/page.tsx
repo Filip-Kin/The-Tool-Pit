@@ -29,11 +29,7 @@ export default async function EventPage({ params }: PageProps) {
   if (data.parentTbaKey !== code) redirect(`/event/${data.parentTbaKey}`)
 
   const { event, albums, divisions } = data
-  // If this event resolves to exactly one album, skip the list and send the
-  // visitor straight to that album on its host.
   const allAlbums = [...albums, ...divisions.flatMap((d) => d.albums)]
-  if (allAlbums.length === 1) redirect(allAlbums[0].url)
-
   const name = displayEventName(event)
   const dates = formatEventDates(event.startDate, event.endDate)
   const location = formatLocation(event.city, event.stateProv, event.country)

@@ -50,10 +50,16 @@ export function EventCard({ event }: { event: EventSearchResult }) {
   const location = formatLocation(event.city, event.stateProv, event.country)
   const dates = formatEventDates(event.startDate, event.endDate)
   const covers = event.coverImages.slice(0, 4)
+  // One-album events link straight to the album (new tab) so there's no
+  // throwaway single-item event page to back out of.
+  const direct = event.soleAlbumUrl
+  const linkProps = direct
+    ? { href: direct, target: '_blank' as const, rel: 'noopener noreferrer' }
+    : { href: `/event/${event.tbaKey}` }
 
   return (
     <Link
-      href={`/event/${event.tbaKey}`}
+      {...linkProps}
       className="group flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:border-primary/50"
     >
       <div className="relative">

@@ -61,9 +61,16 @@ export function InfiniteEventList({
     }
   }, [loading, hasMore])
 
-  // Restore a prior session (loaded pages + scroll) on mount.
+  // Restore a prior session (loaded pages + scroll) on mount, and persist it as
+  // the visitor scrolls so a browser Back drops them exactly where they were.
   useEffect(() => {
-    let restored = false
+    // Own scroll restoration ourselves; the router otherwise resets to top.
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
+    // Last real scroll position. We save THIS, never live window.scrollY at
+    // teardown - the router zeroes the scroll just before unmount, which would
+    // otherwise clobber the saved position with 0.
+    const lastY = { current: 0 }
+
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY)
       if (raw) {
@@ -73,9 +80,16 @@ export function InfiniteEventList({
           offsetRef.current = saved.offset
           setEvents(saved.events)
           setHasMore(saved.hasMore)
-          restored = true
-          // Wait for the restored cards to lay out, then jump back.
-          requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, saved.scrollY)))
+          lastY.current = saved.scrollY
+          // Cards reserve fixed-aspect space, so height settles immediately;
+          // still retry a few frames in case the restored render lags.
+          const target = saved.scrollY
+          let tries = 0
+          const jump = () => {
+            window.scrollTo(0, target)
+            if (Math.abs(window.scrollY - target) > 2 && tries++ < 40) requestAnimationFrame(jump)
+          }
+          requestAnimationFrame(() => requestAnimationFrame(jump))
         }
       }
     } catch {
@@ -87,20 +101,19 @@ export function InfiniteEventList({
       raf = 0
       try {
         const { events: evs, offset, hasMore: more } = latest.current
-        const payload: Persisted = { events: evs.slice(0, MAX_PERSIST), offset, hasMore: more, scrollY: window.scrollY }
+        const payload: Persisted = { events: evs.slice(0, MAX_PERSIST), offset, hasMore: more, scrollY: lastY.current }
         sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
       } catch {
         // ignore quota / serialization errors
       }
     }
     const onScroll = () => {
+      lastY.current = window.scrollY
       if (raf) return
       raf = requestAnimationFrame(save)
     }
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('pagehide', save)
-    // If we restored nothing but there is saved scroll for a fresh feed, ignore.
-    void restored
     return () => {
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('pagehide', save)

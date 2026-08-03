@@ -30,6 +30,8 @@ interface EventSuggestion {
   eventCode: string
   name: string
   year: number
+  /** If the event has exactly one album, its URL - link straight there. */
+  soleAlbumUrl: string | null
 }
 
 /** A bare team number like "254" or "frc254". */
@@ -123,7 +125,9 @@ export function AlbumSearchBar({
       const s = suggestions[activeIndex]
       if (s) {
         setShowSuggestions(false)
-        router.push(`/event/${s.tbaKey}`)
+        // One-album events go straight to the album; others to the event page.
+        if (s.soleAlbumUrl) window.open(s.soleAlbumUrl, '_blank', 'noopener,noreferrer')
+        else router.push(`/event/${s.tbaKey}`)
       }
     }
   }
@@ -186,7 +190,8 @@ export function AlbumSearchBar({
           {suggestions.map((s, i) => (
             <li key={s.tbaKey} id={`${listboxId}-option-${i}`} role="option" aria-selected={i === activeIndex}>
               <Link
-                href={`/event/${s.tbaKey}`}
+                href={s.soleAlbumUrl ?? `/event/${s.tbaKey}`}
+                {...(s.soleAlbumUrl ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 onClick={() => setShowSuggestions(false)}
                 className={cn(
                   'flex items-center gap-2 px-4 py-2.5 text-sm transition-colors',

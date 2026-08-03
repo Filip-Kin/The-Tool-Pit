@@ -24,7 +24,12 @@ export function displayEventName(e: Pick<Event, 'name' | 'eventType' | 'year'>):
   return e.name
 }
 
-function toEventResult(e: Event, albumCount: number, coverImages: string[] = []): EventSearchResult {
+function toEventResult(
+  e: Event,
+  albumCount: number,
+  coverImages: string[] = [],
+  soleAlbumUrl: string | null = null,
+): EventSearchResult {
   return {
     id: e.id,
     tbaKey: e.tbaKey,
@@ -40,6 +45,7 @@ function toEventResult(e: Event, albumCount: number, coverImages: string[] = [])
     country: e.country,
     albumCount,
     coverImages,
+    soleAlbumUrl,
   }
 }
 
@@ -69,6 +75,23 @@ async function publishedAlbumCounts(eventIds: string[]): Promise<Map<string, num
     .where(and(inArray(albums.eventId, eventIds), eq(albums.status, 'published')))
     .groupBy(albums.eventId)
   for (const r of rows) map.set(r.eventId, r.count)
+  return map
+}
+
+/** Published album external URLs per event (for the single-album direct link). */
+async function publishedAlbumUrls(eventIds: string[]): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>()
+  if (eventIds.length === 0) return map
+  const db = getDb()
+  const rows = await db
+    .select({ eventId: albums.eventId, url: albums.url })
+    .from(albums)
+    .where(and(inArray(albums.eventId, eventIds), eq(albums.status, 'published')))
+  for (const r of rows) {
+    const arr = map.get(r.eventId) ?? []
+    arr.push(r.url)
+    map.set(r.eventId, arr)
+  }
   return map
 }
 
@@ -125,6 +148,7 @@ async function collapseDivisions(
   rows: Event[],
   counts: Map<string, number>,
   covers: Map<string, string[]>,
+  urls: Map<string, string[]> = new Map(),
 ): Promise<EventSearchResult[]> {
   const db = getDb()
   // Fetch parent events for any divisions present.
@@ -150,7 +174,9 @@ async function collapseDivisions(
     const count = g.memberIds.reduce((s, id) => s + (counts.get(id) ?? 0), 0)
     const cov: string[] = []
     for (const id of g.memberIds) for (const c of covers.get(id) ?? []) if (cov.length < PREVIEW_COVERS) cov.push(c)
-    return toEventResult(g.event, count, cov)
+    const allUrls = g.memberIds.flatMap((id) => urls.get(id) ?? [])
+    const soleUrl = count === 1 && allUrls.length === 1 ? allUrls[0] : null
+    return toEventResult(g.event, count, cov, soleUrl)
   })
   results.sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? ''))
   return results
@@ -184,9 +210,13 @@ export async function getEventsByDatePage(
     .offset(offset)
 
   const ids = rows.map((e) => e.id)
-  const [counts, covers] = await Promise.all([publishedAlbumCounts(ids), publishedAlbumCovers(ids)])
+  const [counts, covers, urls] = await Promise.all([
+    publishedAlbumCounts(ids),
+    publishedAlbumCovers(ids),
+    publishedAlbumUrls(ids),
+  ])
   return {
-    events: await collapseDivisions(rows, counts, covers),
+    events: await collapseDivisions(rows, counts, covers, urls),
     rawCount: rows.length,
     hasMore: rows.length === limit,
   }
@@ -227,12 +257,13 @@ export async function searchEvents(params: {
     db.select({ count: sql<number>`count(*)::int` }).from(events).where(where),
   ])
 
-  const [counts, covers] = await Promise.all([
+  const [counts, covers, urls] = await Promise.all([
     publishedAlbumCounts(rows.map((r) => r.id)),
     publishedAlbumCovers(rows.map((r) => r.id)),
+    publishedAlbumUrls(rows.map((r) => r.id)),
   ])
   return {
-    events: await collapseDivisions(rows, counts, covers),
+    events: await collapseDivisions(rows, counts, covers, urls),
     total: totalRows[0]?.count ?? 0,
   }
 }
@@ -339,11 +370,12 @@ export async function getTeamEvents(teamNumber: number): Promise<EventSearchResu
     .where(and(eq(eventTeams.teamNumber, teamNumber), hasPublishedAlbum))
     .orderBy(desc(events.startDate))
   const eventRows = rows.map((r) => r.event)
-  const [counts, covers] = await Promise.all([
+  const [counts, covers, urls] = await Promise.all([
     publishedAlbumCounts(eventRows.map((e) => e.id)),
     publishedAlbumCovers(eventRows.map((e) => e.id)),
+    publishedAlbumUrls(eventRows.map((e) => e.id)),
   ])
-  return collapseDivisions(eventRows, counts, covers)
+  return collapseDivisions(eventRows, counts, covers, urls)
 }
 
 /** Lightweight autocomplete: top event name/code matches. */
@@ -364,5 +396,13 @@ export async function suggestEvents(q: string, limit = 5): Promise<EventSearchRe
     .where(and(...filters))
     .orderBy(desc(sql`similarity(${events.name}, ${text})`), desc(events.startDate))
     .limit(limit)
-  return rows.map((e) => toEventResult(e, 0))
+
+  // Counts + sole-album URLs so a one-album suggestion links straight to it.
+  const ids = rows.map((e) => e.id)
+  const [counts, urls] = await Promise.all([publishedAlbumCounts(ids), publishedAlbumUrls(ids)])
+  return rows.map((e) => {
+    const count = counts.get(e.id) ?? 0
+    const evUrls = urls.get(e.id) ?? []
+    return toEventResult(e, count, [], count === 1 && evUrls.length === 1 ? evUrls[0] : null)
+  })
 }
