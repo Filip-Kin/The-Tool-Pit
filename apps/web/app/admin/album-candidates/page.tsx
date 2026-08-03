@@ -132,6 +132,7 @@ export default async function AdminAlbumCandidatesPage({
                         status={row.status}
                         hasEvent={Boolean(row.matchedEventId)}
                         targetEventCode={row.targetEventCode}
+                        targetEventYear={row.targetEventYear}
                       />
                     </td>
                   </tr>

@@ -5,7 +5,7 @@
  */
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { albums, albumSources, albumCandidates, albumCrawlJobs, albumSubmissions } from '@the-tool-pit/db'
+import { albums, albumSources, albumCandidates, albumCrawlJobs, albumSubmissions, events } from '@the-tool-pit/db'
 import type { NewAlbum, AlbumCandidateMetadata } from '@the-tool-pit/db'
 
 const CONNECTOR_SOURCE_TYPE: Record<string, string> = {
@@ -14,7 +14,9 @@ const CONNECTOR_SOURCE_TYPE: Record<string, string> = {
   tba_events: 'tba',
 }
 
-export async function adminPublishAlbum(candidateId: string): Promise<{ albumId: string } | { error: string }> {
+export async function adminPublishAlbum(
+  candidateId: string,
+): Promise<{ albumId: string; eventCode?: string; tbaKey?: string } | { error: string }> {
   const db = getDb()
 
   const [candidate] = await db
@@ -26,6 +28,12 @@ export async function adminPublishAlbum(candidateId: string): Promise<{ albumId:
   if (!candidate) return { error: `Candidate ${candidateId} not found` }
   if (!candidate.matchedEventId) return { error: 'No event matched yet. Set the event first.' }
   if (!candidate.canonicalUrl) return { error: 'Candidate has no album URL.' }
+
+  const [event] = await db
+    .select({ eventCode: events.eventCode, tbaKey: events.tbaKey })
+    .from(events)
+    .where(eq(events.id, candidate.matchedEventId))
+    .limit(1)
 
   // Determine discovery source type.
   let sourceType = 'manual'
@@ -81,5 +89,5 @@ export async function adminPublishAlbum(candidateId: string): Promise<{ albumId:
       .where(eq(albumSubmissions.id, candidate.submissionId))
   }
 
-  return { albumId }
+  return { albumId, eventCode: event?.eventCode, tbaKey: event?.tbaKey }
 }

@@ -37,13 +37,17 @@ export function canonicalizeAlbumUrl(
   if (host === 'smugmug.com' || host.endsWith('.smugmug.com')) {
     // photos.smugmug.com is the media CDN (direct photo/video files), not a gallery
     if (host === 'photos.smugmug.com') return null
-    // An individual photo is ".../Gallery/i-XXXXX..." - strip back to the gallery
+    // Strip an individual-photo suffix back to its gallery. SmugMug has two forms:
+    //   new: ".../Gallery/i-XXXXX/..."
+    //   old: ".../Gallery/9936059_Q79X9/1/677895428_FkvhD"
     let path = u.pathname
-    const iIdx = path.search(/\/i-[A-Za-z0-9]/)
-    if (iIdx >= 0) path = path.slice(0, iIdx)
+      .replace(/\/i-[A-Za-z0-9].*$/, '')
+      .replace(/\/\d{3,}_[A-Za-z0-9].*$/, '')
     path = stripTrailingSlash(path)
-    if (!path) return null // bare host root is a homepage, not an album
-    return { canonicalUrl: `${u.protocol}//${u.host}${path}`, provider: 'smugmug' }
+    // A real gallery has at least Folder/Gallery; a single segment is a folder
+    // listing or the account root, not a specific album.
+    if (path.split('/').filter(Boolean).length < 2) return null
+    return { canonicalUrl: `https://${u.host}${path}`, provider: 'smugmug' }
   }
 
   // Flickr - must be an album/set of a user

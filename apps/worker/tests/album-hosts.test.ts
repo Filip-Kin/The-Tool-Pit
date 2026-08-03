@@ -60,8 +60,14 @@ describe('canonicalizeAlbumUrl', () => {
   })
 
   it('strips trailing punctuation from forum-scraped URLs', () => {
-    expect(canonicalizeAlbumUrl('https://x.smugmug.com/gallery).')?.canonicalUrl)
-      .toBe('https://x.smugmug.com/gallery')
+    expect(canonicalizeAlbumUrl('https://x.smugmug.com/Event/Gallery).')?.canonicalUrl)
+      .toBe('https://x.smugmug.com/Event/Gallery')
+  })
+
+  it('rejects SmugMug folder listings (single path segment) and old-format photo URLs', () => {
+    expect(canonicalizeAlbumUrl('https://davewilson.smugmug.com/Robotics')).toBeNull()
+    expect(canonicalizeAlbumUrl('http://billbo911.smugmug.com/Hobbies/Cal-Games-2009/9936059_Q79X9/1/677895428_FkvhD'))
+      .toEqual({ canonicalUrl: 'https://billbo911.smugmug.com/Hobbies/Cal-Games-2009', provider: 'smugmug' })
   })
 })
 

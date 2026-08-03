@@ -9,16 +9,21 @@ export function AlbumCandidateActions({
   status,
   hasEvent,
   targetEventCode,
+  targetEventYear,
 }: {
   candidateId: string
   status: string
   hasEvent: boolean
   targetEventCode: string | null
+  targetEventYear: number | null
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const [code, setCode] = useState(targetEventCode ?? '')
+  // Pre-fill the full TBA key (year + code) - the year is required.
+  const [code, setCode] = useState(
+    targetEventCode ? `${targetEventYear ?? ''}${targetEventCode}` : '',
+  )
 
   if (status === 'published' || status === 'duplicate') {
     return <span className="text-xs text-muted-2">{status}</span>
@@ -59,7 +64,7 @@ export function AlbumCandidateActions({
           <input
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="event code"
+            placeholder="2023txbel"
             className="w-24 rounded border border-border bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
           />
           <button

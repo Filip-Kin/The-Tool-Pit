@@ -7,6 +7,9 @@ import type { EventSearchResult, AlbumDTO } from '@the-tool-pit/types'
 /** How many album cover images to surface per event card. */
 const PREVIEW_COVERS = 4
 
+/** SQL predicate: the event has at least one published album. */
+const hasPublishedAlbum = sql`exists (select 1 from albums a where a.event_id = ${events.id} and a.status = 'published')`
+
 // ---------------------------------------------------------------------------
 // Mappers
 // ---------------------------------------------------------------------------
@@ -121,7 +124,7 @@ export async function searchEvents(params: {
   if (!query) return { events: [], total: 0 }
 
   const pattern = `%${query}%`
-  const filters = [or(ilike(events.name, pattern), ilike(events.eventCode, pattern))]
+  const filters = [or(ilike(events.name, pattern), ilike(events.eventCode, pattern)), hasPublishedAlbum]
   if (params.year) filters.push(eq(events.year, params.year))
   const where = and(...filters)
 
@@ -147,24 +150,14 @@ export async function searchEvents(params: {
 }
 
 /**
- * Resolve an event by its full TBA key ("2026mimid") or, as a fallback, by a
- * bare event code ("mimid", latest year). Event codes repeat every season, so
- * the TBA key is the canonical identity.
+ * Resolve an event by its full TBA key ("2026mimid"). The year is mandatory:
+ * event codes repeat every season, so a bare code is never accepted here.
  */
-export async function resolveEvent(keyOrCode: string): Promise<Event | null> {
+export async function resolveEvent(tbaKey: string): Promise<Event | null> {
+  const value = tbaKey.trim().toLowerCase()
+  if (!/^(19|20)\d{2}[a-z0-9]+$/.test(value)) return null
   const db = getDb()
-  const value = keyOrCode.trim().toLowerCase()
-  // Full TBA key: 4-digit year + code
-  if (/^\d{4}[a-z0-9]+$/.test(value)) {
-    const [row] = await db.select().from(events).where(eq(events.tbaKey, value)).limit(1)
-    if (row) return row
-  }
-  const [row] = await db
-    .select()
-    .from(events)
-    .where(eq(events.eventCode, value))
-    .orderBy(desc(events.year))
-    .limit(1)
+  const [row] = await db.select().from(events).where(eq(events.tbaKey, value)).limit(1)
   return row ?? null
 }
 
@@ -209,7 +202,7 @@ export async function suggestEvents(q: string, limit = 5): Promise<EventSearchRe
   const rows = await db
     .select()
     .from(events)
-    .where(or(ilike(events.name, pattern), ilike(events.eventCode, pattern)))
+    .where(and(or(ilike(events.name, pattern), ilike(events.eventCode, pattern)), hasPublishedAlbum))
     .orderBy(desc(sql`similarity(${events.name}, ${query})`), desc(events.startDate))
     .limit(limit)
   return rows.map((e) => toEventResult(e, 0))
