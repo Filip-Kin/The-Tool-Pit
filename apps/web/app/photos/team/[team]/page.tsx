@@ -1,3 +1,4 @@
+import { ScrollRestorer } from '@/components/albums/scroll-restorer'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { AlbumSearchBar } from '@/components/albums/album-search-bar'
@@ -23,6 +24,7 @@ export default async function TeamPage({ params }: PageProps) {
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-10">
+      <ScrollRestorer />
       <div className="mb-8">
         <AlbumSearchBar size="md" />
       </div>

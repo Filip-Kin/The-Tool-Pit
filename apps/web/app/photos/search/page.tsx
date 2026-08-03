@@ -1,3 +1,4 @@
+import { ScrollRestorer } from '@/components/albums/scroll-restorer'
 import { redirect } from 'next/navigation'
 import { AlbumSearchBar } from '@/components/albums/album-search-bar'
 import { EventList } from '@/components/albums/event-list'
@@ -25,6 +26,7 @@ export default async function AlbumSearchPage({ searchParams }: PageProps) {
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-10">
+      <ScrollRestorer />
       <div className="mb-8">
         <AlbumSearchBar defaultValue={query} size="md" />
       </div>

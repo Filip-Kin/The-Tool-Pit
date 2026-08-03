@@ -1,3 +1,4 @@
+import { ScrollRestorer } from '@/components/albums/scroll-restorer'
 import { AlbumSearchBar } from '@/components/albums/album-search-bar'
 import { SectionHeader } from '@/components/ui/section-header'
 import { EventList } from '@/components/albums/event-list'
@@ -8,6 +9,7 @@ export default async function PhotosHomePage() {
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-10">
+      <ScrollRestorer />
       <section className="mx-auto mb-12 flex max-w-2xl flex-col items-center gap-4 text-center">
         <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           FRC event photos
