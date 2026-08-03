@@ -1,44 +1,33 @@
-'use client'
+const ERRORS: Record<string, string> = {
+  denied: 'That account is not an admin.',
+  state: 'Login session expired. Please try again.',
+  token: 'Could not complete sign-in. Please try again.',
+  userinfo: 'Could not read your account. Please try again.',
+  config: 'Sign-in is not configured. Contact the site owner.',
+  error: 'Something went wrong. Please try again.',
+}
 
-import { useState } from 'react'
-
-export default function AdminLoginPage() {
-  const [secret, setSecret] = useState('')
-  const [error, setError] = useState('')
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const res = await fetch('/admin/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret }),
-    })
-    if (res.ok) {
-      window.location.href = '/admin'
-    } else {
-      setError('Invalid secret.')
-    }
-  }
+export default async function AdminLoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>
+}) {
+  const { error } = await searchParams
+  const message = error ? (ERRORS[error] ?? ERRORS.error) : null
 
   return (
     <div className="flex min-h-screen items-center justify-center">
-      <form onSubmit={handleSubmit} className="flex w-80 flex-col gap-4 rounded-lg border border-border bg-surface p-6">
-        <h1 className="text-lg font-semibold">Admin Login</h1>
-        <input
-          type="password"
-          value={secret}
-          onChange={(e) => setSecret(e.target.value)}
-          placeholder="Admin secret"
-          className="h-10 rounded-lg border border-border bg-surface-2 px-3 text-sm outline-none focus:border-primary"
-        />
-        {error && <p className="text-xs text-frc">{error}</p>}
-        <button
-          type="submit"
-          className="h-10 rounded-lg bg-primary text-sm font-medium text-white hover:bg-primary-hover transition-colors"
+      <div className="flex w-80 flex-col gap-4 rounded-lg border border-border bg-surface p-6">
+        <h1 className="text-lg font-semibold text-foreground">Admin</h1>
+        <p className="text-sm text-muted">Sign in with your Authelia account.</p>
+        {message && <p className="text-xs text-frc">{message}</p>}
+        <a
+          href="/admin/api/auth/oidc/login"
+          className="flex h-10 items-center justify-center rounded-lg bg-primary text-sm font-medium text-white transition-colors hover:bg-primary-hover"
         >
-          Sign In
-        </button>
-      </form>
+          Log in with Authelia
+        </a>
+      </div>
     </div>
   )
 }
