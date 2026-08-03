@@ -138,9 +138,15 @@ export async function scheduleRecurringJobs() {
     data: { connector: 'fim_albums', year: currentSeasonYear, jobId: 'scheduled' },
   })
 
-  // Search Chief Delphi for album links — once per day
+  // Search Chief Delphi for album links - once per day
   await albumIngestQueue.upsertJobScheduler('album-crawl-cd', { every: 24 * 60 * 60 * 1000 }, {
     name: 'album-crawl-cd',
     data: { connector: 'chief_delphi_albums', year: currentSeasonYear, jobId: 'scheduled' },
+  })
+
+  // Scrape curated Flickr photographer accounts - once per day
+  await albumIngestQueue.upsertJobScheduler('album-crawl-flickr', { every: 24 * 60 * 60 * 1000 }, {
+    name: 'album-crawl-flickr',
+    data: { connector: 'flickr_albums', year: currentSeasonYear, jobId: 'scheduled' },
   })
 }

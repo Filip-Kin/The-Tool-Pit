@@ -68,6 +68,13 @@ export function canonicalizeAlbumUrl(
     return { canonicalUrl: pathOnly, provider: 'pixieset' }
   }
 
+  // Google Drive - shared folders of photos
+  if (host === 'drive.google.com') {
+    const m = u.pathname.match(/\/folders\/([A-Za-z0-9_-]+)/)
+    if (m) return { canonicalUrl: `https://drive.google.com/drive/folders/${m[1]}`, provider: 'google_drive' }
+    return null
+  }
+
   if (opts.allowUnknown) {
     return { canonicalUrl: pathOnly, provider: 'other' }
   }

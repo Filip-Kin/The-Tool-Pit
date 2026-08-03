@@ -10,6 +10,7 @@ import { eq, inArray, sql } from 'drizzle-orm'
 import { TbaEventsConnector } from '../connectors/tba-events.js'
 import { FimAlbumsConnector } from '../connectors/fim-albums.js'
 import { ChiefDelphiAlbumsConnector } from '../connectors/chief-delphi-albums.js'
+import { FlickrAlbumsConnector } from '../connectors/flickr-albums.js'
 import type { AlbumConnector } from '../connectors/album-hosts.js'
 import { albumEnrichQueue } from '../queues.js'
 import type { AlbumIngestPayload } from '@the-tool-pit/types'
@@ -17,6 +18,7 @@ import type { AlbumIngestPayload } from '@the-tool-pit/types'
 const ALBUM_CONNECTOR_REGISTRY: Record<string, () => AlbumConnector> = {
   fim_albums: () => new FimAlbumsConnector(),
   chief_delphi_albums: () => new ChiefDelphiAlbumsConnector(),
+  flickr_albums: () => new FlickrAlbumsConnector(),
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {

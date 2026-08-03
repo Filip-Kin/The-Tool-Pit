@@ -41,6 +41,14 @@ describe('canonicalizeAlbumUrl', () => {
     expect(canonicalizeAlbumUrl('https://photos.app.goo.gl/abc123')?.provider).toBe('google_photos')
   })
 
+  it('recognizes Google Drive shared folders', () => {
+    expect(canonicalizeAlbumUrl('https://drive.google.com/drive/folders/1aIBDNv2HoBa-znwnS_1Z3CRN4dk7OnYx'))
+      .toEqual({ canonicalUrl: 'https://drive.google.com/drive/folders/1aIBDNv2HoBa-znwnS_1Z3CRN4dk7OnYx', provider: 'google_drive' })
+    expect(canonicalizeAlbumUrl('https://drive.google.com/drive/u/0/folders/ABC-123_x?usp=sharing'))
+      .toEqual({ canonicalUrl: 'https://drive.google.com/drive/folders/ABC-123_x', provider: 'google_drive' })
+    expect(canonicalizeAlbumUrl('https://drive.google.com/file/d/xyz/view')).toBeNull()
+  })
+
   it('rejects non-album hosts by default', () => {
     expect(canonicalizeAlbumUrl('https://github.com/foo/bar')).toBeNull()
     expect(canonicalizeAlbumUrl('https://www.chiefdelphi.com/t/thread/123')).toBeNull()

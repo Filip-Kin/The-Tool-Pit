@@ -21,6 +21,14 @@ interface OgMetadata {
   siteName?: string
 }
 
+/** Pull a plausible FRC season year (1992-2099) from free text, or null. */
+function detectYear(text: string): number | null {
+  const m = text.match(/\b(19\d{2}|20\d{2})\b/)
+  if (!m) return null
+  const y = parseInt(m[1], 10)
+  return y >= 1992 && y <= 2099 ? y : null
+}
+
 /** Best-effort Open Graph scrape for an album cover/title. Never throws. */
 async function fetchOgMetadata(url: string): Promise<OgMetadata | null> {
   try {
@@ -62,10 +70,6 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
   }
   const canonicalUrl = cand.canonicalUrl
 
-  // The year is required to identify an event - codes/names repeat every season.
-  // Never fall back to the current season, or historical albums mis-match.
-  const year = cand.targetEventYear ?? null
-
   // 1. Best-effort OG metadata for cover image / title.
   const meta: AlbumCandidateMetadata = { ...(cand.rawMetadata ?? {}) }
   if (!meta.coverImageUrl || !meta.title) {
@@ -77,6 +81,12 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
       meta.photographer = meta.photographer ?? og.siteName
     }
   }
+
+  // The year identifies an event (codes/names repeat every season): use the
+  // connector-supplied year, else read one from the album or thread title. Never
+  // default to the current season, or historical albums mis-match.
+  const matchText = meta.threadTitle || meta.title || ''
+  const year = cand.targetEventYear ?? detectYear(matchText)
 
   // 2. Resolve the event.
   let matchedEventId: string | null = null
@@ -96,8 +106,8 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
     }
   }
 
-  // 3. AI fallback for ambiguous threads - only when we know the year.
-  if (!matchedEventId && meta.threadTitle && year != null) {
+  // 3. Match by title (album og:title or forum thread) - only when we know the year.
+  if (!matchedEventId && matchText && year != null) {
     const shortlist = (await db
       .select({
         eventCode: events.eventCode,
@@ -108,11 +118,11 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
       })
       .from(events)
       .where(eq(events.year, year))
-      .orderBy(desc(sql`similarity(${events.name}, ${meta.threadTitle})`))
+      .orderBy(desc(sql`similarity(${events.name}, ${matchText})`))
       .limit(15)) as EventCandidate[]
 
     const ai = await matchEventWithAI(
-      { albumUrl: canonicalUrl, threadTitle: meta.threadTitle, blurb: meta.blurb },
+      { albumUrl: canonicalUrl, threadTitle: matchText, blurb: meta.blurb },
       shortlist,
     )
     if (ai.eventCode) {

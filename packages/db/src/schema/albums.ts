@@ -11,6 +11,7 @@ export const ALBUM_PROVIDERS = [
   'smugmug',
   'flickr',
   'google_photos',
+  'google_drive',
   'pixieset',
   'chief_delphi',
   'firstinmichigan',
