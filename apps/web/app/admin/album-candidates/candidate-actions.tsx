@@ -64,7 +64,7 @@ export function AlbumCandidateActions({
           <input
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="2023txbel"
+            placeholder=""
             className="w-24 rounded border border-border bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
           />
           <button
