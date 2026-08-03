@@ -8,6 +8,7 @@ import { getDb } from '@the-tool-pit/db'
 import { events, eventTeams, albums, albumCandidates, albumCrawlJobs } from '@the-tool-pit/db'
 import { eq, inArray, sql } from 'drizzle-orm'
 import { TbaEventsConnector } from '../connectors/tba-events.js'
+import { ToaEventsConnector, yearToSeasonKey } from '../connectors/toa-events.js'
 import { FimAlbumsConnector } from '../connectors/fim-albums.js'
 import { ChiefDelphiAlbumsConnector } from '../connectors/chief-delphi-albums.js'
 import { FlickrAlbumsConnector } from '../connectors/flickr-albums.js'
@@ -41,6 +42,15 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
   try {
     if (connectorName === 'tba_events') {
       const stats = await syncTbaEvents(year, { skipTeams: payload.options?.skipTeams === true })
+      await db
+        .update(albumCrawlJobs)
+        .set({ status: 'done', finishedAt: new Date(), stats })
+        .where(eq(albumCrawlJobs.id, jobId))
+      return
+    }
+
+    if (connectorName === 'toa_events') {
+      const stats = await syncToaEvents(year, { skipTeams: payload.options?.skipTeams === true })
       await db
         .update(albumCrawlJobs)
         .set({ status: 'done', finishedAt: new Date(), stats })
@@ -204,6 +214,92 @@ async function syncTbaEvents(year: number, opts: { skipTeams?: boolean } = {}) {
   }
 
   console.log(`[album-ingest] tba_events ${year}: ${rows.length} events, ${teamRows.length} team memberships`)
+  return {
+    discovered: rows.length,
+    new: rows.length,
+    matched: 0,
+    skipped: 0,
+    failed: 0,
+    eventsUpserted: rows.length,
+    eventTeamsUpserted: teamRows.length,
+  }
+}
+
+/** Upsert FTC events + rebuild their event_teams for a competition year (via TOA). */
+async function syncToaEvents(year: number, opts: { skipTeams?: boolean } = {}) {
+  const db = getDb()
+  const seasonKey = yearToSeasonKey(year)
+  const { events: rows, eventTeams: teamsByKey } = await new ToaEventsConnector().run(seasonKey, opts)
+
+  if (rows.length === 0) {
+    return { discovered: 0, new: 0, matched: 0, skipped: 0, failed: 0, eventsUpserted: 0, eventTeamsUpserted: 0 }
+  }
+
+  for (const batch of chunk(rows, 200)) {
+    await db
+      .insert(events)
+      .values(
+        batch.map((e) => ({
+          program: e.program,
+          tbaKey: e.tbaKey,
+          sourceKey: e.sourceKey,
+          eventCode: e.eventCode,
+          year: e.year,
+          name: e.name,
+          startDate: e.startDate,
+          endDate: e.endDate,
+          eventTypeString: e.eventTypeString,
+          city: e.city,
+          stateProv: e.stateProv,
+          country: e.country,
+          venue: e.venue,
+          website: e.website,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: events.tbaKey,
+        set: {
+          program: sql`excluded.program`,
+          sourceKey: sql`excluded.source_key`,
+          eventCode: sql`excluded.event_code`,
+          year: sql`excluded.year`,
+          name: sql`excluded.name`,
+          startDate: sql`excluded.start_date`,
+          endDate: sql`excluded.end_date`,
+          eventTypeString: sql`excluded.event_type_string`,
+          city: sql`excluded.city`,
+          stateProv: sql`excluded.state_prov`,
+          country: sql`excluded.country`,
+          venue: sql`excluded.venue`,
+          website: sql`excluded.website`,
+          updatedAt: new Date(),
+        },
+      })
+  }
+
+  const keyToId = new Map<string, string>()
+  for (const batch of chunk(rows.map((r) => r.tbaKey), 500)) {
+    const ids = await db.select({ id: events.id, tbaKey: events.tbaKey }).from(events).where(inArray(events.tbaKey, batch))
+    for (const row of ids) keyToId.set(row.tbaKey, row.id)
+  }
+
+  const teamRows: { eventId: string; teamNumber: number }[] = []
+  const eventIdsWithTeams: string[] = []
+  for (const [tbaKey, numbers] of teamsByKey) {
+    const eventId = keyToId.get(tbaKey)
+    if (!eventId) continue
+    eventIdsWithTeams.push(eventId)
+    for (const n of numbers) teamRows.push({ eventId, teamNumber: n })
+  }
+
+  for (const batch of chunk(eventIdsWithTeams, 200)) {
+    await db.delete(eventTeams).where(inArray(eventTeams.eventId, batch))
+  }
+  for (const batch of chunk(teamRows, 1000)) {
+    if (batch.length > 0) await db.insert(eventTeams).values(batch).onConflictDoNothing()
+  }
+
+  console.log(`[album-ingest] toa_events ${year} (season ${seasonKey}): ${rows.length} events, ${teamRows.length} team memberships`)
   return {
     discovered: rows.length,
     new: rows.length,

@@ -1,67 +1,130 @@
 import Link from 'next/link'
-import { eq, desc, sql } from 'drizzle-orm'
+import { eq, and, or, ilike, isNull, desc, sql, type SQL } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { albumCandidates, events } from '@the-tool-pit/db'
+import { albumCandidates, albums, events } from '@the-tool-pit/db'
 import type { AlbumCandidateMetadata, AlbumEventMatch } from '@the-tool-pit/db'
 import { AlbumCandidateActions } from './candidate-actions'
 
-const STATUS_TABS = ['pending', 'matched', 'suppressed', 'duplicate', 'published'] as const
+// Real candidate statuses plus a "no_cover" view = published albums missing a
+// cover image (Drive/Dropbox/blocked-Flickr that couldn't be OG-scraped).
+const STATUS_TABS = ['pending', 'matched', 'no_cover', 'suppressed', 'duplicate', 'published'] as const
 type TabStatus = (typeof STATUS_TABS)[number]
+const TAB_LABELS: Record<TabStatus, string> = {
+  pending: 'pending',
+  matched: 'matched',
+  no_cover: 'no cover',
+  suppressed: 'suppressed',
+  duplicate: 'duplicate',
+  published: 'published',
+}
 const PAGE_SIZE = 30
 
 export default async function AdminAlbumCandidatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; page?: string }>
+  searchParams: Promise<{ status?: string; page?: string; q?: string }>
 }) {
   const params = await searchParams
   const status = (STATUS_TABS.includes(params.status as TabStatus) ? params.status : 'pending') as TabStatus
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
   const offset = (page - 1) * PAGE_SIZE
+  const q = params.q?.trim() ?? ''
 
   const db = getDb()
 
-  const [rows, [{ total }], counts] = await Promise.all([
+  // The "no_cover" tab is published rows whose album has no cover image.
+  const statusFilter: SQL =
+    status === 'no_cover'
+      ? and(eq(albumCandidates.status, 'published'), isNull(albums.coverImageUrl))!
+      : eq(albumCandidates.status, status)
+
+  const searchFilter: SQL | undefined = q
+    ? or(
+        ilike(albumCandidates.canonicalUrl, `%${q}%`),
+        ilike(albumCandidates.sourceUrl, `%${q}%`),
+        sql`${albumCandidates.rawMetadata}->>'title' ilike ${`%${q}%`}`,
+        ilike(events.name, `%${q}%`),
+        ilike(events.eventCode, `%${q}%`),
+      )
+    : undefined
+  const where = searchFilter ? and(statusFilter, searchFilter)! : statusFilter
+
+  const [rows, [{ total }], counts, [{ noCover }]] = await Promise.all([
     db
       .select({
         candidate: albumCandidates,
         eventName: events.name,
         eventCode: events.eventCode,
         eventYear: events.year,
+        albumCover: albums.coverImageUrl,
       })
       .from(albumCandidates)
       .leftJoin(events, eq(events.id, albumCandidates.matchedEventId))
-      .where(eq(albumCandidates.status, status))
+      .leftJoin(albums, eq(albums.id, albumCandidates.matchedAlbumId))
+      .where(where)
       .orderBy(desc(albumCandidates.createdAt))
       .limit(PAGE_SIZE)
       .offset(offset),
-    db.select({ total: sql<number>`count(*)::int` }).from(albumCandidates).where(eq(albumCandidates.status, status)),
+    db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(albumCandidates)
+      .leftJoin(events, eq(events.id, albumCandidates.matchedEventId))
+      .leftJoin(albums, eq(albums.id, albumCandidates.matchedAlbumId))
+      .where(where),
     db
       .select({ status: albumCandidates.status, count: sql<number>`count(*)::int` })
       .from(albumCandidates)
       .groupBy(albumCandidates.status),
+    db
+      .select({ noCover: sql<number>`count(*)::int` })
+      .from(albumCandidates)
+      .leftJoin(albums, eq(albums.id, albumCandidates.matchedAlbumId))
+      .where(and(eq(albumCandidates.status, 'published'), isNull(albums.coverImageUrl))),
   ])
 
-  const countMap = Object.fromEntries(counts.map((r) => [r.status, r.count]))
+  const countMap: Record<string, number> = Object.fromEntries(counts.map((r) => [r.status, r.count]))
+  countMap.no_cover = noCover
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   return (
     <div className="flex flex-col gap-6 p-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Album Candidates</h1>
-        <p className="text-sm text-muted">{total.toLocaleString()} {status}</p>
+        <p className="text-sm text-muted">{total.toLocaleString()} {TAB_LABELS[status]}</p>
       </div>
+
+      <form method="get" className="flex gap-2">
+        <input type="hidden" name="status" value={status} />
+        <input
+          type="search"
+          name="q"
+          defaultValue={q}
+          placeholder="Search by title, URL, or event name/code…"
+          className="w-full max-w-md rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
+        />
+        <button className="rounded-lg border border-border px-3 py-2 text-sm text-muted hover:text-foreground">
+          Search
+        </button>
+        {q && (
+          <Link
+            href={`/admin/album-candidates?status=${status}`}
+            className="rounded-lg px-3 py-2 text-sm text-muted-2 hover:text-foreground"
+          >
+            Clear
+          </Link>
+        )}
+      </form>
 
       <div className="flex gap-1 border-b border-border-subtle">
         {STATUS_TABS.map((s) => (
           <Link
             key={s}
-            href={`/admin/album-candidates?status=${s}`}
+            href={`/admin/album-candidates?status=${s}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
             className={`flex items-center gap-1.5 px-3 py-2 text-sm capitalize transition-colors ${
               status === s ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'
             }`}
           >
-            {s}
+            {TAB_LABELS[s]}
             {countMap[s] != null && (
               <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] text-muted">{countMap[s]}</span>
             )}
@@ -70,7 +133,7 @@ export default async function AdminAlbumCandidatesPage({
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-sm text-muted">No {status} candidates.</p>
+        <p className="text-sm text-muted">{q ? `No matches for "${q}".` : `No ${TAB_LABELS[status]} candidates.`}</p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
           <table className="w-full text-sm">
@@ -149,7 +212,7 @@ export default async function AdminAlbumCandidatesPage({
         <div className="flex justify-center gap-2">
           {page > 1 && (
             <Link
-              href={`/admin/album-candidates?status=${status}&page=${page - 1}`}
+              href={`/admin/album-candidates?status=${status}&page=${page - 1}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
               className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground"
             >
               ← Prev
@@ -158,7 +221,7 @@ export default async function AdminAlbumCandidatesPage({
           <span className="px-3 py-1.5 text-xs text-muted">{page} / {totalPages}</span>
           {page < totalPages && (
             <Link
-              href={`/admin/album-candidates?status=${status}&page=${page + 1}`}
+              href={`/admin/album-candidates?status=${status}&page=${page + 1}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
               className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground"
             >
               Next →

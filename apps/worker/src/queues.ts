@@ -132,6 +132,12 @@ export async function scheduleRecurringJobs() {
     data: { connector: 'tba_events', year: currentSeasonYear, jobId: 'scheduled' },
   })
 
+  // Sync FTC events + team rosters from self-hosted TOA — once per day
+  await albumIngestQueue.upsertJobScheduler('album-sync-toa', { every: 24 * 60 * 60 * 1000 }, {
+    name: 'album-sync-toa',
+    data: { connector: 'toa_events', year: currentSeasonYear, jobId: 'scheduled' },
+  })
+
   // Scrape First in Michigan event photo links — every 12 hours
   await albumIngestQueue.upsertJobScheduler('album-crawl-fim', { every: 12 * 60 * 60 * 1000 }, {
     name: 'album-crawl-fim',

@@ -3,17 +3,32 @@ import { sql, relations } from 'drizzle-orm'
 import { albums } from './albums'
 
 // ---------------------------------------------------------------------------
-// FRC events - authoritative records synced from The Blue Alliance.
-// Not moderated: TBA is the source of truth. Albums attach to these.
+// Events - authoritative records. FRC synced from The Blue Alliance, FTC from
+// the self-hosted Orange Alliance. Not moderated: the source is authoritative.
+// Albums attach to these.
 // ---------------------------------------------------------------------------
+
+/** FIRST program an event belongs to. FLL is reserved, not yet ingested. */
+export const EVENT_PROGRAMS = ['frc', 'ftc', 'fll'] as const
+export type EventProgram = (typeof EVENT_PROGRAMS)[number]
 
 export const events = pgTable(
   'events',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    /** Full TBA event key, e.g. "2024mimid". Global dedup key. */
+    /** EVENT_PROGRAMS. Every event is namespaced by program. */
+    program: text('program').notNull().default('frc'),
+    /**
+     * Canonical event key, e.g. "2024mimid" (FRC/TBA) or "2023ftcokot" (FTC,
+     * synthesized). Always year-prefixed. Global dedup key + public URL slug.
+     */
     tbaKey: text('tba_key').notNull().unique(),
-    /** Short TBA event_code (lowercased), e.g. "mimid". Matches FiM URL slug. */
+    /**
+     * Native key from the source of truth (TBA key or TOA event_key like
+     * "2223-OK-OT"), kept for re-sync. Null for FRC (tbaKey already is it).
+     */
+    sourceKey: text('source_key'),
+    /** Short event_code (lowercased), e.g. "mimid". FTC codes are ftc-prefixed. */
     eventCode: text('event_code').notNull(),
     year: integer('year').notNull(),
     name: text('name').notNull(),
@@ -35,7 +50,8 @@ export const events = pgTable(
   },
   (table) => [
     // tbaKey uniqueness comes from the column-level .unique() above.
-    unique('events_code_year_uq').on(table.eventCode, table.year),
+    // Code+year is unique WITHIN a program (FRC and FTC can reuse a code/year).
+    unique('events_program_code_year_uq').on(table.program, table.eventCode, table.year),
     // Full-text over name + code for search
     index('events_search_idx').using(
       'gin',

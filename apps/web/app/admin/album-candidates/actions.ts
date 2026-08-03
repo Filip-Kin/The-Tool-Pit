@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { albumCandidates, albums, albumSources, events } from '@the-tool-pit/db'
+import { albumCandidates, albums, albumSources, albumCovers, events } from '@the-tool-pit/db'
 import type { AlbumCandidateMetadata } from '@the-tool-pit/db'
 import { adminPublishAlbum } from '@/lib/admin/publish-album'
 import { fetchOgImage } from '@/lib/albums/og'
@@ -81,6 +81,42 @@ export async function refetchAlbumCover(candidateId: string): Promise<{ error?: 
     .update(albumCandidates)
     .set({ rawMetadata: { ...meta, coverImageUrl: image }, updatedAt: new Date() })
     .where(eq(albumCandidates.id, candidateId))
+
+  revalidatePath('/admin/album-candidates')
+  revalidatePath('/photos')
+  if (tbaKey) revalidatePath(`/photos/event/${tbaKey}`)
+  return {}
+}
+
+const MAX_COVER_BYTES = 10 * 1024 * 1024
+
+/**
+ * Store a manually-uploaded cover image for a published album (in-DB), and point
+ * the album's cover_image_url at the serving route with a cache-busting version.
+ * The fallback for hosts we can't OG-scrape (Drive/Dropbox folders, blocked Flickr).
+ */
+export async function uploadAlbumCover(candidateId: string, formData: FormData): Promise<{ error?: string }> {
+  await assertAdmin()
+  const file = formData.get('cover')
+  if (!(file instanceof File) || file.size === 0) return { error: 'No image selected.' }
+  if (!file.type.startsWith('image/')) return { error: 'That file is not an image.' }
+  if (file.size > MAX_COVER_BYTES) return { error: 'Image is larger than 10 MB.' }
+
+  const loaded = await loadPublishedAlbum(candidateId)
+  if ('error' in loaded) return loaded
+  const { db, album, tbaKey } = loaded
+
+  const bytes = Buffer.from(await file.arrayBuffer())
+  await db
+    .insert(albumCovers)
+    .values({ albumId: album.id, contentType: file.type, data: bytes, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: albumCovers.albumId,
+      set: { contentType: file.type, data: bytes, updatedAt: new Date() },
+    })
+
+  const coverUrl = `/api/albums/cover/${album.id}?v=${Date.now()}`
+  await db.update(albums).set({ coverImageUrl: coverUrl, updatedAt: new Date() }).where(eq(albums.id, album.id))
 
   revalidatePath('/admin/album-candidates')
   revalidatePath('/photos')

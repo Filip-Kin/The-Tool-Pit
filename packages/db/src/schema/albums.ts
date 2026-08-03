@@ -1,7 +1,14 @@
-import { pgTable, uuid, text, integer, real, timestamp, jsonb, index, unique } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, real, timestamp, jsonb, index, unique, customType } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { events } from './events'
 import type { PipelineLogEntry } from './submissions'
+
+/** Raw binary column (Postgres bytea) for manually-uploaded cover images. */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return 'bytea'
+  },
+})
 
 // ---------------------------------------------------------------------------
 // Enum-like value tuples (plain text columns, app-level unions - no pgEnum)
@@ -89,6 +96,21 @@ export const albums = pgTable(
     index('albums_provider_idx').on(table.provider),
   ],
 )
+
+// ---------------------------------------------------------------------------
+// Manually-uploaded cover images (fallback for hosts with no usable og:image:
+// Google Drive / Dropbox folders, IP-blocked Flickr). Stored in-DB and served
+// via /api/albums/cover/[id]; the album's cover_image_url points at that route.
+// ---------------------------------------------------------------------------
+
+export const albumCovers = pgTable('album_covers', {
+  albumId: uuid('album_id')
+    .primaryKey()
+    .references(() => albums.id, { onDelete: 'cascade' }),
+  contentType: text('content_type').notNull(),
+  data: bytea('data').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
 
 // ---------------------------------------------------------------------------
 // Source evidence: where/how an album was discovered or confirmed
@@ -241,6 +263,8 @@ export const albumSubmissionsRelations = relations(albumSubmissions, ({ one }) =
 
 export type Album = typeof albums.$inferSelect
 export type NewAlbum = typeof albums.$inferInsert
+export type AlbumCover = typeof albumCovers.$inferSelect
+export type NewAlbumCover = typeof albumCovers.$inferInsert
 export type AlbumSource = typeof albumSources.$inferSelect
 export type NewAlbumSource = typeof albumSources.$inferInsert
 export type AlbumCrawlJob = typeof albumCrawlJobs.$inferSelect

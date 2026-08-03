@@ -7,7 +7,7 @@ import { Queue } from 'bullmq'
 import { getRedis } from '@/lib/redis'
 import type { AlbumIngestPayload } from '@the-tool-pit/types'
 
-const ALBUM_CONNECTORS = ['tba_events', 'fim_albums', 'chief_delphi_albums', 'flickr_albums'] as const
+const ALBUM_CONNECTORS = ['tba_events', 'toa_events', 'fim_albums', 'chief_delphi_albums', 'flickr_albums'] as const
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')

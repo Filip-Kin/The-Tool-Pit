@@ -5,7 +5,8 @@ import type { AlbumCrawlStats } from '@the-tool-pit/db'
 import { AlbumSourceTrigger } from './album-source-triggers'
 
 const CONNECTORS = [
-  { connector: 'tba_events', label: 'Sync TBA events' },
+  { connector: 'tba_events', label: 'Sync TBA events (FRC)' },
+  { connector: 'toa_events', label: 'Sync TOA events (FTC)' },
   { connector: 'fim_albums', label: 'Crawl First in Michigan' },
   { connector: 'chief_delphi_albums', label: 'Search Chief Delphi' },
   { connector: 'flickr_albums', label: 'Scrape Flickr accounts' },

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   approveAlbumCandidate,
@@ -8,6 +8,7 @@ import {
   setAlbumEventMatch,
   renameAlbumTitle,
   refetchAlbumCover,
+  uploadAlbumCover,
   deletePublishedAlbum,
 } from './actions'
 
@@ -37,6 +38,7 @@ export function AlbumCandidateActions({
     matchedEventKey ?? (targetEventCode ? `${targetEventYear ?? ''}${targetEventCode}` : ''),
   )
   const [title, setTitle] = useState(albumTitle)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   if (status === 'duplicate') {
     return <span className="text-xs text-muted-2">duplicate</span>
@@ -49,6 +51,15 @@ export function AlbumCandidateActions({
       if (res && 'error' in res && res.error) setError(res.error)
       router.refresh()
     })
+  }
+
+  function onCoverChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const fd = new FormData()
+    fd.set('cover', file)
+    run(() => uploadAlbumCover(candidateId, fd))
+    e.target.value = ''
   }
 
   const canModerate = status === 'pending' || status === 'matched' || status === 'suppressed'
@@ -119,6 +130,14 @@ export function AlbumCandidateActions({
             >
               {pending ? '…' : 'Refetch cover'}
             </button>
+            <button
+              disabled={pending}
+              onClick={() => fileRef.current?.click()}
+              className="rounded border border-border px-2 py-1 text-xs text-muted hover:text-foreground disabled:opacity-40"
+            >
+              Upload cover
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={onCoverChosen} />
             <button
               disabled={pending}
               onClick={() => {
