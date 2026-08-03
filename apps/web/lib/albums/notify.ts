@@ -13,7 +13,8 @@ interface SubmissionNotice {
 export async function notifyNewSubmission(s: SubmissionNotice): Promise<void> {
   const webhook = process.env.PHOTO_SUBMISSION_DISCORD_WEBHOOK
   if (!webhook) return
-  const adminUrl = 'https://photos.frc.tools/admin/album-candidates?status=submitted'
+  // Admin lives on the main host, not the photos subdomain (which rewrites to /photos).
+  const adminUrl = 'https://ttp.filipkin.com/admin/album-candidates?status=submitted'
   const fields = [
     { name: 'Album URL', value: s.url.slice(0, 1000) },
     s.eventHint ? { name: 'Event hint', value: s.eventHint.slice(0, 200) } : null,
