@@ -426,7 +426,8 @@ export async function searchEventsForSubmission(
     })
     .from(events)
     .where(and(...filters))
-    .orderBy(desc(sql`similarity(${events.name}, ${text})`), desc(events.startDate))
+    // Most recent season first (the common case is submitting a current event).
+    .orderBy(desc(events.year), desc(events.startDate))
     .limit(limit)
   return rows
 }

@@ -215,10 +215,6 @@ export function AlbumSubmitForm() {
           </Field>
         </div>
       </div>
-      {tbaKey && (
-        <p className="-mt-2 text-xs text-official">✓ Matched to {tbaKey} — we&apos;ll place it there.</p>
-      )}
-
       <Field label="Photographer" hint="Who took the photos (optional).">
         <input value={photographer} onChange={(e) => setPhotographer(e.target.value)} className="input" />
       </Field>
