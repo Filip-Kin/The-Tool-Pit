@@ -62,7 +62,8 @@ export default async function AdminAlbumCandidatesPage({
       .leftJoin(events, eq(events.id, albumCandidates.matchedEventId))
       .leftJoin(albums, eq(albums.id, albumCandidates.matchedAlbumId))
       .where(where)
-      .orderBy(desc(albumCandidates.createdAt))
+      // Published: newest publish first. Other tabs: newest discovery first.
+      .orderBy(status === 'published' ? desc(albums.publishedAt) : desc(albumCandidates.createdAt))
       .limit(PAGE_SIZE)
       .offset(offset),
     db
