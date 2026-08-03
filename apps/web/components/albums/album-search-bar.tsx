@@ -26,6 +26,7 @@ const iconSizeClasses = {
 }
 
 interface EventSuggestion {
+  tbaKey: string
   eventCode: string
   name: string
   year: number
@@ -122,7 +123,7 @@ export function AlbumSearchBar({
       const s = suggestions[activeIndex]
       if (s) {
         setShowSuggestions(false)
-        router.push(`/event/${s.eventCode}`)
+        router.push(`/event/${s.tbaKey}`)
       }
     }
   }
@@ -183,9 +184,9 @@ export function AlbumSearchBar({
           className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-surface shadow-lg overflow-hidden"
         >
           {suggestions.map((s, i) => (
-            <li key={`${s.eventCode}-${s.year}`} id={`${listboxId}-option-${i}`} role="option" aria-selected={i === activeIndex}>
+            <li key={s.tbaKey} id={`${listboxId}-option-${i}`} role="option" aria-selected={i === activeIndex}>
               <Link
-                href={`/event/${s.eventCode}`}
+                href={`/event/${s.tbaKey}`}
                 onClick={() => setShowSuggestions(false)}
                 className={cn(
                   'flex items-center justify-between gap-2 px-4 py-2.5 text-sm transition-colors',

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { AlbumSearchBar } from '@/components/albums/album-search-bar'
 import { EventList } from '@/components/albums/event-list'
-import { searchEvents, getEventByCode } from '@/lib/queries/albums'
+import { searchEvents, resolveEvent } from '@/lib/queries/albums'
 
 interface PageProps {
   searchParams: Promise<{ q?: string; page?: string }>
@@ -12,10 +12,11 @@ export default async function AlbumSearchPage({ searchParams }: PageProps) {
   const query = (params.q ?? '').trim()
   const page = Math.max(1, parseInt(params.page ?? '1', 10) || 1)
 
-  // Exact event-code match → jump straight to the event page.
-  if (query && /^[a-z0-9-]+$/i.test(query)) {
-    const ev = await getEventByCode(query)
-    if (ev) redirect(`/event/${ev.eventCode}`)
+  // Exact full-key match (e.g. 2026mimid) jumps straight to that event.
+  // Bare codes fall through to the results list so every year shows up.
+  if (query && /^\d{4}[a-z0-9]+$/i.test(query)) {
+    const ev = await resolveEvent(query)
+    if (ev) redirect(`/event/${ev.tbaKey}`)
   }
 
   const { events, total } = query

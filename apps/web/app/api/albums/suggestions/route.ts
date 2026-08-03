@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
   try {
     const events = await suggestEvents(query)
     const suggestions = events.map((e) => ({
+      tbaKey: e.tbaKey,
       eventCode: e.eventCode,
       name: e.name,
       year: e.year,

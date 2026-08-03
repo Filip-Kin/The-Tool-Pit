@@ -1,14 +1,17 @@
-import { sql, eq, and, or, ilike, desc, inArray } from 'drizzle-orm'
+import { sql, eq, and, or, ilike, desc, inArray, isNotNull } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { events, albums, eventTeams } from '@the-tool-pit/db'
 import type { Event, Album } from '@the-tool-pit/db'
 import type { EventSearchResult, AlbumDTO } from '@the-tool-pit/types'
 
+/** How many album cover images to surface per event card. */
+const PREVIEW_COVERS = 4
+
 // ---------------------------------------------------------------------------
 // Mappers
 // ---------------------------------------------------------------------------
 
-function toEventResult(e: Event, albumCount: number): EventSearchResult {
+function toEventResult(e: Event, albumCount: number, coverImages: string[] = []): EventSearchResult {
   return {
     id: e.id,
     tbaKey: e.tbaKey,
@@ -18,10 +21,12 @@ function toEventResult(e: Event, albumCount: number): EventSearchResult {
     startDate: e.startDate,
     endDate: e.endDate,
     week: e.week,
+    eventType: e.eventType,
     city: e.city,
     stateProv: e.stateProv,
     country: e.country,
     albumCount,
+    coverImages,
   }
 }
 
@@ -53,6 +58,29 @@ async function publishedAlbumCounts(eventIds: string[]): Promise<Map<string, num
   return map
 }
 
+/** Up to PREVIEW_COVERS album cover images per event, for card previews. */
+async function publishedAlbumCovers(eventIds: string[]): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>()
+  if (eventIds.length === 0) return map
+  const db = getDb()
+  const rows = await db
+    .select({ eventId: albums.eventId, coverImageUrl: albums.coverImageUrl })
+    .from(albums)
+    .where(
+      and(inArray(albums.eventId, eventIds), eq(albums.status, 'published'), isNotNull(albums.coverImageUrl)),
+    )
+    .orderBy(desc(albums.publishedAt))
+  for (const r of rows) {
+    if (!r.coverImageUrl) continue
+    const arr = map.get(r.eventId) ?? []
+    if (arr.length < PREVIEW_COVERS) {
+      arr.push(r.coverImageUrl)
+      map.set(r.eventId, arr)
+    }
+  }
+  return map
+}
+
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
@@ -76,7 +104,8 @@ export async function getEventsByDate(limit = 60): Promise<EventSearchResult[]> 
     .orderBy(desc(events.startDate))
     .limit(limit)
 
-  return rows.map((e) => toEventResult(e, countMap.get(e.id) ?? 0))
+  const covers = await publishedAlbumCovers(rows.map((e) => e.id))
+  return rows.map((e) => toEventResult(e, countMap.get(e.id) ?? 0, covers.get(e.id) ?? []))
 }
 
 export async function searchEvents(params: {
@@ -107,34 +136,44 @@ export async function searchEvents(params: {
     db.select({ count: sql<number>`count(*)::int` }).from(events).where(where),
   ])
 
-  const counts = await publishedAlbumCounts(rows.map((r) => r.id))
+  const [counts, covers] = await Promise.all([
+    publishedAlbumCounts(rows.map((r) => r.id)),
+    publishedAlbumCovers(rows.map((r) => r.id)),
+  ])
   return {
-    events: rows.map((e) => toEventResult(e, counts.get(e.id) ?? 0)),
+    events: rows.map((e) => toEventResult(e, counts.get(e.id) ?? 0, covers.get(e.id) ?? [])),
     total: totalRows[0]?.count ?? 0,
   }
 }
 
-/** Latest event matching a code (optionally a specific year). */
-export async function getEventByCode(code: string, year?: number): Promise<Event | null> {
+/**
+ * Resolve an event by its full TBA key ("2026mimid") or, as a fallback, by a
+ * bare event code ("mimid", latest year). Event codes repeat every season, so
+ * the TBA key is the canonical identity.
+ */
+export async function resolveEvent(keyOrCode: string): Promise<Event | null> {
   const db = getDb()
-  const filters = [eq(events.eventCode, code.toLowerCase())]
-  if (year) filters.push(eq(events.year, year))
+  const value = keyOrCode.trim().toLowerCase()
+  // Full TBA key: 4-digit year + code
+  if (/^\d{4}[a-z0-9]+$/.test(value)) {
+    const [row] = await db.select().from(events).where(eq(events.tbaKey, value)).limit(1)
+    if (row) return row
+  }
   const [row] = await db
     .select()
     .from(events)
-    .where(and(...filters))
+    .where(eq(events.eventCode, value))
     .orderBy(desc(events.year))
     .limit(1)
   return row ?? null
 }
 
-/** An event plus its published albums. */
+/** An event plus its published albums, keyed by TBA key or bare code. */
 export async function getEventWithAlbums(
-  code: string,
-  year?: number,
+  keyOrCode: string,
 ): Promise<{ event: Event; albums: AlbumDTO[] } | null> {
   const db = getDb()
-  const event = await getEventByCode(code, year)
+  const event = await resolveEvent(keyOrCode)
   if (!event) return null
   const albumRows = await db
     .select()
@@ -154,8 +193,11 @@ export async function getTeamEvents(teamNumber: number): Promise<EventSearchResu
     .where(eq(eventTeams.teamNumber, teamNumber))
     .orderBy(desc(events.startDate))
   const eventRows = rows.map((r) => r.event)
-  const counts = await publishedAlbumCounts(eventRows.map((e) => e.id))
-  return eventRows.map((e) => toEventResult(e, counts.get(e.id) ?? 0))
+  const [counts, covers] = await Promise.all([
+    publishedAlbumCounts(eventRows.map((e) => e.id)),
+    publishedAlbumCovers(eventRows.map((e) => e.id)),
+  ])
+  return eventRows.map((e) => toEventResult(e, counts.get(e.id) ?? 0, covers.get(e.id) ?? []))
 }
 
 /** Lightweight autocomplete: top event name/code matches. */

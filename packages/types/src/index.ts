@@ -166,10 +166,14 @@ export interface EventSearchResult {
   startDate: string | null
   endDate: string | null
   week: number | null
+  /** TBA event_type int (99 = offseason, 100 = preseason). */
+  eventType: number | null
   city: string | null
   stateProv: string | null
   country: string | null
   albumCount: number
+  /** Cover images of the first few published albums, for previews. */
+  coverImages: string[]
 }
 
 export interface AlbumDTO {
