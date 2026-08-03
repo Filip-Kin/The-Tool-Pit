@@ -33,13 +33,15 @@ export default async function EventPage({ params }: PageProps) {
     <div className="container mx-auto max-w-6xl px-4 py-10">
       <header className="mb-8 flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-md bg-primary/15 px-2 py-0.5 text-sm font-bold text-primary">
+            {event.year}
+          </span>
           <Badge variant="default">{event.eventCode}</Badge>
           {event.eventType === 99 || event.eventType === 100 ? (
             <Badge variant="offseason" className="whitespace-nowrap">Offseason</Badge>
           ) : event.week != null ? (
             <Badge variant="season" className="whitespace-nowrap">Week {event.week}</Badge>
           ) : null}
-          <Badge variant="muted">{event.year}</Badge>
         </div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground">{event.name}</h1>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted">

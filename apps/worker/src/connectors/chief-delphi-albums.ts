@@ -38,6 +38,7 @@ const URL_RE = /https?:\/\/[a-zA-Z0-9][-a-zA-Z0-9.]*\.[a-zA-Z]{2,}(?:\/[^\s"<>)'
 interface EventLite {
   eventCode: string
   name: string
+  year: number
 }
 
 /** Strip generic event-name noise so name matching keys on the distinctive part. */
@@ -73,19 +74,25 @@ export class ChiefDelphiAlbumsConnector implements AlbumConnector {
     const errors: string[] = []
     let skipped = 0
 
-    // Load the season's events for query building + code/name matching.
+    // Load ALL events across every synced year - CD threads reference events
+    // from many seasons and the year is what disambiguates them.
     const db = getDb()
     const rows = (await db
-      .select({ eventCode: events.eventCode, name: events.name })
-      .from(events)
-      .where(eq(events.year, year))) as EventLite[]
+      .select({ eventCode: events.eventCode, name: events.name, year: events.year })
+      .from(events)) as EventLite[]
 
-    const codeSet = new Set(rows.map((r) => r.eventCode))
-    const nameKeys = rows
-      .map((r) => ({ code: r.eventCode, key: nameKey(r.name) }))
+    // "code:year" pairs for exact matching, and per-year name keys.
+    const codeYear = new Set(rows.map((r) => `${r.eventCode}:${r.year}`))
+    const nameEntries = rows
+      .map((r) => ({ code: r.eventCode, year: r.year, key: nameKey(r.name) }))
       .filter((r) => r.key.length >= 4)
 
-    const eventQueries = rows.slice(0, MAX_EVENT_QUERIES).map((r) => `${r.name} photos`)
+    // Only build name queries from the most recent season (bounds the crawl).
+    const latestYear = rows.reduce((m, r) => Math.max(m, r.year), 0)
+    const eventQueries = rows
+      .filter((r) => r.year >= latestYear - 1)
+      .slice(0, MAX_EVENT_QUERIES)
+      .map((r) => `${r.name} photos`)
     const queries = [...BASE_QUERIES, ...eventQueries]
 
     const seenUrls = new Set<string>()
@@ -126,7 +133,7 @@ export class ChiefDelphiAlbumsConnector implements AlbumConnector {
           }
           if (albumUrls.length === 0) continue
 
-          const match = this.matchEvent(topic.title ?? '', topic.blurb ?? '', codeSet, nameKeys)
+          const match = this.matchEvent(topic.title ?? '', topic.blurb ?? '', codeYear, nameEntries)
 
           for (const { canonicalUrl, provider } of albumUrls) {
             if (seenUrls.has(canonicalUrl)) continue
@@ -135,8 +142,8 @@ export class ChiefDelphiAlbumsConnector implements AlbumConnector {
               sourceUrl: threadUrl,
               canonicalUrl,
               provider,
-              targetEventCode: match ?? undefined,
-              targetEventYear: year,
+              targetEventCode: match?.code ?? undefined,
+              targetEventYear: match?.year ?? undefined,
               rawMetadata: {
                 threadUrl,
                 threadTitle: topic.title || undefined,
@@ -169,24 +176,34 @@ export class ChiefDelphiAlbumsConnector implements AlbumConnector {
     return out
   }
 
-  /** Heuristic: exact event-code token first, then distinctive name containment. */
+  /**
+   * Year-first heuristic. A CD thread must name a year (e.g. "2009 CalGames")
+   * before we auto-match, because event codes/names repeat every season. Within
+   * that year we match an exact event-code token, then distinctive name
+   * containment. If no year is found we return only the (null) year so the
+   * candidate stays unmatched rather than being pinned to the wrong season.
+   */
   private matchEvent(
     title: string,
     blurb: string,
-    codeSet: Set<string>,
-    nameKeys: Array<{ code: string; key: string }>,
-  ): string | null {
+    codeYear: Set<string>,
+    nameEntries: Array<{ code: string; year: number; key: string }>,
+  ): { code: string | null; year: number | null } {
+    const yearMatch = title.match(/\b(19|20)\d{2}\b/) ?? blurb.match(/\b(19|20)\d{2}\b/)
+    const year = yearMatch ? parseInt(yearMatch[0], 10) : null
+    if (!year) return { code: null, year: null }
+
     const haystack = `${title} ${blurb}`.toLowerCase()
     for (const token of haystack.split(/[^a-z0-9]+/)) {
-      if (token.length >= 4 && codeSet.has(token)) return token
+      if (token.length >= 4 && codeYear.has(`${token}:${year}`)) return { code: token, year }
     }
     const titleKey = ` ${nameKey(title)} `
     let best: { code: string; len: number } | null = null
-    for (const { code, key } of nameKeys) {
-      if (titleKey.includes(` ${key} `) && (!best || key.length > best.len)) {
+    for (const { code, year: y, key } of nameEntries) {
+      if (y === year && titleKey.includes(` ${key} `) && (!best || key.length > best.len)) {
         best = { code, len: key.length }
       }
     }
-    return best?.code ?? null
+    return { code: best?.code ?? null, year }
   }
 }

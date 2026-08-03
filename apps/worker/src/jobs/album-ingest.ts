@@ -38,7 +38,7 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
 
   try {
     if (connectorName === 'tba_events') {
-      const stats = await syncTbaEvents(year)
+      const stats = await syncTbaEvents(year, { skipTeams: payload.options?.skipTeams === true })
       await db
         .update(albumCrawlJobs)
         .set({ status: 'done', finishedAt: new Date(), stats })
@@ -124,9 +124,9 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
 }
 
 /** Upsert events + rebuild event_teams for a season. */
-async function syncTbaEvents(year: number) {
+async function syncTbaEvents(year: number, opts: { skipTeams?: boolean } = {}) {
   const db = getDb()
-  const { events: rows, eventTeams: teamsByKey } = await new TbaEventsConnector().run(year)
+  const { events: rows, eventTeams: teamsByKey } = await new TbaEventsConnector().run(year, opts)
 
   if (rows.length === 0) {
     return { discovered: 0, new: 0, matched: 0, skipped: 0, failed: 0, eventsUpserted: 0, eventTeamsUpserted: 0 }

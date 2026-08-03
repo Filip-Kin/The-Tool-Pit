@@ -27,6 +27,7 @@ export default async function AdminAlbumCandidatesPage({
         candidate: albumCandidates,
         eventName: events.name,
         eventCode: events.eventCode,
+        eventYear: events.year,
       })
       .from(albumCandidates)
       .leftJoin(events, eq(events.id, albumCandidates.matchedEventId))
@@ -82,7 +83,7 @@ export default async function AdminAlbumCandidatesPage({
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ candidate: row, eventName, eventCode }) => {
+              {rows.map(({ candidate: row, eventName, eventCode, eventYear }) => {
                 const meta = (row.rawMetadata ?? {}) as AlbumCandidateMetadata
                 const cls = (row.classification ?? {}) as Partial<AlbumEventMatch>
                 const displayUrl = row.canonicalUrl ?? row.sourceUrl
@@ -106,12 +107,19 @@ export default async function AdminAlbumCandidatesPage({
                     </td>
                     <td className="px-4 py-3">
                       {eventName ? (
-                        <span className="text-xs text-foreground">
-                          {eventName} <span className="font-mono text-muted-2">({eventCode})</span>
+                        <span className="flex items-center gap-2 text-xs">
+                          <span className="rounded bg-primary/15 px-1.5 py-0.5 font-mono text-sm font-bold text-primary">
+                            {eventYear}
+                          </span>
+                          <span className="text-foreground">
+                            {eventName} <span className="font-mono text-muted-2">({eventCode})</span>
+                          </span>
                         </span>
                       ) : (
                         <span className="text-xs text-muted-2">
-                          {row.targetEventCode ? `target: ${row.targetEventCode}` : 'unmatched'}
+                          {row.targetEventCode
+                            ? `target: ${row.targetEventCode}${row.targetEventYear ? ` (${row.targetEventYear})` : ''}`
+                            : 'unmatched'}
                         </span>
                       )}
                     </td>

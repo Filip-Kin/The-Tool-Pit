@@ -10,6 +10,17 @@ describe('canonicalizeAlbumUrl', () => {
       })
   })
 
+  it('strips a SmugMug individual-photo segment back to its gallery', () => {
+    expect(canonicalizeAlbumUrl('https://user.smugmug.com/Event/Gallery-2024/i-XsT9TXz/0/abc/XL/DSC_9997-XL.jpg'))
+      .toEqual({ canonicalUrl: 'https://user.smugmug.com/Event/Gallery-2024', provider: 'smugmug' })
+  })
+
+  it('rejects the SmugMug media CDN and bare-root homepages', () => {
+    expect(canonicalizeAlbumUrl('https://photos.smugmug.com/2021-FRC/Gamma/i-XFVqwXT/0/x/X2/slide.png')).toBeNull()
+    expect(canonicalizeAlbumUrl('https://robodox.smugmug.com')).toBeNull()
+    expect(canonicalizeAlbumUrl('https://robodox.smugmug.com/')).toBeNull()
+  })
+
   it('recognizes Pixieset galleries and strips trailing slash', () => {
     expect(canonicalizeAlbumUrl('https://jaredmilesphoto.pixieset.com/frcmid2026/'))
       .toEqual({ canonicalUrl: 'https://jaredmilesphoto.pixieset.com/frcmid2026', provider: 'pixieset' })

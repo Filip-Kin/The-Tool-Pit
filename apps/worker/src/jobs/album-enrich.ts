@@ -62,7 +62,9 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
   }
   const canonicalUrl = cand.canonicalUrl
 
-  const year = cand.targetEventYear ?? new Date().getFullYear()
+  // The year is required to identify an event - codes/names repeat every season.
+  // Never fall back to the current season, or historical albums mis-match.
+  const year = cand.targetEventYear ?? null
 
   // 1. Best-effort OG metadata for cover image / title.
   const meta: AlbumCandidateMetadata = { ...(cand.rawMetadata ?? {}) }
@@ -81,7 +83,7 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
   let confidence = 0
   const classification: AlbumEventMatch = { eventCode: cand.targetEventCode ?? null, method: 'none' }
 
-  if (cand.targetEventCode) {
+  if (cand.targetEventCode && year != null) {
     const [ev] = await db
       .select({ id: events.id })
       .from(events)
@@ -94,8 +96,8 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
     }
   }
 
-  // 3. AI fallback for ambiguous CD threads.
-  if (!matchedEventId && meta.threadTitle) {
+  // 3. AI fallback for ambiguous threads - only when we know the year.
+  if (!matchedEventId && meta.threadTitle && year != null) {
     const shortlist = (await db
       .select({
         eventCode: events.eventCode,

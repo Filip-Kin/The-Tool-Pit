@@ -59,7 +59,7 @@ interface TbaEvent {
 export class TbaEventsConnector {
   name = 'tba_events'
 
-  async run(year: number): Promise<TbaEventsResult> {
+  async run(year: number, opts: { skipTeams?: boolean } = {}): Promise<TbaEventsResult> {
     const tbaApiKey = process.env.TBA_API_KEY
     const errors: string[] = []
     const eventTeams = new Map<string, number[]>()
@@ -102,9 +102,12 @@ export class TbaEventsConnector {
       website: e.website,
     }))
 
-    console.log(`[tba-events] ${year}: ${events.length} events`)
+    console.log(`[tba-events] ${year}: ${events.length} events${opts.skipTeams ? ' (skipping team rosters)' : ''}`)
 
     let teamCount = 0
+    if (opts.skipTeams) {
+      return { events, eventTeams, stats: { events: events.length, teams: 0, errors } }
+    }
     for (const ev of events) {
       try {
         const res = await politeFetch(`${TBA_BASE}/event/${ev.tbaKey}/teams/keys`, { headers })
