@@ -8,7 +8,7 @@
 import { getDb } from '@the-tool-pit/db'
 import { events, albums, albumCandidates, albumSubmissions } from '@the-tool-pit/db'
 import type { AlbumCandidateMetadata, AlbumEventMatch } from '@the-tool-pit/db'
-import { eq, and, desc, sql } from 'drizzle-orm'
+import { eq, and, desc, sql, inArray } from 'drizzle-orm'
 import { parse } from 'node-html-parser'
 import { politeFetch } from '../connectors/base.js'
 import { matchEventWithAI, type EventCandidate } from '../pipeline/match-event.js'
@@ -148,11 +148,34 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
     }
   }
 
-  // 3a. Non-AI heuristic: strongest word-similarity name match within the year.
-  // word_similarity beats plain similarity here because it keys on the
+  // 3a. Deterministic: an exact event-code token in the title (e.g. "... micmp ...").
+  if (!matchedEventId && matchText && year != null) {
+    const tokens = matchText
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length >= 4)
+    if (tokens.length > 0) {
+      const [ev] = await db
+        .select({ id: events.id, eventCode: events.eventCode })
+        .from(events)
+        .where(and(eq(events.year, year), inArray(events.eventCode, tokens)))
+        .limit(1)
+      if (ev) {
+        matchedEventId = ev.id
+        confidence = 0.95
+        classification.eventCode = ev.eventCode
+        classification.method = 'exact_code'
+      }
+    }
+  }
+
+  // 3b. Deterministic: word-similarity name match. word_similarity keys on the
   // distinctive part of the name (e.g. "Troy") instead of the shared
-  // "FiM District Event" boilerplate. Requires no API credits.
+  // "FiM District Event" boilerplate, and costs no API credits.
   const NAME_MATCH_THRESHOLD = 0.6
+  // Below this there is no plausible candidate, so don't spend AI on it either.
+  const AI_MIN_PLAUSIBLE = 0.4
+  let topWsim = 0
   if (!matchedEventId && matchText && year != null) {
     const [top] = await db
       .select({
@@ -164,17 +187,22 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
       .where(eq(events.year, year))
       .orderBy(desc(sql`word_similarity(${matchText}, ${events.name})`))
       .limit(1)
-    if (top && top.wsim >= NAME_MATCH_THRESHOLD) {
-      matchedEventId = top.id
-      confidence = top.wsim
-      classification.eventCode = top.eventCode
-      classification.method = 'name_match'
-      classification.confidence = top.wsim
+    if (top) {
+      topWsim = top.wsim
+      if (top.wsim >= NAME_MATCH_THRESHOLD) {
+        matchedEventId = top.id
+        confidence = top.wsim
+        classification.eventCode = top.eventCode
+        classification.method = 'name_match'
+        classification.confidence = top.wsim
+      }
     }
   }
 
-  // 3b. AI fallback for the ambiguous ones - only when we know the year.
-  if (!matchedEventId && matchText && year != null) {
+  // 3c. AI - ONLY for the uncertain "maybe" band (a plausible but not confident
+  // name match). Hopeless candidates (topWsim < 0.4) stay pending without an AI
+  // call, so credits are only spent where they can actually help.
+  if (!matchedEventId && matchText && year != null && topWsim >= AI_MIN_PLAUSIBLE) {
     const shortlist = (await db
       .select({
         eventCode: events.eventCode,
