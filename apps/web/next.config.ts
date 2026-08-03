@@ -22,6 +22,11 @@ try {
 const nextConfig: NextConfig = {
   transpilePackages: ['@the-tool-pit/db', '@the-tool-pit/types'],
   serverExternalPackages: ['bullmq'],
+  // Cover-image uploads go through a server action; the default 1 MB body cap
+  // rejects most photos, so allow room for a full-size cover.
+  experimental: {
+    serverActions: { bodySizeLimit: '12mb' },
+  },
   // Standalone output is required for Docker/Coolify deployment.
   // Disabled locally on Windows because bun's symlink-based module cache
   // causes EPERM errors when Next.js tries to copy traced files.

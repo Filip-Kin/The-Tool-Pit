@@ -10,6 +10,8 @@ const CONNECTORS = [
   { connector: 'fim_albums', label: 'Crawl First in Michigan' },
   { connector: 'chief_delphi_albums', label: 'Search Chief Delphi' },
   { connector: 'flickr_albums', label: 'Scrape Flickr accounts' },
+  { connector: 'smugmug_albums', label: 'Crawl SmugMug sites' },
+  { connector: 'reanalyze_candidates', label: 'Re-analyze candidates' },
 ]
 
 export default async function AdminAlbumSourcesPage() {

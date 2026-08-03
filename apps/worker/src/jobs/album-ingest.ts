@@ -6,12 +6,13 @@
  */
 import { getDb } from '@the-tool-pit/db'
 import { events, eventTeams, albums, albumCandidates, albumCrawlJobs } from '@the-tool-pit/db'
-import { eq, inArray, sql } from 'drizzle-orm'
+import { eq, and, or, inArray, isNull, ne, sql } from 'drizzle-orm'
 import { TbaEventsConnector } from '../connectors/tba-events.js'
 import { ToaEventsConnector, yearToSeasonKey } from '../connectors/toa-events.js'
 import { FimAlbumsConnector } from '../connectors/fim-albums.js'
 import { ChiefDelphiAlbumsConnector } from '../connectors/chief-delphi-albums.js'
 import { FlickrAlbumsConnector } from '../connectors/flickr-albums.js'
+import { SmugmugAlbumsConnector } from '../connectors/smugmug-albums.js'
 import type { AlbumConnector } from '../connectors/album-hosts.js'
 import { albumEnrichQueue } from '../queues.js'
 import type { AlbumIngestPayload } from '@the-tool-pit/types'
@@ -20,6 +21,7 @@ const ALBUM_CONNECTOR_REGISTRY: Record<string, () => AlbumConnector> = {
   fim_albums: () => new FimAlbumsConnector(),
   chief_delphi_albums: () => new ChiefDelphiAlbumsConnector(),
   flickr_albums: () => new FlickrAlbumsConnector(),
+  smugmug_albums: () => new SmugmugAlbumsConnector(),
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -51,6 +53,15 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
 
     if (connectorName === 'toa_events') {
       const stats = await syncToaEvents(year, { skipTeams: payload.options?.skipTeams === true })
+      await db
+        .update(albumCrawlJobs)
+        .set({ status: 'done', finishedAt: new Date(), stats })
+        .where(eq(albumCrawlJobs.id, jobId))
+      return
+    }
+
+    if (connectorName === 'reanalyze_candidates') {
+      const stats = await reanalyzeCandidates()
       await db
         .update(albumCrawlJobs)
         .set({ status: 'done', finishedAt: new Date(), stats })
@@ -133,6 +144,39 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
       .where(eq(albumCrawlJobs.id, jobId))
     throw err
   }
+}
+
+/**
+ * Re-run the matcher over candidates that aren't finalized. Resets eligible
+ * candidates to 'pending' and re-enqueues enrich for each. Eligible = currently
+ * pending, OR matched by the algorithm (NOT admin-set) and not yet published.
+ * Admin-set matches (classification.reasoning = 'Admin-set'), published, and
+ * suppressed/duplicate candidates are left untouched. Used after adding new
+ * events (e.g. FTC) or when AI credits become available.
+ */
+async function reanalyzeCandidates() {
+  const db = getDb()
+  // Matched-but-not-admin: status matched and the classification method isn't
+  // the admin sentinel. (Admin sets method 'none' + reasoning 'Admin-set'.)
+  const notAdminSet = sql`coalesce(${albumCandidates.classification}->>'reasoning','') <> 'Admin-set'`
+  const eligible = or(
+    eq(albumCandidates.status, 'pending'),
+    and(eq(albumCandidates.status, 'matched'), notAdminSet),
+  )
+
+  const rows = await db.select({ id: albumCandidates.id }).from(albumCandidates).where(eligible)
+  // Reset matched->pending so the enrich job (which only runs on 'pending') will
+  // reprocess them; clear the stale match so a wrong old match can't linger.
+  await db
+    .update(albumCandidates)
+    .set({ status: 'pending', matchedEventId: null, updatedAt: new Date() })
+    .where(and(eligible!, ne(albumCandidates.status, 'pending')))
+
+  for (const r of rows) {
+    await albumEnrichQueue.add('album-enrich', { candidateId: r.id })
+  }
+  console.log(`[album-ingest] reanalyze: re-enqueued ${rows.length} candidates`)
+  return { discovered: rows.length, new: 0, matched: 0, skipped: 0, failed: 0 }
 }
 
 /** Upsert events + rebuild event_teams for a season. */

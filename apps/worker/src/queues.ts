@@ -155,4 +155,10 @@ export async function scheduleRecurringJobs() {
     name: 'album-crawl-flickr',
     data: { connector: 'flickr_albums', year: currentSeasonYear, jobId: 'scheduled' },
   })
+
+  // Walk curated SmugMug photographer sites - once per day
+  await albumIngestQueue.upsertJobScheduler('album-crawl-smugmug', { every: 24 * 60 * 60 * 1000 }, {
+    name: 'album-crawl-smugmug',
+    data: { connector: 'smugmug_albums', year: currentSeasonYear, jobId: 'scheduled' },
+  })
 }

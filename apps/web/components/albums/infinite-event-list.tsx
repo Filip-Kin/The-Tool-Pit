@@ -64,36 +64,50 @@ export function InfiniteEventList({
   // Restore a prior session (loaded pages + scroll) on mount, and persist it as
   // the visitor scrolls so a browser Back drops them exactly where they were.
   useEffect(() => {
-    // Own scroll restoration ourselves; the router otherwise resets to top.
-    if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
     // Last real scroll position. We save THIS, never live window.scrollY at
     // teardown - the router zeroes the scroll just before unmount, which would
     // otherwise clobber the saved position with 0.
-    const lastY = { current: 0 }
+    const lastY = { current: window.scrollY }
+    let restoring = true
 
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY)
       if (raw) {
         const saved = JSON.parse(raw) as Persisted
-        if (saved.events?.length) {
+        if (saved.events?.length && saved.scrollY > 0) {
           seen.current = new Set(saved.events.map((e) => e.tbaKey))
           offsetRef.current = saved.offset
           setEvents(saved.events)
           setHasMore(saved.hasMore)
           lastY.current = saved.scrollY
-          // Cards reserve fixed-aspect space, so height settles immediately;
-          // still retry a few frames in case the restored render lags.
           const target = saved.scrollY
-          let tries = 0
-          const jump = () => {
-            window.scrollTo(0, target)
-            if (Math.abs(window.scrollY - target) > 2 && tries++ < 40) requestAnimationFrame(jump)
+          // Re-assert the target every frame until it holds for a few frames
+          // (beating the router's own post-navigation scroll-to-top), or we run
+          // out of time. Cards reserve fixed-aspect space so height settles fast.
+          const startedAt = performance.now()
+          let stable = 0
+          const reassert = () => {
+            if (Math.abs(window.scrollY - target) <= 2) {
+              stable++
+            } else {
+              stable = 0
+              window.scrollTo(0, target)
+            }
+            if (stable < 3 && performance.now() - startedAt < 1500) {
+              requestAnimationFrame(reassert)
+            } else {
+              restoring = false
+            }
           }
-          requestAnimationFrame(() => requestAnimationFrame(jump))
+          requestAnimationFrame(() => requestAnimationFrame(reassert))
+        } else {
+          restoring = false
         }
+      } else {
+        restoring = false
       }
     } catch {
-      // ignore malformed state
+      restoring = false
     }
 
     let raf = 0
@@ -108,15 +122,20 @@ export function InfiniteEventList({
       }
     }
     const onScroll = () => {
+      // Ignore scroll events we generate while restoring, so a genuine user
+      // scroll (which cancels the restore) is the only thing that moves lastY.
+      if (restoring) return
       lastY.current = window.scrollY
       if (raf) return
       raf = requestAnimationFrame(save)
     }
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('pagehide', save)
+    document.addEventListener('visibilitychange', save)
     return () => {
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('pagehide', save)
+      document.removeEventListener('visibilitychange', save)
       if (raf) cancelAnimationFrame(raf)
       save()
     }
