@@ -86,6 +86,67 @@ async function publishedAlbumCovers(eventIds: string[]): Promise<Map<string, str
 }
 
 // ---------------------------------------------------------------------------
+// Championship division roll-up
+// A championship (event_type 2 or 4) has divisions (event_type 5 or 3) whose
+// code is the parent code + a digit, e.g. micmp -> micmp1..micmp4. In lists the
+// divisions collapse under the parent; the event page shows them as sections.
+// ---------------------------------------------------------------------------
+
+const CMP_PARENT_TYPES = new Set([2, 4])
+const CMP_DIVISION_TYPES = new Set([3, 5])
+
+function isDivision(e: Pick<Event, 'eventType' | 'eventCode'>): boolean {
+  return CMP_DIVISION_TYPES.has(e.eventType ?? -1) && /\d$/.test(e.eventCode)
+}
+function baseCode(code: string): string {
+  return code.replace(/\d+$/, '')
+}
+/** "FIM State Championship - DTE Energy Foundation Division" -> "DTE Energy Foundation Division". */
+export function divisionLabel(name: string): string {
+  const parts = name.split(' - ')
+  return parts.length > 1 ? parts[parts.length - 1].trim() : name
+}
+
+/**
+ * Collapse championship divisions into their parent for list display, summing
+ * album counts and merging cover previews.
+ */
+async function collapseDivisions(
+  rows: Event[],
+  counts: Map<string, number>,
+  covers: Map<string, string[]>,
+): Promise<EventSearchResult[]> {
+  const db = getDb()
+  // Fetch parent events for any divisions present.
+  const parentKeys = [...new Set(rows.filter(isDivision).map((r) => `${r.year}${baseCode(r.eventCode)}`))]
+  const parentByKey = new Map<string, Event>()
+  if (parentKeys.length > 0) {
+    const parents = await db.select().from(events).where(inArray(events.tbaKey, parentKeys))
+    for (const p of parents) parentByKey.set(p.tbaKey, p)
+  }
+
+  const groups = new Map<string, { event: Event; memberIds: string[] }>()
+  const add = (event: Event, memberId: string) => {
+    const g = groups.get(event.tbaKey) ?? { event, memberIds: [] }
+    g.memberIds.push(memberId)
+    groups.set(event.tbaKey, g)
+  }
+  for (const r of rows) {
+    const parent = isDivision(r) ? parentByKey.get(`${r.year}${baseCode(r.eventCode)}`) : undefined
+    add(parent ?? r, r.id)
+  }
+
+  const results = [...groups.values()].map((g) => {
+    const count = g.memberIds.reduce((s, id) => s + (counts.get(id) ?? 0), 0)
+    const cov: string[] = []
+    for (const id of g.memberIds) for (const c of covers.get(id) ?? []) if (cov.length < PREVIEW_COVERS) cov.push(c)
+    return toEventResult(g.event, count, cov)
+  })
+  results.sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? ''))
+  return results
+}
+
+// ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
 
@@ -109,7 +170,7 @@ export async function getEventsByDate(limit = 60): Promise<EventSearchResult[]> 
     .limit(limit)
 
   const covers = await publishedAlbumCovers(rows.map((e) => e.id))
-  return rows.map((e) => toEventResult(e, countMap.get(e.id) ?? 0, covers.get(e.id) ?? []))
+  return collapseDivisions(rows, countMap, covers)
 }
 
 export async function searchEvents(params: {
@@ -124,9 +185,16 @@ export async function searchEvents(params: {
   const pageSize = params.pageSize ?? 20
   if (!query) return { events: [], total: 0 }
 
-  const pattern = `%${query}%`
-  const filters = [or(ilike(events.name, pattern), ilike(events.eventCode, pattern)), hasPublishedAlbum]
-  if (params.year) filters.push(eq(events.year, params.year))
+  // A year in the query (e.g. "2019 Southfield") filters by season; the rest is
+  // the name/code text, since event names don't contain the year.
+  const yearMatch = query.match(/\b(19|20)\d{2}\b/)
+  const year = params.year ?? (yearMatch ? parseInt(yearMatch[0], 10) : undefined)
+  const text = query.replace(/\b(19|20)\d{2}\b/, '').trim()
+
+  const pattern = `%${text}%`
+  const filters = [hasPublishedAlbum]
+  if (text) filters.push(or(ilike(events.name, pattern), ilike(events.eventCode, pattern))!)
+  if (year) filters.push(eq(events.year, year))
   const where = and(...filters)
 
   const [rows, totalRows] = await Promise.all([
@@ -134,7 +202,7 @@ export async function searchEvents(params: {
       .select()
       .from(events)
       .where(where)
-      .orderBy(desc(sql`similarity(${events.name}, ${query})`), desc(events.startDate))
+      .orderBy(desc(sql`similarity(${events.name}, ${text})`), desc(events.startDate))
       .limit(pageSize)
       .offset((page - 1) * pageSize),
     db.select({ count: sql<number>`count(*)::int` }).from(events).where(where),
@@ -145,7 +213,7 @@ export async function searchEvents(params: {
     publishedAlbumCovers(rows.map((r) => r.id)),
   ])
   return {
-    events: rows.map((e) => toEventResult(e, counts.get(e.id) ?? 0, covers.get(e.id) ?? [])),
+    events: await collapseDivisions(rows, counts, covers),
     total: totalRows[0]?.count ?? 0,
   }
 }
@@ -177,6 +245,71 @@ export async function getEventWithAlbums(
   return { event, albums: albumRows.map((a) => toAlbumDTO(a, event.eventCode)) }
 }
 
+async function albumsForEvent(event: Event): Promise<AlbumDTO[]> {
+  const db = getDb()
+  const rows = await db
+    .select()
+    .from(albums)
+    .where(and(eq(albums.eventId, event.id), eq(albums.status, 'published')))
+    .orderBy(desc(albums.publishedAt))
+  return rows.map((a) => toAlbumDTO(a, event.eventCode))
+}
+
+export interface EventPageDivision {
+  event: Event
+  label: string
+  albums: AlbumDTO[]
+}
+export interface EventPageData {
+  event: Event
+  /** Canonical parent key; if the viewed key was a division, redirect here. */
+  parentTbaKey: string
+  albums: AlbumDTO[]
+  divisions: EventPageDivision[]
+}
+
+/**
+ * Event page data with championship division roll-up. Viewing a division key
+ * resolves to its parent; the page shows the parent's albums plus one section
+ * per division that has albums.
+ */
+export async function getEventPage(tbaKey: string): Promise<EventPageData | null> {
+  const db = getDb()
+  const viewed = await resolveEvent(tbaKey)
+  if (!viewed) return null
+
+  // Resolve to the parent championship if a division key was viewed.
+  let parent = viewed
+  if (isDivision(viewed)) {
+    const [p] = await db
+      .select()
+      .from(events)
+      .where(and(eq(events.eventCode, baseCode(viewed.eventCode)), eq(events.year, viewed.year)))
+      .limit(1)
+    if (p && CMP_PARENT_TYPES.has(p.eventType ?? -1)) parent = p
+  }
+
+  const parentAlbums = await albumsForEvent(parent)
+
+  // Division events of this parent (code = parentCode + digits).
+  const divisionRows = CMP_PARENT_TYPES.has(parent.eventType ?? -1)
+    ? await db
+        .select()
+        .from(events)
+        .where(and(eq(events.year, parent.year), sql`${events.eventCode} ~ ${`^${baseCode(parent.eventCode)}[0-9]+$`}`))
+        .orderBy(events.eventCode)
+    : []
+
+  const divisions: EventPageDivision[] = []
+  for (const d of divisionRows) {
+    if (d.id === parent.id) continue
+    const alb = await albumsForEvent(d)
+    if (alb.length > 0) divisions.push({ event: d, label: divisionLabel(d.name), albums: alb })
+  }
+
+  return { event: parent, parentTbaKey: parent.tbaKey, albums: parentAlbums, divisions }
+}
+
 /** Events a team attended, most recent first, with album counts. */
 export async function getTeamEvents(teamNumber: number): Promise<EventSearchResult[]> {
   const db = getDb()
@@ -191,7 +324,7 @@ export async function getTeamEvents(teamNumber: number): Promise<EventSearchResu
     publishedAlbumCounts(eventRows.map((e) => e.id)),
     publishedAlbumCovers(eventRows.map((e) => e.id)),
   ])
-  return eventRows.map((e) => toEventResult(e, counts.get(e.id) ?? 0, covers.get(e.id) ?? []))
+  return collapseDivisions(eventRows, counts, covers)
 }
 
 /** Lightweight autocomplete: top event name/code matches. */
@@ -199,12 +332,18 @@ export async function suggestEvents(q: string, limit = 5): Promise<EventSearchRe
   const db = getDb()
   const query = q.trim()
   if (query.length < 2) return []
-  const pattern = `%${query}%`
+  const yearMatch = query.match(/\b(19|20)\d{2}\b/)
+  const year = yearMatch ? parseInt(yearMatch[0], 10) : undefined
+  const text = query.replace(/\b(19|20)\d{2}\b/, '').trim()
+  const pattern = `%${text}%`
+  const filters = [hasPublishedAlbum]
+  if (text) filters.push(or(ilike(events.name, pattern), ilike(events.eventCode, pattern))!)
+  if (year) filters.push(eq(events.year, year))
   const rows = await db
     .select()
     .from(events)
-    .where(and(or(ilike(events.name, pattern), ilike(events.eventCode, pattern)), hasPublishedAlbum))
-    .orderBy(desc(sql`similarity(${events.name}, ${query})`), desc(events.startDate))
+    .where(and(...filters))
+    .orderBy(desc(sql`similarity(${events.name}, ${text})`), desc(events.startDate))
     .limit(limit)
   return rows.map((e) => toEventResult(e, 0))
 }

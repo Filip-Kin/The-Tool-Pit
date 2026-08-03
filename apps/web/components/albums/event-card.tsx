@@ -23,7 +23,7 @@ function CoverCollage({ covers }: { covers: string[] }) {
   return (
     <div
       className={cn(
-        'grid aspect-[3/2] w-full gap-0.5 bg-border-subtle',
+        'grid aspect-[3/2] w-full overflow-hidden gap-0.5 bg-border-subtle',
         n === 1 && 'grid-cols-1',
         n === 2 && 'grid-cols-2',
         n >= 3 && 'grid-cols-2 grid-rows-2',
@@ -59,18 +59,22 @@ export function EventCard({ event }: { event: EventSearchResult }) {
       <div className="relative">
         <CoverCollage covers={covers} />
         {isOffseason(event.eventType) ? (
-          <Badge variant="offseason" className="absolute right-2 top-2 whitespace-nowrap shadow">Offseason</Badge>
+          <span className="absolute right-2 top-2 whitespace-nowrap rounded-full bg-sky-500 px-2 py-0.5 text-xs font-semibold text-white shadow">
+            Offseason
+          </span>
         ) : event.week != null ? (
-          <Badge variant="season" className="absolute right-2 top-2 whitespace-nowrap shadow">Week {event.week}</Badge>
+          <span className="absolute right-2 top-2 whitespace-nowrap rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-black shadow">
+            Week {event.week}
+          </span>
         ) : null}
-        <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
+        <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
           <Images className="h-3 w-3" />
           {event.albumCount}
         </span>
       </div>
 
       <div className="flex flex-col gap-1 p-3">
-        <h3 className="font-semibold leading-tight text-foreground group-hover:text-primary transition-colors">
+        <h3 className="line-clamp-1 font-semibold leading-tight text-foreground group-hover:text-primary transition-colors">
           {event.name}
         </h3>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted">

@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { Calendar, MapPin, ExternalLink } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { AlbumGrid } from '@/components/albums/album-grid'
 import { formatEventDates, formatLocation } from '@/components/albums/format'
-import { getEventWithAlbums } from '@/lib/queries/albums'
+import { getEventPage } from '@/lib/queries/albums'
 
 interface PageProps {
   params: Promise<{ code: string }>
@@ -12,7 +12,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { code } = await params
-  const data = await getEventWithAlbums(code)
+  const data = await getEventPage(code)
   if (!data) return { title: 'Event not found' }
   return {
     title: `${data.event.name} Photos`,
@@ -22,12 +22,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function EventPage({ params }: PageProps) {
   const { code } = await params
-  const data = await getEventWithAlbums(code)
+  const data = await getEventPage(code)
   if (!data) notFound()
+  // A division key rolls up to its parent championship - use one canonical URL.
+  if (data.parentTbaKey !== code) redirect(`/event/${data.parentTbaKey}`)
 
-  const { event, albums } = data
+  const { event, albums, divisions } = data
   const dates = formatEventDates(event.startDate, event.endDate)
   const location = formatLocation(event.city, event.stateProv, event.country)
+  const totalAlbums = albums.length + divisions.reduce((s, d) => s + d.albums.length, 0)
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-10">
@@ -70,9 +73,19 @@ export default async function EventPage({ params }: PageProps) {
       </header>
 
       <h2 className="mb-4 text-lg font-semibold text-foreground">
-        {albums.length} {albums.length === 1 ? 'album' : 'albums'}
+        {totalAlbums} {totalAlbums === 1 ? 'album' : 'albums'}
       </h2>
       <AlbumGrid albums={albums} />
+
+      {divisions.map((d) => (
+        <section key={d.event.id} className="mt-10">
+          <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
+            {d.label}
+            <span className="font-mono text-xs font-normal text-muted-2">{d.event.eventCode}</span>
+          </h3>
+          <AlbumGrid albums={d.albums} />
+        </section>
+      ))}
     </div>
   )
 }

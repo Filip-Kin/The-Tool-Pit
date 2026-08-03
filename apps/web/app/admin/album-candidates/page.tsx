@@ -133,6 +133,7 @@ export default async function AdminAlbumCandidatesPage({
                         hasEvent={Boolean(row.matchedEventId)}
                         targetEventCode={row.targetEventCode}
                         targetEventYear={row.targetEventYear}
+                        matchedEventKey={eventCode && eventYear ? `${eventYear}${eventCode}` : null}
                       />
                     </td>
                   </tr>
