@@ -79,6 +79,15 @@ export function canonicalizeAlbumUrl(
     return null
   }
 
+  // Dropbox - shared folders/galleries. Keep the path + rlkey (needed to open);
+  // drop session/tracking params (e, st, dl).
+  if (host === 'dropbox.com' || host === 'www.dropbox.com') {
+    if (!/^\/(scl|s)\//.test(u.pathname)) return null
+    const base = `https://www.dropbox.com${stripTrailingSlash(u.pathname)}`
+    const rlkey = u.searchParams.get('rlkey')
+    return { canonicalUrl: rlkey ? `${base}?rlkey=${rlkey}` : base, provider: 'dropbox' }
+  }
+
   if (opts.allowUnknown) {
     return { canonicalUrl: pathOnly, provider: 'other' }
   }

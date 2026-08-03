@@ -12,6 +12,7 @@ export const ALBUM_PROVIDERS = [
   'flickr',
   'google_photos',
   'google_drive',
+  'dropbox',
   'pixieset',
   'chief_delphi',
   'firstinmichigan',

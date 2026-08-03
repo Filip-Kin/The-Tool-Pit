@@ -32,6 +32,8 @@ const PROVIDER_LABELS: Record<string, string> = {
   smugmug: 'SmugMug',
   flickr: 'Flickr',
   google_photos: 'Google Photos',
+  google_drive: 'Google Drive',
+  dropbox: 'Dropbox',
   pixieset: 'Pixieset',
   chief_delphi: 'Chief Delphi',
   firstinmichigan: 'First in Michigan',

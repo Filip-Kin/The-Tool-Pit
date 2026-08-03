@@ -148,7 +148,32 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
     }
   }
 
-  // 3. Match by title (album og:title or forum thread) - only when we know the year.
+  // 3a. Non-AI heuristic: strongest word-similarity name match within the year.
+  // word_similarity beats plain similarity here because it keys on the
+  // distinctive part of the name (e.g. "Troy") instead of the shared
+  // "FiM District Event" boilerplate. Requires no API credits.
+  const NAME_MATCH_THRESHOLD = 0.6
+  if (!matchedEventId && matchText && year != null) {
+    const [top] = await db
+      .select({
+        id: events.id,
+        eventCode: events.eventCode,
+        wsim: sql<number>`word_similarity(${matchText}, ${events.name})`,
+      })
+      .from(events)
+      .where(eq(events.year, year))
+      .orderBy(desc(sql`word_similarity(${matchText}, ${events.name})`))
+      .limit(1)
+    if (top && top.wsim >= NAME_MATCH_THRESHOLD) {
+      matchedEventId = top.id
+      confidence = top.wsim
+      classification.eventCode = top.eventCode
+      classification.method = 'name_match'
+      classification.confidence = top.wsim
+    }
+  }
+
+  // 3b. AI fallback for the ambiguous ones - only when we know the year.
   if (!matchedEventId && matchText && year != null) {
     const shortlist = (await db
       .select({
