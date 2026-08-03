@@ -3,11 +3,10 @@
 import { isAdmin } from '@/lib/admin/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { eq } from 'drizzle-orm'
+import { eq, or, desc } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { albumCandidates } from '@the-tool-pit/db'
+import { albumCandidates, events } from '@the-tool-pit/db'
 import { adminPublishAlbum } from '@/lib/admin/publish-album'
-import { getEventByCode } from '@/lib/queries/albums'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -31,20 +30,29 @@ export async function suppressAlbumCandidate(candidateId: string, rejectionReaso
   revalidatePath('/admin/album-candidates')
 }
 
-/** Manually resolve the event for a candidate the pipeline couldn't match. */
+/**
+ * Manually resolve the event for a candidate the pipeline couldn't match.
+ * Accepts either the short event code ("micmp") or the full TBA key ("2026micmp").
+ */
 export async function setAlbumEventMatch(candidateId: string, eventCode: string): Promise<{ error?: string }> {
   await assertAdmin()
-  const code = eventCode.trim().toLowerCase()
-  if (!code) return { error: 'Event code required' }
-  const event = await getEventByCode(code)
-  if (!event) return { error: `No event found for code "${code}"` }
+  const raw = eventCode.trim().toLowerCase()
+  if (!raw) return { error: 'Event code required' }
+  const codeOnly = raw.replace(/^\d{4}/, '') // strip a leading year if a full TBA key was given
   const db = getDb()
+  const [event] = await db
+    .select()
+    .from(events)
+    .where(or(eq(events.tbaKey, raw), eq(events.eventCode, codeOnly)))
+    .orderBy(desc(events.year))
+    .limit(1)
+  if (!event) return { error: `No event found for "${eventCode}"` }
   await db
     .update(albumCandidates)
     .set({
       matchedEventId: event.id,
       status: 'matched',
-      classification: { eventCode: code, method: 'none', reasoning: 'Admin-set' },
+      classification: { eventCode: event.eventCode, method: 'none', reasoning: 'Admin-set' },
       updatedAt: new Date(),
     })
     .where(eq(albumCandidates.id, candidateId))
