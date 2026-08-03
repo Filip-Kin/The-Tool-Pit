@@ -1,12 +1,49 @@
 import Link from 'next/link'
 import { Calendar, MapPin, Images } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils/cn'
 import type { EventSearchResult } from '@the-tool-pit/types'
 import { formatEventDates, formatLocation } from './format'
 
 /** TBA event_type 99 = offseason, 100 = preseason. */
 function isOffseason(eventType: number | null): boolean {
   return eventType === 99 || eventType === 100
+}
+
+/** Collage of album cover images — the focal point of the card. */
+function CoverCollage({ covers }: { covers: string[] }) {
+  const n = covers.length
+  if (n === 0) {
+    return (
+      <div className="flex aspect-[3/2] w-full items-center justify-center bg-surface-2 text-muted-2">
+        <Images className="h-10 w-10" />
+      </div>
+    )
+  }
+  return (
+    <div
+      className={cn(
+        'grid aspect-[3/2] w-full gap-0.5 bg-border-subtle',
+        n === 1 && 'grid-cols-1',
+        n === 2 && 'grid-cols-2',
+        n >= 3 && 'grid-cols-2 grid-rows-2',
+      )}
+    >
+      {covers.map((src, i) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={i}
+          src={src}
+          alt=""
+          loading="lazy"
+          className={cn(
+            'h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]',
+            n === 3 && i === 0 && 'row-span-2',
+          )}
+        />
+      ))}
+    </div>
+  )
 }
 
 export function EventCard({ event }: { event: EventSearchResult }) {
@@ -17,56 +54,38 @@ export function EventCard({ event }: { event: EventSearchResult }) {
   return (
     <Link
       href={`/event/${event.tbaKey}`}
-      className="group flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:border-primary/50 hover:bg-surface-2"
+      className="group flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:border-primary/50"
     >
-      {covers.length > 0 && (
-        <div className="flex h-24 gap-px bg-border-subtle">
-          {covers.map((src, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={i}
-              src={src}
-              alt=""
-              loading="lazy"
-              className="h-full min-w-0 flex-1 object-cover"
-            />
-          ))}
-        </div>
-      )}
+      <div className="relative">
+        <CoverCollage covers={covers} />
+        {isOffseason(event.eventType) ? (
+          <Badge variant="offseason" className="absolute right-2 top-2 whitespace-nowrap shadow">Offseason</Badge>
+        ) : event.week != null ? (
+          <Badge variant="season" className="absolute right-2 top-2 whitespace-nowrap shadow">Week {event.week}</Badge>
+        ) : null}
+        <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
+          <Images className="h-3 w-3" />
+          {event.albumCount}
+        </span>
+      </div>
 
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-            {event.name}
-          </h3>
-          {isOffseason(event.eventType) ? (
-            <Badge variant="offseason" className="shrink-0 whitespace-nowrap">Offseason</Badge>
-          ) : event.week != null ? (
-            <Badge variant="season" className="shrink-0 whitespace-nowrap">Week {event.week}</Badge>
-          ) : null}
-        </div>
-
-        <div className="flex flex-col gap-1 text-sm text-muted">
+      <div className="flex flex-col gap-1 p-3">
+        <h3 className="font-semibold leading-tight text-foreground group-hover:text-primary transition-colors">
+          {event.name}
+        </h3>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted">
           {dates && (
-            <span className="flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex items-center gap-1">
+              <Calendar className="h-3 w-3 shrink-0" />
               {dates}
             </span>
           )}
           {location && (
-            <span className="flex items-center gap-1.5">
-              <MapPin className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex items-center gap-1">
+              <MapPin className="h-3 w-3 shrink-0" />
               {location}
             </span>
           )}
-        </div>
-
-        <div className="mt-auto flex items-center justify-between pt-1">
-          <span className="font-mono text-xs text-muted-2">{event.eventCode}</span>
-          <span className="flex items-center gap-1.5 text-sm text-muted">
-            <Images className="h-3.5 w-3.5" />
-            {event.albumCount} {event.albumCount === 1 ? 'album' : 'albums'}
-          </span>
         </div>
       </div>
     </Link>
