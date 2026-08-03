@@ -1,7 +1,14 @@
+import type { Metadata } from 'next'
 import { AlbumSearchBar } from '@/components/albums/album-search-bar'
 import { SectionHeader } from '@/components/ui/section-header'
 import { InfiniteEventList } from '@/components/albums/infinite-event-list'
 import { getEventsByDatePage } from '@/lib/queries/albums'
+
+// Absolute so the home tab reads "FIRST Event Photos", not the parent
+// product's "… | The Tool Pit" template.
+export const metadata: Metadata = {
+  title: { absolute: 'FIRST Event Photos' },
+}
 
 export default async function PhotosHomePage() {
   const first = await getEventsByDatePage({ limit: 30, offset: 0 })
