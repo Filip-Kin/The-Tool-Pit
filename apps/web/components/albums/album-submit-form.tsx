@@ -3,6 +3,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils/cn'
 
+// Cloudflare Turnstile API injected by their script (shared shape with the tools form).
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (
+        container: HTMLElement | string,
+        opts: {
+          sitekey: string
+          callback: (token: string) => void
+          'error-callback': () => void
+          'expired-callback': () => void
+          theme?: 'light' | 'dark' | 'auto'
+        },
+      ) => string
+      reset: (widgetId: string) => void
+    }
+  }
+}
+
+const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
 const CURRENT_YEAR = new Date().getFullYear()
 type Program = 'frc' | 'ftc'
 
@@ -28,6 +48,46 @@ export function AlbumSubmitForm() {
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<{ ok?: boolean; message: string } | null>(null)
+
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const turnstileRef = useRef<HTMLDivElement>(null)
+  const widgetIdRef = useRef<string | null>(null)
+
+  // Render the Cloudflare Turnstile widget (spam protection) when configured.
+  useEffect(() => {
+    if (!SITE_KEY || !turnstileRef.current) return
+    function renderWidget() {
+      if (!turnstileRef.current || !window.turnstile) return
+      widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
+        sitekey: SITE_KEY,
+        callback: (token) => setTurnstileToken(token),
+        'error-callback': () => setTurnstileToken(null),
+        'expired-callback': () => setTurnstileToken(null),
+        theme: 'auto',
+      })
+    }
+    if (window.turnstile) {
+      renderWidget()
+      return
+    }
+    if (!document.getElementById('cf-turnstile-script')) {
+      const script = document.createElement('script')
+      script.id = 'cf-turnstile-script'
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
+      script.async = true
+      script.defer = true
+      script.onload = renderWidget
+      document.head.appendChild(script)
+    } else {
+      const poll = setInterval(() => {
+        if (window.turnstile) {
+          clearInterval(poll)
+          renderWidget()
+        }
+      }, 100)
+      return () => clearInterval(poll)
+    }
+  }, [])
 
   const [options, setOptions] = useState<EventOption[]>([])
   const [showOptions, setShowOptions] = useState(false)
@@ -81,9 +141,20 @@ export function AlbumSubmitForm() {
     setShowOptions(false)
   }
 
+  function resetTurnstile() {
+    if (window.turnstile && widgetIdRef.current) {
+      window.turnstile.reset(widgetIdRef.current)
+      setTurnstileToken(null)
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!url.trim()) return
+    if (SITE_KEY && !turnstileToken) {
+      setResult({ ok: false, message: 'Please complete the “I’m not a robot” check.' })
+      return
+    }
     setSubmitting(true)
     setResult(null)
     try {
@@ -99,6 +170,7 @@ export function AlbumSubmitForm() {
           year: year ? parseInt(year, 10) : undefined,
           photographer: photographer.trim(),
           note: note.trim(),
+          turnstileToken: turnstileToken ?? undefined,
         }),
       })
       const data = (await res.json()) as { message?: string; error?: string }
@@ -111,8 +183,10 @@ export function AlbumSubmitForm() {
         setTbaKey(null)
         setPhotographer('')
         setNote('')
+        resetTurnstile()
       } else {
         setResult({ ok: false, message: data.error ?? 'Submission failed.' })
+        resetTurnstile()
       }
     } catch {
       setResult({ ok: false, message: 'Network error. Please try again.' })
@@ -222,9 +296,11 @@ export function AlbumSubmitForm() {
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className="input resize-y" />
       </Field>
 
+      {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
+
       <button
         type="submit"
-        disabled={submitting || !url.trim()}
+        disabled={submitting || !url.trim() || (Boolean(SITE_KEY) && !turnstileToken)}
         className="self-start rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50"
       >
         {submitting ? 'Submitting…' : 'Submit album'}
