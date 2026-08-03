@@ -102,7 +102,7 @@ export default async function AdminAlbumCandidatesPage({
                         {displayUrl}
                       </a>
                       <p className="mt-1 text-[10px] text-muted-2">
-                        {row.provider} · {new Date(row.createdAt).toLocaleDateString()}
+                        {[row.provider, meta.photographer, meta.dateText].filter(Boolean).join(' · ')}
                       </p>
                     </td>
                     <td className="px-4 py-3">

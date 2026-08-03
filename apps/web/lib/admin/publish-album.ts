@@ -61,6 +61,7 @@ export async function adminPublishAlbum(
     title: meta.title ?? null,
     photographer: meta.photographer ?? null,
     description: meta.description ?? null,
+    dateText: meta.dateText ?? null,
     coverImageUrl: meta.coverImageUrl ?? null,
     status: 'published',
     publishedAt: new Date(),

@@ -71,6 +71,8 @@ export const albums = pgTable(
     title: text('title'),
     photographer: text('photographer'),
     description: text('description'),
+    /** Human date/date-range shown on the album (e.g. "Apr 12-14"). */
+    dateText: text('date_text'),
     coverImageUrl: text('cover_image_url'),
     photoCount: integer('photo_count'),
     /** ALBUM_STATUSES */
@@ -262,6 +264,8 @@ export interface AlbumCandidateMetadata {
   title?: string
   photographer?: string
   description?: string
+  /** Human date/date-range parsed from the album title/description. */
+  dateText?: string
   coverImageUrl?: string
   host?: string
   /** CD-specific */

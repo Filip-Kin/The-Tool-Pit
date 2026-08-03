@@ -41,6 +41,7 @@ function toAlbumDTO(a: Album, eventCode: string): AlbumDTO {
     title: a.title,
     photographer: a.photographer,
     description: a.description,
+    dateText: a.dateText,
     coverImageUrl: a.coverImageUrl,
     photoCount: a.photoCount,
     eventCode,

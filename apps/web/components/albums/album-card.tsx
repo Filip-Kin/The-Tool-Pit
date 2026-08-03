@@ -1,4 +1,4 @@
-import { ExternalLink, Camera, Images } from 'lucide-react'
+import { ExternalLink, Camera, Images, Calendar } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import type { AlbumDTO } from '@the-tool-pit/types'
 import { providerLabel } from './format'
@@ -44,6 +44,12 @@ export function AlbumCard({ album }: { album: AlbumDTO }) {
           <span className="flex items-center gap-1.5 text-xs text-muted">
             <Camera className="h-3 w-3 shrink-0" />
             {album.photographer}
+          </span>
+        )}
+        {album.dateText && (
+          <span className="flex items-center gap-1.5 text-xs text-muted">
+            <Calendar className="h-3 w-3 shrink-0" />
+            {album.dateText}
           </span>
         )}
         {album.photoCount != null && (

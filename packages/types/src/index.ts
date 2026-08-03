@@ -183,6 +183,7 @@ export interface AlbumDTO {
   title: string | null
   photographer: string | null
   description: string | null
+  dateText: string | null
   coverImageUrl: string | null
   photoCount: number | null
   eventCode: string

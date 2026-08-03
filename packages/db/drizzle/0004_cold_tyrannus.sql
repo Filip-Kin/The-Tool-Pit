@@ -1,0 +1,1 @@
+ALTER TABLE "albums" ADD COLUMN "date_text" text;

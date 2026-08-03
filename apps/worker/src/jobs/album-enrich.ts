@@ -29,6 +29,45 @@ function detectYear(text: string): number | null {
   return y >= 1992 && y <= 2099 ? y : null
 }
 
+const MONTHS = 'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec'
+
+/** Best-effort date / date-range from an album title or description. */
+function extractDate(...texts: (string | undefined)[]): string | undefined {
+  for (const text of texts) {
+    if (!text) continue
+    // Google Photos style: "Title · Apr 15 – 18 📸"
+    const dot = text.match(/·\s*([A-Za-z0-9 ,.–—-]+?)\s*(?:📸|🎬|$)/)
+    if (dot && /\d/.test(dot[1])) return dot[1].trim()
+    // A month-day (optionally a range / year) anywhere
+    const m = text.match(
+      new RegExp(`\\b(${MONTHS})[a-z]*\\.?\\s+\\d{1,2}(\\s*[–-]\\s*((${MONTHS})[a-z]*\\.?\\s+)?\\d{1,2})?(,?\\s+\\d{4})?`, 'i'),
+    )
+    if (m) return m[0].trim()
+  }
+  return undefined
+}
+
+/** Photographer handle: the photo host's subdomain / user, or a real site name. */
+function extractPhotographer(canonicalUrl: string, provider: string | null, ogSiteName?: string): string | undefined {
+  try {
+    const u = new URL(canonicalUrl)
+    if (provider === 'smugmug' || provider === 'pixieset') {
+      const sub = u.hostname.split('.')[0]
+      if (sub && sub !== 'www') return sub
+    }
+    if (provider === 'flickr') {
+      const seg = u.pathname.split('/').filter(Boolean)
+      if (seg[0] === 'photos' && seg[1]) return seg[1]
+    }
+  } catch {
+    // ignore
+  }
+  if (ogSiteName && !/^(google photos|flickr|smugmug|pixieset|google drive)$/i.test(ogSiteName.trim())) {
+    return ogSiteName.trim()
+  }
+  return undefined
+}
+
 /** Best-effort Open Graph scrape for an album cover/title. Never throws. */
 async function fetchOgMetadata(url: string): Promise<OgMetadata | null> {
   try {
@@ -70,17 +109,20 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
   }
   const canonicalUrl = cand.canonicalUrl
 
-  // 1. Best-effort OG metadata for cover image / title.
+  // 1. Best-effort OG metadata for cover image / title, then derive photographer + date.
   const meta: AlbumCandidateMetadata = { ...(cand.rawMetadata ?? {}) }
+  let ogSiteName: string | undefined
   if (!meta.coverImageUrl || !meta.title) {
     const og = await fetchOgMetadata(canonicalUrl)
     if (og) {
       meta.coverImageUrl = meta.coverImageUrl ?? og.image
       meta.title = meta.title ?? og.title
       meta.description = meta.description ?? og.description
-      meta.photographer = meta.photographer ?? og.siteName
+      ogSiteName = og.siteName
     }
   }
+  meta.photographer = meta.photographer ?? extractPhotographer(canonicalUrl, cand.provider, ogSiteName)
+  meta.dateText = meta.dateText ?? extractDate(meta.title, meta.description)
 
   // The year identifies an event (codes/names repeat every season): use the
   // connector-supplied year, else read one from the album or thread title. Never
