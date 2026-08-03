@@ -1,7 +1,7 @@
 'use server'
 
+import { isAdmin } from '@/lib/admin/auth'
 import Anthropic from '@anthropic-ai/sdk'
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { eq, sql, and, inArray } from 'drizzle-orm'
@@ -17,9 +17,7 @@ import {
 } from '@the-tool-pit/db'
 
 async function assertAdmin() {
-  const cookieStore = await cookies()
-  const authed = cookieStore.get('admin_token')?.value === process.env.ADMIN_SECRET
-  if (!authed) redirect('/admin/login')
+  if (!(await isAdmin())) redirect('/admin/login')
 }
 
 export interface DupeTool {

@@ -33,18 +33,18 @@ export function canonicalizeAlbumUrl(
   const host = u.hostname.toLowerCase()
   const pathOnly = `${u.protocol}//${u.host}${stripTrailingSlash(u.pathname)}`
 
-  // SmugMug — any subdomain (photographers get their own), keep the gallery path
+  // SmugMug - any subdomain (photographers get their own), keep the gallery path
   if (host === 'smugmug.com' || host.endsWith('.smugmug.com')) {
     return { canonicalUrl: pathOnly, provider: 'smugmug' }
   }
 
-  // Flickr — must be an album/set of a user
+  // Flickr - must be an album/set of a user
   if (host === 'flickr.com' || host === 'www.flickr.com') {
     if (!/^\/photos\/[^/]+\/(albums|sets)\/\d+/.test(u.pathname)) return null
     return { canonicalUrl: stripTrailingSlash(`https://www.flickr.com${u.pathname}`), provider: 'flickr' }
   }
 
-  // Google Photos — shared albums. Some links require a ?key= param, so keep it.
+  // Google Photos - shared albums. Some links require a ?key= param, so keep it.
   if (host === 'photos.app.goo.gl') {
     return { canonicalUrl: stripTrailingSlash(`https://photos.app.goo.gl${u.pathname}`), provider: 'google_photos' }
   }
@@ -55,7 +55,7 @@ export function canonicalizeAlbumUrl(
     return { canonicalUrl: key ? `${base}?key=${key}` : base, provider: 'google_photos' }
   }
 
-  // Pixieset — any subdomain, keep the gallery path
+  // Pixieset - any subdomain, keep the gallery path
   if (host === 'pixieset.com' || host.endsWith('.pixieset.com')) {
     return { canonicalUrl: pathOnly, provider: 'pixieset' }
   }

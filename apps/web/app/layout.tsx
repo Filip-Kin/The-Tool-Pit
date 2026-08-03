@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   },
   description:
     'Discover tools, calculators, apps, and resources for FRC, FTC, and FLL teams. The community directory for FIRST robotics.',
-  metadataBase: new URL(process.env.NEXT_PUBLIC_URL ?? 'https://thetoolpit.com'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_URL ?? 'https://ttp.filipkin.com'),
   openGraph: {
     type: 'website',
     siteName: 'The Tool Pit',

@@ -151,7 +151,7 @@ export class ChiefDelphiAlbumsConnector implements AlbumConnector {
       await delay(1500)
     }
 
-    console.log(`[cd-albums] done — ${candidates.length} album candidates, ${skipped} skipped`)
+    console.log(`[cd-albums] done - ${candidates.length} album candidates, ${skipped} skipped`)
     return { candidates, stats: { discovered: candidates.length, skipped, errors } }
   }
 

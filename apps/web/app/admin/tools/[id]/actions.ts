@@ -1,6 +1,6 @@
 'use server'
 
-import { cookies } from 'next/headers'
+import { isAdmin } from '@/lib/admin/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { eq, and, inArray, desc } from 'drizzle-orm'
@@ -21,9 +21,7 @@ import {
 import type { EnrichJobPayload } from '@the-tool-pit/types'
 
 async function assertAdmin() {
-  const cookieStore = await cookies()
-  const authed = cookieStore.get('admin_token')?.value === process.env.ADMIN_SECRET
-  if (!authed) redirect('/admin/login')
+  if (!(await isAdmin())) redirect('/admin/login')
 }
 
 export async function saveTool(formData: FormData) {

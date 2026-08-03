@@ -1,7 +1,7 @@
 /**
  * Admin-initiated publish: promotes a matched album candidate into a published
  * album record + source evidence. The candidate must already have a resolved
- * event (matchedEventId) — set by enrich or by the admin via setAlbumEventMatch.
+ * event (matchedEventId) - set by enrich or by the admin via setAlbumEventMatch.
  */
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
@@ -24,7 +24,7 @@ export async function adminPublishAlbum(candidateId: string): Promise<{ albumId:
     .limit(1)
 
   if (!candidate) return { error: `Candidate ${candidateId} not found` }
-  if (!candidate.matchedEventId) return { error: 'No event matched yet — set the event first.' }
+  if (!candidate.matchedEventId) return { error: 'No event matched yet. Set the event first.' }
   if (!candidate.canonicalUrl) return { error: 'Candidate has no album URL.' }
 
   // Determine discovery source type.

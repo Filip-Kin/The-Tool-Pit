@@ -3,7 +3,7 @@
  * FiM publishes a structured event list at /FRC/events/ where each event links
  * to /FRC/<code>/ (the code matches the TBA event_code). Each event page carries
  * "EVENT PHOTOS" / "EVENT PHOTOS 1/2/3" anchors pointing at album hosts. This is
- * a direct event-code → album-URL mapping — the highest-signal source.
+ * a direct event-code → album-URL mapping - the highest-signal source.
  */
 import { parse } from 'node-html-parser'
 import { politeFetch, delay } from './base.js'
@@ -121,7 +121,7 @@ export class FimAlbumsConnector implements AlbumConnector {
       }
     }
 
-    console.log(`[fim-albums] done — ${candidates.length} album candidates, ${skipped} skipped`)
+    console.log(`[fim-albums] done - ${candidates.length} album candidates, ${skipped} skipped`)
     return { candidates, stats: { discovered: candidates.length, skipped, errors } }
   }
 }

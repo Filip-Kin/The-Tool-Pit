@@ -1,6 +1,6 @@
 'use server'
 
-import { cookies } from 'next/headers'
+import { isAdmin } from '@/lib/admin/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { eq } from 'drizzle-orm'
@@ -9,9 +9,7 @@ import { crawlCandidates } from '@the-tool-pit/db'
 import { adminPublishCandidate } from '@/lib/admin/publish-candidate'
 
 async function assertAdmin() {
-  const cookieStore = await cookies()
-  const authed = cookieStore.get('admin_token')?.value === process.env.ADMIN_SECRET
-  if (!authed) redirect('/admin/login')
+  if (!(await isAdmin())) redirect('/admin/login')
 }
 
 export async function approveCandidate(candidateId: string): Promise<{ error?: string }> {

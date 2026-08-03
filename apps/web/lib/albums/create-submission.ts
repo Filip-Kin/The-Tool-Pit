@@ -45,7 +45,7 @@ export async function createAlbumSubmission(
     .where(eq(albumCandidates.canonicalUrl, canon.canonicalUrl))
     .limit(1)
   if (existingCand) {
-    return { status: 'duplicate', message: 'Thanks — this album has already been submitted and is awaiting review.' }
+    return { status: 'duplicate', message: 'This album was already submitted and is waiting for review.' }
   }
 
   const hint = input.eventHint?.trim()

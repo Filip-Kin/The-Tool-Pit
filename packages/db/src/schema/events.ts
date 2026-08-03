@@ -3,7 +3,7 @@ import { sql, relations } from 'drizzle-orm'
 import { albums } from './albums'
 
 // ---------------------------------------------------------------------------
-// FRC events — authoritative records synced from The Blue Alliance.
+// FRC events - authoritative records synced from The Blue Alliance.
 // Not moderated: TBA is the source of truth. Albums attach to these.
 // ---------------------------------------------------------------------------
 

@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers'
 import Link from 'next/link'
+import { isAdmin } from '@/lib/admin/auth'
 
 const NAV_ITEMS = [
   { href: '/admin', label: 'Overview' },
@@ -16,8 +16,7 @@ const NAV_ITEMS = [
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const cookieStore = await cookies()
-  const authed = cookieStore.get('admin_token')?.value === process.env.ADMIN_SECRET
+  const authed = await isAdmin()
 
   if (!authed) {
     return <>{children}</>

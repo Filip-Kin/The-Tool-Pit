@@ -2,11 +2,11 @@
  * TBA (The Blue Alliance) Events connector.
  * Syncs the authoritative FRC event list for a season, plus each event's team
  * roster (for team-number search). Unlike the album connectors this does NOT
- * produce moderation candidates — TBA is the source of truth and its rows are
+ * produce moderation candidates - TBA is the source of truth and its rows are
  * written directly by the album-ingest job.
  *
  * Required env var:
- *   TBA_API_KEY — The Blue Alliance API key (https://www.thebluealliance.com/account)
+ *   TBA_API_KEY - The Blue Alliance API key (https://www.thebluealliance.com/account)
  */
 import { politeFetch, delay } from './base.js'
 
@@ -65,7 +65,7 @@ export class TbaEventsConnector {
     const eventTeams = new Map<string, number[]>()
 
     if (!tbaApiKey) {
-      console.warn('[tba-events] TBA_API_KEY not set — skipping')
+      console.warn('[tba-events] TBA_API_KEY not set - skipping')
       return { events: [], eventTeams, stats: { events: 0, teams: 0, errors: ['TBA_API_KEY not set'] } }
     }
 
@@ -125,7 +125,7 @@ export class TbaEventsConnector {
       await delay(250)
     }
 
-    console.log(`[tba-events] done — ${events.length} events, ${teamCount} team memberships`)
+    console.log(`[tba-events] done - ${events.length} events, ${teamCount} team memberships`)
     return { events, eventTeams, stats: { events: events.length, teams: teamCount, errors } }
   }
 }

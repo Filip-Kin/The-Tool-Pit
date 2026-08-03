@@ -4,7 +4,7 @@ import { events } from './events'
 import type { PipelineLogEntry } from './submissions'
 
 // ---------------------------------------------------------------------------
-// Enum-like value tuples (plain text columns, app-level unions — no pgEnum)
+// Enum-like value tuples (plain text columns, app-level unions - no pgEnum)
 // ---------------------------------------------------------------------------
 
 export const ALBUM_PROVIDERS = [
@@ -65,7 +65,7 @@ export const albums = pgTable(
     canonicalUrl: text('canonical_url').notNull(),
     /** ALBUM_PROVIDERS */
     provider: text('provider').notNull().default('other'),
-    /** ALBUM_SOURCE_TYPES — how this album was discovered */
+    /** ALBUM_SOURCE_TYPES - how this album was discovered */
     sourceType: text('source_type').notNull(),
     title: text('title'),
     photographer: text('photographer'),
@@ -137,7 +137,7 @@ export const albumCrawlJobs = pgTable(
 )
 
 // ---------------------------------------------------------------------------
-// Album candidates — moderation staging (scraped, CD, and submitted)
+// Album candidates - moderation staging (scraped, CD, and submitted)
 // ---------------------------------------------------------------------------
 
 export const albumCandidates = pgTable(

@@ -10,7 +10,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { team } = await params
-  return { title: `Team ${team} — Events` }
+  return { title: `Team ${team} Events` }
 }
 
 export default async function TeamPage({ params }: PageProps) {

@@ -3,7 +3,7 @@
  * For each pending album candidate: fill best-effort OG metadata, resolve the
  * target event (exact code first, then optional AI for ambiguous CD threads),
  * dedup against published albums, and write the result back. Never auto-publishes
- * — an admin promotes 'matched' candidates into albums.
+ * - an admin promotes 'matched' candidates into albums.
  */
 import { getDb } from '@the-tool-pit/db'
 import { events, albums, albumCandidates, albumSubmissions } from '@the-tool-pit/db'
@@ -50,7 +50,7 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
     return
   }
   if (cand.status !== 'pending') {
-    console.log(`[album-enrich] candidate ${cand.id} already ${cand.status} — skipping`)
+    console.log(`[album-enrich] candidate ${cand.id} already ${cand.status} - skipping`)
     return
   }
   if (!cand.canonicalUrl) {

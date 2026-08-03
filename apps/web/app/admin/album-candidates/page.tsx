@@ -116,7 +116,7 @@ export default async function AdminAlbumCandidatesPage({
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-[10px] text-muted-2">{cls.method ?? '—'}</span>
+                      <span className="text-[10px] text-muted-2">{cls.method ?? '-'}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <AlbumCandidateActions

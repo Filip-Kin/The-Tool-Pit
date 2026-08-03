@@ -50,7 +50,7 @@ export function AlbumSubmitForm() {
           className="input"
         />
       </Field>
-      <Field label="Event code or name" hint="e.g. mimid, or “Midland”. Helps us match it to the right event.">
+      <Field label="Event code or name" hint="Like mimid, or “Midland”. Helps us match it to the right event.">
         <input
           value={eventHint}
           onChange={(e) => setEventHint(e.target.value)}
@@ -58,10 +58,10 @@ export function AlbumSubmitForm() {
           className="input"
         />
       </Field>
-      <Field label="Photographer" hint="Optional — who took the photos.">
+      <Field label="Photographer" hint="Who took the photos (optional).">
         <input value={photographer} onChange={(e) => setPhotographer(e.target.value)} className="input" />
       </Field>
-      <Field label="Note" hint="Optional — anything else we should know.">
+      <Field label="Note" hint="Anything else we should know (optional).">
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className="input resize-y" />
       </Field>
 

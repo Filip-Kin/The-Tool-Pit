@@ -1,6 +1,6 @@
 /**
  * Shared types used by both apps/web and apps/worker.
- * These are pure TypeScript types — no runtime dependencies.
+ * These are pure TypeScript types - no runtime dependencies.
  */
 
 // ---------------------------------------------------------------------------
@@ -44,7 +44,7 @@ export interface SearchResult {
   lastActivityAt: string | null
   popularityScore: number
   voteCount: number
-  /** Ranking score (higher = better) — not exposed to UI */
+  /** Ranking score (higher = better) - not exposed to UI */
   _score?: number
 }
 
@@ -126,7 +126,7 @@ export interface CrawlJobStats {
 }
 
 // ---------------------------------------------------------------------------
-// Photo album aggregator — worker queue job payloads
+// Photo album aggregator - worker queue job payloads
 // ---------------------------------------------------------------------------
 
 export interface AlbumIngestPayload {
@@ -147,7 +147,7 @@ export interface AlbumEnrichPayload {
 }
 
 // ---------------------------------------------------------------------------
-// Photo album aggregator — public DTOs
+// Photo album aggregator - public DTOs
 // ---------------------------------------------------------------------------
 
 export interface AlbumSearchParams {

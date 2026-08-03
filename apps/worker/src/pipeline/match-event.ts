@@ -68,7 +68,7 @@ export async function matchEventWithAI(
   candidates: EventCandidate[],
 ): Promise<EventMatchResult> {
   if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('[match-event] ANTHROPIC_API_KEY not set — skipping AI match')
+    console.warn('[match-event] ANTHROPIC_API_KEY not set - skipping AI match')
     return { eventCode: null, confidence: 0 }
   }
   if (candidates.length === 0) return { eventCode: null, confidence: 0 }

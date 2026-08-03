@@ -1,6 +1,6 @@
 'use server'
 
-import { cookies } from 'next/headers'
+import { isAdmin } from '@/lib/admin/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { Queue } from 'bullmq'
@@ -17,9 +17,7 @@ import type {
 } from '@the-tool-pit/types'
 
 async function assertAdmin() {
-  const cookieStore = await cookies()
-  const authed = cookieStore.get('admin_token')?.value === process.env.ADMIN_SECRET
-  if (!authed) redirect('/admin/login')
+  if (!(await isAdmin())) redirect('/admin/login')
 }
 
 function getQueue<T>(name: string) {

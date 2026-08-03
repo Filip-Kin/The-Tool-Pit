@@ -16,14 +16,20 @@ export function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Protect all /admin routes except the login page and auth API
+  // Protect all /admin routes except the login page and auth API.
+  // Primary auth is Authelia forward-auth (Remote-Groups header, set by Traefik).
+  // The ADMIN_SECRET cookie stays as a break-glass fallback.
   if (
     pathname.startsWith('/admin') &&
     pathname !== '/admin/login' &&
     !pathname.startsWith('/admin/api/auth')
   ) {
+    const groups = (req.headers.get('remote-groups') ?? '')
+      .split(',')
+      .map((g) => g.trim().toLowerCase())
+    const isAutheliaAdmin = groups.includes('admins')
     const token = req.cookies.get('admin_token')?.value
-    if (token !== process.env.ADMIN_SECRET) {
+    if (!isAutheliaAdmin && token !== process.env.ADMIN_SECRET) {
       return NextResponse.redirect(new URL('/admin/login', req.url))
     }
   }

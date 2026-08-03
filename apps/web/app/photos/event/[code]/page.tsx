@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const data = await getEventWithAlbums(code)
   if (!data) return { title: 'Event not found' }
   return {
-    title: `${data.event.name} — Photos`,
+    title: `${data.event.name} Photos`,
     description: `Photo albums from ${data.event.name} (${data.event.eventCode}, ${data.event.year}).`,
   }
 }
