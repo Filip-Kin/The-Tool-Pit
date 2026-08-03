@@ -8,7 +8,7 @@ export function AlbumsHeader() {
       <div className="container mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
         <Link href="/" className="flex shrink-0 items-center gap-2">
           <Camera className="h-5 w-5 text-primary" />
-          <span className="text-lg font-bold tracking-tight text-foreground">The Photo Pit</span>
+          <span className="text-lg font-bold tracking-tight text-foreground">FIRST Event Photos</span>
         </Link>
 
         <div className="hidden flex-1 md:block max-w-md">
