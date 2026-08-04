@@ -5,7 +5,7 @@
  *   and enqueues each for enrichment/matching before moderation.
  */
 import { getDb } from '@the-tool-pit/db'
-import { events, eventTeams, albums, albumCandidates, albumCrawlJobs } from '@the-tool-pit/db'
+import { events, eventTeams, albums, albumCandidates, albumCrawlJobs, canonicalizeAlbumUrl, resolveShareUrl } from '@the-tool-pit/db'
 import { eq, and, or, inArray, isNull, ne, sql } from 'drizzle-orm'
 import { TbaEventsConnector } from '../connectors/tba-events.js'
 import { ToaEventsConnector, yearToSeasonKey } from '../connectors/toa-events.js'
@@ -79,11 +79,21 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
 
     for (const cand of result.candidates) {
       try {
+        // Resolve short share links (e.g. photos.app.goo.gl) to their canonical album URL so
+        // both the short and expanded form of the same album dedupe to one entry.
+        let canonicalUrl = cand.canonicalUrl
+        let provider = cand.provider
+        const resolved = await resolveShareUrl(canonicalUrl)
+        if (resolved !== canonicalUrl) {
+          const rc = canonicalizeAlbumUrl(resolved, { allowUnknown: true })
+          if (rc) { canonicalUrl = rc.canonicalUrl; provider = rc.provider }
+        }
+
         // Dedup vs published albums and existing candidates on canonical URL.
         const [dupAlbum] = await db
           .select({ id: albums.id })
           .from(albums)
-          .where(eq(albums.canonicalUrl, cand.canonicalUrl))
+          .where(eq(albums.canonicalUrl, canonicalUrl))
           .limit(1)
         if (dupAlbum) {
           totalSkipped++
@@ -92,7 +102,7 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
         const [dupCand] = await db
           .select({ id: albumCandidates.id })
           .from(albumCandidates)
-          .where(eq(albumCandidates.canonicalUrl, cand.canonicalUrl))
+          .where(eq(albumCandidates.canonicalUrl, canonicalUrl))
           .limit(1)
         if (dupCand) {
           totalSkipped++
@@ -104,8 +114,8 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
           .values({
             jobId,
             sourceUrl: cand.sourceUrl,
-            canonicalUrl: cand.canonicalUrl,
-            provider: cand.provider,
+            canonicalUrl,
+            provider,
             targetEventCode: cand.targetEventCode,
             targetEventYear: cand.targetEventYear,
             rawMetadata: cand.rawMetadata,

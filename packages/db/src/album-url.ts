@@ -99,3 +99,44 @@ export function canonicalizeAlbumUrl(
 export function detectAlbumProvider(url: string): AlbumProvider | null {
   return canonicalizeAlbumUrl(url)?.provider ?? null
 }
+
+// Short-link hosts that redirect to a stable canonical album URL. A Google Photos album can be
+// shared as either photos.app.goo.gl/XXX (short) or photos.google.com/share/YYY?key=ZZZ
+// (expanded); left unresolved these produce two different canonical URLs for the same album.
+const SHORT_LINK_HOSTS = new Set(['photos.app.goo.gl', 'app.goo.gl', 'goo.gl'])
+
+/**
+ * Resolve a short share link to its final URL by following one redirect, so both forms of the
+ * same album canonicalize identically. Returns the input unchanged for non-short-link hosts or
+ * on any failure. SERVER-SIDE ONLY — performs a network fetch; do not call from client code.
+ */
+export async function resolveShareUrl(url: string): Promise<string> {
+  let host: string
+  try {
+    host = new URL(url).hostname.toLowerCase()
+  } catch {
+    return url
+  }
+  if (!SHORT_LINK_HOSTS.has(host)) return url
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 10_000)
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      redirect: 'manual',
+      signal: controller.signal,
+      headers: { 'user-agent': 'TheToolPit/1.0 (+https://thetoolpit.com)' },
+    })
+    const loc = res.headers.get('location')
+    if (loc && res.status >= 300 && res.status < 400) {
+      const abs = new URL(loc, url).toString()
+      if (/^https?:/i.test(abs)) return abs
+    }
+    return url
+  } catch {
+    return url
+  } finally {
+    clearTimeout(timer)
+  }
+}

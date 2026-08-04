@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { albums, albumSubmissions, albumCandidates, events, canonicalizeAlbumUrl } from '@the-tool-pit/db'
+import { albums, albumSubmissions, albumCandidates, events, canonicalizeAlbumUrl, resolveShareUrl } from '@the-tool-pit/db'
 import { getAlbumEnrichQueue } from './queue'
 import { notifyNewSubmission } from './notify'
 
@@ -34,7 +34,10 @@ export async function createAlbumSubmission(
 ): Promise<CreateAlbumSubmissionResult> {
   const db = getDb()
 
-  const canon = canonicalizeAlbumUrl(input.url, { allowUnknown: true })
+  // Resolve short share links (photos.app.goo.gl) so a submission of either the short or the
+  // expanded Google Photos URL dedupes against the same canonical album.
+  const resolvedUrl = await resolveShareUrl(input.url)
+  const canon = canonicalizeAlbumUrl(resolvedUrl, { allowUnknown: true })
   if (!canon) return { status: 'duplicate', message: 'That does not look like a valid album URL.' }
 
   // Already published?
