@@ -110,6 +110,12 @@ export async function scheduleRecurringJobs() {
     data: { connector: 'awesome_list', jobId: 'scheduled' },
   })
 
+  // Spectrum FRC CAD Collection — curated team CAD, changes slowly, so once per week
+  await crawlQueue.upsertJobScheduler('crawl-spectrum-cad', { every: 7 * 24 * 60 * 60 * 1000 }, {
+    name: 'crawl-spectrum-cad',
+    data: { connector: 'spectrum_cad', jobId: 'scheduled' },
+  })
+
   // Freshness pass every 24 hours — check all published tools
   // (individual tool freshness jobs are spawned by this scheduler job)
   await freshnessQueue.upsertJobScheduler('freshness-pass', { every: 24 * 60 * 60 * 1000 }, {

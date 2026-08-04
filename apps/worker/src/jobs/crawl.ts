@@ -7,6 +7,7 @@ import { GitHubTopicsConnector } from '../connectors/github-topics.js'
 import { AwesomeListConnector } from '../connectors/awesome-list.js'
 import { ChiefDelphiConnector } from '../connectors/chief-delphi.js'
 import { TbaTeamsConnector } from '../connectors/tba-teams.js'
+import { SpectrumCadConnector } from '../connectors/spectrum-cad.js'
 import { extractMetadata, canonicalizeUrl } from '../pipeline/extract.js'
 import { checkDuplicateByUrl, checkDuplicateByName } from '../pipeline/deduplicate.js'
 import { enrichQueue } from '../queues.js'
@@ -20,6 +21,7 @@ const CONNECTOR_REGISTRY: Record<string, () => { run(): Promise<{ candidates: un
   awesome_list: () => new AwesomeListConnector(),
   chief_delphi: () => new ChiefDelphiConnector(),
   tba_teams: () => new TbaTeamsConnector(),
+  spectrum_cad: () => new SpectrumCadConnector(),
 }
 
 export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {
@@ -56,6 +58,10 @@ export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {
 
     const result = await connector.run()
     const candidates = result.candidates as Array<Record<string, string | undefined>>
+
+    // Trusted, self-describing connectors (e.g. the curated Spectrum CAD collection) provide
+    // full metadata and point at bot-blocked targets — skip per-candidate target fetching.
+    const skipExtract = 'skipExtract' in connector && (connector as { skipExtract?: boolean }).skipExtract === true
 
     for (const candidate of candidates) {
       try {
@@ -96,9 +102,12 @@ export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {
           continue
         }
 
-        // 2. Fetch metadata first, THEN name dedup
-        await delay(500)
-        const metadata = await extractMetadata(canonicalUrl)
+        // 2. Fetch target metadata (unless the connector is self-describing), THEN name dedup
+        let metadata: Awaited<ReturnType<typeof extractMetadata>> = {}
+        if (!skipExtract) {
+          await delay(500)
+          metadata = await extractMetadata(canonicalUrl)
+        }
 
         const resolvedTitle = metadata.title || candidate.title
         if (resolvedTitle) {

@@ -136,6 +136,60 @@ async function extractYouTubeMetadata(url: string): Promise<RawCandidateMetadata
   return {}
 }
 
+// #region title normalisation
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  ndash: '–', mdash: '—', rsquo: '’', lsquo: '‘',
+  ldquo: '“', rdquo: '”', hellip: '…', middot: '·',
+  trade: '™', reg: '®', copy: '©',
+}
+
+function fromCodePointSafe(cp: number): string {
+  try { return String.fromCodePoint(cp) } catch { return '' }
+}
+
+/** Decode the HTML entities that survive og:title/attribute extraction (named + numeric). */
+export function decodeHtmlEntities(input: string): string {
+  return input
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => fromCodePointSafe(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => fromCodePointSafe(parseInt(dec, 10)))
+    .replace(/&([a-zA-Z]+);/g, (m, name: string) => NAMED_ENTITIES[name] ?? NAMED_ENTITIES[name.toLowerCase()] ?? m)
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// Separators that, followed by a short tail, almost always mean "Title <sep> SiteName".
+const SITE_SEP_CHARS = '|·»'
+
+/**
+ * Clean a scraped page title: decode entities, collapse whitespace, and strip a trailing
+ * site-name suffix ("Foo | SiteName", "Foo — SiteName"). Conservative: strips an exact
+ * og:site_name match, or a short trailing segment after a pipe/middot when a multi-word
+ * head remains — so real names like "Robot | Simulator" are left intact.
+ */
+export function normalizeTitle(raw: string, siteName?: string): string {
+  let t = decodeHtmlEntities(raw).replace(/\s+/g, ' ').trim()
+
+  // Strip an explicit trailing "<sep> <og:site_name>" — we know the exact site name here,
+  // so any common separator is safe to remove.
+  const site = siteName?.trim()
+  if (site) {
+    const re = new RegExp(`\\s*[|\\-–—·»:]\\s*${escapeRegExp(site)}\\s*$`, 'i')
+    t = t.replace(re, '').trim()
+  }
+
+  // Generic fallback: strip a short trailing "<pipe/middot> <site-ish tail>" only if the
+  // remaining head still has multiple words (guards against gutting short real names).
+  const sepRe = new RegExp(`\\s*[${SITE_SEP_CHARS}]\\s*[^${SITE_SEP_CHARS}]{1,40}$`)
+  const stripped = t.replace(sepRe, '').trim()
+  if (stripped !== t && /\s/.test(stripped) && stripped.length >= 3) t = stripped
+
+  return t
+}
+// #endregion
+
 export async function extractMetadata(url: string): Promise<RawCandidateMetadata> {
   // GitHub repo URLs — use API, not HTML (HTML gives GitHub's own chrome, not repo data)
   if (parseGitHubUrl(url)) {
@@ -169,17 +223,20 @@ export async function extractMetadata(url: string): Promise<RawCandidateMetadata
     const html = await res.text()
     const root = parse(html)
 
-    // Title: prefer og:title > title tag; fall back to CWS-derived slug title if generic
+    // Title: prefer og:title > title tag; fall back to CWS-derived slug title if generic.
+    // Normalise first — decode HTML entities and strip trailing "| SiteName" chrome, using
+    // og:site_name as the strongest signal for what to strip.
     const ogTitle = root.querySelector('meta[property="og:title"]')?.getAttribute('content')
     const titleTag = root.querySelector('title')?.innerText
-    const rawTitle = (ogTitle ?? titleTag ?? '').trim().slice(0, 300)
+    const siteName = root.querySelector('meta[property="og:site_name"]')?.getAttribute('content') ?? undefined
+    const rawTitle = normalizeTitle(ogTitle ?? titleTag ?? '', siteName).slice(0, 300)
     const isGenericCwsTitle = cwsDerivedTitle && (!rawTitle || /^chrome web store$/i.test(rawTitle))
     const title = isGenericCwsTitle ? cwsDerivedTitle! : rawTitle
 
     // Description
     const ogDesc = root.querySelector('meta[property="og:description"]')?.getAttribute('content')
     const metaDesc = root.querySelector('meta[name="description"]')?.getAttribute('content')
-    const description = (ogDesc ?? metaDesc ?? '').trim().slice(0, 1000)
+    const description = decodeHtmlEntities((ogDesc ?? metaDesc ?? '').trim()).slice(0, 1000)
 
     // Keywords
     const kwContent = root.querySelector('meta[name="keywords"]')?.getAttribute('content') ?? ''

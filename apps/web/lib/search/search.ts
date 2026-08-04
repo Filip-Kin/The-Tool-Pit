@@ -27,6 +27,7 @@ export interface SearchResultRow {
   isVendor: boolean
   isRookieFriendly: boolean
   isTeamCode: boolean
+  isTeamCad: boolean
   teamNumber: number | null
   seasonYear: number | null
   freshnessState: string | null
@@ -66,20 +67,37 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     audienceFunction,
     isOfficial,
     isRookieFriendly,
-    isTeamCode,
-    teamNumber,
     seasonYear,
     sort,
     page = 1,
     pageSize = 20,
   } = params
 
+  // These can be rewritten by a "254 code" style team query, so keep them mutable.
+  let { isTeamCode, isTeamCad, teamArtifact, teamNumber } = params
+
+  // "254 code" / "1678 cad" / "team 254" → structured team-artifact lookup. The team number
+  // rarely appears in a tool's name/summary text, so free-text search alone can't find it;
+  // translate the query into a teamNumber + artifact filter instead. Skipped when the caller
+  // already set an explicit team filter (e.g. the Robot Code Archive).
+  const teamQuery =
+    isTeamCode === undefined && isTeamCad === undefined && teamArtifact === undefined && teamNumber === undefined
+      ? parseTeamQuery(query)
+      : null
+  const effectiveQuery = teamQuery ? '' : query
+  if (teamQuery) {
+    teamNumber = teamQuery.teamNumber
+    if (teamQuery.artifact === 'code') isTeamCode = true
+    else if (teamQuery.artifact === 'cad') isTeamCad = true
+    else teamArtifact = true
+  }
+
   const offset = (page - 1) * pageSize
-  const hasQuery = Boolean(query && query.trim())
+  const hasQuery = Boolean(effectiveQuery && effectiveQuery.trim())
 
   // Build the search vector expression
   const searchVector = sql`to_tsvector('english', ${tools.name} || ' ' || coalesce(${tools.summary}, '') || ' ' || coalesce(${tools.description}, ''))`
-  const queryVector = hasQuery ? sql`plainto_tsquery('english', ${query})` : null
+  const queryVector = hasQuery ? sql`plainto_tsquery('english', ${effectiveQuery})` : null
 
   // ts_rank score (0 if no query)
   const tsRank = hasQuery && queryVector
@@ -88,7 +106,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
 
   // Exact title boost
   const exactTitleBoost = hasQuery
-    ? sql<number>`case when lower(${tools.name}) = lower(${query}) then 0.5 else 0 end`
+    ? sql<number>`case when lower(${tools.name}) = lower(${effectiveQuery}) then 0.5 else 0 end`
     : sql<number>`0`
 
   // Program boost (join-based; done in subquery)
@@ -121,10 +139,14 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     when 'api' then 0.7 when 'spreadsheet' then 0.4
     when 'resource' then 0.35 else 0.5 end * 0.15`
 
-  // Team code penalty — demotes team repos in general search without zeroing them
-  const teamCodePenalty = isTeamCode === undefined
-    ? sql<number>`case when ${tools.isTeamCode} then -0.25 else 0 end`
-    : sql<number>`0`
+  // Team-artifact penalty — demotes team code AND team CAD in general browsing without zeroing
+  // them. Disabled whenever the caller is explicitly after team artifacts (a team filter, or a
+  // "254 code" query that set one above), so the Robot Code Archive and team searches rank normally.
+  const teamFilterActive =
+    isTeamCode !== undefined || isTeamCad !== undefined || teamArtifact !== undefined || teamNumber !== undefined
+  const teamCodePenalty = teamFilterActive
+    ? sql<number>`0`
+    : sql<number>`case when ${tools.isTeamCode} or ${tools.isTeamCad} then -0.25 else 0 end`
 
   const rankScore = sql<number>`(
     ${tsRank} * 1.0
@@ -144,7 +166,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     conditions.push(
       sql`(
         ${searchVector} @@ ${queryVector}
-        or ${tools.name} ilike ${'%' + query + '%'}
+        or ${tools.name} ilike ${'%' + effectiveQuery + '%'}
       )`,
     )
   }
@@ -153,6 +175,8 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
   if (isOfficial !== undefined) conditions.push(eq(tools.isOfficial, isOfficial))
   if (isRookieFriendly !== undefined) conditions.push(eq(tools.isRookieFriendly, isRookieFriendly))
   if (isTeamCode !== undefined) conditions.push(eq(tools.isTeamCode, isTeamCode))
+  if (isTeamCad !== undefined) conditions.push(eq(tools.isTeamCad, isTeamCad))
+  if (teamArtifact) conditions.push(sql`(${tools.isTeamCode} or ${tools.isTeamCad})`)
   if (teamNumber !== undefined) conditions.push(eq(tools.teamNumber, teamNumber))
   if (seasonYear !== undefined) conditions.push(eq(tools.seasonYear, seasonYear))
 
@@ -208,6 +232,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
       isVendor: tools.isVendor,
       isRookieFriendly: tools.isRookieFriendly,
       isTeamCode: tools.isTeamCode,
+      isTeamCad: tools.isTeamCad,
       teamNumber: tools.teamNumber,
       seasonYear: tools.seasonYear,
       freshnessState: tools.freshnessState,
@@ -296,3 +321,34 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
 
   return { tools: result, total: count, page, pageSize }
 }
+
+// #region team-number query parsing
+const TEAM_CODE_WORDS = /\b(code|repo|repos|software|robot\s*code|program|programming|firmware)\b/
+const TEAM_CAD_WORDS = /\b(cad|onshape|grabcad|models?|design)\b/
+
+/**
+ * Recognise "254 code", "1678 cad", "team 254" style queries and translate them into a
+ * structured team-number + artifact lookup. Returns null for ordinary searches — including a
+ * bare number with no team intent — so a search for a tool that merely contains digits is not
+ * hijacked.
+ */
+export function parseTeamQuery(q?: string): { teamNumber: number; artifact: 'code' | 'cad' | 'any' } | null {
+  if (!q) return null
+  const s = q.trim().toLowerCase()
+
+  const numMatch = s.match(/(?:^|\s)(?:team\s*)?(\d{1,5})\b/)
+  if (!numMatch) return null
+  const teamNumber = parseInt(numMatch[1], 10)
+  if (!Number.isInteger(teamNumber) || teamNumber < 1 || teamNumber > 99999) return null
+
+  const cad = TEAM_CAD_WORDS.test(s)
+  const code = TEAM_CODE_WORDS.test(s)
+  const hasTeamWord = /\bteam\s*\d{1,5}\b/.test(s)
+
+  // Only trigger on clear team intent: an artifact word (code/cad/…), or an explicit "team NNNN".
+  if (!cad && !code && !hasTeamWord) return null
+
+  const artifact = cad && !code ? 'cad' : code && !cad ? 'code' : 'any'
+  return { teamNumber, artifact }
+}
+// #endregion

@@ -52,6 +52,7 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
     isVendor: r.isVendor,
     isRookieFriendly: r.isRookieFriendly,
     isTeamCode: r.isTeamCode,
+    isTeamCad: r.isTeamCad,
     teamNumber: r.teamNumber ?? null,
     seasonYear: r.seasonYear ?? null,
     freshnessState: r.freshnessState,

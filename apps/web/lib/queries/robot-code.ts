@@ -12,7 +12,7 @@ export async function getRobotCodeTools(filters: {
 }): Promise<SearchResponse> {
   return searchTools({
     query: '',
-    isTeamCode: true,
+    teamArtifact: true, // team code OR team CAD
     program: filters.program as 'frc' | 'ftc' | 'fll' | undefined,
     seasonYear: filters.seasonYear,
     teamNumber: filters.teamNumber,
@@ -27,7 +27,11 @@ export async function getAvailableSeasonYears(): Promise<number[]> {
   const rows = await db
     .selectDistinct({ seasonYear: tools.seasonYear })
     .from(tools)
-    .where(and(eq(tools.isTeamCode, true), eq(tools.status, 'published'), sql`${tools.seasonYear} is not null`))
+    .where(and(
+      sql`(${tools.isTeamCode} or ${tools.isTeamCad})`,
+      eq(tools.status, 'published'),
+      sql`${tools.seasonYear} is not null`,
+    ))
     .orderBy(sql`${tools.seasonYear} desc nulls last`)
 
   return rows.map((r) => r.seasonYear as number)
@@ -46,7 +50,7 @@ export async function getRobotCodeStats(): Promise<{
       totalYears: sql<number>`count(distinct ${tools.seasonYear})::int`,
     })
     .from(tools)
-    .where(and(eq(tools.isTeamCode, true), eq(tools.status, 'published')))
+    .where(and(sql`(${tools.isTeamCode} or ${tools.isTeamCad})`, eq(tools.status, 'published')))
 
   return {
     totalRepos: row?.totalRepos ?? 0,

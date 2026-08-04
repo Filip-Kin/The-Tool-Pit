@@ -55,7 +55,7 @@ export function validateClassificationOutput(
   if (Array.isArray(out.audienceFunctions)) {
     out.audienceFunctions = out.audienceFunctions.filter((f) => VALID_AUDIENCE_FUNCTIONS.has(f))
   }
-  if (out.isTeamCode) {
+  if (out.isTeamCode || out.isTeamCad) {
     const t = out.teamNumber
     if (t !== null && t !== undefined && (!Number.isInteger(t) || t < 1 || t > 99999)) {
       out.teamNumber = null
@@ -112,6 +112,15 @@ CRITICAL — set confidence=0.0 immediately for ANY of the following (these are 
   with no real content about a tool.
 - A team's build thread or competition debrief post on Chief Delphi — unless the post links to
   a separately hosted tool (code, app, spreadsheet). The post itself is not a tool.
+- Competition announcements, rule-change or game-manual-update posts, event recaps, results or
+  awards summaries, "week N" update threads, and kickoff / season-launch posts. These discuss
+  FIRST but are not themselves a reusable tool. A page or thread ABOUT rules, an event, or
+  results is NOT a tool, even if it is useful reading.
+- Bot-check / CAPTCHA / "verify you are human" / "checking your browser" / "just a moment"
+  pages, maintenance or "temporarily unavailable" pages, and empty "Loading…" shells with no
+  real content about a tool.
+- Sponsor lists, committee or volunteer-recognition pages, fundraising / donation pages, and
+  merchandise stores that are not selling robotics hardware/software to teams.
 
 Once you have enough information, output a JSON object with these fields:
 - toolType: one of "web_app", "desktop_app", "mobile_app", "calculator", "spreadsheet",
@@ -141,6 +150,11 @@ Once you have enough information, output a JSON object with these fields:
   library or reusable tool). Signals: repo named "2024-robot", "frc254", "Team1114-Crescendo",
   GitHub org follows "frcNNNN" / "ftcNNNN" pattern, description says "Team NNN's YYYY robot code".
   False for: libraries (WPILib, AdvantageKit), scouting apps, vendor tools, any tool used by many teams.
+- isTeamCad: boolean — true if this is a specific team's own robot CAD / model (an Onshape or GrabCAD
+  document, or a repo, holding one team's season robot design). Signals: "Team NNN 2024 robot CAD",
+  an Onshape/GrabCAD document titled with a team number and season. False for: reusable COTS part
+  libraries (MKCad, etc.), general CAD tutorials, or CAD tools used by many teams — those are normal
+  tools/resources, not team CAD. A team-code repo is not automatically team CAD.
 - teamNumber: integer or null — FIRST team number (1–99999). Extract from repo name, org name,
   description, or README title. GitHub orgs often follow "frc254" or "ftc12345" pattern.
 - seasonYear: integer or null — season year (2000–2030). Look in repo name, description, branch names,

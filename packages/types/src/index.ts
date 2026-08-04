@@ -19,6 +19,9 @@ export interface SearchParams {
   isVendor?: boolean
   isRookieFriendly?: boolean
   isTeamCode?: boolean
+  isTeamCad?: boolean
+  /** Match team code OR team CAD (the Robot Code Archive lists both). */
+  teamArtifact?: boolean
   teamNumber?: number
   seasonYear?: number
   sort?: SearchSort
