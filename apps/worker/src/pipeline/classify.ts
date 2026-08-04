@@ -147,7 +147,11 @@ Once you have enough information, output a JSON object with these fields:
 - audienceRoles: array from ["student", "mentor", "volunteer", "parent_newcomer", "organizer_staff"]
 - audienceFunctions: array from ["programmer", "scouter", "strategist", "cad", "mechanical", "electrical",
   "drive_team", "awards", "outreach", "team_management", "event_ops", "field_technical", "inspection", "judging"]
-- isRookieFriendly: boolean — true if clearly targeted at new/beginner teams
+- isRookieFriendly: boolean — HIGH BAR. True ONLY for tools built to onboard brand-new teams or
+  beginners: tutorials, getting-started / zero-to-robot guides, rookie training curricula, starter
+  templates, and beginner-oriented docs or wikis. Do NOT set true just because a beginner COULD use
+  it. Advanced developer tools (swerve libraries, logging/telemetry frameworks, simulators, custom
+  dashboards, path-planning / state-space / vision libraries) are NOT rookie-friendly. If unsure, false
 - isOfficial: boolean — true ONLY if clearly from FIRST organization itself (firstinspires.org, etc.)
 - isVendor: boolean — true if from a commercial vendor selling to robotics teams
 - isTeamWebsite: boolean — true if this is an FRC/FTC/FLL team's own home page or "about us" website
