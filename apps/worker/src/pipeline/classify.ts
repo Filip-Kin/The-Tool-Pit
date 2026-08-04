@@ -121,6 +121,14 @@ CRITICAL — set confidence=0.0 immediately for ANY of the following (these are 
   real content about a tool.
 - Sponsor lists, committee or volunteer-recognition pages, fundraising / donation pages, and
   merchandise stores that are not selling robotics hardware/software to teams.
+- General-purpose software not specific to FIRST: web frameworks (Flask, Django, React),
+  ML / data-science libraries (scikit-learn, NumPy, pandas), and general math / serialization /
+  utility libraries (math.js, MessagePack). Even though an advanced team COULD use these to build
+  a custom dashboard, they are not FIRST tools. Only index tools built for, or specifically about,
+  FIRST robotics. If it would be equally at home in a general programming directory, confidence=0.0.
+- An individual documentation page or sub-section of a larger tool's docs site (e.g. one page of
+  docs.wpilib.org, docs.photonvision.org). The tool/project itself is indexed once; a single doc
+  page ("Installation", "State Observers", "Getting Started with Romi") is NOT its own tool.
 
 Once you have enough information, output a JSON object with these fields:
 - toolType: one of "web_app", "desktop_app", "mobile_app", "calculator", "spreadsheet",
