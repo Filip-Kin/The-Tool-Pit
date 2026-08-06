@@ -11,7 +11,8 @@ import {
   fieldSpecSummary,
 } from '@/lib/fields/field-display'
 import type { FieldCoverage, FieldElements } from '@the-tool-pit/db'
-import { FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY } from '@the-tool-pit/db'
+// Value tuples from the zero-dependency enum subpath (keeps the DB client out of the client bundle).
+import { FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY } from '@the-tool-pit/db/field-enums'
 import { PinMap } from '@/components/fields/pin-map'
 import { approveField, suppressField, unsuppressField, deleteField, updateField, type FieldEditInput } from './actions'
 

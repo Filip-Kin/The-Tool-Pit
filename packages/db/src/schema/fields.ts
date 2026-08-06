@@ -8,37 +8,27 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   },
 })
 
-// ---------------------------------------------------------------------------
-// Enum-like value tuples (plain text columns, app-level unions - no pgEnum)
-// ---------------------------------------------------------------------------
-
-/** FIRST program the field is built for. Matches events.program. */
-export const FIELD_PROGRAMS = ['frc', 'ftc', 'fll'] as const
-export type FieldProgram = (typeof FIELD_PROGRAMS)[number]
-
-/** How much of the field is set up. Drives half-vs-full in the pin colour. */
-export const FIELD_COVERAGE = ['full', 'half', 'elements_only'] as const
-export type FieldCoverage = (typeof FIELD_COVERAGE)[number]
-
-/** What the field perimeter is made of (shown on the card, not in the pin). */
-export const FIELD_PERIMETER = ['wood', 'metal', 'none'] as const
-export type FieldPerimeter = (typeof FIELD_PERIMETER)[number]
-
-/** Whether the game/scoring elements are shop-built wood or real official pieces. Drives the pin hue. */
-export const FIELD_ELEMENTS = ['wood', 'official'] as const
-export type FieldElements = (typeof FIELD_ELEMENTS)[number]
-
-/** When the field can be used. */
-export const FIELD_AVAILABILITY = ['year_round', 'in_season', 'by_arrangement', 'unknown'] as const
-export type FieldAvailability = (typeof FIELD_AVAILABILITY)[number]
-
-/** Moderation state. Only 'published' fields appear publicly. */
-export const FIELD_STATUSES = ['pending', 'published', 'suppressed'] as const
-export type FieldStatus = (typeof FIELD_STATUSES)[number]
-
-/** Where the listing came from. */
-export const FIELD_SOURCES = ['submission', 'seed', 'admin'] as const
-export type FieldSource = (typeof FIELD_SOURCES)[number]
+// Enum-like value tuples live in ../field-enums (a zero-dependency module) so
+// client components can import them without pulling in the DB client. Re-export
+// here so `@the-tool-pit/db` consumers still get them from the barrel.
+export {
+  FIELD_PROGRAMS,
+  FIELD_COVERAGE,
+  FIELD_PERIMETER,
+  FIELD_ELEMENTS,
+  FIELD_AVAILABILITY,
+  FIELD_STATUSES,
+  FIELD_SOURCES,
+} from '../field-enums'
+export type {
+  FieldProgram,
+  FieldCoverage,
+  FieldPerimeter,
+  FieldElements,
+  FieldAvailability,
+  FieldStatus,
+  FieldSource,
+} from '../field-enums'
 
 // ---------------------------------------------------------------------------
 // Practice field listings (submission -> admin-approved -> published)

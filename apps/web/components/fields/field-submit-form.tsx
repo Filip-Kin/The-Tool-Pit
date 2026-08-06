@@ -9,7 +9,9 @@ import {
   ELEMENTS_LABEL,
   AVAILABILITY_LABEL,
 } from '@/lib/fields/field-display'
-import { FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY } from '@the-tool-pit/db'
+// Value tuples come from the zero-dependency enum subpath (NOT the barrel),
+// so the DB client / postgres never lands in the client bundle.
+import { FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY } from '@the-tool-pit/db/field-enums'
 
 declare global {
   interface Window {

@@ -21,6 +21,10 @@
       "bun": "./src/schema/index.ts",
       "default": "./dist/schema/index.js"
     },
+    "./field-enums": {
+      "bun": "./src/field-enums.ts",
+      "default": "./dist/field-enums.js"
+    },
     "./client": {
       "bun": "./src/client.ts",
       "default": "./dist/client.js"
