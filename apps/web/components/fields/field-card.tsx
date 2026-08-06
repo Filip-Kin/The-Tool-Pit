@@ -21,20 +21,13 @@ function locationOf(f: PublicField): string {
   return [f.city, f.region, f.country].filter(Boolean).join(', ')
 }
 
-/** A small round/diamond swatch matching this field's pin. */
+/** A small round swatch matching this field's pin. */
 function PinDot({ f }: { f: PublicField }) {
-  const s = fieldMarkerStyle(f.coverage, f.elements, f.hasFms)
+  const s = fieldMarkerStyle(f.coverage, f.elements)
   return (
     <span
-      className="mt-1 inline-block shrink-0 border border-black/40"
-      style={{
-        width: 14,
-        height: 14,
-        background: s.color,
-        borderRadius: s.shape === 'diamond' ? '2px' : '50%',
-        transform: s.shape === 'diamond' ? 'rotate(45deg)' : undefined,
-        boxShadow: s.ring ? '0 0 0 2px #fff' : undefined,
-      }}
+      className="mt-1 inline-block shrink-0 rounded-full border border-white/60"
+      style={{ width: 14, height: 14, background: s.color }}
     />
   )
 }

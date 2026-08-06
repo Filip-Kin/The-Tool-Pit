@@ -46,34 +46,21 @@ export interface MarkerStyle {
   color: string
   /** Diameter in px. */
   size: number
-  /** 'circle' for full/half fields, 'diamond' for elements-only. */
-  shape: 'circle' | 'diamond'
-  /** White ring around the marker signals an FMS is available. */
-  ring: boolean
 }
 
-const WOOD_FULL = '#f59e0b' // deep amber
-const WOOD_HALF = '#fcd9a0' // pale amber
-const OFFICIAL_FULL = '#10b981' // deep green
-const OFFICIAL_HALF = '#a7e8cf' // pale green
-export function fieldMarkerStyle(
-  coverage: FieldCoverage,
-  elements: FieldElements,
-  hasFms: boolean,
-): MarkerStyle {
+// FRC colours: official elements = blue, wood elements = red; the half-field
+// variant is lightened toward white. (FMS is not shown on the map.)
+const WOOD_FULL = '#e5484d' // FRC red
+const WOOD_HALF = '#f2a6a8' // light red
+const OFFICIAL_FULL = '#3b6fe0' // FRC blue
+const OFFICIAL_HALF = '#a8c6f6' // light blue
+
+export function fieldMarkerStyle(coverage: FieldCoverage, elements: FieldElements): MarkerStyle {
   const full = coverage === 'full'
   const color =
     elements === 'official' ? (full ? OFFICIAL_FULL : OFFICIAL_HALF) : full ? WOOD_FULL : WOOD_HALF
-  return { color, size: full ? 20 : 16, shape: 'circle', ring: hasFms }
+  return { color, size: full ? 20 : 16 }
 }
-
-/** Legend rows, in display order. */
-export const MARKER_LEGEND: { label: string; style: MarkerStyle }[] = [
-  { label: 'Full field, official elements', style: fieldMarkerStyle('full', 'official', false) },
-  { label: 'Half field, official elements', style: fieldMarkerStyle('half', 'official', false) },
-  { label: 'Full field, wood elements', style: fieldMarkerStyle('full', 'wood', false) },
-  { label: 'Half field, wood elements', style: fieldMarkerStyle('half', 'wood', false) },
-]
 
 /** Below this ceiling height (feet), warn that it may be too low to shoot. */
 export const LOW_CEILING_FT = 12
@@ -115,8 +102,11 @@ export const AVAILABILITY_LABEL: Record<FieldAvailability, string> = {
 }
 
 /** A short one-line summary of the field spec for cards and popups. */
-export function fieldSpecSummary(f: Pick<PublicField, 'coverage' | 'elements' | 'hasFms'>): string {
+export function fieldSpecSummary(
+  f: Pick<PublicField, 'coverage' | 'elements' | 'hasFms'>,
+  opts?: { fms?: boolean },
+): string {
   const parts = [COVERAGE_LABEL[f.coverage], ELEMENTS_LABEL[f.elements].toLowerCase()]
-  if (f.hasFms) parts.push('FMS')
+  if (f.hasFms && opts?.fms !== false) parts.push('FMS')
   return parts.join(' · ')
 }

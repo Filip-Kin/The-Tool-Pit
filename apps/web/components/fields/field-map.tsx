@@ -24,7 +24,7 @@ function popupHtml(f: PublicField): string {
   const esc = (s: string) => s.replace(/</g, '&lt;').replace(/>/g, '&gt;')
   return `<div style="font-family:Inter,sans-serif;min-width:150px">
     <div style="font-weight:600;color:#0a0a0b">${esc(title)}</div>
-    <div style="font-size:12px;color:#555;margin-top:2px">${esc(fieldSpecSummary(f))}</div>
+    <div style="font-size:12px;color:#555;margin-top:2px">${esc(fieldSpecSummary(f, { fms: false }))}</div>
     ${loc ? `<div style="font-size:12px;color:#777;margin-top:2px">${esc(loc)}</div>` : ''}
   </div>`
 }
@@ -65,7 +65,7 @@ export function FieldMap({ fields, selectedId, onSelect, height = 560 }: FieldMa
       const latlngs: [number, number][] = []
       for (const f of fields) {
         if (f.latitude == null || f.longitude == null) continue
-        const style = fieldMarkerStyle(f.coverage, f.elements, f.hasFms)
+        const style = fieldMarkerStyle(f.coverage, f.elements)
         const base = L.divIcon({
           html: markerHtml(style),
           className: '',
