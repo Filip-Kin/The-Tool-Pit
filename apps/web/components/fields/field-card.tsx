@@ -1,4 +1,4 @@
-import { MapPin, Ruler, Clock, CalendarClock, Tag, ExternalLink } from 'lucide-react'
+import { MapPin, AlertTriangle, Clock, CalendarClock, Tag, ExternalLink, Handshake, Link2 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import type { PublicField } from '@/lib/fields/field-display'
 import {
@@ -7,6 +7,8 @@ import {
   PERIMETER_LABEL,
   ELEMENTS_LABEL,
   AVAILABILITY_LABEL,
+  accessLabel,
+  isLowCeiling,
 } from '@/lib/fields/field-display'
 
 function titleOf(f: PublicField): string {
@@ -41,7 +43,7 @@ function SpecBadges({ f }: { f: PublicField }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       <Badge>{COVERAGE_LABEL[f.coverage]}</Badge>
-      {f.coverage !== 'elements_only' && <Badge>{ELEMENTS_LABEL[f.elements]}</Badge>}
+      <Badge>{ELEMENTS_LABEL[f.elements]}</Badge>
       {f.perimeter !== 'none' && <Badge>{PERIMETER_LABEL[f.perimeter]}</Badge>}
       {f.hasFms && <Badge tone="fms">FMS</Badge>}
     </div>
@@ -94,14 +96,20 @@ export function FieldCard({
           <SpecBadges f={field} />
         </div>
         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
-          <span className="flex items-center gap-1">
-            <CalendarClock className="h-3 w-3" />
-            {AVAILABILITY_LABEL[field.availability]}
-          </span>
-          {field.ceilingHeightFt != null && (
+          {field.availability !== 'unknown' && (
             <span className="flex items-center gap-1">
-              <Ruler className="h-3 w-3" />
-              {field.ceilingHeightFt} ft ceiling
+              <CalendarClock className="h-3 w-3" />
+              {AVAILABILITY_LABEL[field.availability]}
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            {field.contactUrl ? <Link2 className="h-3 w-3" /> : <Handshake className="h-3 w-3" />}
+            {accessLabel(field)}
+          </span>
+          {isLowCeiling(field.ceilingHeightFt) && (
+            <span className="flex items-center gap-1 text-official">
+              <AlertTriangle className="h-3 w-3" />
+              Low ceiling · {field.ceilingHeightFt} ft
             </span>
           )}
         </div>
@@ -140,13 +148,24 @@ export function FieldDetail({ field }: { field: PublicField }) {
       <SpecBadges f={field} />
 
       <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
-        <Row icon={<CalendarClock className="h-4 w-4" />} label="Availability" value={AVAILABILITY_LABEL[field.availability]} />
-        {field.hours && <Row icon={<Clock className="h-4 w-4" />} label="Days / hours" value={field.hours} />}
-        {field.ceilingHeightFt != null && (
-          <Row icon={<Ruler className="h-4 w-4" />} label="Ceiling height" value={`${field.ceilingHeightFt} ft`} />
+        {field.availability !== 'unknown' && (
+          <Row icon={<CalendarClock className="h-4 w-4" />} label="Availability" value={AVAILABILITY_LABEL[field.availability]} />
         )}
+        <Row
+          icon={field.contactUrl ? <Link2 className="h-4 w-4" /> : <Handshake className="h-4 w-4" />}
+          label="Access"
+          value={accessLabel(field)}
+        />
+        {field.hours && <Row icon={<Clock className="h-4 w-4" />} label="Days / hours" value={field.hours} />}
         {field.perimeter !== 'none' && <Row icon={<Tag className="h-4 w-4" />} label="Perimeter" value={PERIMETER_LABEL[field.perimeter]} />}
       </dl>
+
+      {isLowCeiling(field.ceilingHeightFt) && (
+        <div className="flex items-center gap-2 rounded-lg border border-official/40 bg-official/10 p-3 text-sm text-official">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          Low ceiling ({field.ceilingHeightFt} ft) - may be too low for shooting games.
+        </div>
+      )}
 
       {field.notes && <p className="whitespace-pre-wrap text-sm text-muted">{field.notes}</p>}
 

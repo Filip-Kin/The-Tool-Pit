@@ -37,9 +37,8 @@ export interface PublicField {
 }
 
 // ---------------------------------------------------------------------------
-// Pin colour scheme: hue = element type, depth = coverage, ring = FMS.
-// elements_only fields don't have a coverage so they render as a neutral
-// diamond rather than a coloured circle.
+// Pin colour scheme: hue = element type (amber wood / green official),
+// depth = coverage (deep full / pale half), white ring = FMS.
 // ---------------------------------------------------------------------------
 
 export interface MarkerStyle {
@@ -57,16 +56,11 @@ const WOOD_FULL = '#f59e0b' // deep amber
 const WOOD_HALF = '#fcd9a0' // pale amber
 const OFFICIAL_FULL = '#10b981' // deep green
 const OFFICIAL_HALF = '#a7e8cf' // pale green
-const NEUTRAL = '#9ca3af' // grey - elements only
-
 export function fieldMarkerStyle(
   coverage: FieldCoverage,
   elements: FieldElements,
   hasFms: boolean,
 ): MarkerStyle {
-  if (coverage === 'elements_only') {
-    return { color: NEUTRAL, size: 14, shape: 'diamond', ring: hasFms }
-  }
   const full = coverage === 'full'
   const color =
     elements === 'official' ? (full ? OFFICIAL_FULL : OFFICIAL_HALF) : full ? WOOD_FULL : WOOD_HALF
@@ -79,8 +73,20 @@ export const MARKER_LEGEND: { label: string; style: MarkerStyle }[] = [
   { label: 'Half field, official elements', style: fieldMarkerStyle('half', 'official', false) },
   { label: 'Full field, wood elements', style: fieldMarkerStyle('full', 'wood', false) },
   { label: 'Half field, wood elements', style: fieldMarkerStyle('half', 'wood', false) },
-  { label: 'Elements only', style: fieldMarkerStyle('elements_only', 'wood', false) },
 ]
+
+/** Below this ceiling height (feet), warn that it may be too low to shoot. */
+export const LOW_CEILING_FT = 12
+
+/** True if a stated ceiling height is low enough to matter for shooting games. */
+export function isLowCeiling(ft: number | null | undefined): ft is number {
+  return typeof ft === 'number' && ft < LOW_CEILING_FT
+}
+
+/** Whether access is via a sign-up form (has a link) or by arranging with the team. */
+export function accessLabel(f: Pick<PublicField, 'contactUrl'>): 'Sign-up form' | 'By arrangement' {
+  return f.contactUrl ? 'Sign-up form' : 'By arrangement'
+}
 
 // ---------------------------------------------------------------------------
 // Human labels
@@ -89,7 +95,6 @@ export const MARKER_LEGEND: { label: string; style: MarkerStyle }[] = [
 export const COVERAGE_LABEL: Record<FieldCoverage, string> = {
   full: 'Full field',
   half: 'Half field',
-  elements_only: 'Elements only',
 }
 
 export const PERIMETER_LABEL: Record<FieldPerimeter, string> = {
@@ -105,15 +110,13 @@ export const ELEMENTS_LABEL: Record<FieldElements, string> = {
 
 export const AVAILABILITY_LABEL: Record<FieldAvailability, string> = {
   year_round: 'Year round',
-  in_season: 'In season only',
-  by_arrangement: 'By arrangement',
-  unknown: 'Ask the team',
+  in_season: 'In season',
+  unknown: 'Not sure',
 }
 
 /** A short one-line summary of the field spec for cards and popups. */
 export function fieldSpecSummary(f: Pick<PublicField, 'coverage' | 'elements' | 'hasFms'>): string {
-  const parts = [COVERAGE_LABEL[f.coverage]]
-  if (f.coverage !== 'elements_only') parts.push(ELEMENTS_LABEL[f.elements].toLowerCase())
+  const parts = [COVERAGE_LABEL[f.coverage], ELEMENTS_LABEL[f.elements].toLowerCase()]
   if (f.hasFms) parts.push('FMS')
   return parts.join(' · ')
 }

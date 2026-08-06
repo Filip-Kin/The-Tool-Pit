@@ -63,7 +63,7 @@ const SEED: NewPracticeField[] = [
     city: 'Southgate',
     coverage: 'full',
     elements: 'wood',
-    availability: 'by_arrangement',
+    availability: 'unknown',
     notes:
       'Full field with wood elements. The team is generous about letting other teams come over. (Reported by an 5090 mentor in the thread.) Perimeter details unconfirmed.',
     status: 'pending',
@@ -75,7 +75,7 @@ const SEED: NewPracticeField[] = [
     name: 'Team 2832 practice field',
     region: 'MI',
     country: 'USA',
-    availability: 'by_arrangement',
+    availability: 'unknown',
     notes:
       'Field at the team center near Churchill, open with prior contact with the team. Reported second-hand ("open last time I was on the team"); location, coverage and element details all unconfirmed - verify before publishing.',
     status: 'pending',

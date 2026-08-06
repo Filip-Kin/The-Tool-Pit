@@ -274,13 +274,13 @@ export function FieldSubmitForm() {
             <span className="text-xs text-muted-2">ft</span>
           </label>
         </div>
-        <p className="text-xs text-muted-2">Ceiling height can be approximate - a rough number still helps teams with shooting games.</p>
+        <p className="text-xs text-muted-2">Ceiling height can be approximate. It mainly flags whether the field is tall enough to shoot - anything under 12 ft is marked as a low ceiling.</p>
       </Section>
 
       <Section title="Access">
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="flex-1">
-            <Field label="Availability">
+            <Field label="Availability" hint="Roughly when in the year the field is set up. How to actually get access is below.">
               <select value={form.availability} onChange={(e) => set('availability', e.target.value)} className="input">
                 {FIELD_AVAILABILITY.map((a) => <option key={a} value={a}>{AVAILABILITY_LABEL[a]}</option>)}
               </select>
@@ -292,12 +292,12 @@ export function FieldSubmitForm() {
             </Field>
           </div>
         </div>
-        <Field label="How to arrange access" hint="What a visiting team should do to book time.">
+        <Field label="How to arrange access" hint="Most fields are by arrangement - say what a visiting team should do to book time.">
           <textarea value={form.contactInfo} onChange={(e) => set('contactInfo', e.target.value)} rows={2} className="input resize-y" />
         </Field>
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="flex-1">
-            <Field label="Sign-up / contact link" hint="A Google Form, booking page, or email link.">
+            <Field label="Sign-up form link" hint="Only if there's a booking form or sign-up page (e.g. a Google Form). With one, the field shows as sign-up instead of by arrangement.">
               <input type="url" value={form.contactUrl} onChange={(e) => set('contactUrl', e.target.value)} placeholder="https://forms.gle/…" className="input" />
             </Field>
           </div>

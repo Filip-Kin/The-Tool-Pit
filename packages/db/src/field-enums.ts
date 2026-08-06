@@ -10,7 +10,7 @@ export const FIELD_PROGRAMS = ['frc', 'ftc', 'fll'] as const
 export type FieldProgram = (typeof FIELD_PROGRAMS)[number]
 
 /** How much of the field is set up. Drives half-vs-full in the pin colour. */
-export const FIELD_COVERAGE = ['full', 'half', 'elements_only'] as const
+export const FIELD_COVERAGE = ['full', 'half'] as const
 export type FieldCoverage = (typeof FIELD_COVERAGE)[number]
 
 /** What the field perimeter is made of (shown on the card, not in the pin). */
@@ -21,8 +21,8 @@ export type FieldPerimeter = (typeof FIELD_PERIMETER)[number]
 export const FIELD_ELEMENTS = ['wood', 'official'] as const
 export type FieldElements = (typeof FIELD_ELEMENTS)[number]
 
-/** When the field can be used. */
-export const FIELD_AVAILABILITY = ['year_round', 'in_season', 'by_arrangement', 'unknown'] as const
+/** When the field can be used (timing only - access/arrangement is a separate axis). */
+export const FIELD_AVAILABILITY = ['year_round', 'in_season', 'unknown'] as const
 export type FieldAvailability = (typeof FIELD_AVAILABILITY)[number]
 
 /** Moderation state. Only 'published' fields appear publicly. */

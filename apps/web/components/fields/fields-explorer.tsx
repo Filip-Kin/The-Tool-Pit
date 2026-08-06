@@ -16,9 +16,9 @@ const FieldMap = dynamic(() => import('./field-map').then((m) => m.FieldMap), {
   loading: () => <div className="h-[560px] rounded-lg border border-border bg-surface" />,
 })
 
-const COVERAGES: FieldCoverage[] = ['full', 'half', 'elements_only']
+const COVERAGES: FieldCoverage[] = ['full', 'half']
 const ELEMENTS: FieldElements[] = ['official', 'wood']
-const AVAILABILITIES: FieldAvailability[] = ['year_round', 'in_season', 'by_arrangement']
+const AVAILABILITIES: FieldAvailability[] = ['year_round', 'in_season']
 
 interface Filters {
   q: string
@@ -26,7 +26,6 @@ interface Filters {
   elements: Set<FieldElements>
   availability: Set<FieldAvailability>
   fmsOnly: boolean
-  minCeiling: string
 }
 
 const EMPTY: Filters = {
@@ -35,7 +34,6 @@ const EMPTY: Filters = {
   elements: new Set(),
   availability: new Set(),
   fmsOnly: false,
-  minCeiling: '',
 }
 
 export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
@@ -44,19 +42,15 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
 
   const filtered = useMemo(() => {
     const q = filters.q.trim().toLowerCase()
-    const minCeiling = filters.minCeiling ? Number(filters.minCeiling) : null
     return fields.filter((f) => {
       if (q) {
         const hay = [f.name, f.teamName, f.city, f.region, f.teamNumber?.toString()].filter(Boolean).join(' ').toLowerCase()
         if (!hay.includes(q)) return false
       }
       if (filters.coverage.size && !filters.coverage.has(f.coverage)) return false
-      if (filters.elements.size && !(f.coverage !== 'elements_only' && filters.elements.has(f.elements))) return false
+      if (filters.elements.size && !filters.elements.has(f.elements)) return false
       if (filters.availability.size && !filters.availability.has(f.availability)) return false
       if (filters.fmsOnly && !f.hasFms) return false
-      if (minCeiling != null && Number.isFinite(minCeiling)) {
-        if (f.ceilingHeightFt == null || f.ceilingHeightFt < minCeiling) return false
-      }
       return true
     })
   }, [fields, filters])
@@ -72,8 +66,7 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
     filters.coverage.size +
     filters.elements.size +
     filters.availability.size +
-    (filters.fmsOnly ? 1 : 0) +
-    (filters.minCeiling ? 1 : 0)
+    (filters.fmsOnly ? 1 : 0)
 
   return (
     <div className="grid gap-4 lg:grid-cols-[380px_1fr]">
@@ -123,18 +116,6 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
             <FilterGroup label="Extras">
               <Chip active={filters.fmsOnly} onClick={() => setFilters((f) => ({ ...f, fmsOnly: !f.fmsOnly }))}>Has FMS</Chip>
             </FilterGroup>
-            <label className="flex items-center gap-2 text-sm text-muted">
-              Min ceiling
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                value={filters.minCeiling}
-                onChange={(e) => setFilters((f) => ({ ...f, minCeiling: e.target.value }))}
-                placeholder="ft"
-                className="input w-24"
-              />
-            </label>
             {activeCount > 0 && (
               <button type="button" onClick={() => setFilters((f) => ({ ...EMPTY, q: f.q }))} className="self-start text-xs text-muted-2 hover:text-foreground">
                 Clear filters
