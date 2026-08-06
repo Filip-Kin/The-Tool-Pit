@@ -32,13 +32,11 @@ declare global {
 }
 
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
-type Program = 'frc' | 'ftc' | 'fll'
 
 interface FormState {
   name: string
   teamNumber: string
   teamName: string
-  program: Program
   address: string
   city: string
   region: string
@@ -62,7 +60,6 @@ const INITIAL: FormState = {
   name: '',
   teamNumber: '',
   teamName: '',
-  program: 'frc',
   address: '',
   city: '',
   region: '',
@@ -189,7 +186,7 @@ export function FieldSubmitForm() {
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <Section title="The field">
         <Field label="Field or facility name" required>
-          <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Motor City Alliance field at University of Detroit Mercy" className="input" required />
+          <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Motor City Alliance Field" className="input" required />
         </Field>
         <div className="flex gap-3">
           <div className="w-32">
@@ -199,16 +196,7 @@ export function FieldSubmitForm() {
           </div>
           <div className="flex-1">
             <Field label="Team / organisation">
-              <input value={form.teamName} onChange={(e) => set('teamName', e.target.value)} placeholder="Motor City Alliance" className="input" />
-            </Field>
-          </div>
-          <div className="w-28">
-            <Field label="Program">
-              <select value={form.program} onChange={(e) => set('program', e.target.value as Program)} className="input uppercase">
-                <option value="frc">FRC</option>
-                <option value="ftc">FTC</option>
-                <option value="fll">FLL</option>
-              </select>
+              <input value={form.teamName} onChange={(e) => set('teamName', e.target.value)} placeholder="Kinematic Wolves" className="input" />
             </Field>
           </div>
         </div>
