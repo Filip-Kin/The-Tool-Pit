@@ -16,9 +16,11 @@
  * Note on team 5090: in the thread, the mentor of 5090 is describing team
  * 2620's field, not a separate one, so it is folded into the 2620 entry.
  */
-import { eq } from 'drizzle-orm'
-import { getDb, practiceFields } from '@the-tool-pit/db'
-import type { NewPracticeField } from '@the-tool-pit/db'
+// Relative import (not the package name): this top-level script has no
+// node_modules of its own, so it reaches into the db package source, which
+// resolves drizzle-orm/postgres from packages/db/node_modules.
+import { getDb, practiceFields, eq } from '../packages/db/src/index'
+import type { NewPracticeField } from '../packages/db/src/index'
 
 const SEED: NewPracticeField[] = [
   {
