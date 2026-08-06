@@ -3,7 +3,7 @@
 import 'leaflet/dist/leaflet.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Map as LeafletMap, Marker as LeafletMarker } from 'leaflet'
-import type { GeocodeResult } from '@/app/api/fields/geocode/route'
+import type { GeocodeResult, AddressParts } from '@/app/api/fields/geocode/route'
 
 interface Coords {
   lat: number
@@ -13,6 +13,8 @@ interface Coords {
 interface PinMapProps {
   value: Coords | null
   onChange: (coords: Coords) => void
+  /** Called with the address parts resolved for the pin (search pick or reverse-geocode on drag/click). */
+  onResolveAddress?: (parts: AddressParts) => void
   height?: number
 }
 
@@ -27,12 +29,27 @@ const PIN_HTML =
  * box that recentres the map. Leaflet is dynamic-imported so it never runs
  * during SSR. Reused by the public submit form and the admin editor.
  */
-export function PinMap({ value, onChange, height = 320 }: PinMapProps) {
+export function PinMap({ value, onChange, onResolveAddress, height = 320 }: PinMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<LeafletMap | null>(null)
   const markerRef = useRef<LeafletMarker | null>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  const onResolveAddressRef = useRef(onResolveAddress)
+  onResolveAddressRef.current = onResolveAddress
+
+  // Reverse-geocode a dropped/dragged pin and push the address parts up.
+  async function reverseResolve(lat: number, lng: number) {
+    if (!onResolveAddressRef.current) return
+    try {
+      const res = await fetch(`/api/fields/geocode?lat=${lat}&lon=${lng}`)
+      if (!res.ok) return
+      const parts = (await res.json()) as AddressParts
+      onResolveAddressRef.current(parts)
+    } catch {
+      // ignore - auto-fill is best-effort
+    }
+  }
 
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<GeocodeResult[]>([])
@@ -61,14 +78,19 @@ export function PinMap({ value, onChange, height = 320 }: PinMapProps) {
           m.on('dragend', () => {
             const p = m.getLatLng()
             onChangeRef.current({ lat: p.lat, lng: p.lng })
+            void reverseResolve(p.lat, p.lng)
           })
           markerRef.current = m
         }
         onChangeRef.current({ lat, lng })
       }
 
+      // Initial pin (from an existing value) does not re-fill the address fields.
       if (value) place(value.lat, value.lng)
-      map.on('click', (e) => place(e.latlng.lat, e.latlng.lng))
+      map.on('click', (e) => {
+        place(e.latlng.lat, e.latlng.lng)
+        void reverseResolve(e.latlng.lat, e.latlng.lng)
+      })
       mapRef.current = map
     })()
 
@@ -123,10 +145,13 @@ export function PinMap({ value, onChange, height = 320 }: PinMapProps) {
       m.on('dragend', () => {
         const p = m.getLatLng()
         onChangeRef.current({ lat: p.lat, lng: p.lng })
+        void reverseResolve(p.lat, p.lng)
       })
       markerRef.current = m
     }
     onChangeRef.current({ lat: r.lat, lng: r.lon })
+    // The picked result already carries structured address parts.
+    onResolveAddressRef.current?.({ address: r.address, city: r.city, region: r.region, country: r.country })
   }
 
   return (

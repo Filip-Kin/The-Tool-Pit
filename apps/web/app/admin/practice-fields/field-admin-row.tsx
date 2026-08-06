@@ -113,7 +113,6 @@ function Editor({ field, onDone, onError }: { field: PracticeField; onDone: () =
     elements: field.elements,
     perimeter: field.perimeter,
     hasFms: field.hasFms,
-    aprilTags: field.aprilTags,
     ceilingHeightFt: field.ceilingHeightFt,
     availability: field.availability,
     hours: field.hours,
@@ -172,7 +171,6 @@ function Editor({ field, onDone, onError }: { field: PracticeField; onDone: () =
 
       <div className="flex items-center gap-6">
         <label className="flex items-center gap-2 text-sm text-foreground"><input type="checkbox" checked={!!form.hasFms} onChange={(e) => set('hasFms', e.target.checked)} className="h-4 w-4 accent-[var(--color-primary)]" /> Has FMS</label>
-        <label className="flex items-center gap-2 text-sm text-foreground"><input type="checkbox" checked={!!form.aprilTags} onChange={(e) => set('aprilTags', e.target.checked)} className="h-4 w-4 accent-[var(--color-primary)]" /> AprilTags</label>
       </div>
 
       <div className="flex gap-2">

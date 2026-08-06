@@ -26,7 +26,6 @@ interface Filters {
   elements: Set<FieldElements>
   availability: Set<FieldAvailability>
   fmsOnly: boolean
-  aprilTagsOnly: boolean
   minCeiling: string
 }
 
@@ -36,7 +35,6 @@ const EMPTY: Filters = {
   elements: new Set(),
   availability: new Set(),
   fmsOnly: false,
-  aprilTagsOnly: false,
   minCeiling: '',
 }
 
@@ -56,7 +54,6 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
       if (filters.elements.size && !(f.coverage !== 'elements_only' && filters.elements.has(f.elements))) return false
       if (filters.availability.size && !filters.availability.has(f.availability)) return false
       if (filters.fmsOnly && !f.hasFms) return false
-      if (filters.aprilTagsOnly && !f.aprilTags) return false
       if (minCeiling != null && Number.isFinite(minCeiling)) {
         if (f.ceilingHeightFt == null || f.ceilingHeightFt < minCeiling) return false
       }
@@ -76,7 +73,6 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
     filters.elements.size +
     filters.availability.size +
     (filters.fmsOnly ? 1 : 0) +
-    (filters.aprilTagsOnly ? 1 : 0) +
     (filters.minCeiling ? 1 : 0)
 
   return (
@@ -89,7 +85,8 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
             value={filters.q}
             onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
             placeholder="Search team, field, or city"
-            className="input pl-9"
+            className="input"
+            style={{ paddingLeft: '2.25rem' }}
           />
         </div>
 
@@ -125,7 +122,6 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
             </FilterGroup>
             <FilterGroup label="Extras">
               <Chip active={filters.fmsOnly} onClick={() => setFilters((f) => ({ ...f, fmsOnly: !f.fmsOnly }))}>Has FMS</Chip>
-              <Chip active={filters.aprilTagsOnly} onClick={() => setFilters((f) => ({ ...f, aprilTagsOnly: !f.aprilTagsOnly }))}>AprilTags</Chip>
             </FilterGroup>
             <label className="flex items-center gap-2 text-sm text-muted">
               Min ceiling

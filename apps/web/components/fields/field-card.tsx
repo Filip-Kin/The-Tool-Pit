@@ -44,7 +44,6 @@ function SpecBadges({ f }: { f: PublicField }) {
       {f.coverage !== 'elements_only' && <Badge>{ELEMENTS_LABEL[f.elements]}</Badge>}
       {f.perimeter !== 'none' && <Badge>{PERIMETER_LABEL[f.perimeter]}</Badge>}
       {f.hasFms && <Badge tone="fms">FMS</Badge>}
-      {f.aprilTags && <Badge>AprilTags</Badge>}
     </div>
   )
 }

@@ -88,7 +88,9 @@ export async function createFieldSubmission(
     perimeter: pickEnum(input.perimeter, FIELD_PERIMETER, 'none'),
     elements,
     hasFms,
-    aprilTags: Boolean(input.aprilTags),
+    // Every practice field is assumed to have AprilTags set up, so it's no
+    // longer a per-field toggle - always true.
+    aprilTags: true,
     ceilingHeightFt: ceiling,
     availability: pickEnum(input.availability, FIELD_AVAILABILITY, 'unknown'),
     hours: input.hours?.trim() || null,

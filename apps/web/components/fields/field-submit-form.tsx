@@ -47,7 +47,6 @@ interface FormState {
   perimeter: string
   elements: string
   hasFms: boolean
-  aprilTags: boolean
   ceilingHeightFt: string
   availability: string
   hours: string
@@ -72,7 +71,6 @@ const INITIAL: FormState = {
   perimeter: 'none',
   elements: 'wood',
   hasFms: false,
-  aprilTags: false,
   ceilingHeightFt: '',
   availability: 'unknown',
   hours: '',
@@ -191,17 +189,17 @@ export function FieldSubmitForm() {
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <Section title="The field">
         <Field label="Field or facility name" required>
-          <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Royal Oak Robotics practice field" className="input" required />
+          <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Motor City Alliance field at University of Detroit Mercy" className="input" required />
         </Field>
         <div className="flex gap-3">
           <div className="w-32">
             <Field label="Team number">
-              <input type="number" inputMode="numeric" min={1} value={form.teamNumber} onChange={(e) => set('teamNumber', e.target.value)} placeholder="1188" className="input" />
+              <input type="number" inputMode="numeric" min={1} value={form.teamNumber} onChange={(e) => set('teamNumber', e.target.value)} placeholder="5577" className="input" />
             </Field>
           </div>
           <div className="flex-1">
             <Field label="Team / organisation">
-              <input value={form.teamName} onChange={(e) => set('teamName', e.target.value)} placeholder="Royal Oak Robotics" className="input" />
+              <input value={form.teamName} onChange={(e) => set('teamName', e.target.value)} placeholder="Motor City Alliance" className="input" />
             </Field>
           </div>
           <div className="w-28">
@@ -216,8 +214,20 @@ export function FieldSubmitForm() {
         </div>
       </Section>
 
-      <Section title="Where it is" hint="Drop a pin on the exact spot. Search an address to jump there first, then fine-tune by dragging.">
-        <PinMap value={coords} onChange={setCoords} />
+      <Section title="Where it is" hint="Search an address or drop a pin on the exact spot, then fine-tune by dragging. The address, city and state fill in automatically from the pin - edit them if anything looks off.">
+        <PinMap
+          value={coords}
+          onChange={setCoords}
+          onResolveAddress={(p) =>
+            setForm((f) => ({
+              ...f,
+              ...(p.address ? { address: p.address } : {}),
+              ...(p.city ? { city: p.city } : {}),
+              ...(p.region ? { region: p.region } : {}),
+              ...(p.country ? { country: p.country } : {}),
+            }))
+          }
+        />
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="flex-1">
             <Field label="Address">
@@ -226,7 +236,7 @@ export function FieldSubmitForm() {
           </div>
           <div className="flex-1">
             <Field label="City">
-              <input value={form.city} onChange={(e) => set('city', e.target.value)} className="input" />
+              <input value={form.city} onChange={(e) => set('city', e.target.value)} placeholder="Detroit" className="input" />
             </Field>
           </div>
         </div>
@@ -270,13 +280,13 @@ export function FieldSubmitForm() {
         </div>
         <div className="flex flex-wrap items-center gap-6">
           <Check checked={form.hasFms} onChange={(v) => set('hasFms', v)} label="Has an FMS" />
-          <Check checked={form.aprilTags} onChange={(v) => set('aprilTags', v)} label="AprilTags set up" />
           <label className="flex items-center gap-2 text-sm text-foreground">
             Ceiling height
             <input type="number" inputMode="decimal" min={1} step="0.5" value={form.ceilingHeightFt} onChange={(e) => set('ceilingHeightFt', e.target.value)} placeholder="ft" className="input w-24" />
             <span className="text-xs text-muted-2">ft</span>
           </label>
         </div>
+        <p className="text-xs text-muted-2">Ceiling height can be approximate - a rough number still helps teams with shooting games.</p>
       </Section>
 
       <Section title="Access">
@@ -328,7 +338,7 @@ export function FieldSubmitForm() {
             </Field>
           </div>
           <div className="flex-1">
-            <Field label="How to reach you" hint="In case we have a question.">
+            <Field label="How to reach you">
               <input value={form.submitterContact} onChange={(e) => set('submitterContact', e.target.value)} className="input" />
             </Field>
           </div>
