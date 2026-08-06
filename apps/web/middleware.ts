@@ -16,6 +16,17 @@ export function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // fields.* subdomain → serve the /fields route tree (the Practice Field Map)
+  // with its own chrome. Same host-rewrite shape as photos.*.
+  if (host.startsWith('fields.')) {
+    if (!pathname.startsWith('/api') && !pathname.startsWith('/fields') && !pathname.startsWith('/_next')) {
+      const url = req.nextUrl.clone()
+      url.pathname = `/fields${pathname}`
+      return NextResponse.rewrite(url)
+    }
+    return NextResponse.next()
+  }
+
   // Protect all /admin routes except the login page and auth API.
   // Primary auth is Authelia forward-auth (Remote-Groups header, set by Traefik).
   // The ADMIN_SECRET cookie stays as a break-glass fallback.

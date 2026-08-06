@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: '/admin/album-candidates', label: 'Album Candidates' },
   { href: '/admin/album-submissions', label: 'Album Submissions' },
   { href: '/admin/album-sources', label: 'Album Sources' },
+  { href: '/admin/practice-fields', label: 'Practice Fields' },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
