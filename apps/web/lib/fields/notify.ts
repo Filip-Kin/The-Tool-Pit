@@ -43,3 +43,32 @@ export async function notifyNewFieldSubmission(s: FieldSubmissionNotice): Promis
     // ignore - notification failure must never affect the submission
   }
 }
+
+/** Discord ping for a community edit proposal. Same webhook, best-effort. */
+export async function notifyFieldEdit(s: { fieldName: string; note?: string }): Promise<void> {
+  const webhook = process.env.FIELD_SUBMISSION_DISCORD_WEBHOOK
+  if (!webhook) return
+  const adminUrl = 'https://ttp.filipkin.com/admin/field-edits'
+  const fields = [
+    { name: 'Field', value: s.fieldName.slice(0, 200) },
+    s.note ? { name: 'What changed', value: s.note.slice(0, 500) } : null,
+  ].filter(Boolean)
+  try {
+    await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        embeds: [
+          {
+            title: 'New practice field edit proposal',
+            description: `Review it in the [admin queue](${adminUrl}).`,
+            color: 0xf59e0b,
+            fields,
+          },
+        ],
+      }),
+    })
+  } catch {
+    // ignore
+  }
+}

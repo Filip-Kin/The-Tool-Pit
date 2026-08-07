@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils/cn'
 import { PinMap } from './pin-map'
+import type { PublicField } from '@/lib/fields/field-display'
 import {
   COVERAGE_LABEL,
   PERIMETER_LABEL,
@@ -82,10 +83,47 @@ const INITIAL: FormState = {
   submitterContact: '',
 }
 
-export function FieldSubmitForm() {
-  const [form, setForm] = useState<FormState>(INITIAL)
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
+/** Map a published field to the form state, for pre-filling an edit. */
+function fieldToFormState(f: PublicField): FormState {
+  return {
+    name: f.name,
+    teamNumber: f.teamNumber != null ? String(f.teamNumber) : '',
+    teamName: f.teamName ?? '',
+    program: (f.program as Program) ?? 'frc',
+    address: f.address ?? '',
+    city: f.city ?? '',
+    region: f.region ?? '',
+    country: f.country ?? '',
+    coverage: f.coverage,
+    perimeter: f.perimeter,
+    elements: f.elements,
+    hasFms: f.hasFms,
+    ceilingHeightFt: f.ceilingHeightFt != null ? String(f.ceilingHeightFt) : '',
+    availability: f.availability,
+    hours: f.hours ?? '',
+    contactInfo: f.contactInfo ?? '',
+    contactUrl: f.contactUrl ?? '',
+    website: f.website ?? '',
+    notes: f.notes ?? '',
+    submitterName: '',
+    submitterContact: '',
+  }
+}
+
+/**
+ * The field submit form. In `edit` mode it is pre-filled from an existing field
+ * and posts an edit proposal (for admin approval) instead of a new field.
+ */
+export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicField }; onSubmitted?: () => void } = {}) {
+  const editing = !!edit
+  const [form, setForm] = useState<FormState>(edit ? fieldToFormState(edit.field) : INITIAL)
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    edit && edit.field.latitude != null && edit.field.longitude != null
+      ? { lat: edit.field.latitude, lng: edit.field.longitude }
+      : null,
+  )
   const [photo, setPhoto] = useState<File | null>(null)
+  const [editReason, setEditReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<{ ok?: boolean; message: string } | null>(null)
 
@@ -163,17 +201,24 @@ export function FieldSubmitForm() {
       }
       fd.set('latitude', String(coords.lat))
       fd.set('longitude', String(coords.lng))
-      if (photo) fd.set('photo', photo)
+      if (!editing && photo) fd.set('photo', photo)
+      if (editing && editReason.trim()) fd.set('editReason', editReason.trim())
       if (turnstileToken) fd.set('turnstileToken', turnstileToken)
 
-      const res = await fetch('/api/fields/submit', { method: 'POST', body: fd })
+      const url = editing ? `/api/fields/${edit.field.id}/edit` : '/api/fields/submit'
+      const res = await fetch(url, { method: 'POST', body: fd })
       const data = (await res.json()) as { message?: string; error?: string }
       if (res.ok) {
         setResult({ ok: true, message: data.message ?? 'Submitted.' })
-        setForm(INITIAL)
-        setCoords(null)
-        setPhoto(null)
-        resetTurnstile()
+        if (editing) {
+          resetTurnstile()
+          onSubmitted?.()
+        } else {
+          setForm(INITIAL)
+          setCoords(null)
+          setPhoto(null)
+          resetTurnstile()
+        }
       } else {
         setResult({ ok: false, message: data.error ?? 'Submission failed.' })
         resetTurnstile()
@@ -187,6 +232,11 @@ export function FieldSubmitForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      {editing && (
+        <Section title="What changed" hint="A quick note on what you're updating and why (optional). Your edit is reviewed before it goes live.">
+          <textarea value={editReason} onChange={(e) => setEditReason(e.target.value)} rows={2} className="input resize-y" placeholder="e.g. we now have realistic hub lighting and timing for this season" />
+        </Section>
+      )}
       <Section title="The field">
         <Field label="Field or facility name" required>
           <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Motor City Alliance Field" className="input" required />
@@ -325,9 +375,11 @@ export function FieldSubmitForm() {
         <Field label="Notes" hint="Anything else visiting teams should know.">
           <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className="input resize-y" />
         </Field>
-        <Field label="Photo of the field" hint="Optional. Reviewed before it goes live. Max 10 MB.">
-          <input type="file" accept="image/*" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} className="input" />
-        </Field>
+        {!editing && (
+          <Field label="Photo of the field" hint="Optional. Reviewed before it goes live. Max 10 MB.">
+            <input type="file" accept="image/*" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} className="input" />
+          </Field>
+        )}
       </Section>
 
       <Section title="You" hint="Private - only the moderators see this, never shown publicly.">
@@ -352,7 +404,7 @@ export function FieldSubmitForm() {
         disabled={submitting || !form.name.trim() || !coords || (Boolean(SITE_KEY) && !turnstileToken)}
         className="self-start rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50"
       >
-        {submitting ? 'Submitting…' : 'Submit field'}
+        {submitting ? 'Submitting…' : editing ? 'Submit edit for review' : 'Submit field'}
       </button>
 
       {result && <p className={result.ok ? 'text-sm text-rookie' : 'text-sm text-frc'}>{result.message}</p>}

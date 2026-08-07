@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, real, boolean, doublePrecision, timestamp, index, customType } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, real, boolean, doublePrecision, timestamp, jsonb, index, customType } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 /** Raw binary column (Postgres bytea) for uploaded field photos. */
@@ -124,11 +124,73 @@ export const fieldPhotos = pgTable('field_photos', {
 })
 
 // ---------------------------------------------------------------------------
+// Community edit proposals - anyone can suggest changes to a published field;
+// an admin reviews the before/after diff and applies or rejects.
+// ---------------------------------------------------------------------------
+
+export const FIELD_EDIT_STATUSES = ['pending', 'applied', 'rejected'] as const
+export type FieldEditStatus = (typeof FIELD_EDIT_STATUSES)[number]
+
+/** The editable snapshot a proposal carries (full proposed state of the field). */
+export interface FieldEditProposalData {
+  name?: string
+  teamNumber?: number | null
+  teamName?: string | null
+  program?: string
+  latitude?: number | null
+  longitude?: number | null
+  address?: string | null
+  city?: string | null
+  region?: string | null
+  country?: string | null
+  coverage?: string
+  perimeter?: string
+  elements?: string
+  hasFms?: boolean
+  ceilingHeightFt?: number | null
+  availability?: string
+  hours?: string | null
+  contactInfo?: string | null
+  contactUrl?: string | null
+  website?: string | null
+  notes?: string | null
+}
+
+export const fieldEditProposals = pgTable(
+  'field_edit_proposals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    fieldId: uuid('field_id')
+      .notNull()
+      .references(() => practiceFields.id, { onDelete: 'cascade' }),
+    proposed: jsonb('proposed').$type<FieldEditProposalData>().notNull(),
+    /** Submitter's note explaining what changed / why. */
+    note: text('note'),
+    submitterName: text('submitter_name'),
+    submitterContact: text('submitter_contact'),
+    submitterIpHash: text('submitter_ip_hash'),
+    /** FIELD_EDIT_STATUSES */
+    status: text('status').notNull().default('pending'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('field_edit_proposals_field_id_idx').on(table.fieldId),
+    index('field_edit_proposals_status_idx').on(table.status),
+  ],
+)
+
+// ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
 
-export const practiceFieldsRelations = relations(practiceFields, ({ one }) => ({
+export const practiceFieldsRelations = relations(practiceFields, ({ one, many }) => ({
   photo: one(fieldPhotos, { fields: [practiceFields.id], references: [fieldPhotos.fieldId] }),
+  editProposals: many(fieldEditProposals),
+}))
+
+export const fieldEditProposalsRelations = relations(fieldEditProposals, ({ one }) => ({
+  field: one(practiceFields, { fields: [fieldEditProposals.fieldId], references: [practiceFields.id] }),
 }))
 
 export const fieldPhotosRelations = relations(fieldPhotos, ({ one }) => ({
@@ -143,3 +205,5 @@ export type PracticeField = typeof practiceFields.$inferSelect
 export type NewPracticeField = typeof practiceFields.$inferInsert
 export type FieldPhoto = typeof fieldPhotos.$inferSelect
 export type NewFieldPhoto = typeof fieldPhotos.$inferInsert
+export type FieldEditProposal = typeof fieldEditProposals.$inferSelect
+export type NewFieldEditProposal = typeof fieldEditProposals.$inferInsert

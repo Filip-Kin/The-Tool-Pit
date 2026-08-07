@@ -125,8 +125,8 @@ export function FieldCard({
   )
 }
 
-/** Full detail view, used on the shareable /fields/[id] page. */
-export function FieldDetail({ field }: { field: PublicField }) {
+/** Full detail view, used in the dialog and on the shareable /fields/[id] page. */
+export function FieldDetail({ field, onSuggestEdit }: { field: PublicField; onSuggestEdit?: () => void }) {
   const loc = locationOf(field)
   const mapsHref =
     field.latitude != null && field.longitude != null
@@ -202,6 +202,16 @@ export function FieldDetail({ field }: { field: PublicField }) {
         <div className="rounded-lg border border-border-subtle bg-surface p-4 text-sm text-muted">
           <span className="font-medium text-foreground">How to arrange access: </span>
           {field.contactInfo}
+        </div>
+      )}
+
+      {onSuggestEdit && (
+        <div className="border-t border-border-subtle pt-4 text-sm text-muted-2">
+          Something out of date?{' '}
+          <button type="button" onClick={onSuggestEdit} className="text-primary hover:underline">
+            Suggest an edit
+          </button>
+          . Changes are reviewed before they go live.
         </div>
       )}
     </div>
