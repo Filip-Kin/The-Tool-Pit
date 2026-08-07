@@ -93,10 +93,12 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
     (filters.fmsOnly ? 1 : 0)
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[380px_1fr]">
-      {/* Left: program switcher, search, filters, list */}
-      <div className="flex flex-col gap-3">
-        <div className="inline-flex self-start rounded-lg border border-border bg-surface p-0.5">
+    <div className="grid gap-4 lg:grid-cols-[360px_1fr] lg:items-start">
+      {/* Controls: program switcher, search, filters. DOM order puts the map
+          above the list on mobile; grid placement restores the two-column
+          layout (controls + list on the left, map on the right) on desktop. */}
+      <div className="flex min-w-0 flex-col gap-3 lg:col-start-1 lg:row-start-1">
+        <div className="inline-flex max-w-full self-start overflow-x-auto rounded-lg border border-border bg-surface p-0.5">
           {PROGRAMS.map((p) => (
             <button
               key={p.key}
@@ -163,30 +165,32 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
             )}
           </div>
         </details>
+      </div>
 
+      {/* Map + legend. On mobile it renders right after the controls (above the
+          list); on desktop it sits in the right column, spanning both rows and
+          sticking as the list scrolls. */}
+      <div className="flex min-w-0 flex-col gap-3 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-20 lg:self-start">
+        <FieldMap fields={filtered} selectedId={selectedId} onSelect={open} />
+        <FieldLegend />
+      </div>
+
+      {/* Results list */}
+      <div className="flex min-w-0 flex-col gap-2 lg:col-start-1 lg:row-start-2 lg:max-h-[520px] lg:overflow-auto lg:pr-1">
         <p className="text-xs text-muted-2">
           {filtered.length} {filtered.length === 1 ? 'field' : 'fields'}
           {filtered.length !== (programCounts[program] ?? 0) && ` of ${programCounts[program] ?? 0}`}
         </p>
-
-        <div className="flex flex-col gap-2 lg:max-h-[520px] lg:overflow-auto lg:pr-1">
-          {filtered.map((f) => (
-            <FieldCard key={f.id} field={f} selected={f.id === selectedId} onSelect={open} />
-          ))}
-          {filtered.length === 0 && (
-            <p className="rounded-lg border border-border-subtle bg-surface p-6 text-center text-sm text-muted-2">
-              {(programCounts[program] ?? 0) === 0
-                ? `No ${PROGRAMS.find((p) => p.key === program)?.label ?? ''} fields on the map yet.`
-                : 'No fields match these filters yet.'}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Right: map + legend (sticky on desktop) */}
-      <div className="flex flex-col gap-3 lg:sticky lg:top-20 lg:self-start">
-        <FieldMap fields={filtered} selectedId={selectedId} onSelect={open} />
-        <FieldLegend />
+        {filtered.map((f) => (
+          <FieldCard key={f.id} field={f} selected={f.id === selectedId} onSelect={open} />
+        ))}
+        {filtered.length === 0 && (
+          <p className="rounded-lg border border-border-subtle bg-surface p-6 text-center text-sm text-muted-2">
+            {(programCounts[program] ?? 0) === 0
+              ? `No ${PROGRAMS.find((p) => p.key === program)?.label ?? ''} fields on the map yet.`
+              : 'No fields match these filters yet.'}
+          </p>
+        )}
       </div>
 
       <FieldDialog field={fields.find((f) => f.id === openId) ?? null} onClose={() => setOpenId(null)} />
