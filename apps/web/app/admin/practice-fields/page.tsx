@@ -34,7 +34,7 @@ export default async function PracticeFieldsAdminPage({
   for (const r of all) counts[r.status] = (counts[r.status] ?? 0) + 1
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <h1 className="text-xl font-semibold text-foreground">Practice Fields</h1>
       <p className="mt-1 text-sm text-muted">Review submitted practice fields, place their pin, and publish to the map.</p>
 

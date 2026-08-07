@@ -58,7 +58,7 @@ export default async function FieldEditsAdminPage() {
     .orderBy(desc(fieldEditProposals.createdAt))
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <h1 className="text-xl font-semibold text-foreground">Field Edit Proposals</h1>
       <p className="mt-1 text-sm text-muted">Community-suggested edits. Review the changes and apply or reject.</p>
 

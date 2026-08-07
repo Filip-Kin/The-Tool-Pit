@@ -25,20 +25,21 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-border-subtle bg-surface">
-        <div className="border-b border-border-subtle px-4 py-4">
+    <div className="flex min-h-screen flex-col md:flex-row">
+      {/* Sidebar on desktop; a sticky top bar with a horizontally-scrolling nav on mobile. */}
+      <aside className="shrink-0 border-b border-border-subtle bg-surface md:w-56 md:border-b-0 md:border-r">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 md:block md:py-4">
           <Link href="/" className="text-xs text-muted hover:text-foreground">
             ← The Tool Pit
           </Link>
-          <p className="mt-1 text-sm font-semibold text-foreground">Admin</p>
+          <p className="text-sm font-semibold text-foreground md:mt-1">Admin</p>
         </div>
-        <nav className="flex flex-1 flex-col gap-0.5 p-2">
+        <nav className="flex gap-0.5 overflow-x-auto border-t border-border-subtle p-2 md:flex-1 md:flex-col md:overflow-visible md:border-t-0">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+              className="whitespace-nowrap rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
             >
               {item.label}
             </Link>
@@ -46,7 +47,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </nav>
       </aside>
 
-      <main className="flex-1 overflow-auto bg-background">
+      <main className="min-w-0 flex-1 overflow-auto bg-background">
         {children}
       </main>
     </div>
