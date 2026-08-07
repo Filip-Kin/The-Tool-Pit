@@ -18,22 +18,22 @@ const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{
 const TILE_ATTRIB = '&copy; OpenStreetMap contributors &copy; CARTO'
 const DEFAULT_CENTER: [number, number] = [39.5, -98.35]
 
-function popupHtml(f: PublicField): string {
-  const title = f.teamNumber ? `${f.teamNumber} · ${f.name}` : f.name
-  const loc = [f.city, f.region].filter(Boolean).join(', ')
+function tooltipHtml(f: PublicField): string {
+  const team =
+    f.teamNumber && f.teamName ? `${f.teamNumber} · ${f.teamName}` : f.teamNumber ? `Team ${f.teamNumber}` : f.teamName ?? ''
   const esc = (s: string) => s.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  return `<div style="font-family:Inter,sans-serif;min-width:150px">
-    <div style="font-weight:600;color:#0a0a0b">${esc(title)}</div>
-    <div style="font-size:12px;color:#555;margin-top:2px">${esc(fieldSpecSummary(f, { fms: false }))}</div>
-    ${loc ? `<div style="font-size:12px;color:#777;margin-top:2px">${esc(loc)}</div>` : ''}
+  return `<div style="font-family:Inter,sans-serif;min-width:120px">
+    <div style="font-weight:600;color:#0a0a0b">${esc(f.name)}</div>
+    ${team ? `<div style="font-size:12px;color:#555;margin-top:1px">${esc(team)}</div>` : ''}
+    <div style="font-size:12px;color:#777;margin-top:2px">${esc(fieldSpecSummary(f, { fms: false }))}</div>
   </div>`
 }
 
 /**
  * The explore map: every published field as a colour-coded pin. Hue = element
- * type, depth = coverage, white ring = FMS, grey diamond = elements-only.
- * Selection is two-way with the list beside it. Leaflet is dynamic-imported so
- * it never runs during SSR.
+ * type (blue official / red wood), depth = coverage. Hovering shows a tooltip;
+ * clicking opens the detail dialog. Leaflet is dynamic-imported so it never
+ * runs during SSR.
  */
 export function FieldMap({ fields, selectedId, onSelect, height = 560 }: FieldMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -80,7 +80,7 @@ export function FieldMap({ fields, selectedId, onSelect, height = 560 }: FieldMa
         })
         const marker = L.marker([f.latitude, f.longitude], { icon: base, riseOnHover: true })
           .addTo(map)
-          .bindPopup(popupHtml(f))
+          .bindTooltip(tooltipHtml(f), { direction: 'top', offset: [0, -style.size / 2], opacity: 1 })
         marker.on('click', () => onSelectRef.current(f.id))
         markersRef.current.set(f.id, marker)
         iconsRef.current.set(f.id, { base, selected })
@@ -120,10 +120,7 @@ export function FieldMap({ fields, selectedId, onSelect, height = 560 }: FieldMa
     })
     if (selectedId) {
       const marker = markersRef.current.get(selectedId)
-      if (marker) {
-        map.panTo(marker.getLatLng())
-        marker.openPopup()
-      }
+      if (marker) map.panTo(marker.getLatLng())
     }
   }, [selectedId])
 

@@ -9,6 +9,7 @@ import { COVERAGE_LABEL, ELEMENTS_LABEL, AVAILABILITY_LABEL } from '@/lib/fields
 import type { FieldCoverage, FieldElements, FieldAvailability, FieldProgram } from '@the-tool-pit/db'
 import { FieldCard } from './field-card'
 import { FieldLegend } from './field-legend'
+import { FieldDialog } from './field-dialog'
 
 // FRC first and foremost: it's the default program; FTC/FLL are secondary tabs.
 const PROGRAMS: { key: FieldProgram; label: string }[] = [
@@ -47,6 +48,13 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
   const [program, setProgram] = useState<FieldProgram>('frc')
   const [filters, setFilters] = useState<Filters>(EMPTY)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
+
+  // Clicking a card or pin: highlight it and open its detail dialog.
+  function open(id: string) {
+    setSelectedId(id)
+    setOpenId(id)
+  }
 
   // Count fields per program so the tabs can show what's available.
   const programCounts = useMemo(() => {
@@ -163,7 +171,7 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
 
         <div className="flex flex-col gap-2 lg:max-h-[520px] lg:overflow-auto lg:pr-1">
           {filtered.map((f) => (
-            <FieldCard key={f.id} field={f} selected={f.id === selectedId} onSelect={setSelectedId} />
+            <FieldCard key={f.id} field={f} selected={f.id === selectedId} onSelect={open} />
           ))}
           {filtered.length === 0 && (
             <p className="rounded-lg border border-border-subtle bg-surface p-6 text-center text-sm text-muted-2">
@@ -177,9 +185,11 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
 
       {/* Right: map + legend (sticky on desktop) */}
       <div className="flex flex-col gap-3 lg:sticky lg:top-20 lg:self-start">
-        <FieldMap fields={filtered} selectedId={selectedId} onSelect={setSelectedId} />
+        <FieldMap fields={filtered} selectedId={selectedId} onSelect={open} />
         <FieldLegend />
       </div>
+
+      <FieldDialog field={fields.find((f) => f.id === openId) ?? null} onClose={() => setOpenId(null)} />
     </div>
   )
 }

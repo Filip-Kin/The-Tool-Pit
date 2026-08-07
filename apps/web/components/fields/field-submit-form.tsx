@@ -264,7 +264,7 @@ export function FieldSubmitForm() {
             </Field>
           </div>
           <div className="flex-1">
-            <Field label="Game elements">
+            <Field label="Game elements" hint="Go by your major elements - if the main ones are official, pick official even if a few are shop-built. Use your best judgement and add specifics in the notes.">
               <select value={form.elements} onChange={(e) => set('elements', e.target.value)} className="input">
                 {FIELD_ELEMENTS.map((el) => <option key={el} value={el}>{ELEMENTS_LABEL[el]}</option>)}
               </select>

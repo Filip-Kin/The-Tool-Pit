@@ -11,10 +11,11 @@ import {
   isLowCeiling,
 } from '@/lib/fields/field-display'
 
-function titleOf(f: PublicField): string {
-  if (f.teamNumber && f.teamName) return `${f.teamNumber} ${f.teamName}`
-  if (f.teamNumber) return `${f.teamNumber} · ${f.name}`
-  return f.name
+/** Team line shown as a subtitle under the field name. Null if no team info. */
+function teamSubtitle(f: PublicField): string | null {
+  if (f.teamNumber && f.teamName) return `${f.teamNumber} · ${f.teamName}`
+  if (f.teamNumber) return `Team ${f.teamNumber}`
+  return f.teamName || null
 }
 
 function locationOf(f: PublicField): string {
@@ -88,9 +89,10 @@ export function FieldCard({
       <PinDot f={field} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="min-w-0 flex-1 truncate font-medium text-foreground">{titleOf(field)}</span>
+          <span className="min-w-0 flex-1 truncate font-medium text-foreground">{field.name}</span>
           {field.program !== 'frc' && <ProgramTag program={field.program} />}
         </div>
+        {teamSubtitle(field) && <div className="mt-0.5 truncate text-xs text-muted">{teamSubtitle(field)}</div>}
         {loc && (
           <div className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-2">
             <MapPin className="h-3 w-3 shrink-0" />
@@ -137,11 +139,12 @@ export function FieldDetail({ field }: { field: PublicField }) {
     <div className="flex flex-col gap-5">
       <div>
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-bold text-foreground">{titleOf(field)}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{field.name}</h1>
           {field.program !== 'frc' && <ProgramTag program={field.program} />}
         </div>
+        {teamSubtitle(field) && <p className="mt-0.5 text-sm text-muted">{teamSubtitle(field)}</p>}
         {loc && (
-          <p className="mt-1 flex items-center gap-1 text-sm text-muted">
+          <p className="mt-1 flex items-center gap-1 text-sm text-muted-2">
             <MapPin className="h-4 w-4" />
             {field.address ? `${field.address}, ${loc}` : loc}
           </p>
