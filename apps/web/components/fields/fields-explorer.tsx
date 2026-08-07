@@ -6,9 +6,16 @@ import { Search, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import type { PublicField } from '@/lib/fields/field-display'
 import { COVERAGE_LABEL, ELEMENTS_LABEL, AVAILABILITY_LABEL } from '@/lib/fields/field-display'
-import type { FieldCoverage, FieldElements, FieldAvailability } from '@the-tool-pit/db'
+import type { FieldCoverage, FieldElements, FieldAvailability, FieldProgram } from '@the-tool-pit/db'
 import { FieldCard } from './field-card'
 import { FieldLegend } from './field-legend'
+
+// FRC first and foremost: it's the default program; FTC/FLL are secondary tabs.
+const PROGRAMS: { key: FieldProgram; label: string }[] = [
+  { key: 'frc', label: 'FRC' },
+  { key: 'ftc', label: 'FTC' },
+  { key: 'fll', label: 'FLL' },
+]
 
 // The map only runs in the browser (Leaflet touches window), so load it client-only.
 const FieldMap = dynamic(() => import('./field-map').then((m) => m.FieldMap), {
@@ -37,12 +44,21 @@ const EMPTY: Filters = {
 }
 
 export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
+  const [program, setProgram] = useState<FieldProgram>('frc')
   const [filters, setFilters] = useState<Filters>(EMPTY)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  // Count fields per program so the tabs can show what's available.
+  const programCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const f of fields) counts[f.program] = (counts[f.program] ?? 0) + 1
+    return counts
+  }, [fields])
 
   const filtered = useMemo(() => {
     const q = filters.q.trim().toLowerCase()
     return fields.filter((f) => {
+      if (f.program !== program) return false
       if (q) {
         const hay = [f.name, f.teamName, f.city, f.region, f.teamNumber?.toString()].filter(Boolean).join(' ').toLowerCase()
         if (!hay.includes(q)) return false
@@ -53,7 +69,7 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
       if (filters.fmsOnly && !f.hasFms) return false
       return true
     })
-  }, [fields, filters])
+  }, [fields, filters, program])
 
   function toggle<T>(set: Set<T>, value: T): Set<T> {
     const next = new Set(set)
@@ -70,8 +86,24 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[380px_1fr]">
-      {/* Left: search, filters, list */}
+      {/* Left: program switcher, search, filters, list */}
       <div className="flex flex-col gap-3">
+        <div className="inline-flex self-start rounded-lg border border-border bg-surface p-0.5">
+          {PROGRAMS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => { setProgram(p.key); setSelectedId(null) }}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                p.key === program ? 'bg-primary text-white' : 'text-muted hover:text-foreground',
+              )}
+            >
+              {p.label}
+              {programCounts[p.key] ? <span className={cn('ml-1.5 text-xs', p.key === program ? 'text-white/70' : 'text-muted-2')}>{programCounts[p.key]}</span> : null}
+            </button>
+          ))}
+        </div>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-2" />
           <input
@@ -126,7 +158,7 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
 
         <p className="text-xs text-muted-2">
           {filtered.length} {filtered.length === 1 ? 'field' : 'fields'}
-          {filtered.length !== fields.length && ` of ${fields.length}`}
+          {filtered.length !== (programCounts[program] ?? 0) && ` of ${programCounts[program] ?? 0}`}
         </p>
 
         <div className="flex flex-col gap-2 lg:max-h-[520px] lg:overflow-auto lg:pr-1">
@@ -135,7 +167,9 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
           ))}
           {filtered.length === 0 && (
             <p className="rounded-lg border border-border-subtle bg-surface p-6 text-center text-sm text-muted-2">
-              No fields match these filters yet.
+              {(programCounts[program] ?? 0) === 0
+                ? `No ${PROGRAMS.find((p) => p.key === program)?.label ?? ''} fields on the map yet.`
+                : 'No fields match these filters yet.'}
             </p>
           )}
         </div>

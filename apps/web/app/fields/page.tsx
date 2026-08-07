@@ -18,8 +18,9 @@ export default async function FieldsHomePage() {
       <div className="mb-6 flex flex-col gap-2">
         <h1 className="text-2xl font-bold text-foreground">Practice Field Map</h1>
         <p className="max-w-2xl text-sm text-muted">
-          Teams sharing their practice fields with the community. Filter by field type, FMS, ceiling
-          height, and availability, then reach out to the host team to arrange a visit.{' '}
+          Teams sharing their practice fields with the community. FRC first, with FTC and FLL fields
+          welcome too. Pick a program, filter by field type and availability, then reach out to the host
+          team to arrange a visit.{' '}
           <Link href="/submit" className="text-primary hover:underline">Add your field</Link>.
         </p>
       </div>

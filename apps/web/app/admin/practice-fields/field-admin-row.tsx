@@ -12,7 +12,7 @@ import {
 } from '@/lib/fields/field-display'
 import type { FieldCoverage, FieldElements } from '@the-tool-pit/db'
 // Value tuples from the zero-dependency enum subpath (keeps the DB client out of the client bundle).
-import { FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY } from '@the-tool-pit/db/field-enums'
+import { FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db/field-enums'
 import { PinMap } from '@/components/fields/pin-map'
 import { approveField, suppressField, unsuppressField, deleteField, updateField, type FieldEditInput } from './actions'
 
@@ -109,6 +109,7 @@ function Editor({ field, onDone, onError }: { field: PracticeField; onDone: () =
     name: field.name,
     teamNumber: field.teamNumber,
     teamName: field.teamName,
+    program: field.program,
     coverage: field.coverage,
     elements: field.elements,
     perimeter: field.perimeter,
@@ -152,6 +153,7 @@ function Editor({ field, onDone, onError }: { field: PracticeField; onDone: () =
           <L label="Team #"><input type="number" className="input" value={form.teamNumber ?? ''} onChange={(e) => set('teamNumber', e.target.value ? Number(e.target.value) : null)} /></L>
           <L label="Team name"><input className="input" value={form.teamName ?? ''} onChange={(e) => set('teamName', e.target.value)} /></L>
         </div>
+        <L label="Program"><select className="input uppercase" value={form.program} onChange={(e) => set('program', e.target.value)}>{FIELD_PROGRAMS.map((p) => <option key={p} value={p}>{p.toUpperCase()}</option>)}</select></L>
         <L label="Coverage"><select className="input" value={form.coverage} onChange={(e) => set('coverage', e.target.value)}>{FIELD_COVERAGE.map((c) => <option key={c} value={c}>{COVERAGE_LABEL[c]}</option>)}</select></L>
         <L label="Elements"><select className="input" value={form.elements} onChange={(e) => set('elements', e.target.value)}>{FIELD_ELEMENTS.map((c) => <option key={c} value={c}>{ELEMENTS_LABEL[c]}</option>)}</select></L>
         <L label="Perimeter"><select className="input" value={form.perimeter} onChange={(e) => set('perimeter', e.target.value)}>{FIELD_PERIMETER.map((c) => <option key={c} value={c}>{PERIMETER_LABEL[c]}</option>)}</select></L>

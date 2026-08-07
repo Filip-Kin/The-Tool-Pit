@@ -32,11 +32,13 @@ declare global {
 }
 
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
+type Program = 'frc' | 'ftc' | 'fll'
 
 interface FormState {
   name: string
   teamNumber: string
   teamName: string
+  program: Program
   address: string
   city: string
   region: string
@@ -60,6 +62,7 @@ const INITIAL: FormState = {
   name: '',
   teamNumber: '',
   teamName: '',
+  program: 'frc',
   address: '',
   city: '',
   region: '',
@@ -197,6 +200,15 @@ export function FieldSubmitForm() {
           <div className="flex-1">
             <Field label="Team / organisation">
               <input value={form.teamName} onChange={(e) => set('teamName', e.target.value)} placeholder="Kinematic Wolves" className="input" />
+            </Field>
+          </div>
+          <div className="w-28">
+            <Field label="Program">
+              <select value={form.program} onChange={(e) => set('program', e.target.value as Program)} className="input uppercase">
+                <option value="frc">FRC</option>
+                <option value="ftc">FTC</option>
+                <option value="fll">FLL</option>
+              </select>
             </Field>
           </div>
         </div>

@@ -56,6 +56,15 @@ function Badge({ children, tone }: { children: React.ReactNode; tone?: 'fms' }) 
   )
 }
 
+/** Small uppercase program tag, shown only for non-FRC fields (FRC is the default). */
+function ProgramTag({ program }: { program: string }) {
+  return (
+    <span className="shrink-0 rounded bg-surface-3 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+      {program}
+    </span>
+  )
+}
+
 /** Compact, selectable list row. */
 export function FieldCard({
   field,
@@ -78,7 +87,10 @@ export function FieldCard({
     >
       <PinDot f={field} />
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-foreground">{titleOf(field)}</div>
+        <div className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate font-medium text-foreground">{titleOf(field)}</span>
+          {field.program !== 'frc' && <ProgramTag program={field.program} />}
+        </div>
         {loc && (
           <div className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-2">
             <MapPin className="h-3 w-3 shrink-0" />
@@ -124,7 +136,10 @@ export function FieldDetail({ field }: { field: PublicField }) {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">{titleOf(field)}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold text-foreground">{titleOf(field)}</h1>
+          {field.program !== 'frc' && <ProgramTag program={field.program} />}
+        </div>
         {loc && (
           <p className="mt-1 flex items-center gap-1 text-sm text-muted">
             <MapPin className="h-4 w-4" />
