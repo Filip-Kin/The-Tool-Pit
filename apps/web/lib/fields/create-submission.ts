@@ -2,7 +2,6 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import type { NewPracticeField } from '@the-tool-pit/db'
-import { fieldSpecSummary } from '@/lib/fields/field-display'
 import { notifyNewFieldSubmission } from './notify'
 
 export interface CreateFieldSubmissionInput {
@@ -57,6 +56,8 @@ export async function createFieldSubmission(
 
   const coverage = pickEnum(input.coverage, FIELD_COVERAGE, 'full')
   const elements = pickEnum(input.elements, FIELD_ELEMENTS, 'wood')
+  const perimeter = pickEnum(input.perimeter, FIELD_PERIMETER, 'none')
+  const availability = pickEnum(input.availability, FIELD_AVAILABILITY, 'unknown')
   const hasFms = Boolean(input.hasFms)
 
   // Sanity-clamp coordinates; drop them if out of range so the map never gets junk.
@@ -85,14 +86,14 @@ export async function createFieldSubmission(
     region: input.region?.trim() || null,
     country: input.country?.trim() || null,
     coverage,
-    perimeter: pickEnum(input.perimeter, FIELD_PERIMETER, 'none'),
+    perimeter,
     elements,
     hasFms,
     // Every practice field is assumed to have AprilTags set up, so it's no
     // longer a per-field toggle - always true.
     aprilTags: true,
     ceilingHeightFt: ceiling,
-    availability: pickEnum(input.availability, FIELD_AVAILABILITY, 'unknown'),
+    availability,
     hours: input.hours?.trim() || null,
     contactInfo: input.contactInfo?.trim() || null,
     contactUrl: input.contactUrl?.trim() || null,
@@ -122,11 +123,29 @@ export async function createFieldSubmission(
   }
 
   void notifyNewFieldSubmission({
+    fieldId: row.id,
     name,
     teamNumber,
+    teamName: values.teamName,
+    program: values.program,
     city: values.city,
     region: values.region,
-    spec: fieldSpecSummary({ coverage, elements, hasFms }),
+    country: values.country,
+    address: values.address,
+    coverage,
+    perimeter,
+    elements,
+    hasFms,
+    ceilingHeightFt: ceiling,
+    availability,
+    hours: values.hours,
+    contactInfo: values.contactInfo,
+    contactUrl: values.contactUrl,
+    website: values.website,
+    notes: values.notes,
+    submitterName: values.submitterName,
+    submitterContact: values.submitterContact,
+    hasPhoto: Boolean(input.photo),
   })
 
   return {

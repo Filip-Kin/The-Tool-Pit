@@ -136,7 +136,13 @@ export async function createAlbumSubmission(
   // Best-effort Discord ping so a moderator sees new submissions promptly.
   void notifyNewSubmission({
     url: input.url,
+    coverUrl: canon.canonicalUrl,
     eventHint: input.eventHint,
+    eventName: resolvedName,
+    eventCode: targetEventCode,
+    year: targetEventYear,
+    program: targetProgram,
+    provider: canon.provider,
     photographer: input.photographerHint,
     note: input.note,
   })
