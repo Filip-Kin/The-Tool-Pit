@@ -71,10 +71,13 @@ export function FieldCard({
   field,
   selected,
   onSelect,
+  distance,
 }: {
   field: PublicField
   selected: boolean
   onSelect: (id: string) => void
+  /** Pre-formatted distance from the visitor (e.g. "12 mi"), shown when located. */
+  distance?: string | null
 }) {
   const loc = locationOf(field)
   return (
@@ -93,10 +96,13 @@ export function FieldCard({
           {field.program !== 'frc' && <ProgramTag program={field.program} />}
         </div>
         {teamSubtitle(field) && <div className="mt-0.5 truncate text-xs text-muted">{teamSubtitle(field)}</div>}
-        {loc && (
+        {(loc || distance) && (
           <div className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-2">
             <MapPin className="h-3 w-3 shrink-0" />
-            {loc}
+            <span className="truncate">{loc}</span>
+            {distance && (
+              <span className="ml-auto shrink-0 pl-2 font-medium text-muted">{distance} away</span>
+            )}
           </div>
         )}
         <div className="mt-2">

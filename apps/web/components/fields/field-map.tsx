@@ -11,12 +11,23 @@ interface FieldMapProps {
   fields: PublicField[]
   selectedId: string | null
   onSelect: (id: string) => void
+  /** Visitor's location, once granted, for a "you are here" marker + zoom-in. */
+  userLoc?: { lat: number; lng: number } | null
   height?: number
 }
 
 const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png'
 const TILE_ATTRIB = '&copy; OpenStreetMap contributors &copy; CARTO'
 const DEFAULT_CENTER: [number, number] = [39.5, -98.35]
+// Zoom level to drop the visitor into once we know where they are: regional,
+// enough to see their city and the fields around it.
+const USER_ZOOM = 9
+
+// A "you are here" pin: brand-purple device dot with a soft halo, distinct from
+// the red/blue field pins so it never reads as a field.
+function userMarkerHtml(): string {
+  return `<div style="width:14px;height:14px;background:#7c3aed;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(124,58,237,0.25),0 1px 4px rgba(0,0,0,0.6)"></div>`
+}
 
 function tooltipHtml(f: PublicField): string {
   const team =
@@ -35,11 +46,13 @@ function tooltipHtml(f: PublicField): string {
  * clicking opens the detail dialog. Leaflet is dynamic-imported so it never
  * runs during SSR.
  */
-export function FieldMap({ fields, selectedId, onSelect, height = 560 }: FieldMapProps) {
+export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }: FieldMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<LeafletMap | null>(null)
   const markersRef = useRef<Map<string, LeafletMarker>>(new Map())
   const iconsRef = useRef<Map<string, { base: DivIcon; selected: DivIcon }>>(new Map())
+  const userMarkerRef = useRef<LeafletMarker | null>(null)
+  const framedForUserRef = useRef(false)
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
 
@@ -87,7 +100,25 @@ export function FieldMap({ fields, selectedId, onSelect, height = 560 }: FieldMa
         latlngs.push([f.latitude, f.longitude])
       }
 
-      if (latlngs.length === 1) {
+      // Drop (or move) the "you are here" marker once we know the visitor's spot.
+      userMarkerRef.current?.remove()
+      userMarkerRef.current = null
+      if (userLoc) {
+        const icon = L.divIcon({ html: userMarkerHtml(), className: '', iconSize: [14, 14], iconAnchor: [7, 7] })
+        userMarkerRef.current = L.marker([userLoc.lat, userLoc.lng], { icon, interactive: true, zIndexOffset: 1000 })
+          .addTo(map)
+          .bindTooltip('You are here', { direction: 'top', offset: [0, -8], opacity: 1 })
+      }
+
+      // Framing: when we know where the visitor is, zoom into their area once
+      // (the first time we get a fix); otherwise leave the view where they or a
+      // card click put it. With no location, frame all fields as an overview.
+      if (userLoc) {
+        if (!framedForUserRef.current) {
+          map.setView([userLoc.lat, userLoc.lng], USER_ZOOM)
+          framedForUserRef.current = true
+        }
+      } else if (latlngs.length === 1) {
         map.setView(latlngs[0], 13)
       } else if (latlngs.length > 1) {
         map.fitBounds(L.latLngBounds(latlngs).pad(0.15))
@@ -97,7 +128,7 @@ export function FieldMap({ fields, selectedId, onSelect, height = 560 }: FieldMa
     return () => {
       cancelled = true
     }
-  }, [fields])
+  }, [fields, userLoc])
 
   // Tear the map down on unmount.
   useEffect(() => {
@@ -106,6 +137,7 @@ export function FieldMap({ fields, selectedId, onSelect, height = 560 }: FieldMa
       mapRef.current = null
       markersRef.current.clear()
       iconsRef.current.clear()
+      userMarkerRef.current = null
     }
   }, [])
 
@@ -120,7 +152,9 @@ export function FieldMap({ fields, selectedId, onSelect, height = 560 }: FieldMa
     })
     if (selectedId) {
       const marker = markersRef.current.get(selectedId)
-      if (marker) map.panTo(marker.getLatLng())
+      // Bring the picked field into view; if we're zoomed way out (global
+      // dataset), zoom in enough that it's actually usable.
+      if (marker) map.setView(marker.getLatLng(), Math.max(map.getZoom(), 12), { animate: true })
     }
   }, [selectedId])
 

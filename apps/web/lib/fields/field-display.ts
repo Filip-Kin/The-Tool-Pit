@@ -62,6 +62,41 @@ export function fieldMarkerStyle(coverage: FieldCoverage, elements: FieldElement
   return { color, size: full ? 20 : 16 }
 }
 
+// ---------------------------------------------------------------------------
+// Distance / proximity (for "near me" sorting)
+// ---------------------------------------------------------------------------
+
+export type DistanceUnit = 'mi' | 'km'
+
+/** Great-circle distance between two lat/lng points, in kilometres (haversine). */
+export function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371 // Earth radius, km
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(bLat - aLat)
+  const dLng = toRad(bLng - aLng)
+  const lat1 = toRad(aLat)
+  const lat2 = toRad(bLat)
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+// Locales that conventionally use miles for distance (everyone else: km).
+const MILE_REGIONS = new Set(['US', 'GB', 'MM', 'LR'])
+
+/** Pick a distance unit from a browser locale string (e.g. "en-US" -> mi). */
+export function unitFromLocale(locale: string | undefined): DistanceUnit {
+  if (!locale) return 'km'
+  const region = locale.split('-')[1]?.toUpperCase()
+  return region && MILE_REGIONS.has(region) ? 'mi' : 'km'
+}
+
+/** Format a kilometre distance in the given unit, rounded for readability. */
+export function formatDistance(km: number, unit: DistanceUnit): string {
+  const value = unit === 'mi' ? km * 0.621371 : km
+  const rounded = value < 10 ? Math.round(value * 10) / 10 : Math.round(value)
+  return `${rounded} ${unit}`
+}
+
 /** Below this ceiling height (feet), warn that it may be too low to shoot. */
 export const LOW_CEILING_FT = 12
 
