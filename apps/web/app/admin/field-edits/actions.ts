@@ -3,9 +3,9 @@
 import { isAdmin } from '@/lib/admin/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { eq } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { practiceFields, fieldEditProposals } from '@the-tool-pit/db'
+import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos } from '@the-tool-pit/db'
 import type { FieldEditProposalData } from '@the-tool-pit/db'
 
 async function assertAdmin() {
@@ -59,6 +59,33 @@ export async function applyFieldEdit(proposalId: string): Promise<{ error?: stri
   if (!p.name || !(p.name as string).trim()) return { error: 'Proposed name is empty.' }
 
   await db.update(practiceFields).set(patch).where(eq(practiceFields.id, proposal.fieldId))
+
+  // Apply the photo changes: remove the requested existing photos, then append
+  // the proposal's pending photos to the field's gallery.
+  const removeIds = (proposal.removePhotoIds ?? []) as string[]
+  if (removeIds.length > 0) {
+    await db
+      .delete(fieldPhotos)
+      .where(and(eq(fieldPhotos.fieldId, proposal.fieldId), inArray(fieldPhotos.id, removeIds)))
+  }
+
+  const pending = await db
+    .select()
+    .from(fieldEditProposalPhotos)
+    .where(eq(fieldEditProposalPhotos.proposalId, proposalId))
+  if (pending.length > 0) {
+    const remaining = await db
+      .select({ sortOrder: fieldPhotos.sortOrder })
+      .from(fieldPhotos)
+      .where(eq(fieldPhotos.fieldId, proposal.fieldId))
+    let nextOrder = remaining.reduce((m, r) => Math.max(m, r.sortOrder + 1), 0)
+    await db.insert(fieldPhotos).values(
+      pending.map((ph) => ({ fieldId: proposal.fieldId, contentType: ph.contentType, data: ph.data, sortOrder: nextOrder++ })),
+    )
+    // Reclaim the pending bytea now that the photos live on the field.
+    await db.delete(fieldEditProposalPhotos).where(eq(fieldEditProposalPhotos.proposalId, proposalId))
+  }
+
   await db
     .update(fieldEditProposals)
     .set({ status: 'applied', updatedAt: new Date() })
@@ -70,6 +97,8 @@ export async function applyFieldEdit(proposalId: string): Promise<{ error?: stri
 export async function rejectFieldEdit(proposalId: string): Promise<void> {
   await assertAdmin()
   const db = getDb()
+  // Drop the pending photo bytes; the proposal row stays for the record.
+  await db.delete(fieldEditProposalPhotos).where(eq(fieldEditProposalPhotos.proposalId, proposalId))
   await db
     .update(fieldEditProposals)
     .set({ status: 'rejected', updatedAt: new Date() })

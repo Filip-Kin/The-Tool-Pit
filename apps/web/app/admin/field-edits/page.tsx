@@ -1,7 +1,7 @@
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, asc, inArray } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
-import { practiceFields, fieldEditProposals } from '@the-tool-pit/db'
+import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos } from '@the-tool-pit/db'
 import type { PracticeField, FieldEditProposalData } from '@the-tool-pit/db'
 import { EditProposalActions } from './edit-proposal-actions'
 
@@ -57,6 +57,29 @@ export default async function FieldEditsAdminPage() {
     .where(eq(fieldEditProposals.status, 'pending'))
     .orderBy(desc(fieldEditProposals.createdAt))
 
+  // Existing photos for the involved fields (to show which are being removed),
+  // and the pending photos each proposal wants to add.
+  const fieldIds = [...new Set(rows.map((r) => r.field.id))]
+  const proposalIds = rows.map((r) => r.proposal.id)
+  const existingPhotos = fieldIds.length
+    ? await db
+        .select({ id: fieldPhotos.id, fieldId: fieldPhotos.fieldId })
+        .from(fieldPhotos)
+        .where(inArray(fieldPhotos.fieldId, fieldIds))
+        .orderBy(asc(fieldPhotos.sortOrder), asc(fieldPhotos.createdAt))
+    : []
+  const pendingPhotos = proposalIds.length
+    ? await db
+        .select({ id: fieldEditProposalPhotos.id, proposalId: fieldEditProposalPhotos.proposalId })
+        .from(fieldEditProposalPhotos)
+        .where(inArray(fieldEditProposalPhotos.proposalId, proposalIds))
+        .orderBy(asc(fieldEditProposalPhotos.createdAt))
+    : []
+  const existingByField = new Map<string, string[]>()
+  for (const p of existingPhotos) existingByField.set(p.fieldId, [...(existingByField.get(p.fieldId) ?? []), p.id])
+  const pendingByProposal = new Map<string, string[]>()
+  for (const p of pendingPhotos) pendingByProposal.set(p.proposalId, [...(pendingByProposal.get(p.proposalId) ?? []), p.id])
+
   return (
     <div className="p-4 md:p-6">
       <h1 className="text-xl font-semibold text-foreground">Field Edit Proposals</h1>
@@ -68,6 +91,10 @@ export default async function FieldEditsAdminPage() {
           const proposed = proposal.proposed as FieldEditProposalData
           const changes = changedKeys(field, proposed)
           const current = field as unknown as Record<string, unknown>
+          const removeIds = (proposal.removePhotoIds ?? []) as string[]
+          const existingIds = existingByField.get(field.id) ?? []
+          const addIds = pendingByProposal.get(proposal.id) ?? []
+          const hasPhotoChanges = removeIds.length > 0 || addIds.length > 0
           return (
             <div key={proposal.id} className="rounded-lg border border-border-subtle bg-surface p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -84,28 +111,54 @@ export default async function FieldEditsAdminPage() {
                 <EditProposalActions proposalId={proposal.id} />
               </div>
 
-              {changes.length === 0 ? (
+              {changes.length === 0 && !hasPhotoChanges ? (
                 <p className="mt-3 text-xs text-muted-2">No actual changes from the current listing.</p>
               ) : (
-                <div className="mt-3 overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-muted-2">
-                        <th className="py-1 pr-4 font-medium">Field</th>
-                        <th className="py-1 pr-4 font-medium">Current</th>
-                        <th className="py-1 font-medium">Proposed</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {changes.map((k) => (
-                        <tr key={k} className="border-t border-border-subtle align-top">
-                          <td className="py-1.5 pr-4 text-muted-2">{KEY_LABELS[k]}</td>
-                          <td className="py-1.5 pr-4 text-muted line-through decoration-muted-2/50">{fmt(current[k])}</td>
-                          <td className="py-1.5 text-foreground">{fmt(proposed[k])}</td>
+                changes.length > 0 && (
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-muted-2">
+                          <th className="py-1 pr-4 font-medium">Field</th>
+                          <th className="py-1 pr-4 font-medium">Current</th>
+                          <th className="py-1 font-medium">Proposed</th>
                         </tr>
+                      </thead>
+                      <tbody>
+                        {changes.map((k) => (
+                          <tr key={k} className="border-t border-border-subtle align-top">
+                            <td className="py-1.5 pr-4 text-muted-2">{KEY_LABELS[k]}</td>
+                            <td className="py-1.5 pr-4 text-muted line-through decoration-muted-2/50">{fmt(current[k])}</td>
+                            <td className="py-1.5 text-foreground">{fmt(proposed[k])}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              )}
+
+              {hasPhotoChanges && (
+                <div className="mt-3 flex flex-col gap-2">
+                  <span className="text-xs font-medium text-muted-2">Photos</span>
+                  <div className="flex flex-wrap gap-2">
+                    {existingIds
+                      .filter((id) => removeIds.includes(id))
+                      .map((id) => (
+                        <div key={id} className="relative">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={`/api/fields/photo/${id}`} alt="" className="h-20 w-24 rounded-md border border-border object-cover opacity-40 grayscale" />
+                          <span className="absolute inset-x-1 bottom-1 rounded bg-frc/80 py-0.5 text-center text-[10px] font-medium text-white">Removing</span>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                    {addIds.map((id) => (
+                      <div key={id} className="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={`/api/fields/proposal-photo/${id}`} alt="" className="h-20 w-24 rounded-md border border-rookie/60 object-cover" />
+                        <span className="absolute inset-x-1 bottom-1 rounded bg-rookie/80 py-0.5 text-center text-[10px] font-medium text-white">Adding</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

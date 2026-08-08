@@ -4,9 +4,9 @@ import { getDb } from '@/lib/db'
 import { fieldPhotos } from '@the-tool-pit/db'
 
 /**
- * Serves an uploaded practice-field photo from the DB. The field's photo_url
- * points here. Only bytes are exposed - no moderation state - so unpublished
- * fields' photos aren't linked anywhere public until an admin publishes them.
+ * Serves an uploaded practice-field photo from the DB, by photo id. Only bytes
+ * are exposed - no moderation state - so unpublished fields' photos aren't
+ * linked anywhere public until an admin publishes them.
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const [row] = await db
     .select({ data: fieldPhotos.data, contentType: fieldPhotos.contentType })
     .from(fieldPhotos)
-    .where(eq(fieldPhotos.fieldId, id))
+    .where(eq(fieldPhotos.id, id))
     .limit(1)
   if (!row) return new NextResponse('Not found', { status: 404 })
 

@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { getIpHash } from '@/lib/utils/ip'
 import { checkFieldSubmissionRateLimit } from '@/lib/fields/rate-limit'
 import { createFieldEditProposal } from '@/lib/fields/create-edit'
-import { formStr as str, formNum as num, formBool as bool } from '@/lib/fields/form-parse'
+import { formStr as str, formNum as num, formBool as bool, formStringArray as strArr, readPhotoFiles } from '@/lib/fields/form-parse'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -24,6 +24,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const outcome = (await verify.json()) as { success: boolean }
       if (!outcome.success) return NextResponse.json({ error: 'Verification failed' }, { status: 400 })
     }
+
+    const parsed = await readPhotoFiles(form, 'photos')
+    if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
     const result = await createFieldEditProposal(id, {
       name: str(form, 'name'),
@@ -51,6 +54,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       submitterName: str(form, 'submitterName'),
       submitterContact: str(form, 'submitterContact'),
       submitterIpHash: ipHash,
+      newPhotos: parsed.photos,
+      removePhotoIds: strArr(form, 'removePhotoIds'),
     })
 
     if (result.status === 'error') return NextResponse.json({ error: result.message }, { status: 400 })

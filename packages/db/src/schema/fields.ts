@@ -81,8 +81,6 @@ export const practiceFields = pgTable(
     contactUrl: text('contact_url'),
     website: text('website'),
     notes: text('notes'),
-    /** Serving URL for the uploaded photo (points at /api/fields/photo/<id>) or an external image URL. */
-    photoUrl: text('photo_url'),
 
     // Moderation
     /** FIELD_STATUSES */
@@ -111,17 +109,25 @@ export const practiceFields = pgTable(
 
 // ---------------------------------------------------------------------------
 // Uploaded field photos (in-DB bytea, served via /api/fields/photo/[id]).
-// Reviewed by an admin before the field is published.
+// A field can have several - a gallery, ordered by sortOrder. Reviewed by an
+// admin before the field is published.
 // ---------------------------------------------------------------------------
 
-export const fieldPhotos = pgTable('field_photos', {
-  fieldId: uuid('field_id')
-    .primaryKey()
-    .references(() => practiceFields.id, { onDelete: 'cascade' }),
-  contentType: text('content_type').notNull(),
-  data: bytea('data').notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
+export const fieldPhotos = pgTable(
+  'field_photos',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    fieldId: uuid('field_id')
+      .notNull()
+      .references(() => practiceFields.id, { onDelete: 'cascade' }),
+    contentType: text('content_type').notNull(),
+    data: bytea('data').notNull(),
+    /** Display order within a field's gallery (ascending; first is the cover). */
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('field_photos_field_id_idx').on(table.fieldId)],
+)
 
 // ---------------------------------------------------------------------------
 // Community edit proposals - anyone can suggest changes to a published field;
@@ -164,6 +170,8 @@ export const fieldEditProposals = pgTable(
       .notNull()
       .references(() => practiceFields.id, { onDelete: 'cascade' }),
     proposed: jsonb('proposed').$type<FieldEditProposalData>().notNull(),
+    /** IDs of existing field_photos the submitter proposes removing. */
+    removePhotoIds: jsonb('remove_photo_ids').$type<string[]>().notNull().default([]),
     /** Submitter's note explaining what changed / why. */
     note: text('note'),
     submitterName: text('submitter_name'),
@@ -181,20 +189,45 @@ export const fieldEditProposals = pgTable(
 )
 
 // ---------------------------------------------------------------------------
+// Photos attached to a pending edit proposal (in-DB bytea). Held here until an
+// admin applies the proposal, at which point they become field_photos rows.
+// Served (admin-only) via /api/fields/proposal-photo/[id] for the diff view.
+// ---------------------------------------------------------------------------
+
+export const fieldEditProposalPhotos = pgTable(
+  'field_edit_proposal_photos',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    proposalId: uuid('proposal_id')
+      .notNull()
+      .references(() => fieldEditProposals.id, { onDelete: 'cascade' }),
+    contentType: text('content_type').notNull(),
+    data: bytea('data').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('field_edit_proposal_photos_proposal_id_idx').on(table.proposalId)],
+)
+
+// ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
 
-export const practiceFieldsRelations = relations(practiceFields, ({ one, many }) => ({
-  photo: one(fieldPhotos, { fields: [practiceFields.id], references: [fieldPhotos.fieldId] }),
+export const practiceFieldsRelations = relations(practiceFields, ({ many }) => ({
+  photos: many(fieldPhotos),
   editProposals: many(fieldEditProposals),
 }))
 
-export const fieldEditProposalsRelations = relations(fieldEditProposals, ({ one }) => ({
+export const fieldEditProposalsRelations = relations(fieldEditProposals, ({ one, many }) => ({
   field: one(practiceFields, { fields: [fieldEditProposals.fieldId], references: [practiceFields.id] }),
+  photos: many(fieldEditProposalPhotos),
 }))
 
 export const fieldPhotosRelations = relations(fieldPhotos, ({ one }) => ({
   field: one(practiceFields, { fields: [fieldPhotos.fieldId], references: [practiceFields.id] }),
+}))
+
+export const fieldEditProposalPhotosRelations = relations(fieldEditProposalPhotos, ({ one }) => ({
+  proposal: one(fieldEditProposals, { fields: [fieldEditProposalPhotos.proposalId], references: [fieldEditProposals.id] }),
 }))
 
 // ---------------------------------------------------------------------------
@@ -207,3 +240,5 @@ export type FieldPhoto = typeof fieldPhotos.$inferSelect
 export type NewFieldPhoto = typeof fieldPhotos.$inferInsert
 export type FieldEditProposal = typeof fieldEditProposals.$inferSelect
 export type NewFieldEditProposal = typeof fieldEditProposals.$inferInsert
+export type FieldEditProposalPhoto = typeof fieldEditProposalPhotos.$inferSelect
+export type NewFieldEditProposalPhoto = typeof fieldEditProposalPhotos.$inferInsert

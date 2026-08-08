@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { MapPin, Pencil, Check, X, Trash2, RotateCcw } from 'lucide-react'
 import type { PracticeField } from '@the-tool-pit/db'
+import type { FieldPhotoRef } from '@/lib/fields/field-display'
 import {
   COVERAGE_LABEL,
   PERIMETER_LABEL,
@@ -14,9 +16,9 @@ import type { FieldCoverage, FieldElements } from '@the-tool-pit/db'
 // Value tuples from the zero-dependency enum subpath (keeps the DB client out of the client bundle).
 import { FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db/field-enums'
 import { PinMap } from '@/components/fields/pin-map'
-import { approveField, suppressField, unsuppressField, deleteField, updateField, type FieldEditInput } from './actions'
+import { approveField, suppressField, unsuppressField, deleteField, updateField, addFieldPhotos, removeFieldPhoto, type FieldEditInput } from './actions'
 
-export function FieldAdminRow({ field }: { field: PracticeField }) {
+export function FieldAdminRow({ field, photos }: { field: PracticeField; photos: FieldPhotoRef[] }) {
   const [editing, setEditing] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -95,12 +97,12 @@ export function FieldAdminRow({ field }: { field: PracticeField }) {
 
       {msg && <p className="mt-2 text-xs text-official">{msg}</p>}
 
-      {editing && <Editor field={field} onDone={() => setEditing(false)} onError={setMsg} />}
+      {editing && <Editor field={field} photos={photos} onDone={() => setEditing(false)} onError={setMsg} />}
     </div>
   )
 }
 
-function Editor({ field, onDone, onError }: { field: PracticeField; onDone: () => void; onError: (m: string) => void }) {
+function Editor({ field, photos, onDone, onError }: { field: PracticeField; photos: FieldPhotoRef[]; onDone: () => void; onError: (m: string) => void }) {
   const [pending, startTransition] = useTransition()
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
     field.latitude != null && field.longitude != null ? { lat: field.latitude, lng: field.longitude } : null,
@@ -175,6 +177,8 @@ function Editor({ field, onDone, onError }: { field: PracticeField; onDone: () =
         <label className="flex items-center gap-2 text-sm text-foreground"><input type="checkbox" checked={!!form.hasFms} onChange={(e) => set('hasFms', e.target.checked)} className="h-4 w-4 accent-[var(--color-primary)]" /> Has FMS</label>
       </div>
 
+      <PhotoManager fieldId={field.id} photos={photos} onError={onError} />
+
       <div className="flex gap-2">
         <button onClick={save} disabled={pending} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover disabled:opacity-50">
           {pending ? 'Saving…' : 'Save changes'}
@@ -183,6 +187,67 @@ function Editor({ field, onDone, onError }: { field: PracticeField; onDone: () =
           Cancel
         </button>
       </div>
+    </div>
+  )
+}
+
+/** Immediate photo add/remove for a field (admin changes apply straight away). */
+function PhotoManager({ fieldId, photos, onError }: { fieldId: string; photos: FieldPhotoRef[]; onError: (m: string) => void }) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  function add(files: FileList | null) {
+    if (!files || files.length === 0) return
+    const fd = new FormData()
+    for (const f of Array.from(files)) fd.append('photos', f)
+    startTransition(async () => {
+      const res = await addFieldPhotos(fieldId, fd)
+      if (res.error) onError(res.error)
+      else router.refresh()
+      if (inputRef.current) inputRef.current.value = ''
+    })
+  }
+
+  function remove(photoId: string) {
+    startTransition(async () => {
+      const res = await removeFieldPhoto(photoId)
+      if (res.error) onError(res.error)
+      else router.refresh()
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs text-muted-2">Photos</span>
+      {photos.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {photos.map((p) => (
+            <div key={p.id} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.url} alt="" className="h-20 w-24 rounded-md border border-border object-cover" />
+              <button
+                type="button"
+                onClick={() => remove(p.id)}
+                disabled={pending}
+                aria-label="Remove photo"
+                className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white hover:bg-black disabled:opacity-50"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        disabled={pending}
+        onChange={(e) => add(e.target.files)}
+        className="input"
+      />
     </div>
   )
 }

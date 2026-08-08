@@ -2,9 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { getIpHash } from '@/lib/utils/ip'
 import { checkFieldSubmissionRateLimit } from '@/lib/fields/rate-limit'
 import { createFieldSubmission } from '@/lib/fields/create-submission'
-import { formStr as str, formNum as num, formBool as bool } from '@/lib/fields/form-parse'
-
-const MAX_PHOTO_BYTES = 10 * 1024 * 1024
+import { formStr as str, formNum as num, formBool as bool, readPhotoFiles } from '@/lib/fields/form-parse'
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,14 +27,9 @@ export async function POST(req: NextRequest) {
       if (!outcome.success) return NextResponse.json({ error: 'Verification failed' }, { status: 400 })
     }
 
-    // Optional photo.
-    let photo: { data: Buffer; contentType: string } | undefined
-    const file = form.get('photo')
-    if (file instanceof File && file.size > 0) {
-      if (!file.type.startsWith('image/')) return NextResponse.json({ error: 'The photo must be an image.' }, { status: 400 })
-      if (file.size > MAX_PHOTO_BYTES) return NextResponse.json({ error: 'Photo is larger than 10 MB.' }, { status: 400 })
-      photo = { data: Buffer.from(await file.arrayBuffer()), contentType: file.type }
-    }
+    // Optional photos.
+    const parsed = await readPhotoFiles(form, 'photos')
+    if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
     const result = await createFieldSubmission({
       name,
@@ -64,7 +57,7 @@ export async function POST(req: NextRequest) {
       submitterName: str(form, 'submitterName'),
       submitterContact: str(form, 'submitterContact'),
       submitterIpHash: ipHash,
-      photo,
+      photos: parsed.photos,
     })
 
     if (result.status === 'error') return NextResponse.json({ error: result.message }, { status: 400 })

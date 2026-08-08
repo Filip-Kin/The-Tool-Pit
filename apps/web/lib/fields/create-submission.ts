@@ -1,4 +1,3 @@
-import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import type { NewPracticeField } from '@the-tool-pit/db'
@@ -30,8 +29,8 @@ export interface CreateFieldSubmissionInput {
   submitterName?: string
   submitterContact?: string
   submitterIpHash: string
-  /** Optional photo to attach and review before publish. */
-  photo?: { data: Buffer; contentType: string }
+  /** Optional photos to attach and review before publish (gallery order). */
+  photos?: { data: Buffer; contentType: string }[]
 }
 
 export interface CreateFieldSubmissionResult {
@@ -108,18 +107,16 @@ export async function createFieldSubmission(
 
   const [row] = await db.insert(practiceFields).values(values).returning({ id: practiceFields.id })
 
-  // Store the uploaded photo (reviewed before the field is published) and point
-  // the field's photoUrl at the serving route.
-  if (input.photo) {
-    await db.insert(fieldPhotos).values({
-      fieldId: row.id,
-      contentType: input.photo.contentType,
-      data: input.photo.data,
-    })
-    await db
-      .update(practiceFields)
-      .set({ photoUrl: `/api/fields/photo/${row.id}`, updatedAt: new Date() })
-      .where(eq(practiceFields.id, row.id))
+  // Store the uploaded photos (reviewed before the field is published) in
+  // gallery order. Keep the first id for the Discord embed preview.
+  let firstPhotoId: string | null = null
+  const photos = input.photos ?? []
+  if (photos.length > 0) {
+    const inserted = await db
+      .insert(fieldPhotos)
+      .values(photos.map((p, i) => ({ fieldId: row.id, contentType: p.contentType, data: p.data, sortOrder: i })))
+      .returning({ id: fieldPhotos.id })
+    firstPhotoId = inserted[0]?.id ?? null
   }
 
   void notifyNewFieldSubmission({
@@ -145,7 +142,8 @@ export async function createFieldSubmission(
     notes: values.notes,
     submitterName: values.submitterName,
     submitterContact: values.submitterContact,
-    hasPhoto: Boolean(input.photo),
+    photoId: firstPhotoId,
+    photoCount: photos.length,
   })
 
   return {

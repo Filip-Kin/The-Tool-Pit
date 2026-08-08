@@ -54,8 +54,10 @@ interface FieldSubmissionNotice {
   notes?: string | null
   submitterName?: string | null
   submitterContact?: string | null
-  /** Whether an uploaded photo was stored for this field. */
-  hasPhoto?: boolean
+  /** First uploaded photo's id, for the embed preview (null if none). */
+  photoId?: string | null
+  /** How many photos were uploaded. */
+  photoCount?: number
 }
 
 export async function notifyNewFieldSubmission(s: FieldSubmissionNotice): Promise<void> {
@@ -94,6 +96,7 @@ export async function notifyNewFieldSubmission(s: FieldSubmissionNotice): Promis
   addField(fields, 'Website', s.website)
   addField(fields, 'Notes', s.notes)
   addField(fields, 'Submitter', submitter)
+  if (s.photoCount && s.photoCount > 1) addField(fields, 'Photos', `${s.photoCount} uploaded`, true)
 
   const embed: Record<string, unknown> = {
     title: 'New practice field submission',
@@ -101,8 +104,8 @@ export async function notifyNewFieldSubmission(s: FieldSubmissionNotice): Promis
     color: 0x6366f1,
     fields,
   }
-  if (s.hasPhoto) {
-    embed.image = { url: `${FIELDS_PUBLIC_BASE}/api/fields/photo/${s.fieldId}` }
+  if (s.photoId) {
+    embed.image = { url: `${FIELDS_PUBLIC_BASE}/api/fields/photo/${s.photoId}` }
   }
 
   try {
@@ -117,13 +120,25 @@ export async function notifyNewFieldSubmission(s: FieldSubmissionNotice): Promis
 }
 
 /** Discord ping for a community edit proposal. Same webhook, best-effort. */
-export async function notifyFieldEdit(s: { fieldName: string; note?: string }): Promise<void> {
+export async function notifyFieldEdit(s: {
+  fieldName: string
+  note?: string
+  addedPhotos?: number
+  removedPhotos?: number
+}): Promise<void> {
   const webhook = process.env.FIELD_SUBMISSION_DISCORD_WEBHOOK
   if (!webhook) return
   const adminUrl = 'https://ttp.filipkin.com/admin/field-edits'
+  const photoChange = [
+    s.addedPhotos ? `+${s.addedPhotos} photo${s.addedPhotos > 1 ? 's' : ''}` : null,
+    s.removedPhotos ? `-${s.removedPhotos} photo${s.removedPhotos > 1 ? 's' : ''}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
   const fields: EmbedField[] = []
   addField(fields, 'Field', s.fieldName)
   addField(fields, 'What changed', s.note)
+  addField(fields, 'Photos', photoChange || null)
   try {
     await fetch(webhook, {
       method: 'POST',

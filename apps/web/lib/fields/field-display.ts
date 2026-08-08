@@ -5,6 +5,13 @@
  */
 import type { FieldCoverage, FieldElements, FieldAvailability, FieldPerimeter } from '@the-tool-pit/db'
 
+/** A single photo in a field's gallery, as sent to the client. */
+export interface FieldPhotoRef {
+  id: string
+  /** Serving URL for the image (points at /api/fields/photo/<photoId>). */
+  url: string
+}
+
 /**
  * Public field shape sent to the client. Deliberately omits the private
  * submitter audit columns (name/contact/ip hash).
@@ -33,7 +40,8 @@ export interface PublicField {
   contactUrl: string | null
   website: string | null
   notes: string | null
-  photoUrl: string | null
+  /** Gallery photos, ordered (first is the cover). Empty if none. */
+  photos: FieldPhotoRef[]
 }
 
 // ---------------------------------------------------------------------------

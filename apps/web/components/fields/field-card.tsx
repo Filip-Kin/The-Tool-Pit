@@ -1,5 +1,6 @@
 import { MapPin, AlertTriangle, Clock, CalendarClock, Tag, ExternalLink, Handshake, Link2 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { FieldGallery } from './field-gallery'
 import type { PublicField } from '@/lib/fields/field-display'
 import {
   fieldMarkerStyle,
@@ -157,10 +158,7 @@ export function FieldDetail({ field, onSuggestEdit }: { field: PublicField; onSu
         )}
       </div>
 
-      {field.photoUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={field.photoUrl} alt={`${field.name} field`} className="max-h-96 w-full rounded-lg border border-border object-cover" />
-      )}
+      {field.photos.length > 0 && <FieldGallery photos={field.photos} alt={field.name} />}
 
       <SpecBadges f={field} />
 

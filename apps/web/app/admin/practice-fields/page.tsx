@@ -1,9 +1,10 @@
 import Link from 'next/link'
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, asc, inArray } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
-import { practiceFields, FIELD_STATUSES } from '@the-tool-pit/db'
+import { practiceFields, fieldPhotos, FIELD_STATUSES } from '@the-tool-pit/db'
 import type { FieldStatus } from '@the-tool-pit/db'
+import type { FieldPhotoRef } from '@/lib/fields/field-display'
 import { FieldAdminRow } from './field-admin-row'
 
 export const dynamic = 'force-dynamic'
@@ -27,6 +28,19 @@ export default async function PracticeFieldsAdminPage({
     .from(practiceFields)
     .where(eq(practiceFields.status, active))
     .orderBy(desc(practiceFields.createdAt))
+
+  // Gallery photos for the visible fields, grouped by field id (ordered).
+  const photoRows = rows.length
+    ? await db
+        .select({ id: fieldPhotos.id, fieldId: fieldPhotos.fieldId })
+        .from(fieldPhotos)
+        .where(inArray(fieldPhotos.fieldId, rows.map((r) => r.id)))
+        .orderBy(asc(fieldPhotos.sortOrder), asc(fieldPhotos.createdAt))
+    : []
+  const photosByField = new Map<string, FieldPhotoRef[]>()
+  for (const p of photoRows) {
+    photosByField.set(p.fieldId, [...(photosByField.get(p.fieldId) ?? []), { id: p.id, url: `/api/fields/photo/${p.id}` }])
+  }
 
   // Counts per tab for the badges.
   const all = await db.select({ status: practiceFields.status }).from(practiceFields)
@@ -56,7 +70,7 @@ export default async function PracticeFieldsAdminPage({
       <div className="mt-4 flex flex-col gap-3">
         {rows.length === 0 && <p className="text-sm text-muted-2">Nothing here.</p>}
         {rows.map((f) => (
-          <FieldAdminRow key={f.id} field={f} />
+          <FieldAdminRow key={f.id} field={f} photos={photosByField.get(f.id) ?? []} />
         ))}
       </div>
     </div>

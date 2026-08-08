@@ -1,7 +1,7 @@
-import { eq, and, isNotNull, desc } from 'drizzle-orm'
+import { eq, and, isNotNull, desc, asc, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { practiceFields } from '@the-tool-pit/db'
-import type { PublicField } from '@/lib/fields/field-display'
+import { practiceFields, fieldPhotos } from '@the-tool-pit/db'
+import type { PublicField, FieldPhotoRef } from '@/lib/fields/field-display'
 import type { FieldCoverage, FieldElements, FieldAvailability, FieldPerimeter } from '@the-tool-pit/db'
 
 /** Columns exposed publicly - never the submitter audit fields. */
@@ -29,17 +29,35 @@ const publicColumns = {
   contactUrl: practiceFields.contactUrl,
   website: practiceFields.website,
   notes: practiceFields.notes,
-  photoUrl: practiceFields.photoUrl,
 } as const
 
-function toPublic(row: Record<string, unknown>): PublicField {
+function toPublic(row: Record<string, unknown>, photos: FieldPhotoRef[]): PublicField {
   return {
     ...row,
     coverage: row.coverage as FieldCoverage,
     perimeter: row.perimeter as FieldPerimeter,
     elements: row.elements as FieldElements,
     availability: row.availability as FieldAvailability,
+    photos,
   } as PublicField
+}
+
+/** Load gallery photos for a set of fields, grouped by field id (ordered). */
+async function photosByField(fieldIds: string[]): Promise<Map<string, FieldPhotoRef[]>> {
+  const map = new Map<string, FieldPhotoRef[]>()
+  if (fieldIds.length === 0) return map
+  const db = getDb()
+  const rows = await db
+    .select({ id: fieldPhotos.id, fieldId: fieldPhotos.fieldId })
+    .from(fieldPhotos)
+    .where(inArray(fieldPhotos.fieldId, fieldIds))
+    .orderBy(asc(fieldPhotos.sortOrder), asc(fieldPhotos.createdAt))
+  for (const r of rows) {
+    const list = map.get(r.fieldId) ?? []
+    list.push({ id: r.id, url: `/api/fields/photo/${r.id}` })
+    map.set(r.fieldId, list)
+  }
+  return map
 }
 
 /**
@@ -59,7 +77,8 @@ export async function getPublishedFields(): Promise<PublicField[]> {
       ),
     )
     .orderBy(desc(practiceFields.createdAt))
-  return rows.map(toPublic)
+  const photos = await photosByField(rows.map((r) => r.id))
+  return rows.map((r) => toPublic(r, photos.get(r.id) ?? []))
 }
 
 /** A single published field by id, for its shareable detail page. */
@@ -70,5 +89,7 @@ export async function getPublishedFieldById(id: string): Promise<PublicField | n
     .from(practiceFields)
     .where(and(eq(practiceFields.id, id), eq(practiceFields.status, 'published')))
     .limit(1)
-  return row ? toPublic(row) : null
+  if (!row) return null
+  const photos = await photosByField([row.id])
+  return toPublic(row, photos.get(row.id) ?? [])
 }

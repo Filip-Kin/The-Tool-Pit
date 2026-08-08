@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { practiceFields, fieldEditProposals, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
+import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import type { FieldEditProposalData } from '@the-tool-pit/db'
 import { notifyFieldEdit } from './notify'
 
@@ -31,6 +31,10 @@ export interface CreateFieldEditInput {
   submitterName?: string
   submitterContact?: string
   submitterIpHash: string
+  /** New photos to add to the gallery (held pending until an admin applies). */
+  newPhotos?: { data: Buffer; contentType: string }[]
+  /** IDs of existing field photos the submitter wants removed. */
+  removePhotoIds?: string[]
 }
 
 export interface CreateFieldEditResult {
@@ -91,17 +95,45 @@ export async function createFieldEditProposal(
     notes: input.notes?.trim() || null,
   }
 
-  await db.insert(fieldEditProposals).values({
-    fieldId,
-    proposed,
-    note: input.note?.trim() || null,
-    submitterName: input.submitterName?.trim() || null,
-    submitterContact: input.submitterContact?.trim() || null,
-    submitterIpHash: input.submitterIpHash,
-    status: 'pending',
-  })
+  // Only allow removing photos that actually belong to this field.
+  const requestedRemovals = input.removePhotoIds ?? []
+  let removePhotoIds: string[] = []
+  if (requestedRemovals.length > 0) {
+    const owned = await db
+      .select({ id: fieldPhotos.id })
+      .from(fieldPhotos)
+      .where(and(eq(fieldPhotos.fieldId, fieldId), inArray(fieldPhotos.id, requestedRemovals)))
+    removePhotoIds = owned.map((r) => r.id)
+  }
 
-  void notifyFieldEdit({ fieldName: field.name, note: input.note })
+  const newPhotos = input.newPhotos ?? []
+
+  const [proposal] = await db
+    .insert(fieldEditProposals)
+    .values({
+      fieldId,
+      proposed,
+      removePhotoIds,
+      note: input.note?.trim() || null,
+      submitterName: input.submitterName?.trim() || null,
+      submitterContact: input.submitterContact?.trim() || null,
+      submitterIpHash: input.submitterIpHash,
+      status: 'pending',
+    })
+    .returning({ id: fieldEditProposals.id })
+
+  if (newPhotos.length > 0) {
+    await db.insert(fieldEditProposalPhotos).values(
+      newPhotos.map((p) => ({ proposalId: proposal.id, contentType: p.contentType, data: p.data })),
+    )
+  }
+
+  void notifyFieldEdit({
+    fieldName: field.name,
+    note: input.note,
+    addedPhotos: newPhotos.length,
+    removedPhotos: removePhotoIds.length,
+  })
 
   return { status: 'pending', message: "Thanks! Your edit is in for review." }
 }

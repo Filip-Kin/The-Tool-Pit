@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { X, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { PinMap } from './pin-map'
-import type { PublicField } from '@/lib/fields/field-display'
+import type { PublicField, FieldPhotoRef } from '@/lib/fields/field-display'
 import {
   COVERAGE_LABEL,
   PERIMETER_LABEL,
@@ -122,7 +123,8 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
       ? { lat: edit.field.latitude, lng: edit.field.longitude }
       : null,
   )
-  const [photo, setPhoto] = useState<File | null>(null)
+  const [newPhotos, setNewPhotos] = useState<File[]>([])
+  const [removePhotoIds, setRemovePhotoIds] = useState<string[]>([])
   const [editReason, setEditReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<{ ok?: boolean; message: string } | null>(null)
@@ -201,8 +203,11 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
       }
       fd.set('latitude', String(coords.lat))
       fd.set('longitude', String(coords.lng))
-      if (!editing && photo) fd.set('photo', photo)
-      if (editing && editReason.trim()) fd.set('editReason', editReason.trim())
+      for (const f of newPhotos) fd.append('photos', f)
+      if (editing) {
+        if (editReason.trim()) fd.set('editReason', editReason.trim())
+        fd.set('removePhotoIds', JSON.stringify(removePhotoIds))
+      }
       if (turnstileToken) fd.set('turnstileToken', turnstileToken)
 
       const url = editing ? `/api/fields/${edit.field.id}/edit` : '/api/fields/submit'
@@ -211,12 +216,14 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
       if (res.ok) {
         setResult({ ok: true, message: data.message ?? 'Submitted.' })
         if (editing) {
+          setNewPhotos([])
+          setRemovePhotoIds([])
           resetTurnstile()
           onSubmitted?.()
         } else {
           setForm(INITIAL)
           setCoords(null)
-          setPhoto(null)
+          setNewPhotos([])
           resetTurnstile()
         }
       } else {
@@ -375,11 +382,25 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
         <Field label="Notes" hint="Anything else visiting teams should know.">
           <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className="input resize-y" />
         </Field>
-        {!editing && (
-          <Field label="Photo of the field" hint="Optional. Reviewed before it goes live. Max 10 MB.">
-            <input type="file" accept="image/*" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} className="input" />
-          </Field>
-        )}
+        <Field
+          label="Photos of the field"
+          hint={
+            editing
+              ? 'Add or remove photos. Changes are reviewed before they go live. Up to 8, max 10 MB each.'
+              : 'Optional. Reviewed before it goes live. Up to 8 photos, max 10 MB each.'
+          }
+        >
+          <PhotoEditor
+            existing={edit?.field.photos ?? []}
+            removeIds={removePhotoIds}
+            onToggleRemove={(id) =>
+              setRemovePhotoIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
+            }
+            files={newPhotos}
+            onAddFiles={(fs) => setNewPhotos((prev) => [...prev, ...fs].slice(0, 8))}
+            onRemoveFile={(i) => setNewPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+          />
+        </Field>
       </Section>
 
       <Section title="You" hint="Private - only the moderators see this, never shown publicly.">
@@ -432,6 +453,100 @@ function Field({ label, hint, required, children }: { label: string; hint?: stri
       {children}
       {hint && <span className="text-xs text-muted-2">{hint}</span>}
     </label>
+  )
+}
+
+/** Object-URL previews for picked files, revoked when the selection changes. */
+function usePreviews(files: File[]): string[] {
+  const [urls, setUrls] = useState<string[]>([])
+  useEffect(() => {
+    const next = files.map((f) => URL.createObjectURL(f))
+    setUrls(next)
+    return () => next.forEach((u) => URL.revokeObjectURL(u))
+  }, [files])
+  return urls
+}
+
+/**
+ * Gallery editor: shows existing photos with a remove/keep toggle, plus a
+ * thumbnail preview of newly picked files. Used for both new submissions
+ * (no existing photos) and edit proposals.
+ */
+function PhotoEditor({
+  existing,
+  removeIds,
+  onToggleRemove,
+  files,
+  onAddFiles,
+  onRemoveFile,
+}: {
+  existing: FieldPhotoRef[]
+  removeIds: string[]
+  onToggleRemove: (id: string) => void
+  files: File[]
+  onAddFiles: (files: File[]) => void
+  onRemoveFile: (index: number) => void
+}) {
+  const previews = usePreviews(files)
+  const hasThumbs = existing.length > 0 || files.length > 0
+  return (
+    <div className="flex flex-col gap-3">
+      {hasThumbs && (
+        <div className="flex flex-wrap gap-2">
+          {existing.map((p) => {
+            const removed = removeIds.includes(p.id)
+            return (
+              <div key={p.id} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={p.url}
+                  alt=""
+                  className={cn('h-20 w-24 rounded-md border border-border object-cover', removed && 'opacity-30 grayscale')}
+                />
+                <button
+                  type="button"
+                  onClick={() => onToggleRemove(p.id)}
+                  aria-label={removed ? 'Keep photo' : 'Remove photo'}
+                  className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white hover:bg-black"
+                >
+                  {removed ? <RotateCcw className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                </button>
+                {removed && (
+                  <span className="absolute inset-x-1 bottom-1 rounded bg-black/70 py-0.5 text-center text-[10px] font-medium text-white">
+                    Will remove
+                  </span>
+                )}
+              </div>
+            )
+          })}
+          {previews.map((src, i) => (
+            <div key={i} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt="" className="h-20 w-24 rounded-md border border-primary/60 object-cover" />
+              <span className="absolute left-1 top-1 rounded bg-primary px-1 text-[10px] font-medium text-white">New</span>
+              <button
+                type="button"
+                onClick={() => onRemoveFile(i)}
+                aria-label="Remove photo"
+                className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white hover:bg-black"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={(e) => {
+          onAddFiles(Array.from(e.target.files ?? []))
+          e.target.value = ''
+        }}
+        className="input"
+      />
+    </div>
   )
 }
 

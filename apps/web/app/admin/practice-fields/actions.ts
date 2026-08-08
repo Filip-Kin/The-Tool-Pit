@@ -5,7 +5,8 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { practiceFields, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
+import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
+import { readPhotoFiles } from '@/lib/fields/form-parse'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -127,6 +128,35 @@ export async function updateField(id: string, input: FieldEditInput): Promise<{ 
   if (input.notes !== undefined) patch.notes = input.notes?.trim() || null
 
   await db.update(practiceFields).set(patch).where(eq(practiceFields.id, id))
+  revalidateAll()
+  return {}
+}
+
+/** Admin: add one or more photos to a field's gallery immediately. */
+export async function addFieldPhotos(fieldId: string, formData: FormData): Promise<{ error?: string }> {
+  await assertAdmin()
+  const parsed = await readPhotoFiles(formData, 'photos')
+  if ('error' in parsed) return { error: parsed.error }
+  if (parsed.photos.length === 0) return { error: 'No photos selected.' }
+
+  const db = getDb()
+  const existing = await db
+    .select({ sortOrder: fieldPhotos.sortOrder })
+    .from(fieldPhotos)
+    .where(eq(fieldPhotos.fieldId, fieldId))
+  let nextOrder = existing.reduce((m, r) => Math.max(m, r.sortOrder + 1), 0)
+  await db.insert(fieldPhotos).values(
+    parsed.photos.map((p) => ({ fieldId, contentType: p.contentType, data: p.data, sortOrder: nextOrder++ })),
+  )
+  revalidateAll()
+  return {}
+}
+
+/** Admin: remove a single photo from a field's gallery immediately. */
+export async function removeFieldPhoto(photoId: string): Promise<{ error?: string }> {
+  await assertAdmin()
+  const db = getDb()
+  await db.delete(fieldPhotos).where(eq(fieldPhotos.id, photoId))
   revalidateAll()
   return {}
 }
