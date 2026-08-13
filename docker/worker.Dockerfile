@@ -10,7 +10,9 @@ COPY packages/types/package.json ./packages/types/
 COPY apps/worker/package.json ./apps/worker/
 COPY apps/web/package.json ./apps/web/
 
-RUN bun install --frozen-lockfile
+# Retry once with a cleared cache: large tarballs (e.g. next) occasionally fail to
+# extract on the build server, and a stale/partial cache entry makes it stick.
+RUN bun install --frozen-lockfile || { bun pm cache rm 2>/dev/null || true; rm -rf node_modules; bun install --frozen-lockfile; }
 
 # ─── build stage ─────────────────────────────────────────────────────────────
 FROM base AS builder
