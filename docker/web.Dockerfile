@@ -25,6 +25,17 @@ RUN bun run --filter @the-tool-pit/db build
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_OUTPUT=standalone
+
+# `next build` prerenders DB-backed pages, so the build needs to reach Postgres +
+# Redis. When building on the NAS build server (which can't route to the cloud's
+# docker network), Coolify passes these build args pointing at the cloud DB/Redis
+# over Tailscale. They apply to the build stage ONLY; the runtime container keeps
+# its internal Coolify service-name DATABASE_URL/REDIS_URL. Empty locally = falls
+# back to whatever env is already set.
+ARG BUILD_DATABASE_URL
+ARG BUILD_REDIS_URL
+ENV DATABASE_URL=${BUILD_DATABASE_URL:-$DATABASE_URL}
+ENV REDIS_URL=${BUILD_REDIS_URL:-$REDIS_URL}
 RUN bun run --filter @the-tool-pit/web build
 
 # ─── production runner ───────────────────────────────────────────────────────
