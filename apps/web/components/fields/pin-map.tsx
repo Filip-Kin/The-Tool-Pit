@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Map as LeafletMap, Marker as LeafletMarker } from 'leaflet'
 import type { GeocodeResult, AddressParts } from '@/app/api/fields/geocode/route'
+import { addDarkBasemap } from './dark-basemap'
 
 interface Coords {
   lat: number
@@ -18,8 +19,6 @@ interface PinMapProps {
   height?: number
 }
 
-const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png'
-const TILE_ATTRIB = '&copy; OpenStreetMap contributors &copy; CARTO'
 const DEFAULT_CENTER: [number, number] = [39.5, -98.35] // continental US
 const PIN_HTML =
   '<div style="width:22px;height:22px;background:#6366f1;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,0.6)"></div>'
@@ -66,7 +65,7 @@ export function PinMap({ value, onChange, onResolveAddress, height = 320 }: PinM
 
       const start: [number, number] = value ? [value.lat, value.lng] : DEFAULT_CENTER
       const map = L.map(containerRef.current, { center: start, zoom: value ? 15 : 4, zoomControl: true })
-      L.tileLayer(DARK_TILES, { subdomains: 'abcd', maxZoom: 20, attribution: TILE_ATTRIB }).addTo(map)
+      await addDarkBasemap(map)
 
       const icon = L.divIcon({ html: PIN_HTML, className: '', iconSize: [22, 22], iconAnchor: [11, 22] })
 

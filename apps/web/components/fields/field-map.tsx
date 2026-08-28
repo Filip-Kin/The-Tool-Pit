@@ -6,6 +6,7 @@ import type { Map as LeafletMap, Marker as LeafletMarker, DivIcon } from 'leafle
 import type { PublicField } from '@/lib/fields/field-display'
 import { fieldMarkerStyle, fieldSpecSummary } from '@/lib/fields/field-display'
 import { markerHtml } from './marker-html'
+import { addDarkBasemap } from './dark-basemap'
 
 interface FieldMapProps {
   fields: PublicField[]
@@ -16,8 +17,6 @@ interface FieldMapProps {
   height?: number
 }
 
-const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png'
-const TILE_ATTRIB = '&copy; OpenStreetMap contributors &copy; CARTO'
 const DEFAULT_CENTER: [number, number] = [39.5, -98.35]
 // Zoom level to drop the visitor into once we know where they are: regional,
 // enough to see their city and the fields around it.
@@ -53,6 +52,10 @@ export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }
   const iconsRef = useRef<Map<string, { base: DivIcon; selected: DivIcon }>>(new Map())
   const userMarkerRef = useRef<LeafletMarker | null>(null)
   const framedForUserRef = useRef(false)
+  // True when the current selection came from clicking a pin on the map itself,
+  // so the highlight effect leaves the view untouched (clicking a pin should
+  // not zoom or pan). A selection from a list card still recentres.
+  const selectedFromMapRef = useRef(false)
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
 
@@ -65,7 +68,7 @@ export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }
 
       if (!mapRef.current) {
         const map = L.map(containerRef.current, { center: DEFAULT_CENTER, zoom: 4, zoomControl: true })
-        L.tileLayer(DARK_TILES, { subdomains: 'abcd', maxZoom: 20, attribution: TILE_ATTRIB }).addTo(map)
+        await addDarkBasemap(map)
         mapRef.current = map
       }
       const map = mapRef.current
@@ -94,7 +97,10 @@ export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }
         const marker = L.marker([f.latitude, f.longitude], { icon: base, riseOnHover: true })
           .addTo(map)
           .bindTooltip(tooltipHtml(f), { direction: 'top', offset: [0, -style.size / 2], opacity: 1 })
-        marker.on('click', () => onSelectRef.current(f.id))
+        marker.on('click', () => {
+          selectedFromMapRef.current = true
+          onSelectRef.current(f.id)
+        })
         markersRef.current.set(f.id, marker)
         iconsRef.current.set(f.id, { base, selected })
         latlngs.push([f.latitude, f.longitude])
@@ -151,10 +157,15 @@ export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }
       marker.setIcon(id === selectedId ? icons.selected : icons.base)
     })
     if (selectedId) {
-      const marker = markersRef.current.get(selectedId)
-      // Bring the picked field into view; if we're zoomed way out (global
-      // dataset), zoom in enough that it's actually usable.
-      if (marker) map.setView(marker.getLatLng(), Math.max(map.getZoom(), 12), { animate: true })
+      if (selectedFromMapRef.current) {
+        // Clicked a pin on the map: highlight only, leave zoom and position as-is.
+        selectedFromMapRef.current = false
+      } else {
+        const marker = markersRef.current.get(selectedId)
+        // Selected from the list: bring the picked field into view; if we're
+        // zoomed way out (global dataset), zoom in enough that it's usable.
+        if (marker) map.setView(marker.getLatLng(), Math.max(map.getZoom(), 12), { animate: true })
+      }
     }
   }, [selectedId])
 
