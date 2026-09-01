@@ -56,8 +56,8 @@ function RegBadge({ ev }: { ev: PublicEvent }) {
   const s = ev.registrationStatus
   if (s === 'unknown') return null
   const tone =
-    s === 'open' ? 'bg-success/15 text-success'
-    : s === 'waitlist' ? 'bg-warning/15 text-warning'
+    s === 'open' ? 'bg-rookie/15 text-rookie'
+    : s === 'waitlist' ? 'bg-official/15 text-official'
     : 'bg-surface-3 text-muted'
   return <span className={cn('rounded px-1.5 py-0.5 text-xs font-medium', tone)}>{REGISTRATION_STATUS_SHORT[s]}</span>
 }
@@ -67,7 +67,7 @@ function FullnessBar({ ev }: { ev: PublicEvent }) {
   const ratio = fullnessRatio(ev)
   if (ratio == null) return null
   const pct = Math.round(ratio * 100)
-  const tone = ratio >= 1 ? 'bg-warning' : ratio >= 0.85 ? 'bg-warning' : 'bg-success'
+  const tone = ratio >= 1 ? 'bg-official' : ratio >= 0.85 ? 'bg-official' : 'bg-rookie'
   return (
     <div className="mt-1.5 flex items-center gap-2">
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
@@ -125,7 +125,7 @@ export function EventCard({
               {eventDateRange(ev)}
             </span>
           )}
-          <span className={cn('font-medium', cancelled ? 'text-error' : 'text-primary')}>{timingPhrase(ev, now)}</span>
+          <span className={cn('font-medium', cancelled ? 'text-frc' : 'text-primary')}>{timingPhrase(ev, now)}</span>
         </div>
 
         {(loc || distance) && (
@@ -183,7 +183,7 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
               {ev.program}
             </span>
           )}
-          <span className={cn('rounded px-2 py-0.5 text-xs font-medium', cancelled ? 'bg-error/15 text-error' : 'bg-primary/15 text-primary')}>
+          <span className={cn('rounded px-2 py-0.5 text-xs font-medium', cancelled ? 'bg-frc/15 text-frc' : 'bg-primary/15 text-primary')}>
             {timingPhrase(ev, now)}
           </span>
         </div>
@@ -212,7 +212,7 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
           </div>
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-3">
             <div
-              className={cn('h-full rounded-full', (fullnessRatio(ev) ?? 0) >= 0.85 ? 'bg-warning' : 'bg-success')}
+              className={cn('h-full rounded-full', (fullnessRatio(ev) ?? 0) >= 0.85 ? 'bg-official' : 'bg-rookie')}
               style={{ width: `${Math.round((fullnessRatio(ev) ?? 0) * 100)}%` }}
             />
           </div>

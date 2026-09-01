@@ -82,9 +82,26 @@ CONCLUSION for Filip: the fullness number will come mostly from TBA, reliably, o
 is coded there. Live pre-registration scraping of arbitrary offseason sites is not tractable
 in general; it works only where the organiser publishes a roster page, and those are gated.
 
+## Build progress
+- [x] schema + migration 0011_abandoned_red_wolf.sql (committed 97a2e09). Additive only.
+- [x] read path: display helpers, query, map/card/dialog/legend/explorer, layout/header,
+      /events + /events/[id], vertical-switcher + vertical-links registration (committed
+      19cfcca). type-check green, `bun run build` = "Compiled successfully", /events routes.
+- [ ] submit flow (public, no sign-in) -> pending -> Discord ping. NEXT.
+- [ ] admin moderation page.
+- [ ] seed the 17 Michigan events from the sheet (status pending, source seed, no coords -
+      admin drops pins, exactly like fields seed).
+- [ ] worker: TBA roster connector (match listing -> events by tbaKey, pull roster, set
+      registeredTeamCount directly since TBA is authoritative) + opportunistic per-site
+      scraper writing pending roster snapshots for admin review.
+
+## Migration NOT yet applied to prod (do not deploy this session). 0011 needs the same
+## SSH-tunnel drizzle-kit migrate the other verticals used. Left for Filip / deploy step.
+
 ## Next concrete step
-Build `event-enums.ts` + `event_listings`/`event_roster_snapshots` schema, generate migration,
-type-check, commit. THEN scaffolding, THEN seed, THEN verify+build scraper.
+Build the submit flow: components/events/event-submit-form.tsx (pin-drop map + fields from
+the sheet), app/events/submit/page.tsx, app/api/events/submit/route.ts,
+lib/events/create-submission.ts (reuse fields rate-limit + Turnstile + notify pattern).
 
 ## 1. Filip's spreadsheet columns (VERIFIED, read 2026-09-01)
 
