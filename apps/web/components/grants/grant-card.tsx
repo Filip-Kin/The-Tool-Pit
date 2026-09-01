@@ -41,7 +41,7 @@ export function GrantCard({ grant, now }: { grant: PublicGrant; now: Date }) {
 
   return (
     <Link
-      href={`/${grant.slug}`}
+      href={`/grants/${grant.slug}`}
       className={cn(
         'flex flex-col gap-3 rounded-lg border p-4 transition-colors',
         closed

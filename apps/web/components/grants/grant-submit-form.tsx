@@ -278,7 +278,7 @@ export function GrantSubmitForm() {
           {result.slug && (
             <>
               {' '}
-              <a href={`/${result.slug}`} className="underline underline-offset-2">
+              <a href={`/grants/${result.slug}`} className="underline underline-offset-2">
                 Open the listing
               </a>
               .

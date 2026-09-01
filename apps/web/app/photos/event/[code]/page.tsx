@@ -26,7 +26,7 @@ export default async function EventPage({ params }: PageProps) {
   const data = await getEventPage(code)
   if (!data) notFound()
   // A division key rolls up to its parent championship - use one canonical URL.
-  if (data.parentTbaKey !== code) redirect(`/event/${data.parentTbaKey}`)
+  if (data.parentTbaKey !== code) redirect(`/photos/event/${data.parentTbaKey}`)
 
   const { event, albums, divisions } = data
   const allAlbums = [...albums, ...divisions.flatMap((d) => d.albums)]

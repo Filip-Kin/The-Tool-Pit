@@ -17,7 +17,7 @@ export default async function AlbumSearchPage({ searchParams }: PageProps) {
   // Bare codes fall through to the results list so every year shows up.
   if (query && /^\d{4}[a-z0-9]+$/i.test(query)) {
     const ev = await resolveEvent(query)
-    if (ev) redirect(`/event/${ev.tbaKey}`)
+    if (ev) redirect(`/photos/event/${ev.tbaKey}`)
   }
 
   const { events, total } = query

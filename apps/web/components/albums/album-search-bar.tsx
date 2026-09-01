@@ -104,8 +104,8 @@ export function AlbumSearchBar({
 
     const team = q.match(TEAM_QUERY_RE)
     startTransition(() => {
-      if (team) router.push(`/team/${parseInt(team[1], 10)}`)
-      else router.push(`/search?q=${encodeURIComponent(q)}`)
+      if (team) router.push(`/photos/team/${parseInt(team[1], 10)}`)
+      else router.push(`/photos/search?q=${encodeURIComponent(q)}`)
     })
   }
 
@@ -127,7 +127,7 @@ export function AlbumSearchBar({
         setShowSuggestions(false)
         // One-album events go straight to the album; others to the event page.
         if (s.soleAlbumUrl) window.open(s.soleAlbumUrl, '_blank', 'noopener,noreferrer')
-        else router.push(`/event/${s.tbaKey}`)
+        else router.push(`/photos/event/${s.tbaKey}`)
       }
     }
   }
@@ -190,7 +190,7 @@ export function AlbumSearchBar({
           {suggestions.map((s, i) => (
             <li key={s.tbaKey} id={`${listboxId}-option-${i}`} role="option" aria-selected={i === activeIndex}>
               <Link
-                href={s.soleAlbumUrl ?? `/event/${s.tbaKey}`}
+                href={s.soleAlbumUrl ?? `/photos/event/${s.tbaKey}`}
                 {...(s.soleAlbumUrl ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 onClick={() => setShowSuggestions(false)}
                 className={cn(

@@ -55,7 +55,7 @@ export function EventCard({ event }: { event: EventSearchResult }) {
   const direct = event.soleAlbumUrl
   const linkProps = direct
     ? { href: direct, target: '_blank' as const, rel: 'noopener noreferrer' }
-    : { href: `/event/${event.tbaKey}` }
+    : { href: `/photos/event/${event.tbaKey}` }
 
   return (
     <Link
