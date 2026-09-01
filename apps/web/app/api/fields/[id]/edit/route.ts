@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { getIpHash } from '@/lib/utils/ip'
 import { getCurrentUser } from '@/lib/auth/session'
-import { checkFieldSubmissionRateLimit } from '@/lib/fields/rate-limit'
+import { checkSubmissionRateLimit } from '@/lib/rate-limit'
 import { createFieldEditProposal } from '@/lib/fields/create-edit'
 import { formStr as str, formNum as num, formBool as bool, formStringArray as strArr, readPhotoFiles, readMultipartForm } from '@/lib/fields/form-parse'
 
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Same rule as the submit route: suggesting an edit works signed out, the
     // account is attribution only.
     const user = await getCurrentUser()
-    if (!(await checkFieldSubmissionRateLimit(ipHash))) {
+    if (!(await checkSubmissionRateLimit('field-submit', ipHash))) {
       return NextResponse.json({ error: 'Too many submissions. Please wait.' }, { status: 429 })
     }
 

@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { getIpHash } from '@/lib/utils/ip'
 import { getCurrentUser } from '@/lib/auth/session'
 import { submitterOwnsFromForm } from '@/lib/listings/passing-along'
-import { checkEventSubmissionRateLimit } from '@/lib/events/rate-limit'
+import { checkSubmissionRateLimit } from '@/lib/rate-limit'
 import { createEventSubmission } from '@/lib/events/create-submission'
 import { formStr as str, formNum as num, formBool as bool } from '@/lib/events/form-parse'
 
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     // Sign-in is optional on this route (same as fields): a signed-out
     // submission goes through on the IP hash alone, so this must never 401.
     const user = await getCurrentUser()
-    if (!(await checkEventSubmissionRateLimit(ipHash))) {
+    if (!(await checkSubmissionRateLimit('event-submit', ipHash))) {
       return NextResponse.json({ error: 'Too many submissions. Please wait.' }, { status: 429 })
     }
 

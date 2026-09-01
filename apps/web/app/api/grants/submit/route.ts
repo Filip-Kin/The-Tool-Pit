@@ -3,7 +3,7 @@ import { getIpHash } from '@/lib/utils/ip'
 // The FormData getters are vertical-neutral despite living under lib/fields.
 // Copying them here would be two implementations of trim-and-drop-empties.
 import { formStr as str } from '@/lib/fields/form-parse'
-import { checkGrantSubmissionRateLimit } from '@/lib/grants/rate-limit'
+import { checkSubmissionRateLimit } from '@/lib/rate-limit'
 import { createGrantSubmission } from '@/lib/grants/create-submission'
 import { getCurrentUser } from '@/lib/auth/session'
 import { submitterOwnsFromForm } from '@/lib/listings/passing-along'
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     if (!infoUrl) return NextResponse.json({ error: 'A link to the funder page is required.' }, { status: 400 })
 
     const ipHash = getIpHash(req.headers.get('x-forwarded-for') ?? '')
-    if (!(await checkGrantSubmissionRateLimit(ipHash))) {
+    if (!(await checkSubmissionRateLimit('grant-submit', ipHash))) {
       return NextResponse.json({ error: 'Too many submissions. Please wait.' }, { status: 429 })
     }
 

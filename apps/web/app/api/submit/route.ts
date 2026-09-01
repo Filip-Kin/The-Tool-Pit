@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createSubmission } from '@/lib/submissions/create'
 import { getIpHash } from '@/lib/utils/ip'
-import { checkSubmissionRateLimit } from '@/lib/submissions/rate-limit'
+import { checkSubmissionRateLimit } from '@/lib/rate-limit'
 import { getCurrentUser } from '@/lib/auth/session'
 import { submitterOwnsFromForm } from '@/lib/listings/passing-along'
 
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     const ip = req.headers.get('x-forwarded-for') ?? ''
     const ipHash = getIpHash(ip)
 
-    const allowed = await checkSubmissionRateLimit(ipHash)
+    const allowed = await checkSubmissionRateLimit('submit', ipHash)
     if (!allowed) {
       return NextResponse.json({ error: 'Too many submissions. Please wait.' }, { status: 429 })
     }

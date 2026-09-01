@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { getIpHash } from '@/lib/utils/ip'
 // The FormData getters are vertical-neutral despite living under lib/fields.
 import { formStr as str, formNum as num } from '@/lib/fields/form-parse'
-import { checkRobotCodeSubmissionRateLimit } from '@/lib/robot-code/rate-limit'
+import { checkSubmissionRateLimit } from '@/lib/rate-limit'
 import { createRobotCodeSubmission } from '@/lib/robot-code/create-submission'
 import { getCurrentUser } from '@/lib/auth/session'
 import { submitterOwnsFromForm } from '@/lib/listings/passing-along'
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     if (!url) return NextResponse.json({ error: 'A link is required.' }, { status: 400 })
 
     const ipHash = getIpHash(req.headers.get('x-forwarded-for') ?? '')
-    if (!(await checkRobotCodeSubmissionRateLimit(ipHash))) {
+    if (!(await checkSubmissionRateLimit('robot-code-submit', ipHash))) {
       return NextResponse.json({ error: 'Too many submissions. Please wait.' }, { status: 429 })
     }
 

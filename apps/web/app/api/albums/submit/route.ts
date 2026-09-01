@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { getIpHash } from '@/lib/utils/ip'
-import { checkAlbumSubmissionRateLimit } from '@/lib/albums/rate-limit'
+import { checkSubmissionRateLimit } from '@/lib/rate-limit'
 import { createAlbumSubmission } from '@/lib/albums/create-submission'
 import { getCurrentUser } from '@/lib/auth/session'
 import { submitterOwnsFromForm } from '@/lib/listings/passing-along'
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
 
     const ipHash = getIpHash(req.headers.get('x-forwarded-for') ?? '')
-    if (!(await checkAlbumSubmissionRateLimit(ipHash))) {
+    if (!(await checkSubmissionRateLimit('album-submit', ipHash))) {
       return NextResponse.json({ error: 'Too many submissions. Please wait.' }, { status: 429 })
     }
 
