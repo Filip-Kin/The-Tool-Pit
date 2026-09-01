@@ -4,6 +4,16 @@ import { type NextRequest, NextResponse } from 'next/server'
 const VERTICAL_HOSTS = ['photos', 'fields', 'grants'] as const
 
 /**
+ * Whole hosts that used to serve this app and now belong to frc.tools.
+ *
+ * Kept alive and redirected rather than switched off, because they are in
+ * bookmarks, in Chief Delphi posts and in the Coolify domain list. The path is
+ * preserved, so ttp.filipkin.com/grants lands on frc.tools/grants rather than
+ * dumping everyone on the home page.
+ */
+const LEGACY_APP_HOSTS = ['ttp.filipkin.com'] as const
+
+/**
  * The one host the verticals are served from.
  *
  * Derived from NEXT_PUBLIC_URL so a dev box and prod agree, and NOT by
@@ -30,6 +40,27 @@ function canonicalHost(req: NextRequest): string {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
   const host = req.headers.get('host') ?? ''
+
+  // A whole legacy host redirects to the canonical one, path intact.
+  if ((LEGACY_APP_HOSTS as readonly string[]).includes(host.toLowerCase())) {
+    const target = canonicalHost(req)
+    // Never redirect a host onto itself: if NEXT_PUBLIC_URL is ever set back to
+    // one of these, this would otherwise be an infinite loop.
+    // Same carve-out the vertical rule makes: /api keeps serving on the old
+    // host so a page loaded before this shipped does not fail mid-submit.
+    if (
+      target &&
+      target.toLowerCase() !== host.toLowerCase() &&
+      !pathname.startsWith('/api') &&
+      !pathname.startsWith('/_next')
+    ) {
+      const url = new URL(req.nextUrl)
+      url.host = target
+      url.port = ''
+      url.protocol = 'https:'
+      return NextResponse.redirect(url, 308)
+    }
+  }
 
   // Legacy vertical subdomains redirect to the canonical path form.
   //
