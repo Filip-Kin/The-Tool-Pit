@@ -35,6 +35,38 @@ export function parseGitHubUrl(url: string): { owner: string; repo: string } | n
   }
 }
 
+/**
+ * Fetch a repo's README as raw text, in whatever markup it is written in.
+ *
+ * raw.githubusercontent.com is a CDN and is not metered against the API rate limit, so the
+ * one spelling that covers most repos is tried there first. The API's /readme endpoint
+ * finds every other spelling (README.adoc, README.rst, lowercase, a docs/ subdirectory) in
+ * a single call, which is worth one unit of rate limit for the repos the CDN misses.
+ */
+export async function fetchGitHubReadme(owner: string, repo: string): Promise<string | null> {
+  const cap = 20_000
+
+  try {
+    const res = await politeFetch(`https://raw.githubusercontent.com/${owner}/${repo}/HEAD/README.md`)
+    if (res.ok) return (await res.text()).slice(0, cap)
+  } catch {
+    // Fall through to the API, which answers for every other spelling anyway.
+  }
+
+  const headers: Record<string, string> = { Accept: 'application/vnd.github.raw' }
+  const token = process.env.GITHUB_TOKEN
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  try {
+    const res = await politeFetch(`https://api.github.com/repos/${owner}/${repo}/readme`, { headers })
+    if (!res.ok) return null
+    return (await res.text()).slice(0, cap)
+  } catch (err) {
+    console.error(`[github] error fetching README for ${owner}/${repo}:`, err)
+    return null
+  }
+}
+
 export async function fetchGitHubRepo(url: string): Promise<GitHubRepoInfo | null> {
   const parsed = parseGitHubUrl(url)
   if (!parsed) return null

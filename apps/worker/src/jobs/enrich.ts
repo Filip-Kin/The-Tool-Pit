@@ -3,7 +3,9 @@ import { getDb } from '@the-tool-pit/db'
 import { crawlCandidates, submissions, toolLinks, tools } from '@the-tool-pit/db'
 import type { PipelineLogEntry, CandidateClassification } from '@the-tool-pit/db'
 import { classifyCandidate } from '../pipeline/classify.js'
-import { fetchGitHubRepo, parseGitHubUrl } from '../connectors/github.js'
+import { resolveListingTitle, titleIsRepoDerived } from '../pipeline/title.js'
+import { fetchGitHubReadme, fetchGitHubRepo, parseGitHubUrl } from '../connectors/github.js'
+import type { GitHubRepoInfo } from '../connectors/github.js'
 import { publishCandidate } from '../pipeline/publish.js'
 import { extractMetadata } from '../pipeline/extract.js'
 import { notifySubmissionAutoPublished } from '../notifications/submissions.js'
@@ -236,9 +238,10 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
   let enrichedMetadata = { ...metadata }
   const githubUrl = metadata.githubUrl as string | undefined
   let githubStars = 0
+  let repoInfo: GitHubRepoInfo | null = null
 
   if (githubUrl) {
-    const repoInfo = await fetchGitHubRepo(githubUrl)
+    repoInfo = await fetchGitHubRepo(githubUrl)
     if (repoInfo) {
       githubStars = repoInfo.stars
       // Backfill title from repo name if missing
@@ -367,6 +370,40 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
     const result = await publishCandidate(candidateId, sourceType)
     console.log(`[enrich] candidate ${candidateId} (github_team_code): ${result.action}`)
     return
+  }
+
+  // 2e. Name the listing.
+  //
+  //     A repo folder name is not a product name. "scoutmachine/web" was published as
+  //     "web", and 4698RaiderRobotics/FRCTools calls itself "FRC Tools for Fusion" at the
+  //     top of its own README. The resolver reads the README heading, the README's opening
+  //     sentence, the org and the repo name, and decides between them deterministically;
+  //     it only reaches for a model when a lowercase hyphenated repo has a README that
+  //     just repeats the slug back.
+  //
+  //     Guarded by titleIsRepoDerived so this can only ever replace a title that carried
+  //     nothing beyond the slug. A real scraped page title is left exactly as it was.
+  //
+  //     Sits below the gates on purpose: a page we are about to suppress is not worth a
+  //     README fetch, let alone a model call.
+  const repoRef = repoInfo?.fullName ?? (githubUrl ? parseGitHubUrl(githubUrl) : null)
+  const repoParts = typeof repoRef === 'string'
+    ? { owner: repoRef.split('/')[0], repo: repoRef.split('/')[1] }
+    : repoRef
+  if (repoParts?.owner && repoParts.repo && titleIsRepoDerived(qualityTitle, repoParts.repo)) {
+    const readme = await fetchGitHubReadme(repoParts.owner, repoParts.repo)
+    const decision = await resolveListingTitle({
+      owner: repoParts.owner,
+      repo: repoParts.repo,
+      readme: readme ?? undefined,
+      pageTitle: qualityTitle,
+      description: repoInfo?.description ?? undefined,
+    })
+    if (decision.title && decision.title !== qualityTitle) {
+      console.log(`[enrich] candidate ${candidateId}: named "${decision.title}" from ${decision.source} (${decision.reason})`)
+      enrichedMetadata.title = decision.title
+    }
+    enrichedMetadata.titleSource = decision.source
   }
 
   // 3. AI classification — now has full enriched context
