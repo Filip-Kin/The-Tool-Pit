@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
-import { getCurrentUser } from '@/lib/auth/session'
 import { MeShell } from '@/components/me/me-shell'
 import { InviteAccepter } from '@/components/me/invite-accepter'
+import { SignedInGate } from '@/components/auth/signed-in-gate'
 import { acceptInvite } from '../actions'
 
 export const metadata: Metadata = {
@@ -18,11 +17,6 @@ export default async function InvitePage({
   searchParams: Promise<{ token?: string }>
 }) {
   const { token } = await searchParams
-  const user = await getCurrentUser()
-  if (!user) {
-    // Sign in, then land back on the invite with its token intact.
-    redirect(`/?signin=1&next=${encodeURIComponent(`/me/listings/invite?token=${token ?? ''}`)}`)
-  }
 
   return (
     <MeShell
@@ -31,7 +25,11 @@ export default async function InvitePage({
       active="listings"
     >
       {token ? (
-        <InviteAccepter token={token} acceptAction={acceptInvite} />
+        // Signed out, the page stays put behind the gate so the token in the URL
+        // survives sign-in instead of being lost to a redirect.
+        <SignedInGate reason="Sign in to accept this invite.">
+          <InviteAccepter token={token} acceptAction={acceptInvite} />
+        </SignedInGate>
       ) : (
         <div className="rounded-lg border border-border-subtle bg-surface p-5 text-sm text-muted">
           This invite link is missing its token. Ask whoever sent it for a fresh link.

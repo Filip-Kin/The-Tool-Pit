@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/session'
 import { MeShell } from '@/components/me/me-shell'
 import { ClaimStarter } from '@/components/me/claim-starter'
+import { SignedInGate } from '@/components/auth/signed-in-gate'
 import { isListingEntityType, resolveClaimable, VERIFY_FILENAME } from '@/lib/queries/listing-ownership'
 import { startClaim } from '../actions'
 
@@ -20,12 +20,13 @@ export default async function ClaimPage({
 }) {
   const { type, id } = await searchParams
   const user = await getCurrentUser()
-  // Bounce through sign-in and come back here, so the claim button on a public
-  // page works for someone who is not signed in yet.
-  if (!user) redirect(`/?signin=1&next=${encodeURIComponent(`/me/listings/claim?type=${type ?? ''}&id=${id ?? ''}`)}`)
 
+  // Resolve for display with a best-effort user id when signed out: the page
+  // stays put (its token in the URL) behind a sign-in gate rather than being
+  // redirected away and losing it. startClaim re-resolves ownership server-side
+  // from the real session, so the displayed path is cosmetic, never the gate.
   const valid = type && id && isListingEntityType(type)
-  const target = valid ? await resolveClaimable(user.id, type, id) : null
+  const target = valid ? await resolveClaimable(user?.id ?? '', type, id) : null
 
   return (
     <MeShell
@@ -34,7 +35,9 @@ export default async function ClaimPage({
       active="listings"
     >
       {target ? (
-        <ClaimStarter target={target} verifyFilename={VERIFY_FILENAME} startAction={startClaim} />
+        <SignedInGate reason="Sign in to claim a listing you run.">
+          <ClaimStarter target={target} verifyFilename={VERIFY_FILENAME} startAction={startClaim} />
+        </SignedInGate>
       ) : (
         <div className="rounded-lg border border-border-subtle bg-surface p-5 text-sm text-muted">
           <p>We could not find that listing to claim.</p>
