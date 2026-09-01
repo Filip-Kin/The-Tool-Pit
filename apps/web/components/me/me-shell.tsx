@@ -29,7 +29,7 @@ export function MeShell({
           <header className="mb-10">
             <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{title}</h1>
             <p className="mt-2 max-w-2xl text-sm text-muted">{intro}</p>
-            <nav className="mt-6 flex items-center gap-1 border-b border-border-subtle">
+            <nav className="mt-6 flex items-center gap-1 overflow-x-auto border-b border-border-subtle">
               <Tab href="/me" label="Saved" active={active === 'saved'} />
               <Tab href="/me/listings" label="Your listings" active={active === 'listings'} />
               <Tab href="/me/team" label="My teams" active={active === 'team'} />
@@ -52,8 +52,8 @@ function Tab({ href, label, active }: { href: string; label: string; active: boo
       aria-current={active ? 'page' : undefined}
       className={
         active
-          ? 'border-b-2 border-primary px-3 pb-2 text-sm font-medium text-foreground'
-          : 'border-b-2 border-transparent px-3 pb-2 text-sm font-medium text-muted transition-colors hover:text-foreground'
+          ? 'whitespace-nowrap border-b-2 border-primary px-3 pb-2 text-sm font-medium text-foreground'
+          : 'whitespace-nowrap border-b-2 border-transparent px-3 pb-2 text-sm font-medium text-muted transition-colors hover:text-foreground'
       }
     >
       {label}
