@@ -1,4 +1,6 @@
 import { MapPin, AlertTriangle, Clock, CalendarClock, Tag, ExternalLink, Handshake, Link2 } from 'lucide-react'
+import { ButtonLink } from '@/components/ui/button'
+import { Card, cardClass } from '@/components/ui/card'
 import { cn } from '@/lib/utils/cn'
 import { FieldGallery } from './field-gallery'
 import type { PublicField } from '@/lib/fields/field-display'
@@ -85,10 +87,12 @@ export function FieldCard({
     <button
       type="button"
       onClick={() => onSelect(field.id)}
-      className={cn(
-        'flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors',
-        selected ? 'border-primary bg-surface-2' : 'border-border-subtle bg-surface hover:bg-surface-2',
-      )}
+      className={cardClass({
+        pad: 'sm',
+        interactive: true,
+        selected,
+        className: 'flex w-full items-start gap-3 text-left',
+      })}
     >
       <PinDot f={field} />
       <div className="min-w-0 flex-1">
@@ -186,27 +190,27 @@ export function FieldDetail({ field, onSuggestEdit }: { field: PublicField; onSu
 
       <div className="flex flex-wrap gap-3">
         {field.contactUrl && (
-          <a href={field.contactUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover">
+          <ButtonLink href={field.contactUrl} external>
             Sign up / contact <ExternalLink className="h-3.5 w-3.5" />
-          </a>
+          </ButtonLink>
         )}
         {field.website && (
-          <a href={field.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
+          <ButtonLink href={field.website} external variant="secondary">
             Website <ExternalLink className="h-3.5 w-3.5" />
-          </a>
+          </ButtonLink>
         )}
         {mapsHref && (
-          <a href={mapsHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
+          <ButtonLink href={mapsHref} external variant="secondary">
             Open in map <ExternalLink className="h-3.5 w-3.5" />
-          </a>
+          </ButtonLink>
         )}
       </div>
 
       {field.contactInfo && (
-        <div className="rounded-lg border border-border-subtle bg-surface p-4 text-sm text-muted">
+        <Card className="text-sm text-muted">
           <span className="font-medium text-foreground">How to arrange access: </span>
           {field.contactInfo}
-        </div>
+        </Card>
       )}
 
       {onSuggestEdit && (

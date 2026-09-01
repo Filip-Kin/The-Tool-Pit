@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { ButtonLink } from '@/components/ui/button'
 import { getPublishedFields } from '@/lib/queries/fields'
 import { listingClaimStates } from '@/lib/queries/listing-ownership'
 import { FieldsExplorer } from '@/components/fields/fields-explorer'
@@ -30,12 +31,9 @@ export default async function FieldsHomePage() {
       {fields.length === 0 ? (
         <div className="rounded-lg border border-border-subtle bg-surface p-10 text-center">
           <p className="text-muted">No practice fields on the map yet.</p>
-          <Link
-            href="/fields/submit"
-            className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover"
-          >
+          <ButtonLink href="/fields/submit" className="mt-4">
             Be the first to add one
-          </Link>
+          </ButtonLink>
         </div>
       ) : (
         <FieldsExplorer fields={fields} claimStates={claimStates} />
