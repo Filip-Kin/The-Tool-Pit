@@ -130,7 +130,13 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
   const freshnessScore = sql<number>`case
     when ${tools.freshnessState} in ('active', 'evergreen', 'seasonal') then 0.25
     when ${tools.freshnessState} = 'stale' then 0.05
-    when ${tools.freshnessState} in ('inactive', 'archived') then -0.35
+    -- Archived is a lighter penalty than inactive, because it is a different
+    -- fact. Inactive means nobody has touched it in two years. Archived means a
+    -- maintainer deliberately closed the repo, which for FRC usually means the
+    -- work finished or moved: wpilibsuite/PathWeaver is archived and still
+    -- ships with WPILib. Burying that at -0.35 hid an official tool.
+    when ${tools.freshnessState} = 'archived' then -0.1
+    when ${tools.freshnessState} = 'inactive' then -0.35
     else 0.1
   end`
 

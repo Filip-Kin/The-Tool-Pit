@@ -10,7 +10,7 @@ export function formatRelativeTime(date: Date | string | null | undefined): stri
 export function getFreshnessLabel(
   freshnessState: string | null | undefined,
   lastActivityAt: Date | string | null | undefined,
-): 'Current' | 'Stale' | 'Abandoned' | null {
+): 'Current' | 'Stale' | 'Archived' | 'Abandoned' | null {
   // Use DB-stored state as primary signal
   switch (freshnessState) {
     case 'active':
@@ -19,8 +19,15 @@ export function getFreshnessLabel(
       return 'Current'
     case 'stale':
       return 'Stale'
-    case 'inactive':
+    // Archived is not abandoned, and conflating them libels good software.
+    // wpilibsuite/PathWeaver reports archived: true on GitHub because WPILib
+    // stopped developing it there, and the app still ships and is still used.
+    // Calling that "Abandoned" tells a rookie to avoid an official tool.
+    // Archiving is a deliberate act by a maintainer and usually means finished
+    // or moved, so the chip says what happened and lets the reader judge.
     case 'archived':
+      return 'Archived'
+    case 'inactive':
       return 'Abandoned'
   }
 

@@ -10,6 +10,9 @@ interface FreshnessChipProps {
 const labelConfig = {
   Current: { dot: 'bg-fresh', text: 'text-fresh' },
   Stale: { dot: 'bg-stale', text: 'text-stale' },
+  // Archived shares the quiet grey with Abandoned because both mean "not
+  // moving", and differs in the one thing that matters: the word.
+  Archived: { dot: 'bg-abandoned', text: 'text-abandoned' },
   Abandoned: { dot: 'bg-abandoned', text: 'text-abandoned' },
 }
 

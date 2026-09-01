@@ -119,7 +119,11 @@ export function FavoriteButton({
         aria-busy={busy || loading}
         title={title}
         className={cn(
-          'inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border-subtle bg-background/80 p-1.5 text-muted backdrop-blur transition-colors',
+          // rounded-md, not rounded-full. This sits directly beside the upvote
+          // on every tool card, and the two were a circle and a rounded square
+          // doing the same kind of job. components/ui/button.tsx is rounded-md,
+          // so that is what the app means by a control.
+          'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border-subtle bg-background/80 p-1.5 text-muted backdrop-blur transition-colors',
           'hover:text-foreground disabled:opacity-50',
           favorited && 'text-primary hover:text-primary',
           error && 'border-frc/60 text-frc',
