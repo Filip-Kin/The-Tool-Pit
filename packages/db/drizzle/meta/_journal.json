@@ -78,6 +78,13 @@
       "when": 1788228241837,
       "tag": "0010_grey_meltdown",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788255448373,
+      "tag": "0011_abandoned_red_wolf",
+      "breakpoints": true
     }
   ]
 }
