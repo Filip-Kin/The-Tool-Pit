@@ -20,6 +20,12 @@ export {
   TEAM_ORG_TYPES,
   SCHOOL_TYPES,
   GRANT_FIELD_FILL_KINDS,
+  GRANT_CANDIDATE_STATUSES,
+  GRANT_TRI_STATES,
+  GRANT_APPLY_METHODS,
+  GRANT_EVIDENCE_SOURCES,
+  GRANT_REJECTION_KINDS,
+  GRANT_REJECTION_KIND_LABELS,
   ALERT_CHANNELS,
   ALERT_KINDS,
 } from '../grant-enums'
@@ -39,6 +45,11 @@ export type {
   TeamOrgType,
   SchoolType,
   GrantFieldFillKind,
+  GrantCandidateStatus,
+  GrantTriState,
+  GrantApplyMethod,
+  GrantEvidenceSource,
+  GrantRejectionKind,
   AlertChannel,
   AlertKind,
 } from '../grant-enums'
@@ -104,6 +115,19 @@ export const grants = pgTable(
     infoUrl: text('info_url').notNull(),
     /** Where the application actually happens, if it is a different page. */
     applicationUrl: text('application_url'),
+    /**
+     * How an application is actually submitted. GRANT_APPLY_METHODS.
+     *
+     * Not every sponsor has a form. A local foundation that wants a posted
+     * letter is a real, winnable grant, and a directory that assumes a form
+     * hides it, so the method is stated rather than implied by the presence of
+     * an application URL.
+     */
+    applyMethod: text('apply_method').notNull().default('unknown'),
+    /** The address on the funder's page for questions or for an application. */
+    contactEmail: text('contact_email'),
+    /** Where a posted application goes, when the funder asks for one. */
+    mailingAddress: text('mailing_address'),
 
     /** GRANT_PROGRAMS, e.g. ['frc','ftc'] or ['any']. */
     programs: text('programs').array().notNull().default(['any']),

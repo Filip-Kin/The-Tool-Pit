@@ -2,6 +2,7 @@ import { pgTable, uuid, text, integer, real, boolean, timestamp, jsonb, index, u
 import { relations } from 'drizzle-orm'
 import { grants } from './grants'
 import { users } from './accounts'
+import type { GrantApplyMethod, GrantEvidenceSource, GrantTriState } from '../grant-enums'
 
 // ---------------------------------------------------------------------------
 // Grant discovery and monitoring
@@ -92,10 +93,36 @@ export const grantCandidates = pgTable(
     canonicalUrl: text('canonical_url'),
     rawMetadata: jsonb('raw_metadata').$type<RawGrantMetadata>(),
     classification: jsonb('classification').$type<GrantClassification>(),
+    /**
+     * The extraction pass output: every field a moderator would otherwise
+     * type, each with the verbatim quote that supports it and which text that
+     * quote was found in. Written by the second pass, never published by it.
+     * See GrantExtraction at the bottom of this file.
+     */
+    extraction: jsonb('extraction').$type<GrantExtraction>(),
+    /** When the extraction pass last ran. Null = it has not run on this row. */
+    extractedAt: timestamp('extracted_at', { withTimezone: true }),
     confidenceScore: real('confidence_score'),
-    /** pending | matched | published | suppressed | duplicate */
+    /** GRANT_CANDIDATE_STATUSES */
     status: text('status').notNull().default('pending'),
     rejectionReason: text('rejection_reason'),
+    /**
+     * GRANT_REJECTION_KINDS. The bucket a moderator put the rejection in.
+     *
+     * rejectionReason is one person's sentence about one page, which is the
+     * right thing to show a submitter and the wrong thing to feed a model.
+     * This column is the machine-readable half: recent suppressions grouped by
+     * kind become the classifier's negative examples, so a page shape that
+     * keeps getting through gets caught next time instead of being rejected
+     * again by hand.
+     */
+    rejectionKind: text('rejection_kind'),
+    /**
+     * Why a moderator flagged the row for better data. Flagging is not a
+     * rejection, so it does not touch rejectionReason: the candidate stays in
+     * the queue and this note tells the deep re-extraction what was wrong.
+     */
+    reviewNote: text('review_note'),
     matchedGrantId: uuid('matched_grant_id').references(() => grants.id, { onDelete: 'set null' }),
 
     // Submitter audit for kind='submission' (private, admin only).
@@ -129,6 +156,7 @@ export const grantCandidates = pgTable(
     index('grant_candidates_job_idx').on(table.jobId),
     index('grant_candidates_submitted_by_idx').on(table.submittedByUserId),
     index('grant_candidates_status_idx').on(table.status),
+    index('grant_candidates_rejection_kind_idx').on(table.rejectionKind),
     index('grant_candidates_canonical_url_idx').on(table.canonicalUrl),
   ],
 )
@@ -338,4 +366,145 @@ export interface ExtractedGrantFields {
   applicationUrl?: string | null
   /** True when the page says the round is shut. */
   looksClosed?: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Extraction (the second pass over an accepted candidate)
+//
+// Classification answers "is this a grant". Extraction fills the record. They
+// are separate calls on purpose: a classifier that also extracts is a
+// classifier that invents a deadline to fill a field, and grants exist
+// downstream of that exact lesson.
+//
+// Two rules shape everything below.
+//
+//   1. Tri-state, never a bare null. Every yes/no answer is yes | no |
+//      unknown. A blank used to mean both "the page says no" and "the page did
+//      not say", and a team reading the listing could not tell which.
+//   2. Every value carries the verbatim quote that supports it, and which text
+//      that quote was found in. A field with no supporting quote comes back
+//      unknown rather than guessed. listing-ownership.ts states the rule this
+//      serves: a grant's dates, amounts and eligibility are a moderator's
+//      verified reading of the funder's page, and a wrong deadline is worse
+//      than no deadline.
+// ---------------------------------------------------------------------------
+
+/**
+ * One extracted value with its evidence.
+ *
+ * `value === null` means the page did not state it. For a tri-state field the
+ * "did not state" answer is the value 'unknown', so those are never null.
+ */
+export interface ExtractedField<T> {
+  value: T | null
+  /** Verbatim from the evidence text, trimmed. Null when nothing supported it. */
+  quote: string | null
+  /** Which text `quote` was verified against. Null when there is no quote. */
+  source: GrantEvidenceSource | null
+  /**
+   * Set when the funder's page and the aggregator blurb disagree. The value
+   * kept is the funder's page, because it is the one that can be applied on,
+   * but the disagreement is shown to the moderator rather than swallowed.
+   */
+  conflict?: string | null
+}
+
+/**
+ * Every field the extraction pass attempts. All of them are present on a
+ * completed extraction, so "the pass did not look" and "the page did not say"
+ * cannot be confused: the first is a missing key, the second is a null value
+ * or 'unknown' with a reason.
+ */
+export interface GrantExtractionFields {
+  // --- Identity and prose ---
+  name: ExtractedField<string>
+  funderName: ExtractedField<string>
+  /** One or two sentences. The card on the public list. */
+  summary: ExtractedField<string>
+  /** Several paragraphs. Longer than the summary, for the detail page. */
+  description: ExtractedField<string>
+
+  // --- How to apply ---
+  /** GRANT_APPLY_METHODS. */
+  applyMethod: ExtractedField<GrantApplyMethod>
+  applicationUrl: ExtractedField<string>
+  contactEmail: ExtractedField<string>
+  mailingAddress: ExtractedField<string>
+
+  // --- Money ---
+  awardMin: ExtractedField<number>
+  awardMax: ExtractedField<number>
+  awardCurrency: ExtractedField<string>
+  /**
+   * The funder's own words about the amount, verbatim.
+   *
+   * This is the field that fixes an 11% award fill rate. awardMin and awardMax
+   * are integers, so "varies", "up to $5,000 in kind" and "typically $500 to
+   * $2,000 per team" all stored as NULL and the listing said nothing at all.
+   * The integers stay where a real figure exists; the phrase is what a team
+   * reads when there is not one.
+   */
+  awardPhrase: ExtractedField<string>
+  /** GRANT_TRI_STATES. Can a team apply again in a later cycle. */
+  renewable: ExtractedField<GrantTriState>
+  /** GRANT_EFFORT_LEVELS. Rough size of the application. */
+  effortLevel: ExtractedField<string>
+
+  // --- Geography ---
+  /** GRANT_GEO_SCOPES. */
+  geoScope: ExtractedField<string>
+  /** ISO 3166-1 alpha-2. */
+  countries: ExtractedField<string[]>
+  /** State or province codes. */
+  regions: ExtractedField<string[]>
+  /** A county or metro with no code of its own. */
+  localityNote: ExtractedField<string>
+
+  // --- Timing. Lands in grant_cycles, not on the grant. ---
+  /** GRANT_DEADLINE_TYPES. */
+  deadlineType: ExtractedField<string>
+  /** Calendar year the round closes in. */
+  cycleYear: ExtractedField<number>
+  /** YYYY-MM-DD. */
+  opensAt: ExtractedField<string>
+  /** ISO instant with an offset when the page gives a time and zone, else YYYY-MM-DD. */
+  deadlineAt: ExtractedField<string>
+  /** The funder's own wording, e.g. "11:59pm Eastern". */
+  deadlineNote: ExtractedField<string>
+  /** YYYY-MM-DD, when decisions are announced. */
+  decisionAt: ExtractedField<string>
+
+  // --- Eligibility. The tri-states land in grant_requirements. ---
+  requires501c3: ExtractedField<GrantTriState>
+  /** Does an employee or member of the funder have to mentor or sponsor the team. */
+  requiresEmployeeMentor: ExtractedField<GrantTriState>
+  rookieOnly: ExtractedField<GrantTriState>
+  /** Must the team be a school team or attached to a school. */
+  requiresSchoolAffiliation: ExtractedField<GrantTriState>
+  /** e.g. "grades 6-12", "under 18". */
+  ageRange: ExtractedField<string>
+  /** Eligibility geography in the funder's words, beside the coded regions. */
+  geographyRestriction: ExtractedField<string>
+  /** Everything else about who may apply, in plain words. */
+  eligibilityText: ExtractedField<string>
+  /** GRANT_PROGRAMS. */
+  programs: ExtractedField<string[]>
+}
+
+/** The stored extraction. Written to grant_candidates.extraction. */
+export interface GrantExtraction {
+  /** Bumped when the field set changes, so an old row is readable as old. */
+  version: number
+  fields: GrantExtractionFields
+  /** Model id, so a bad batch can be found later. */
+  model?: string
+  /** 'shallow' = the page we already had. 'deep' = refetched and widened. */
+  depth: 'shallow' | 'deep'
+  /** Every URL whose text was read, in the order it was read. */
+  evidenceUrls: string[]
+  /** Quotes dropped because they were in neither text, truncation, skipped surfaces. */
+  notes: string[]
+  /** The model's own sentence on what it could and could not read. */
+  reasoning?: string
+  extractedAt: string
 }

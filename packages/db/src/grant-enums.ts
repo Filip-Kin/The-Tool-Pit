@@ -146,3 +146,89 @@ export type AlertChannel = (typeof ALERT_CHANNELS)[number]
 /** Why we are pinging someone. */
 export const ALERT_KINDS = ['new_match', 'deadline', 'grant_change', 'watch_update', 'digest'] as const
 export type AlertKind = (typeof ALERT_KINDS)[number]
+
+/**
+ * Candidate moderation states.
+ *
+ * 'flagged' is a THIRD answer, not a softer suppression. Suppressing says the
+ * page is not a grant and counts against the source that found it; flagging
+ * says the page probably is a grant but what we read off it is too thin or too
+ * doubtful to publish. A flagged row stays in the queue, keeps its extraction,
+ * and is what a later crawl or a second reader picks up.
+ */
+export const GRANT_CANDIDATE_STATUSES = [
+  'pending',
+  'flagged',
+  'matched',
+  'published',
+  'suppressed',
+  'duplicate',
+] as const
+export type GrantCandidateStatus = (typeof GRANT_CANDIDATE_STATUSES)[number]
+
+/**
+ * Yes / no / unknown, for every eligibility question the extractor answers.
+ *
+ * A blank used to mean both "the funder's page says no" and "the page never
+ * said", and a reader could not tell them apart. 'unknown' is the honest third
+ * answer and it renders as "not stated on the funder's page", which is a
+ * useful thing for a team to read. Never store null where one of these fits.
+ */
+export const GRANT_TRI_STATES = ['yes', 'no', 'unknown'] as const
+export type GrantTriState = (typeof GRANT_TRI_STATES)[number]
+
+/**
+ * How an application is actually submitted. Plenty of real sponsors have no
+ * form at all and want a posted letter or an email to a named person, so
+ * 'online_form' is not a safe default and 'unknown' is.
+ */
+export const GRANT_APPLY_METHODS = ['online_form', 'email', 'letter', 'contact', 'unknown'] as const
+export type GrantApplyMethod = (typeof GRANT_APPLY_METHODS)[number]
+
+/**
+ * Which text an extracted field's supporting quote was found in.
+ *
+ * - funder_page: the text fetched from the candidate's own URL. Highest trust.
+ * - aggregator:  the blurb a third party wrote about the grant (grantexec,
+ *                instrumentl, a state association's round-up). Often a better
+ *                summary of eligibility than the raw page, written by a person,
+ *                but it is someone else's reading and it can be out of date.
+ *
+ * The distinction is rendered in the review deck because the two deserve
+ * different amounts of trust, and a deadline off an aggregator is exactly the
+ * kind of second-hand fact that costs a team a round.
+ */
+export const GRANT_EVIDENCE_SOURCES = ['funder_page', 'aggregator'] as const
+export type GrantEvidenceSource = (typeof GRANT_EVIDENCE_SOURCES)[number]
+
+/**
+ * Why a moderator said no.
+ *
+ * A free-text reason cannot be fed back to anything: it is one person's
+ * sentence about one page. These seven buckets are the failure modes the
+ * grants queue actually produces, and they exist so that a suppression becomes
+ * a labelled negative example the next classification run can read. The
+ * moderator's own sentence is kept as well, because it is the part that
+ * explains the call; the bucket is the part a machine can count and group.
+ */
+export const GRANT_REJECTION_KINDS = [
+  'not_a_grant',
+  'aggregator_list',
+  'announcement',
+  'legislative',
+  'expired',
+  'duplicate',
+  'out_of_scope',
+] as const
+export type GrantRejectionKind = (typeof GRANT_REJECTION_KINDS)[number]
+
+/** One line each, shown in the review deck and sent to the classifier as the label. */
+export const GRANT_REJECTION_KIND_LABELS: Record<GrantRejectionKind, string> = {
+  not_a_grant: 'Not a grant a team can apply for',
+  aggregator_list: 'A list of several grants, not one grant',
+  announcement: 'Press release, award news or a sponsor wall',
+  legislative: 'A bill, a statute or a legislator announcing a programme',
+  expired: 'Ended for good, not a recurring grant between cycles',
+  duplicate: 'Already in the directory',
+  out_of_scope: 'Real funding, but not for youth STEM teams',
+}
