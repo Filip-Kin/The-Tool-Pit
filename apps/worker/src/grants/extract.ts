@@ -17,6 +17,7 @@
  * funder reworded a paragraph that never mentioned dates.
  */
 import Anthropic from '@anthropic-ai/sdk'
+import { anthropic } from '../anthropic.js'
 import type { ExtractedGrantFields } from '@the-tool-pit/db'
 
 /** Cheapest model that reliably returns clean JSON. Same one classify.ts uses. */
@@ -471,7 +472,7 @@ export function deterministicExtract(text: string): DeterministicRead {
 
 let _client: Anthropic | undefined
 function getClient(): Anthropic {
-  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  if (!_client) _client = anthropic()
   return _client
 }
 

@@ -9,6 +9,7 @@
  *   3. Claude returns a JSON classification object.
  */
 import Anthropic from '@anthropic-ai/sdk'
+import { anthropic } from '../anthropic.js'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
 import { renderPage } from '../connectors/playwright-render.js'
 import { parseGitHubUrl } from '../connectors/github.js'
@@ -77,7 +78,7 @@ let _client: Anthropic | undefined
 
 function getClient(): Anthropic {
   if (!_client) {
-    _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    _client = anthropic()
   }
   return _client
 }

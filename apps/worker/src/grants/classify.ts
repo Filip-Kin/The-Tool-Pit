@@ -23,6 +23,7 @@
  * for the review queue.
  */
 import Anthropic from '@anthropic-ai/sdk'
+import { anthropic } from '../anthropic.js'
 import {
   GRANT_PROGRAMS,
   GRANT_GEO_SCOPES,
@@ -134,7 +135,7 @@ const MAX_CONTENT_CHARS = 12000
 let _client: Anthropic | undefined
 
 function getClient(): Anthropic {
-  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  if (!_client) _client = anthropic()
   return _client
 }
 

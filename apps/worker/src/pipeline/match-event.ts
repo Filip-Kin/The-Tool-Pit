@@ -5,6 +5,7 @@
  * validated against the shortlist of real events we pass in.
  */
 import Anthropic from '@anthropic-ai/sdk'
+import { anthropic } from '../anthropic.js'
 
 export interface EventCandidate {
   eventCode: string
@@ -22,7 +23,7 @@ export interface EventMatchResult {
 
 let _client: Anthropic | undefined
 function getClient(): Anthropic {
-  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  if (!_client) _client = anthropic()
   return _client
 }
 
