@@ -31,6 +31,12 @@ export interface CreateFieldEditInput {
   submitterName?: string
   submitterContact?: string
   submitterIpHash: string
+  /**
+   * The signed-in user, when there was one. Optional on purpose: suggesting an
+   * edit never requires an account, an account only earns attribution and
+   * lets the submitter find this again later.
+   */
+  submittedByUserId?: string
   /** New photos to add to the gallery (held pending until an admin applies). */
   newPhotos?: { data: Buffer; contentType: string }[]
   /** IDs of existing field photos the submitter wants removed. */
@@ -118,6 +124,7 @@ export async function createFieldEditProposal(
       submitterName: input.submitterName?.trim() || null,
       submitterContact: input.submitterContact?.trim() || null,
       submitterIpHash: input.submitterIpHash,
+      submittedByUserId: input.submittedByUserId ?? null,
       status: 'pending',
     })
     .returning({ id: fieldEditProposals.id })

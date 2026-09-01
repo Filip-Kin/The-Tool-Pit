@@ -1,7 +1,8 @@
 import { desc, eq, asc, inArray } from 'drizzle-orm'
+import { UserRound } from 'lucide-react'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
-import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos } from '@the-tool-pit/db'
+import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos, users } from '@the-tool-pit/db'
 import type { PracticeField, FieldEditProposalData } from '@the-tool-pit/db'
 import { EditProposalActions } from './edit-proposal-actions'
 
@@ -50,10 +51,19 @@ function changedKeys(field: PracticeField, proposed: FieldEditProposalData): (ke
 export default async function FieldEditsAdminPage() {
   await assertAdmin()
   const db = getDb()
+  // The account is a LEFT join: suggesting an edit does not require signing in,
+  // so most proposals have no user and must still be listed.
   const rows = await db
-    .select({ proposal: fieldEditProposals, field: practiceFields })
+    .select({
+      proposal: fieldEditProposals,
+      field: practiceFields,
+      accountId: users.id,
+      accountName: users.displayName,
+      accountEmail: users.email,
+    })
     .from(fieldEditProposals)
     .innerJoin(practiceFields, eq(fieldEditProposals.fieldId, practiceFields.id))
+    .leftJoin(users, eq(fieldEditProposals.submittedByUserId, users.id))
     .where(eq(fieldEditProposals.status, 'pending'))
     .orderBy(desc(fieldEditProposals.createdAt))
 
@@ -87,7 +97,7 @@ export default async function FieldEditsAdminPage() {
 
       <div className="mt-4 flex flex-col gap-3">
         {rows.length === 0 && <p className="text-sm text-muted-2">No pending edits.</p>}
-        {rows.map(({ proposal, field }) => {
+        {rows.map(({ proposal, field, accountId, accountName, accountEmail }) => {
           const proposed = proposal.proposed as FieldEditProposalData
           const changes = changedKeys(field, proposed)
           const current = field as unknown as Record<string, unknown>
@@ -107,6 +117,19 @@ export default async function FieldEditsAdminPage() {
                       {proposal.submitterContact ? ` · ${proposal.submitterContact}` : ''}
                     </div>
                   )}
+                  {/* Says which it is either way, so a known account reads as
+                      different from an IP hash at a glance. */}
+                  <div className="mt-1 flex items-center gap-1 text-xs text-muted-2">
+                    <UserRound className="h-3 w-3" />
+                    {accountId ? (
+                      <span>
+                        Account <span className="text-foreground">{accountName ?? accountEmail ?? accountId}</span>
+                        {accountName && accountEmail ? ` · ${accountEmail}` : ''}
+                      </span>
+                    ) : (
+                      <span>No account, anonymous edit</span>
+                    )}
+                  </div>
                 </div>
                 <EditProposalActions proposalId={proposal.id} />
               </div>

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import { SessionProvider } from '@/components/auth/session-provider'
+import { getCurrentUser } from '@/lib/auth/session'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -22,10 +24,29 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Resolve the session on the server so the header renders signed-in on the
+  // first paint instead of flashing a "Sign in" button and then swapping.
+  const user = await getCurrentUser()
+
   return (
     <html lang="en" className={inter.variable}>
-      <body>{children}</body>
+      <body>
+        <SessionProvider
+          initialUser={
+            user
+              ? {
+                  id: user.id,
+                  email: user.email,
+                  displayName: user.displayName,
+                  photoUrl: user.photoUrl,
+                }
+              : null
+          }
+        >
+          {children}
+        </SessionProvider>
+      </body>
     </html>
   )
 }

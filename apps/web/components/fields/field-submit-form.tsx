@@ -14,6 +14,8 @@ import {
 // Value tuples come from the zero-dependency enum subpath (NOT the barrel),
 // so the DB client / postgres never lands in the client bundle.
 import { FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY } from '@the-tool-pit/db/field-enums'
+import { useSession, type SessionUser } from '@/components/auth/session-provider'
+import { SignInDialog } from '@/components/auth/sign-in-dialog'
 
 declare global {
   interface Window {
@@ -112,11 +114,30 @@ function fieldToFormState(f: PublicField): FormState {
 }
 
 /**
+ * What the "You" fields start as for a given viewer. Signed in we fill them
+ * from the account so nobody retypes their own name, signed out they stay
+ * blank exactly as before.
+ */
+function submitterDefaults(user: SessionUser | null): Pick<FormState, 'submitterName' | 'submitterContact'> {
+  return {
+    submitterName: user?.displayName ?? '',
+    submitterContact: user?.email ?? '',
+  }
+}
+
+/**
  * The field submit form. In `edit` mode it is pre-filled from an existing field
  * and posts an edit proposal (for admin approval) instead of a new field.
+ *
+ * Sign-in is optional throughout. The account is never checked before posting:
+ * the server reads it from the session cookie if it is there, and a signed-out
+ * submission is a first-class submission. Getting a field on the map must not
+ * depend on having an account.
  */
 export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicField }; onSubmitted?: () => void } = {}) {
   const editing = !!edit
+  const { user } = useSession()
+  const [signInOpen, setSignInOpen] = useState(false)
   const [form, setForm] = useState<FormState>(edit ? fieldToFormState(edit.field) : INITIAL)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
     edit && edit.field.latitude != null && edit.field.longitude != null
@@ -136,6 +157,22 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
+
+  // The session resolves after first paint on some routes, so fill the "You"
+  // fields when it lands. Only ever fills blanks: someone submitting on behalf
+  // of a team mate has already typed the right name and we must not stomp it.
+  // Keyed on the user id so a sign-in mid-form still prefills, once.
+  const prefilledForRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!user || prefilledForRef.current === user.id) return
+    prefilledForRef.current = user.id
+    const defaults = submitterDefaults(user)
+    setForm((f) => ({
+      ...f,
+      submitterName: f.submitterName || defaults.submitterName,
+      submitterContact: f.submitterContact || defaults.submitterContact,
+    }))
+  }, [user])
 
   useEffect(() => {
     if (!SITE_KEY || !turnstileRef.current) return
@@ -221,7 +258,9 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
           resetTurnstile()
           onSubmitted?.()
         } else {
-          setForm(INITIAL)
+          // Clearing back to blank would drop the account prefill, so put it
+          // straight back for the next field they add.
+          setForm({ ...INITIAL, ...submitterDefaults(user) })
           setCoords(null)
           setNewPhotos([])
           resetTurnstile()
@@ -237,199 +276,230 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
     }
   }
 
+  const noun = editing ? 'edit' : 'submission'
+
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-      {editing && (
-        <Section title="What changed" hint="A quick note on what you're updating and why (optional). Your edit is reviewed before it goes live.">
-          <textarea value={editReason} onChange={(e) => setEditReason(e.target.value)} rows={2} className="input resize-y" placeholder="e.g. we now have realistic hub lighting and timing for this season" />
+    <>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        {editing && (
+          <Section title="What changed" hint="A quick note on what you're updating and why (optional). Your edit is reviewed before it goes live.">
+            <textarea value={editReason} onChange={(e) => setEditReason(e.target.value)} rows={2} className="input resize-y" placeholder="e.g. we now have realistic hub lighting and timing for this season" />
+          </Section>
+        )}
+        <Section title="The field">
+          <Field label="Field or facility name" required>
+            <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Motor City Alliance Field" className="input" required />
+          </Field>
+          <div className="flex gap-3">
+            <div className="w-32">
+              <Field label="Team number">
+                <input type="number" inputMode="numeric" min={1} value={form.teamNumber} onChange={(e) => set('teamNumber', e.target.value)} placeholder="5577" className="input" />
+              </Field>
+            </div>
+            <div className="flex-1">
+              <Field label="Team / organisation">
+                <input value={form.teamName} onChange={(e) => set('teamName', e.target.value)} placeholder="Kinematic Wolves" className="input" />
+              </Field>
+            </div>
+            <div className="w-28">
+              <Field label="Program">
+                <select value={form.program} onChange={(e) => set('program', e.target.value as Program)} className="input uppercase">
+                  <option value="frc">FRC</option>
+                  <option value="ftc">FTC</option>
+                  <option value="fll">FLL</option>
+                </select>
+              </Field>
+            </div>
+          </div>
         </Section>
-      )}
-      <Section title="The field">
-        <Field label="Field or facility name" required>
-          <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Motor City Alliance Field" className="input" required />
-        </Field>
-        <div className="flex gap-3">
-          <div className="w-32">
-            <Field label="Team number">
-              <input type="number" inputMode="numeric" min={1} value={form.teamNumber} onChange={(e) => set('teamNumber', e.target.value)} placeholder="5577" className="input" />
-            </Field>
-          </div>
-          <div className="flex-1">
-            <Field label="Team / organisation">
-              <input value={form.teamName} onChange={(e) => set('teamName', e.target.value)} placeholder="Kinematic Wolves" className="input" />
-            </Field>
-          </div>
-          <div className="w-28">
-            <Field label="Program">
-              <select value={form.program} onChange={(e) => set('program', e.target.value as Program)} className="input uppercase">
-                <option value="frc">FRC</option>
-                <option value="ftc">FTC</option>
-                <option value="fll">FLL</option>
-              </select>
-            </Field>
-          </div>
-        </div>
-      </Section>
 
-      <Section title="Where it is" hint="Search an address or drop a pin on the exact spot, then fine-tune by dragging. The address, city and state fill in automatically from the pin - edit them if anything looks off.">
-        <PinMap
-          value={coords}
-          onChange={setCoords}
-          onResolveAddress={(p) =>
-            setForm((f) => ({
-              ...f,
-              ...(p.address ? { address: p.address } : {}),
-              ...(p.city ? { city: p.city } : {}),
-              ...(p.region ? { region: p.region } : {}),
-              ...(p.country ? { country: p.country } : {}),
-            }))
-          }
-        />
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <div className="flex-1">
-            <Field label="Address">
-              <input value={form.address} onChange={(e) => set('address', e.target.value)} className="input" />
-            </Field>
-          </div>
-          <div className="flex-1">
-            <Field label="City">
-              <input value={form.city} onChange={(e) => set('city', e.target.value)} placeholder="Detroit" className="input" />
-            </Field>
-          </div>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <div className="flex-1">
-            <Field label="State / region">
-              <input value={form.region} onChange={(e) => set('region', e.target.value)} placeholder="MI" className="input" />
-            </Field>
-          </div>
-          <div className="flex-1">
-            <Field label="Country">
-              <input value={form.country} onChange={(e) => set('country', e.target.value)} placeholder="USA" className="input" />
-            </Field>
-          </div>
-        </div>
-      </Section>
-
-      <Section title="Field spec">
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <div className="flex-1">
-            <Field label="Coverage">
-              <select value={form.coverage} onChange={(e) => set('coverage', e.target.value)} className="input">
-                {FIELD_COVERAGE.map((c) => <option key={c} value={c}>{COVERAGE_LABEL[c]}</option>)}
-              </select>
-            </Field>
-          </div>
-          <div className="flex-1">
-            <Field label="Game elements" hint="Go by your major elements - if the main ones are official, pick official even if a few are shop-built. Use your best judgement and add specifics in the notes.">
-              <select value={form.elements} onChange={(e) => set('elements', e.target.value)} className="input">
-                {FIELD_ELEMENTS.map((el) => <option key={el} value={el}>{ELEMENTS_LABEL[el]}</option>)}
-              </select>
-            </Field>
-          </div>
-          <div className="flex-1">
-            <Field label="Perimeter">
-              <select value={form.perimeter} onChange={(e) => set('perimeter', e.target.value)} className="input">
-                {FIELD_PERIMETER.map((p) => <option key={p} value={p}>{PERIMETER_LABEL[p]}</option>)}
-              </select>
-            </Field>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-6">
-          <Check checked={form.hasFms} onChange={(v) => set('hasFms', v)} label="Has an FMS" />
-          <label className="flex items-center gap-2 text-sm text-foreground">
-            Ceiling height
-            <input type="number" inputMode="decimal" min={1} step="0.5" value={form.ceilingHeightFt} onChange={(e) => set('ceilingHeightFt', e.target.value)} placeholder="ft" className="input w-24" />
-            <span className="text-xs text-muted-2">ft</span>
-          </label>
-        </div>
-        <p className="text-xs text-muted-2">Ceiling height can be approximate. It mainly flags whether the field is tall enough to shoot - anything under 12 ft is marked as a low ceiling.</p>
-      </Section>
-
-      <Section title="Access">
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <div className="flex-1">
-            <Field label="Availability" hint="Roughly when in the year the field is set up. How to actually get access is below.">
-              <select value={form.availability} onChange={(e) => set('availability', e.target.value)} className="input">
-                {FIELD_AVAILABILITY.map((a) => <option key={a} value={a}>{AVAILABILITY_LABEL[a]}</option>)}
-              </select>
-            </Field>
-          </div>
-          <div className="flex-1">
-            <Field label="Days / hours open" hint="Free text, e.g. weeknights 6-9pm in build season.">
-              <input value={form.hours} onChange={(e) => set('hours', e.target.value)} className="input" />
-            </Field>
-          </div>
-        </div>
-        <Field label="How to arrange access" hint="Most fields are by arrangement - say what a visiting team should do to book time.">
-          <textarea value={form.contactInfo} onChange={(e) => set('contactInfo', e.target.value)} rows={2} className="input resize-y" />
-        </Field>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <div className="flex-1">
-            <Field label="Sign-up form link" hint="Only if there's a booking form or sign-up page (e.g. a Google Form). With one, the field shows as sign-up instead of by arrangement.">
-              <input type="url" value={form.contactUrl} onChange={(e) => set('contactUrl', e.target.value)} placeholder="https://forms.gle/…" className="input" />
-            </Field>
-          </div>
-          <div className="flex-1">
-            <Field label="Website">
-              <input type="url" value={form.website} onChange={(e) => set('website', e.target.value)} className="input" />
-            </Field>
-          </div>
-        </div>
-      </Section>
-
-      <Section title="Extras">
-        <Field label="Notes" hint="Anything else visiting teams should know.">
-          <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className="input resize-y" />
-        </Field>
-        <Field
-          label="Photos of the field"
-          hint={
-            editing
-              ? 'Add or remove photos. Changes are reviewed before they go live. Up to 8, max 10 MB each.'
-              : 'Optional. Reviewed before it goes live. Up to 8 photos, max 10 MB each.'
-          }
-        >
-          <PhotoEditor
-            existing={edit?.field.photos ?? []}
-            removeIds={removePhotoIds}
-            onToggleRemove={(id) =>
-              setRemovePhotoIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
+        <Section title="Where it is" hint="Search an address or drop a pin on the exact spot, then fine-tune by dragging. The address, city and state fill in automatically from the pin - edit them if anything looks off.">
+          <PinMap
+            value={coords}
+            onChange={setCoords}
+            onResolveAddress={(p) =>
+              setForm((f) => ({
+                ...f,
+                ...(p.address ? { address: p.address } : {}),
+                ...(p.city ? { city: p.city } : {}),
+                ...(p.region ? { region: p.region } : {}),
+                ...(p.country ? { country: p.country } : {}),
+              }))
             }
-            files={newPhotos}
-            onAddFiles={(fs) => setNewPhotos((prev) => [...prev, ...fs].slice(0, 8))}
-            onRemoveFile={(i) => setNewPhotos((prev) => prev.filter((_, idx) => idx !== i))}
           />
-        </Field>
-      </Section>
-
-      <Section title="You" hint="Private - only the moderators see this, never shown publicly.">
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <div className="flex-1">
-            <Field label="Your name">
-              <input value={form.submitterName} onChange={(e) => set('submitterName', e.target.value)} className="input" />
-            </Field>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex-1">
+              <Field label="Address">
+                <input value={form.address} onChange={(e) => set('address', e.target.value)} className="input" />
+              </Field>
+            </div>
+            <div className="flex-1">
+              <Field label="City">
+                <input value={form.city} onChange={(e) => set('city', e.target.value)} placeholder="Detroit" className="input" />
+              </Field>
+            </div>
           </div>
-          <div className="flex-1">
-            <Field label="How to reach you">
-              <input value={form.submitterContact} onChange={(e) => set('submitterContact', e.target.value)} className="input" />
-            </Field>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex-1">
+              <Field label="State / region">
+                <input value={form.region} onChange={(e) => set('region', e.target.value)} placeholder="MI" className="input" />
+              </Field>
+            </div>
+            <div className="flex-1">
+              <Field label="Country">
+                <input value={form.country} onChange={(e) => set('country', e.target.value)} placeholder="USA" className="input" />
+              </Field>
+            </div>
           </div>
-        </div>
-      </Section>
+        </Section>
 
-      {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
+        <Section title="Field spec">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex-1">
+              <Field label="Coverage">
+                <select value={form.coverage} onChange={(e) => set('coverage', e.target.value)} className="input">
+                  {FIELD_COVERAGE.map((c) => <option key={c} value={c}>{COVERAGE_LABEL[c]}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div className="flex-1">
+              <Field label="Game elements" hint="Go by your major elements - if the main ones are official, pick official even if a few are shop-built. Use your best judgement and add specifics in the notes.">
+                <select value={form.elements} onChange={(e) => set('elements', e.target.value)} className="input">
+                  {FIELD_ELEMENTS.map((el) => <option key={el} value={el}>{ELEMENTS_LABEL[el]}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div className="flex-1">
+              <Field label="Perimeter">
+                <select value={form.perimeter} onChange={(e) => set('perimeter', e.target.value)} className="input">
+                  {FIELD_PERIMETER.map((p) => <option key={p} value={p}>{PERIMETER_LABEL[p]}</option>)}
+                </select>
+              </Field>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-6">
+            <Check checked={form.hasFms} onChange={(v) => set('hasFms', v)} label="Has an FMS" />
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              Ceiling height
+              <input type="number" inputMode="decimal" min={1} step="0.5" value={form.ceilingHeightFt} onChange={(e) => set('ceilingHeightFt', e.target.value)} placeholder="ft" className="input w-24" />
+              <span className="text-xs text-muted-2">ft</span>
+            </label>
+          </div>
+          <p className="text-xs text-muted-2">Ceiling height can be approximate. It mainly flags whether the field is tall enough to shoot - anything under 12 ft is marked as a low ceiling.</p>
+        </Section>
 
-      <button
-        type="submit"
-        disabled={submitting || !form.name.trim() || !coords || (Boolean(SITE_KEY) && !turnstileToken)}
-        className="self-start rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50"
-      >
-        {submitting ? 'Submitting…' : editing ? 'Submit edit for review' : 'Submit field'}
-      </button>
+        <Section title="Access">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex-1">
+              <Field label="Availability" hint="Roughly when in the year the field is set up. How to actually get access is below.">
+                <select value={form.availability} onChange={(e) => set('availability', e.target.value)} className="input">
+                  {FIELD_AVAILABILITY.map((a) => <option key={a} value={a}>{AVAILABILITY_LABEL[a]}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div className="flex-1">
+              <Field label="Days / hours open" hint="Free text, e.g. weeknights 6-9pm in build season.">
+                <input value={form.hours} onChange={(e) => set('hours', e.target.value)} className="input" />
+              </Field>
+            </div>
+          </div>
+          <Field label="How to arrange access" hint="Most fields are by arrangement - say what a visiting team should do to book time.">
+            <textarea value={form.contactInfo} onChange={(e) => set('contactInfo', e.target.value)} rows={2} className="input resize-y" />
+          </Field>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex-1">
+              <Field label="Sign-up form link" hint="Only if there's a booking form or sign-up page (e.g. a Google Form). With one, the field shows as sign-up instead of by arrangement.">
+                <input type="url" value={form.contactUrl} onChange={(e) => set('contactUrl', e.target.value)} placeholder="https://forms.gle/…" className="input" />
+              </Field>
+            </div>
+            <div className="flex-1">
+              <Field label="Website">
+                <input type="url" value={form.website} onChange={(e) => set('website', e.target.value)} className="input" />
+              </Field>
+            </div>
+          </div>
+        </Section>
 
-      {result && <p className={result.ok ? 'text-sm text-rookie' : 'text-sm text-frc'}>{result.message}</p>}
-    </form>
+        <Section title="Extras">
+          <Field label="Notes" hint="Anything else visiting teams should know.">
+            <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className="input resize-y" />
+          </Field>
+          <Field
+            label="Photos of the field"
+            hint={
+              editing
+                ? 'Add or remove photos. Changes are reviewed before they go live. Up to 8, max 10 MB each.'
+                : 'Optional. Reviewed before it goes live. Up to 8 photos, max 10 MB each.'
+            }
+          >
+            <PhotoEditor
+              existing={edit?.field.photos ?? []}
+              removeIds={removePhotoIds}
+              onToggleRemove={(id) =>
+                setRemovePhotoIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
+              }
+              files={newPhotos}
+              onAddFiles={(fs) => setNewPhotos((prev) => [...prev, ...fs].slice(0, 8))}
+              onRemoveFile={(i) => setNewPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+            />
+          </Field>
+        </Section>
+
+        <Section title="You" hint="Private - only the moderators see this, never shown publicly.">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex-1">
+              <Field label="Your name">
+                <input value={form.submitterName} onChange={(e) => set('submitterName', e.target.value)} className="input" />
+              </Field>
+            </div>
+            <div className="flex-1">
+              <Field label="How to reach you">
+                <input value={form.submitterContact} onChange={(e) => set('submitterContact', e.target.value)} className="input" />
+              </Field>
+            </div>
+          </div>
+          {user ? (
+            <p className="text-xs text-muted-2">
+              Signed in as {user.displayName || user.email}. This {noun} will be credited to your account.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-2">
+              <button
+                type="button"
+                onClick={() => setSignInOpen(true)}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                Sign in to track this {noun}
+              </button>{' '}
+              (optional, it works fine without one).
+            </p>
+          )}
+        </Section>
+
+        {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
+
+        <button
+          type="submit"
+          disabled={submitting || !form.name.trim() || !coords || (Boolean(SITE_KEY) && !turnstileToken)}
+          className="self-start rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50"
+        >
+          {submitting ? 'Submitting…' : editing ? 'Submit edit for review' : 'Submit field'}
+        </button>
+
+        {result && <p className={result.ok ? 'text-sm text-rookie' : 'text-sm text-frc'}>{result.message}</p>}
+      </form>
+
+      {/* Opened only from the quiet link in the "You" section, never
+          automatically: an interrupting modal is exactly what would cost us
+          submissions. It sits OUTSIDE the form on purpose. React events from a
+          portal bubble up the React tree, so a dialog rendered inside the form
+          would fire this form's onSubmit when someone signs in with a password. */}
+      <SignInDialog
+        open={signInOpen}
+        onOpenChange={setSignInOpen}
+        reason={`Optional. Signing in credits this ${noun} to you and lets you find it later.`}
+      />
+    </>
   )
 }
 

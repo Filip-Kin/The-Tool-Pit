@@ -5,7 +5,7 @@
  */
 import { Worker } from 'bullmq'
 import { getRedis } from './redis.js'
-import { scheduleRecurringJobs } from './queues.js'
+import { scheduleRecurringJobs, grantEnrichQueue, grantMonitorQueue } from './queues.js'
 import { processCrawlJob } from './jobs/crawl.js'
 import { processEnrichJob } from './jobs/enrich.js'
 import { processFreshnessJob } from './jobs/freshness.js'
@@ -14,7 +14,18 @@ import { processReindexJob } from './jobs/reindex.js'
 import { processSubmissionJob } from './jobs/submission.js'
 import { processAlbumIngestJob } from './jobs/album-ingest.js'
 import { processAlbumEnrichJob } from './jobs/album-enrich.js'
+import { processGrantDiscoverJob } from './grants/discover.js'
+import { processGrantEnrichJob } from './grants/enrich.js'
+import { processGrantMonitorJob } from './grants/monitor.js'
+import { processGrantMatchJob } from './grants/matcher.js'
+import { processGrantAlertDrainJob } from './grants/alerts.js'
+import { processGrantDeadlineSweepJob } from './grants/deadline-sweeper.js'
+import { enqueueDueGrantMonitors } from './grants/cadence.js'
 import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload, AlbumIngestPayload, AlbumEnrichPayload } from '@the-tool-pit/types'
+import type { GrantDiscoverPayload } from './grants/discover.js'
+import type { GrantEnrichPayload } from './grants/enrich.js'
+import type { GrantMonitorPayload } from './grants/monitor.js'
+import type { GrantMatchJobPayload } from './grants/matcher.js'
 
 const connection = getRedis()
 const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY ?? '2', 10)
@@ -91,8 +102,107 @@ const albumEnrichWorker = new Worker<AlbumEnrichPayload>(
   { connection, concurrency: CONCURRENCY },
 )
 
+// #region grants
+
+const grantDiscoverWorker = new Worker<GrantDiscoverPayload>(
+  'grant-discover',
+  async (job) => {
+    console.log(`[grant-discover] processing job ${job.id} connector=${job.data.connector}`)
+    const outcome = await processGrantDiscoverJob(job.data)
+
+    // discover.ts returns the ids and deliberately enqueues nothing itself, so
+    // the chain to classification is closed here, where the queue handles live.
+    for (const candidateId of outcome.insertedCandidateIds) {
+      await grantEnrichQueue.add('grant-enrich', { candidateId })
+    }
+
+    // A capped run and a complete run look identical in the logs otherwise, and
+    // a silent cap reads as "we found everything there is".
+    if (outcome.stats.limits.length > 0) {
+      console.warn(`[grant-discover] ${outcome.connector} coverage limits: ${outcome.stats.limits.join('; ')}`)
+    }
+    for (const err of outcome.stats.errors) {
+      console.error(`[grant-discover] ${outcome.connector} error: ${err}`)
+    }
+    console.log(
+      `[grant-discover] ${outcome.connector} queued ${outcome.insertedCandidateIds.length} candidates for enrichment`,
+    )
+  },
+  { connection, concurrency: CONCURRENCY },
+)
+
+const grantEnrichWorker = new Worker<GrantEnrichPayload>(
+  'grant-enrich',
+  async (job) => {
+    console.log(`[grant-enrich] processing candidate ${job.data.candidateId}`)
+    await processGrantEnrichJob(job.data)
+  },
+  // One Haiku call per job. Low concurrency keeps a discovery run that inserted
+  // a few hundred candidates from emptying a pay-as-you-go balance in a minute.
+  { connection, concurrency: 2 },
+)
+
+const grantMonitorWorker = new Worker<GrantMonitorPayload>(
+  'grant-monitor',
+  async (job) => {
+    // Due-check sentinel, same shape as the freshness pass. cadence.ts returns
+    // the ids and does no enqueueing, so the fan-out happens here.
+    if (job.data.grantId === '__all__') {
+      const dueIds = await enqueueDueGrantMonitors()
+      for (const grantId of dueIds) {
+        await grantMonitorQueue.add(
+          'grant-monitor',
+          { grantId },
+          // Spread over five minutes. These are funders' own web servers, and a
+          // few hundred simultaneous requests from one IP is how a directory
+          // gets itself blocked.
+          { delay: Math.floor(Math.random() * 300_000) },
+        )
+      }
+      console.log(`[grant-monitor] queued ${dueIds.length} due grants`)
+      return
+    }
+
+    console.log(`[grant-monitor] checking grant ${job.data.grantId}`)
+    await processGrantMonitorJob(job.data)
+  },
+  { connection, concurrency: 3 },
+)
+
+const grantMatchWorker = new Worker<GrantMatchJobPayload>(
+  'grant-match',
+  async (job) => {
+    console.log(`[grant-match] matching profile ${job.data.profileId}`)
+    await processGrantMatchJob(job.data)
+  },
+  { connection, concurrency: CONCURRENCY },
+)
+
+const grantAlertWorker = new Worker(
+  'grant-alert-drain',
+  async () => {
+    await processGrantAlertDrainJob()
+  },
+  // Concurrency MUST stay 1. grants/mailer.ts paces sends with a module-level
+  // timestamp to stay under Resend's 2 requests per second, and a second
+  // concurrent drain in the same process would step straight over that pacing.
+  { connection, concurrency: 1 },
+)
+
+const grantDeadlineWorker = new Worker(
+  'grant-deadline-sweep',
+  async () => {
+    await processGrantDeadlineSweepJob()
+  },
+  // Serial for the same reason as the drain: the sweep writes alert rows keyed
+  // by a dedupe key, and one writer means no race on that key.
+  { connection, concurrency: 1 },
+)
+
+// #endregion
+
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -120,6 +230,12 @@ async function shutdown() {
     submissionWorker.close(),
     albumIngestWorker.close(),
     albumEnrichWorker.close(),
+    grantDiscoverWorker.close(),
+    grantEnrichWorker.close(),
+    grantMonitorWorker.close(),
+    grantMatchWorker.close(),
+    grantAlertWorker.close(),
+    grantDeadlineWorker.close(),
   ])
   process.exit(0)
 }

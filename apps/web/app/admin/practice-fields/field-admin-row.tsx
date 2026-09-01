@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { MapPin, Pencil, Check, X, Trash2, RotateCcw } from 'lucide-react'
+import { MapPin, Pencil, Check, X, Trash2, RotateCcw, UserRound } from 'lucide-react'
 import type { PracticeField } from '@the-tool-pit/db'
 import type { FieldPhotoRef } from '@/lib/fields/field-display'
 import {
@@ -18,7 +18,25 @@ import { FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FI
 import { PinMap } from '@/components/fields/pin-map'
 import { approveField, suppressField, unsuppressField, deleteField, updateField, addFieldPhotos, removeFieldPhoto, type FieldEditInput } from './actions'
 
-export function FieldAdminRow({ field, photos }: { field: PracticeField; photos: FieldPhotoRef[] }) {
+/**
+ * The account behind a submission, when the submitter happened to be signed in.
+ * Null is the normal case, not an error: the public form works signed out.
+ */
+export interface SubmitterAccount {
+  id: string
+  displayName: string | null
+  email: string | null
+}
+
+export function FieldAdminRow({
+  field,
+  photos,
+  account,
+}: {
+  field: PracticeField
+  photos: FieldPhotoRef[]
+  account?: SubmitterAccount | null
+}) {
   const [editing, setEditing] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -62,6 +80,19 @@ export function FieldAdminRow({ field, photos }: { field: PracticeField; photos:
               {field.submitterContact ? ` · ${field.submitterContact}` : ''}
             </div>
           )}
+          {/* A named account is worth more to a moderator than an IP hash, so
+              say which it is either way rather than only showing the good case. */}
+          <div className="mt-1 flex items-center gap-1 text-xs text-muted-2">
+            <UserRound className="h-3 w-3" />
+            {account ? (
+              <span>
+                Account <span className="text-foreground">{account.displayName ?? account.email ?? account.id}</span>
+                {account.displayName && account.email ? ` · ${account.email}` : ''}
+              </span>
+            ) : (
+              <span>No account, anonymous submission</span>
+            )}
+          </div>
           {field.rejectionReason && <div className="mt-1 text-xs text-official">Reason: {field.rejectionReason}</div>}
         </div>
 

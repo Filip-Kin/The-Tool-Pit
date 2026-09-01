@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { Camera } from 'lucide-react'
 import { AlbumSearchBar } from './album-search-bar'
+import { UserMenu } from '@/components/auth/user-menu'
+import { VerticalSwitcher } from '@/components/layout/vertical-switcher'
 
 export function AlbumsHeader() {
   return (
@@ -11,17 +13,21 @@ export function AlbumsHeader() {
           <span className="text-lg font-bold tracking-tight text-foreground">FIRST Event Photos</span>
         </Link>
 
+        {/* Which of the four verticals you are in. Same slot in every header. */}
+        <VerticalSwitcher current="photos" className="hidden sm:flex" />
+
         <div className="hidden flex-1 md:block max-w-md">
           <AlbumSearchBar size="sm" placeholder="Search events or a team number…" />
         </div>
 
-        <nav className="ml-auto flex items-center gap-1">
+        <nav className="ml-auto flex items-center gap-2">
           <Link
             href="/submit"
             className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
           >
             Submit album
           </Link>
+          <UserMenu />
         </nav>
       </div>
     </header>

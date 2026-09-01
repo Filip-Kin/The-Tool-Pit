@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import { MapPin } from 'lucide-react'
+import { UserMenu } from '@/components/auth/user-menu'
+import { VerticalSwitcher } from '@/components/layout/vertical-switcher'
 
 export function FieldsHeader() {
   return (
@@ -10,13 +12,17 @@ export function FieldsHeader() {
           <span className="text-lg font-bold tracking-tight text-foreground">Practice Field Map</span>
         </Link>
 
-        <nav className="ml-auto flex items-center gap-1">
+        {/* Which of the four verticals you are in. Same slot in every header. */}
+        <VerticalSwitcher current="fields" className="hidden sm:flex" />
+
+        <nav className="ml-auto flex items-center gap-2">
           <Link
             href="/submit"
             className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
           >
             Add a field
           </Link>
+          <UserMenu />
         </nav>
       </div>
     </header>

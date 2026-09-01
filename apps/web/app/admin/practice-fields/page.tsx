@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { desc, eq, asc, inArray } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
-import { practiceFields, fieldPhotos, FIELD_STATUSES } from '@the-tool-pit/db'
+import { practiceFields, fieldPhotos, users, FIELD_STATUSES } from '@the-tool-pit/db'
 import type { FieldStatus } from '@the-tool-pit/db'
 import type { FieldPhotoRef } from '@/lib/fields/field-display'
 import { FieldAdminRow } from './field-admin-row'
@@ -23,9 +23,18 @@ export default async function PracticeFieldsAdminPage({
     : 'pending'
 
   const db = getDb()
+  // Left join the account, because sign-in is optional on the public form: most
+  // rows have no user and must still come back. Columns are pulled out flat
+  // rather than as a nested object so the left join's nullability is obvious.
   const rows = await db
-    .select()
+    .select({
+      field: practiceFields,
+      accountId: users.id,
+      accountName: users.displayName,
+      accountEmail: users.email,
+    })
     .from(practiceFields)
+    .leftJoin(users, eq(practiceFields.submittedByUserId, users.id))
     .where(eq(practiceFields.status, active))
     .orderBy(desc(practiceFields.createdAt))
 
@@ -34,7 +43,7 @@ export default async function PracticeFieldsAdminPage({
     ? await db
         .select({ id: fieldPhotos.id, fieldId: fieldPhotos.fieldId })
         .from(fieldPhotos)
-        .where(inArray(fieldPhotos.fieldId, rows.map((r) => r.id)))
+        .where(inArray(fieldPhotos.fieldId, rows.map((r) => r.field.id)))
         .orderBy(asc(fieldPhotos.sortOrder), asc(fieldPhotos.createdAt))
     : []
   const photosByField = new Map<string, FieldPhotoRef[]>()
@@ -69,8 +78,13 @@ export default async function PracticeFieldsAdminPage({
 
       <div className="mt-4 flex flex-col gap-3">
         {rows.length === 0 && <p className="text-sm text-muted-2">Nothing here.</p>}
-        {rows.map((f) => (
-          <FieldAdminRow key={f.id} field={f} photos={photosByField.get(f.id) ?? []} />
+        {rows.map((r) => (
+          <FieldAdminRow
+            key={r.field.id}
+            field={r.field}
+            photos={photosByField.get(r.field.id) ?? []}
+            account={r.accountId ? { id: r.accountId, displayName: r.accountName, email: r.accountEmail } : null}
+          />
         ))}
       </div>
     </div>

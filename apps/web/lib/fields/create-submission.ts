@@ -29,6 +29,12 @@ export interface CreateFieldSubmissionInput {
   submitterName?: string
   submitterContact?: string
   submitterIpHash: string
+  /**
+   * The signed-in user, when there was one. Optional on purpose: submitting a
+   * field never requires an account, an account only earns attribution and
+   * lets the submitter find this again later.
+   */
+  submittedByUserId?: string
   /** Optional photos to attach and review before publish (gallery order). */
   photos?: { data: Buffer; contentType: string }[]
 }
@@ -101,6 +107,7 @@ export async function createFieldSubmission(
     submitterName: input.submitterName?.trim() || null,
     submitterContact: input.submitterContact?.trim() || null,
     submitterIpHash: input.submitterIpHash,
+    submittedByUserId: input.submittedByUserId ?? null,
     status: 'pending',
     source: 'submission',
   }

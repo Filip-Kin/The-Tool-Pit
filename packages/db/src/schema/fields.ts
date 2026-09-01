@@ -1,5 +1,6 @@
 import { pgTable, uuid, text, integer, real, boolean, doublePrecision, timestamp, jsonb, index, customType } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
+import { users } from './accounts'
 
 /** Raw binary column (Postgres bytea) for uploaded field photos. */
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -94,6 +95,13 @@ export const practiceFields = pgTable(
     /** How to reach the submitter (email/phone/handle). Never shown publicly. */
     submitterContact: text('submitter_contact'),
     submitterIpHash: text('submitter_ip_hash'),
+    /**
+     * The signed-in user who submitted this, when there was one. Sign-in is
+     * OPTIONAL here on purpose: anonymous submissions stay open so a mentor
+     * without an account can still put their field on the map. Signing in
+     * only buys attribution and the ability to find your own submissions.
+     */
+    submittedByUserId: uuid('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
 
     publishedAt: timestamp('published_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -177,6 +185,13 @@ export const fieldEditProposals = pgTable(
     submitterName: text('submitter_name'),
     submitterContact: text('submitter_contact'),
     submitterIpHash: text('submitter_ip_hash'),
+    /**
+     * The signed-in user who submitted this, when there was one. Sign-in is
+     * OPTIONAL here on purpose: anonymous submissions stay open so a mentor
+     * without an account can still put their field on the map. Signing in
+     * only buys attribution and the ability to find your own submissions.
+     */
+    submittedByUserId: uuid('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     /** FIELD_EDIT_STATUSES */
     status: text('status').notNull().default('pending'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

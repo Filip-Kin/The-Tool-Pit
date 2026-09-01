@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AlbumsHeader } from '@/components/albums/albums-header'
+import { VerticalFooterLinks } from '@/components/layout/vertical-switcher'
 
 export const metadata: Metadata = {
   title: {
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
     'Photo albums from FRC events. Search by event name, event code, or team number.',
 }
 
-export default function PhotosLayout({ children }: { children: React.ReactNode }) {
+export default async function PhotosLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
       <AlbumsHeader />
@@ -19,9 +20,9 @@ export default function PhotosLayout({ children }: { children: React.ReactNode }
       <footer className="border-t border-border-subtle py-6">
         <div className="container mx-auto flex max-w-6xl flex-col gap-2 px-4 text-sm text-muted-2 sm:flex-row sm:items-center sm:justify-between">
           <span>FIRST Event Photos</span>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             <Link href="/submit" className="hover:text-foreground">Submit an album</Link>
-            <a href="https://ttp.filipkin.com" className="hover:text-foreground">The Tool Pit</a>
+            <VerticalFooterLinks current="photos" />
           </div>
         </div>
       </footer>

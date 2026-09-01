@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { getIpHash } from '@/lib/utils/ip'
+import { getCurrentUser } from '@/lib/auth/session'
 import { checkFieldSubmissionRateLimit } from '@/lib/fields/rate-limit'
 import { createFieldSubmission } from '@/lib/fields/create-submission'
 import { formStr as str, formNum as num, formBool as bool, readPhotoFiles } from '@/lib/fields/form-parse'
@@ -12,6 +13,10 @@ export async function POST(req: NextRequest) {
     if (!name) return NextResponse.json({ error: 'A field name is required.' }, { status: 400 })
 
     const ipHash = getIpHash(req.headers.get('x-forwarded-for') ?? '')
+    // Sign-in is optional on this route. A signed-out submission still goes
+    // through on the IP hash alone, an account only adds attribution, so this
+    // must never turn into a 401.
+    const user = await getCurrentUser()
     if (!(await checkFieldSubmissionRateLimit(ipHash))) {
       return NextResponse.json({ error: 'Too many submissions. Please wait.' }, { status: 429 })
     }
@@ -57,6 +62,7 @@ export async function POST(req: NextRequest) {
       submitterName: str(form, 'submitterName'),
       submitterContact: str(form, 'submitterContact'),
       submitterIpHash: ipHash,
+      submittedByUserId: user?.id ?? undefined,
       photos: parsed.photos,
     })
 

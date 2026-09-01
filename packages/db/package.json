@@ -25,6 +25,10 @@
       "bun": "./src/field-enums.ts",
       "default": "./dist/field-enums.js"
     },
+    "./grant-enums": {
+      "bun": "./src/grant-enums.ts",
+      "default": "./dist/grant-enums.js"
+    },
     "./client": {
       "bun": "./src/client.ts",
       "default": "./dist/client.js"

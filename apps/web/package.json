@@ -29,6 +29,7 @@
     "cookies-next": "^4.3.0",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.36.0",
+    "firebase": "^12.18.0",
     "ioredis": "5.9.3",
     "jose": "^5.9.0",
     "leaflet": "^1.9.4",
@@ -36,6 +37,7 @@
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "resend": "^6.25.0",
     "tailwind-merge": "^2.5.0"
   },
   "devDependencies": {
