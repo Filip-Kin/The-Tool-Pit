@@ -13,14 +13,13 @@ import type { PublicEvent } from '@/lib/events/event-display'
 import {
   eventMarkerStyle,
   eventTiming,
+  timingPhrase,
   eventDateRange,
   eventLocation,
   costLabel,
   daysLabel,
   fullnessLabel,
   fullnessRatio,
-  daysUntil,
-  EVENT_STATUS_LABEL,
   REGISTRATION_STATUS_SHORT,
 } from '@/lib/events/event-display'
 
@@ -33,19 +32,6 @@ function PinDot({ ev, now }: { ev: PublicEvent; now: Date }) {
       style={{ width: 14, height: 14, background: s.color }}
     />
   )
-}
-
-/** "In 11 days", "Today", "3 days ago", or a plain confirmed/cancelled note. */
-function timingPhrase(ev: PublicEvent, now: Date): string {
-  if (ev.eventStatus === 'cancelled') return 'Cancelled'
-  const timing = eventTiming(ev, now)
-  const d = daysUntil(ev, now)
-  if (timing === 'past') return 'Completed'
-  if (d == null) return EVENT_STATUS_LABEL[ev.eventStatus]
-  if (d <= 0) return 'Happening now'
-  if (d === 1) return 'Tomorrow'
-  if (d <= 45) return `In ${d} days`
-  return EVENT_STATUS_LABEL[ev.eventStatus]
 }
 
 /** Registration chip, coloured green when open, amber for waitlist. */

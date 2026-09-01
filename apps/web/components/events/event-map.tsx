@@ -4,7 +4,13 @@ import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef } from 'react'
 import type { Map as LeafletMap, Marker as LeafletMarker, DivIcon } from 'leaflet'
 import type { PublicEvent } from '@/lib/events/event-display'
-import { eventMarkerStyle, eventDateRange, eventLocation, fullnessLabel } from '@/lib/events/event-display'
+import {
+  eventMarkerStyle,
+  eventDateRange,
+  eventLocation,
+  fullnessLabel,
+  timingPhrase,
+} from '@/lib/events/event-display'
 import { markerHtml } from './marker-html'
 import { addDarkBasemap } from './dark-basemap'
 
@@ -24,12 +30,18 @@ function userMarkerHtml(): string {
   return `<div style="width:14px;height:14px;background:#7c3aed;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(124,58,237,0.25),0 1px 4px rgba(0,0,0,0.6)"></div>`
 }
 
-function tooltipHtml(ev: PublicEvent): string {
+function tooltipHtml(ev: PublicEvent, now: Date): string {
   const esc = (s: string) => s.replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const date = eventDateRange(ev)
   const full = fullnessLabel(ev)
+  // The pin cannot carry this. Grey means past OR cancelled OR nobody has told
+  // us the registration state, so where the event sits in its life has to be
+  // written down. Cancelled reads red, because it is the one that wastes a trip.
+  const phrase = timingPhrase(ev, now)
+  const phraseColor = ev.eventStatus === 'cancelled' ? '#ef4444' : '#0a0a0b'
   return `<div style="font-family:Inter,sans-serif;min-width:130px">
     <div style="font-weight:600;color:#0a0a0b">${esc(ev.name)}</div>
+    <div style="font-size:12px;font-weight:600;color:${phraseColor};margin-top:1px">${esc(phrase)}</div>
     ${date ? `<div style="font-size:12px;color:#555;margin-top:1px">${esc(date)}</div>` : ''}
     <div style="font-size:12px;color:#777;margin-top:2px">${esc(eventLocation(ev))}</div>
     ${full ? `<div style="font-size:12px;color:#7c3aed;margin-top:2px">${esc(full)}</div>` : ''}
@@ -89,7 +101,7 @@ export function EventMap({ events, now, selectedId, onSelect, userLoc, height = 
         })
         const marker = L.marker([ev.latitude, ev.longitude], { icon: base, riseOnHover: true })
           .addTo(map)
-          .bindTooltip(tooltipHtml(ev), { direction: 'top', offset: [0, -style.size / 2], opacity: 1 })
+          .bindTooltip(tooltipHtml(ev, now), { direction: 'top', offset: [0, -style.size / 2], opacity: 1 })
         marker.on('click', () => {
           selectedFromMapRef.current = true
           onSelectRef.current(ev.id)

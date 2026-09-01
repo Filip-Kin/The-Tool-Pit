@@ -159,6 +159,28 @@ export function eventTiming(ev: PublicEvent, now: Date): EventTiming {
   return d != null && d <= SOON_DAYS ? 'soon' : 'upcoming'
 }
 
+/**
+ * Where an event sits in its life: "Cancelled", "Completed", "Happening now",
+ * "In 11 days", or its plain status.
+ *
+ * Lived in event-card.tsx, which meant the map tooltip had no way to say any of
+ * it. A pin's colour cannot: grey means past OR cancelled OR nobody has told us
+ * the registration state, so the one thing the tooltip most needed to say was
+ * the one thing the pin could not. Shared from here so the card and the map say
+ * the same words about the same event.
+ */
+export function timingPhrase(ev: PublicEvent, now: Date): string {
+  if (ev.eventStatus === 'cancelled') return 'Cancelled'
+  const timing = eventTiming(ev, now)
+  const d = daysUntil(ev, now)
+  if (timing === 'past') return 'Completed'
+  if (d == null) return EVENT_STATUS_LABEL[ev.eventStatus]
+  if (d <= 0) return 'Happening now'
+  if (d === 1) return 'Tomorrow'
+  if (d <= 45) return `In ${d} days`
+  return EVENT_STATUS_LABEL[ev.eventStatus]
+}
+
 // ---------------------------------------------------------------------------
 // Pin colour scheme: hue = registration state. Every card already carries the
 // date, so timing is not what the colour has to tell you. Whether you can sign
