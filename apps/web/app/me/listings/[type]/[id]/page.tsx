@@ -6,6 +6,7 @@ import { MeShell } from '@/components/me/me-shell'
 import { ListingEditForm } from '@/components/me/listing-edit-form'
 import { ListingAccessPanel } from '@/components/me/listing-access-panel'
 import { entityNoun } from '@/components/me/listing-labels'
+import { TOOL_TYPES } from '@the-tool-pit/db'
 import {
   getOwnerRole,
   isListingEntityType,
@@ -62,7 +63,12 @@ export default async function EditListingPage({
           ← Back to your listings
         </Link>
 
-        <ListingEditForm entityId={id} listing={listing} saveAction={SAVE_ACTIONS[type]} />
+        <ListingEditForm
+          entityId={id}
+          listing={listing}
+          toolTypeOptions={TOOL_TYPES}
+          saveAction={SAVE_ACTIONS[type]}
+        />
 
         <ListingAccessPanel
           entityType={type}

@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { TOOL_TYPES } from '@the-tool-pit/db'
 import type { EditableListing } from '@/lib/queries/listing-ownership'
 
 /**
@@ -18,10 +17,17 @@ import type { EditableListing } from '@/lib/queries/listing-ownership'
 export function ListingEditForm({
   entityId,
   listing,
+  toolTypeOptions,
   saveAction,
 }: {
   entityId: string
   listing: EditableListing
+  /**
+   * The allowed tool types, passed in from the server. Not imported here: the
+   * db schema barrel is server-only, so a client component takes the list as a
+   * prop rather than pulling the whole schema into the browser bundle.
+   */
+  toolTypeOptions: readonly string[]
   saveAction: (formData: FormData) => Promise<{ error?: string; message?: string }>
 }) {
   const router = useRouter()
@@ -48,7 +54,7 @@ export function ListingEditForm({
     <form onSubmit={onSubmit} className="flex flex-col gap-5 rounded-lg border border-border-subtle bg-surface p-5">
       <input type="hidden" name="entityId" value={entityId} />
 
-      {listing.entityType === 'tool' && <ToolFields values={listing.values} />}
+      {listing.entityType === 'tool' && <ToolFields values={listing.values} toolTypeOptions={toolTypeOptions} />}
       {listing.entityType === 'album' && <AlbumFields values={listing.values} />}
       {listing.entityType === 'field' && <FieldFields values={listing.values} />}
 
@@ -93,7 +99,13 @@ function humanizeToolType(t: string): string {
   return t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-function ToolFields({ values }: { values: Extract<EditableListing, { entityType: 'tool' }>['values'] }) {
+function ToolFields({
+  values,
+  toolTypeOptions,
+}: {
+  values: Extract<EditableListing, { entityType: 'tool' }>['values']
+  toolTypeOptions: readonly string[]
+}) {
   return (
     <>
       <Field label="Name">
@@ -101,7 +113,7 @@ function ToolFields({ values }: { values: Extract<EditableListing, { entityType:
       </Field>
       <Field label="Type">
         <select name="toolType" defaultValue={values.toolType} className="input">
-          {TOOL_TYPES.map((t) => (
+          {toolTypeOptions.map((t) => (
             <option key={t} value={t}>
               {humanizeToolType(t)}
             </option>
