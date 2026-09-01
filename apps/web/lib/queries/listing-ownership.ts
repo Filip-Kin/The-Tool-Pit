@@ -264,7 +264,13 @@ export interface UserClaim {
   status: ClaimStatus
   createdAt: Date
   facts: ListingFacts | null
+  /** repo_file only: the token the user must commit and the repo to commit it to. */
+  verifyToken: string | null
+  repoUrl: string | null
 }
+
+/** The file a repo owner adds to prove control. Mirrors the value in actions.ts. */
+export const VERIFY_FILENAME = '.frc-tools-verify'
 
 /** This user's own claims and their state, newest first. Read-only surface. */
 export async function listClaimsForUser(userId: string): Promise<UserClaim[]> {
@@ -277,6 +283,7 @@ export async function listClaimsForUser(userId: string): Promise<UserClaim[]> {
       method: listingClaims.method,
       status: listingClaims.status,
       createdAt: listingClaims.createdAt,
+      evidence: listingClaims.evidence,
     })
     .from(listingClaims)
     .where(eq(listingClaims.userId, userId))
@@ -300,6 +307,7 @@ export async function listClaimsForUser(userId: string): Promise<UserClaim[]> {
 
   return rows.filter((r) => isListingEntityType(r.entityType)).map((r) => {
     const type = r.entityType as ListingEntityType
+    const isRepo = r.method === 'repo_file' && r.status === 'pending'
     return {
       id: r.id,
       entityType: type,
@@ -308,6 +316,8 @@ export async function listClaimsForUser(userId: string): Promise<UserClaim[]> {
       status: r.status as ClaimStatus,
       createdAt: r.createdAt,
       facts: byType.get(type)?.get(r.entityId) ?? null,
+      verifyToken: isRepo ? (r.evidence?.token ?? null) : null,
+      repoUrl: isRepo ? (r.evidence?.repoUrl ?? null) : null,
     }
   })
 }
@@ -383,6 +393,95 @@ export async function resolveClaimable(
   }
 
   return { entityType, entityId, facts, alreadyOwned, repoUrl, isSelfSubmitted }
+}
+
+// #endregion
+
+// #region load one listing for the owner edit form
+//
+// Returns the editable columns for the type. Safe to read the whole row here
+// because every caller has already proven canEditListing; the returned shape
+// still names only the columns the owner form actually writes, so a widening of
+// the select cannot leak a private column into a form.
+
+export interface EditableToolValues {
+  name: string
+  summary: string | null
+  description: string | null
+  vendorName: string | null
+  toolType: string
+}
+export interface EditableAlbumValues {
+  title: string | null
+  photographer: string | null
+  description: string | null
+  dateText: string | null
+}
+export interface EditableFieldValues {
+  name: string
+  hours: string | null
+  contactInfo: string | null
+  contactUrl: string | null
+  website: string | null
+  notes: string | null
+}
+
+export type EditableListing =
+  | { entityType: 'tool'; facts: ListingFacts; values: EditableToolValues }
+  | { entityType: 'album'; facts: ListingFacts; values: EditableAlbumValues }
+  | { entityType: 'field'; facts: ListingFacts; values: EditableFieldValues }
+
+export async function loadListingForEdit(
+  entityType: ListingEntityType,
+  entityId: string,
+): Promise<EditableListing | null> {
+  const db = getDb()
+  const facts = (await RESOLVERS[entityType]([entityId])).get(entityId)
+  if (!facts) return null
+
+  if (entityType === 'tool') {
+    const [row] = await db
+      .select({
+        name: tools.name,
+        summary: tools.summary,
+        description: tools.description,
+        vendorName: tools.vendorName,
+        toolType: tools.toolType,
+      })
+      .from(tools)
+      .where(eq(tools.id, entityId))
+      .limit(1)
+    if (!row) return null
+    return { entityType, facts, values: row }
+  }
+  if (entityType === 'album') {
+    const [row] = await db
+      .select({
+        title: albums.title,
+        photographer: albums.photographer,
+        description: albums.description,
+        dateText: albums.dateText,
+      })
+      .from(albums)
+      .where(eq(albums.id, entityId))
+      .limit(1)
+    if (!row) return null
+    return { entityType, facts, values: row }
+  }
+  const [row] = await db
+    .select({
+      name: practiceFields.name,
+      hours: practiceFields.hours,
+      contactInfo: practiceFields.contactInfo,
+      contactUrl: practiceFields.contactUrl,
+      website: practiceFields.website,
+      notes: practiceFields.notes,
+    })
+    .from(practiceFields)
+    .where(eq(practiceFields.id, entityId))
+    .limit(1)
+  if (!row) return null
+  return { entityType, facts, values: row }
 }
 
 // #endregion

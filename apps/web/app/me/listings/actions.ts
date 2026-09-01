@@ -411,7 +411,10 @@ export async function removeOwner(
 
   const myRole = await getOwnerRole(user.id, entityType, entityId)
   if (myRole === null) return { error: 'You do not manage this listing.' }
-  const removingSelf = targetUserId === user.id
+  // The client never holds a trusted user id. '__self__' (or an empty value)
+  // means "remove me", resolved from the session rather than the argument.
+  const targetId = targetUserId && targetUserId !== '__self__' ? targetUserId : user.id
+  const removingSelf = targetId === user.id
   if (!removingSelf && myRole !== 'owner') {
     return { error: 'Only an owner can remove other members.' }
   }
@@ -424,7 +427,7 @@ export async function removeOwner(
       and(
         eq(listingOwners.entityType, entityType),
         eq(listingOwners.entityId, entityId),
-        eq(listingOwners.userId, targetUserId),
+        eq(listingOwners.userId, targetId),
       ),
     )
     .limit(1)

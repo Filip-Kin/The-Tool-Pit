@@ -18,7 +18,7 @@ export function MeShell({
 }: {
   title: string
   intro: string
-  active: 'saved' | 'team' | 'profile' | 'notifications'
+  active: 'saved' | 'listings' | 'team' | 'profile' | 'notifications'
   children: React.ReactNode
 }) {
   return (
@@ -31,6 +31,7 @@ export function MeShell({
             <p className="mt-2 max-w-2xl text-sm text-muted">{intro}</p>
             <nav className="mt-6 flex items-center gap-1 border-b border-border-subtle">
               <Tab href="/me" label="Saved" active={active === 'saved'} />
+              <Tab href="/me/listings" label="Your listings" active={active === 'listings'} />
               <Tab href="/me/team" label="My teams" active={active === 'team'} />
               <Tab href="/me/team/profile" label="Team profile" active={active === 'profile'} />
               <Tab href="/me/notifications" label="Notifications" active={active === 'notifications'} />
