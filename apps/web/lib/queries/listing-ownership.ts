@@ -351,30 +351,69 @@ export async function listingClaimState(
   entityType: ListingEntityType,
   entityId: string,
 ): Promise<ListingClaimState> {
-  const user = await getCurrentUser()
-  if (!user) return 'signed_out'
+  const states = await listingClaimStates(entityType, [entityId])
+  return states.get(entityId) ?? 'signed_out'
+}
 
-  const [role, owners, pending] = await Promise.all([
-    getOwnerRole(user.id, entityType, entityId),
-    countOwners(entityType, entityId),
-    getDb()
-      .select({ id: listingClaims.id })
+/**
+ * The same answer for a whole grid, in two queries rather than two per card.
+ *
+ * A card can carry the ownership control now, and a championship event page
+ * draws eight album cards while the practice field map draws every published
+ * field at once. Resolving each one on its own would put a pair of round trips
+ * behind every tile on the page, which is the shape of slowness that only
+ * shows up once the data grows. Same fan-out rule as getVotedToolIds: one
+ * lookup for the set, keyed by id on the way out.
+ *
+ * Ids missing from the returned map never happen; every id asked for gets an
+ * entry, so a caller can index it without a fallback branch per card.
+ */
+export async function listingClaimStates(
+  entityType: ListingEntityType,
+  entityIds: string[],
+): Promise<Map<string, ListingClaimState>> {
+  const out = new Map<string, ListingClaimState>()
+  const ids = [...new Set(entityIds)]
+  if (ids.length === 0) return out
+
+  const user = await getCurrentUser()
+  if (!user) {
+    for (const id of ids) out.set(id, 'signed_out')
+    return out
+  }
+
+  const db = getDb()
+  const [owners, pending] = await Promise.all([
+    // Every owner of these listings, not just this user's rows: "owned by
+    // someone else" is what stops a second person being invited to take one.
+    db
+      .select({ entityId: listingOwners.entityId, userId: listingOwners.userId })
+      .from(listingOwners)
+      .where(and(eq(listingOwners.entityType, entityType), inArray(listingOwners.entityId, ids))),
+    db
+      .select({ entityId: listingClaims.entityId })
       .from(listingClaims)
       .where(
         and(
           eq(listingClaims.userId, user.id),
           eq(listingClaims.entityType, entityType),
-          eq(listingClaims.entityId, entityId),
+          inArray(listingClaims.entityId, ids),
           eq(listingClaims.status, 'pending'),
         ),
-      )
-      .limit(1),
+      ),
   ])
 
-  if (role !== null) return 'owner'
-  if (pending.length > 0) return 'claim_pending'
-  if (owners > 0) return 'owned_by_other'
-  return 'claimable'
+  const mine = new Set(owners.filter((r) => r.userId === user.id).map((r) => r.entityId))
+  const anyOwner = new Set(owners.map((r) => r.entityId))
+  const mineClaimed = new Set(pending.map((r) => r.entityId))
+
+  for (const id of ids) {
+    if (mine.has(id)) out.set(id, 'owner')
+    else if (mineClaimed.has(id)) out.set(id, 'claim_pending')
+    else if (anyOwner.has(id)) out.set(id, 'owned_by_other')
+    else out.set(id, 'claimable')
+  }
+  return out
 }
 
 /**

@@ -3,6 +3,7 @@ import { ShieldCheck, Pencil, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import type { ListingEntityType } from '@the-tool-pit/db'
 import type { ListingClaimState } from '@/lib/queries/listing-ownership'
+import { claimAffordance } from '@/lib/listings/claim-affordance'
 
 /**
  * The ownership control on a public detail page.
@@ -17,6 +18,10 @@ import type { ListingClaimState } from '@/lib/queries/listing-ownership'
  * that is true. It is no longer a client component: none of the four outcomes
  * needs browser state, and doing it on the server means the first paint is
  * already right instead of flashing a claim button at the owner.
+ *
+ * No 'use client' either, so the practice field dialog can pull it into its own
+ * client tree and get the same control the /fields/[id] page renders. Nothing
+ * here touches a server API, only the state prop, which is why that works.
  */
 const BUTTON =
   'inline-flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm font-medium transition-colors'
@@ -34,36 +39,31 @@ export function ClaimListingButton({
 }) {
   // Signed out, claiming needs an account, so offering it is a sign-in prompt
   // nobody asked for. Someone else's listing is not this visitor's business.
-  if (state === 'signed_out' || state === 'owned_by_other') return null
+  const affordance = claimAffordance(entityType, entityId, state)
+  if (!affordance) return null
 
-  if (state === 'owner') {
+  if (affordance.kind === 'edit') {
     return (
-      <Link
-        href={`/me/listings/${entityType}/${entityId}`}
-        className={cn(BUTTON, 'text-foreground hover:bg-surface-3', className)}
-      >
+      <Link href={affordance.href} className={cn(BUTTON, 'text-foreground hover:bg-surface-3', className)}>
         <Pencil className="h-4 w-4" aria-hidden />
-        Edit your listing
+        {affordance.label}
       </Link>
     )
   }
 
-  if (state === 'claim_pending') {
+  if (affordance.kind === 'pending') {
     return (
       <span className={cn(BUTTON, 'cursor-default text-muted', className)}>
         <Clock className="h-4 w-4" aria-hidden />
-        Claim under review
+        {affordance.label}
       </span>
     )
   }
 
   return (
-    <Link
-      href={`/me/listings/claim?type=${entityType}&id=${entityId}`}
-      className={cn(BUTTON, 'text-muted hover:text-foreground', className)}
-    >
+    <Link href={affordance.href} className={cn(BUTTON, 'text-muted hover:text-foreground', className)}>
       <ShieldCheck className="h-4 w-4" aria-hidden />
-      Claim this listing
+      {affordance.label}
     </Link>
   )
 }
