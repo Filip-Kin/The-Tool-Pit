@@ -5,6 +5,7 @@ import { Github, ExternalLink, BookOpen, Bug, FileText, Globe, MessageCircle } f
 import { Badge } from '@/components/ui/badge'
 import { FreshnessChip } from '@/components/ui/freshness-chip'
 import { VoteButton } from '@/components/tools/vote-button'
+import { ClaimListingButton } from '@/components/auth/claim-listing-button'
 import { formatRelativeTime } from '@/lib/utils/time'
 import { cn } from '@/lib/utils/cn'
 import type { ToolDetailData } from '@/lib/queries/tools'
@@ -112,6 +113,7 @@ export function ToolDetail({ tool }: ToolDetailProps) {
                 </span>
               )}
               <VoteButton toolId={tool.id} initialCount={tool.voteCount} />
+              <ClaimListingButton entityType="tool" entityId={tool.id} />
             </div>
           </div>
 
