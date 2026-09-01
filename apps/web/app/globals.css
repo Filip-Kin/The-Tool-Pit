@@ -76,6 +76,19 @@
   .text-balance {
     text-wrap: balance;
   }
+  /* Tailwind v4's preflight follows the browser and leaves a <button> on the
+     default arrow cursor. Every button in this app is a real control, so they
+     all say so on hover. Doing it here rather than adding cursor-pointer to
+     each of the ~20 components that render one, which is how the upvote
+     button, the event cards and the field cards all ended up without it.
+     Disabled controls keep the not-allowed cursor. */
+  button:not(:disabled):not([aria-disabled='true']),
+  [role='button']:not([aria-disabled='true']),
+  label:has(> input[type='checkbox']),
+  summary {
+    cursor: pointer;
+  }
+
   .input {
     width: 100%;
     border-radius: var(--radius-sm);

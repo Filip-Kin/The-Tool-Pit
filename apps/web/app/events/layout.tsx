@@ -6,11 +6,11 @@ import { SiteCredit } from '@/components/layout/site-credit'
 
 export const metadata: Metadata = {
   title: {
-    default: 'Off-season FRC events',
+    default: 'Offseason FRC events',
     template: '%s | Off-Season Events',
   },
   description:
-    'Off-season FRC events on a map: when they run, what they cost, how many slots are left, and whether registration is open. Upcoming events first.',
+    'Offseason FRC events on a map: when they run, what they cost, how many slots are left, and whether registration is open. Upcoming events first.',
 }
 
 export default function EventsLayout({ children }: { children: React.ReactNode }) {

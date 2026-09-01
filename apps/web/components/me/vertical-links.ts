@@ -67,7 +67,7 @@ export const VERTICALS: VerticalLink[] = [
   {
     key: 'events',
     name: 'Off-Season Events',
-    blurb: 'Off-season competitions on a map, with cost, capacity and registration status. Save the ones near you.',
+    blurb: 'Offseason competitions on a map, with cost, capacity and registration status. Save the ones near you.',
     href: EVENTS_ORIGIN,
   },
 ]

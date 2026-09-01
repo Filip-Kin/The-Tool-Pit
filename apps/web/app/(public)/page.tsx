@@ -37,8 +37,7 @@ export default async function HomePage() {
             <span className="text-primary">your season easier</span>
           </h1>
           <p className="max-w-xl text-base text-muted md:text-lg">
-            A community-built directory of tools, calculators, apps, and resources for FIRST
-            Robotics. Searchable. Organized. Always growing.
+            Tools, calculators and resources for FRC, FTC and FLL.
           </p>
         </div>
 

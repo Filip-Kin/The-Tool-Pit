@@ -22,12 +22,11 @@ export default async function GrantsHomePage() {
     <div className="container mx-auto max-w-6xl px-4 py-6">
       <div className="mb-6 flex flex-col gap-2">
         <h1 className="text-2xl font-bold text-foreground">Grants for FIRST teams</h1>
-        <p className="max-w-2xl text-sm text-muted">
-          Funding your team can actually apply for: who gives it, how much, what you have to be, and when it
-          closes. Nothing is listed until a person has checked it against the funder&apos;s own page, so every
-          listing carries the date it was last verified.{' '}
+        <p className="text-sm text-muted">
+          Funding your team can apply for. Every deadline is checked against the funder&apos;s own page
+          before it appears, and each listing shows when.{' '}
           <Link href="/grants/submit" className="text-primary hover:underline">
-            Found one we are missing?
+            Add one we are missing
           </Link>
         </p>
       </div>
@@ -51,10 +50,9 @@ function EmptyState() {
     <div className="flex flex-col gap-6 rounded-lg border border-border-subtle bg-surface p-8">
       <div className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold text-foreground">Nothing published yet</h2>
-        <p className="max-w-2xl text-sm text-muted">
-          The directory is being built now. Grants are found automatically, then read and confirmed by a person
-          against the funder&apos;s own page before they appear here. That gate is deliberate: a wrong deadline
-          costs a team a whole application cycle, so a slow list beats a fast one that is wrong.
+        <p className="text-sm text-muted">
+          Still filling up. Nothing appears until a person has confirmed it, because a wrong deadline
+          costs a team an entire application cycle.
         </p>
       </div>
 

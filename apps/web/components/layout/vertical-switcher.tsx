@@ -38,7 +38,7 @@ const VERTICALS: Vertical[] = [
   { key: 'code', label: 'Robot Code / CAD', slug: 'robot-code' },
   // Off-season events: a map of off-season competitions, with cost, capacity
   // and registration state, leading with what is coming up next.
-  { key: 'events', label: 'Events', slug: 'events' },
+  { key: 'events', label: 'Offseason Events', slug: 'events' },
 ]
 
 /** Kept apart from VERTICALS so the footer form, which has no icons, does not carry them. */

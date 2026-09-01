@@ -4,7 +4,7 @@ import { getPublishedEvents } from '@/lib/queries/event-listings'
 import { EventsExplorer } from '@/components/events/events-explorer'
 
 export const metadata: Metadata = {
-  title: { absolute: 'Off-season FRC events' },
+  title: { absolute: 'Offseason FRC events' },
 }
 
 // A newly published event, or a fresh scraped team count, has to show up on the
@@ -20,12 +20,11 @@ export default async function EventsHomePage() {
   return (
     <div className="container mx-auto max-w-6xl px-4 py-6">
       <div className="mb-6 flex flex-col gap-2">
-        <h1 className="text-2xl font-bold text-foreground">Off-season FRC events</h1>
-        <p className="max-w-2xl text-sm text-muted">
-          The off-season calendar on a map: when each event runs, what it costs, how many team slots are left, and
-          whether registration is open. Upcoming events come first.{' '}
+        <h1 className="text-2xl font-bold text-foreground">Offseason FRC events</h1>
+        <p className="text-sm text-muted">
+          Offseason events on a map, upcoming first.{' '}
           <Link href="/events/submit" className="text-primary hover:underline">
-            Running one we are missing?
+            Add one we are missing
           </Link>
         </p>
       </div>

@@ -5,7 +5,7 @@ import { MobileNav } from '@/components/layout/mobile-nav'
 import { VerticalHomeCrumb, verticalNavItems } from '@/components/layout/vertical-switcher'
 
 /**
- * Off-season events chrome. Same slots and order as the other verticals'
+ * Offseason events chrome. Same slots and order as the other verticals'
  * headers: home crumb, wordmark, the one call to action, account menu.
  *
  * Links are prefixed with /events, not root-relative: the verticals are PATHS
@@ -23,7 +23,7 @@ export async function EventsHeader() {
           <CalendarDays className="h-5 w-5 text-primary" />
           <span className="whitespace-nowrap text-lg font-bold tracking-tight text-foreground">
             <span className="hidden sm:inline">Off-Season Events</span>
-            <span className="sm:hidden">Events</span>
+            <span className="sm:hidden">Offseason</span>
           </span>
         </Link>
 
