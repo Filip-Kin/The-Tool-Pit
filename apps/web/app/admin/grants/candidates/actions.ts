@@ -15,7 +15,7 @@ import {
   revalidateGrantPublic,
   uniqueGrantSlug,
 } from '@/lib/admin/grants'
-import { notifyGrantPublished } from '@/lib/notify/approvals'
+import { notifyGrantPublished, notifyGrantCandidateRejected } from '@/lib/notify/approvals'
 
 const QUEUE_PATH = '/admin/grants/candidates'
 
@@ -159,7 +159,12 @@ export async function attachGrantCandidate(candidateId: string, grantRef: string
 
 /**
  * Suppress with a reason. The reason is not decoration: it is how a source that
- * keeps producing award announcements gets recognised and switched off.
+ * keeps producing award announcements gets recognised and switched off, and it
+ * is also what the person who sent the grant in is told.
+ *
+ * Double duty, like every other suppress on the site. A candidate at
+ * 'published' has a grant in the directory teams are reading, so suppressing it
+ * is a takedown and gets the takedown email, not the "we did not list it" one.
  */
 export async function suppressGrantCandidate(candidateId: string, reason: string): Promise<{ error?: string }> {
   await assertAdmin()
@@ -174,6 +179,7 @@ export async function suppressGrantCandidate(candidateId: string, reason: string
     .set({ status: 'suppressed', rejectionReason: clean, updatedAt: new Date() })
     .where(eq(grantCandidates.id, candidateId))
   await bumpSourceCounter(candidate.sourceId, 'reject')
+  await notifyGrantCandidateRejected(candidateId, candidate.status === 'published', clean)
 
   revalidatePath(QUEUE_PATH)
   return {}

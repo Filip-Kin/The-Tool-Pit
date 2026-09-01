@@ -17,6 +17,7 @@ import {
   audienceFunctions,
 } from '@the-tool-pit/db'
 import type { NewTool } from '@the-tool-pit/db'
+import { isHumanEdited, isHumanEditedLink } from '@the-tool-pit/db'
 
 /** Confidence threshold to auto-publish (0.0–1.0) */
 const PUBLISH_THRESHOLD = 0.7
@@ -69,6 +70,53 @@ export function missingForPublish(fields: {
   return missing
 }
 
+// #region human edits
+//
+// A crawl refreshes a listing. It does not get to argue with a person about it.
+//
+// Until this existed, a re-publish rewrote the whole tool row and both sets of
+// join tables, so every owner edit and every admin correction was reverted by
+// the next pass over that candidate. The marker is tools.human_edited_fields,
+// written by the owner form and by the admin tool editor. See
+// packages/db/src/human-edited.ts for the shape and why the links are markers
+// in that same array rather than a flag on tool_links.
+//
+// DELIBERATELY NOT THE WHOLE ROW. A tool with a claimed name still gets a fresh
+// star count, a fresh summary if nobody wrote one, and a fresh docs link. The
+// unit of ownership is a field, not a listing, because the common case is an
+// owner who fixed one wrong line and would still like the rest kept current.
+
+/**
+ * Strip the keys a person owns out of an update the crawl wants to make.
+ *
+ * Pure, and exported, because this is the behaviour that has to hold: a claimed
+ * field is not in the returned set at any price, an unclaimed one always is.
+ * A key that is not claimable at all (a star count, updatedAt) is never checked
+ * against the list, so metrics keep refreshing on a fully claimed listing.
+ */
+export function withoutHumanEdits<T extends Record<string, unknown>>(
+  set: T,
+  humanEditedFields: readonly string[] | null | undefined,
+): Partial<T> {
+  if (!humanEditedFields?.length) return set
+  const out: Partial<T> = {}
+  for (const key of Object.keys(set) as Array<keyof T & string>) {
+    if (isHumanEdited(humanEditedFields, key)) continue
+    out[key] = set[key]
+  }
+  return out
+}
+
+/** May the crawl replace this link type, or has someone set it by hand? */
+export function crawlOwnsLink(
+  linkType: string,
+  humanEditedFields: readonly string[] | null | undefined,
+): boolean {
+  return !isHumanEditedLink(humanEditedFields, linkType)
+}
+
+// #endregion
+
 export async function publishCandidate(candidateId: string, sourceType = 'manual'): Promise<PublishResult> {
   const db = getDb()
 
@@ -119,75 +167,101 @@ export async function publishCandidate(candidateId: string, sourceType = 'manual
   // If this candidate already maps to a tool, update it rather than creating a duplicate.
   if (candidate.matchedToolId) {
     const existingToolId = candidate.matchedToolId
+
+    // What a person has already claimed on this listing. Read before anything
+    // is written, and the only thing standing between an owner's edit and this
+    // function's default behaviour of rewriting the row.
+    const [claimed] = await db
+      .select({ humanEditedFields: tools.humanEditedFields })
+      .from(tools)
+      .where(eq(tools.id, existingToolId))
+      .limit(1)
+    const humanEdited = claimed?.humanEditedFields ?? []
+
     await db.transaction(async (tx) => {
+      // Everything the crawl WOULD write, before the human edits are taken out
+      // of it. Metrics are listed here too and are never claimable, so a fully
+      // claimed listing still gets a fresh star count.
+      const crawlSet = {
+        name: (meta.title as string) ?? 'Untitled Tool',
+        summary,
+        description,
+        toolType: (classification.toolType as string) ?? 'other',
+        isOfficial: Boolean(classification.isOfficial),
+        isVendor: Boolean(classification.isVendor),
+        isRookieFriendly: Boolean(classification.isRookieFriendly),
+        isTeamCode: Boolean(classification.isTeamCode),
+        isTeamCad: Boolean(classification.isTeamCad),
+        teamNumber: typeof classification.teamNumber === 'number' ? classification.teamNumber : null,
+        seasonYear: typeof classification.seasonYear === 'number' ? classification.seasonYear : null,
+        githubStars: typeof meta.githubStars === 'number' ? meta.githubStars : 0,
+        chiefDelphiLikes: typeof meta.chiefDelphiLikes === 'number' ? meta.chiefDelphiLikes : 0,
+        popularityScore: (typeof meta.githubStars === 'number' ? meta.githubStars : 0) +
+                         (typeof meta.chiefDelphiLikes === 'number' ? meta.chiefDelphiLikes : 0),
+        confidenceScore: confidence,
+      }
+
       await tx
         .update(tools)
-        .set({
-          name: (meta.title as string) ?? 'Untitled Tool',
-          summary,
-          description,
-          toolType: (classification.toolType as string) ?? 'other',
-          isOfficial: Boolean(classification.isOfficial),
-          isVendor: Boolean(classification.isVendor),
-          isRookieFriendly: Boolean(classification.isRookieFriendly),
-          isTeamCode: Boolean(classification.isTeamCode),
-          isTeamCad: Boolean(classification.isTeamCad),
-          teamNumber: typeof classification.teamNumber === 'number' ? classification.teamNumber : null,
-          seasonYear: typeof classification.seasonYear === 'number' ? classification.seasonYear : null,
-          githubStars: typeof meta.githubStars === 'number' ? meta.githubStars : 0,
-          chiefDelphiLikes: typeof meta.chiefDelphiLikes === 'number' ? meta.chiefDelphiLikes : 0,
-          popularityScore: (typeof meta.githubStars === 'number' ? meta.githubStars : 0) +
-                           (typeof meta.chiefDelphiLikes === 'number' ? meta.chiefDelphiLikes : 0),
-          confidenceScore: confidence,
-          updatedAt: new Date(),
-        })
+        .set({ ...withoutHumanEdits(crawlSet, humanEdited), updatedAt: new Date() })
         .where(eq(tools.id, existingToolId))
 
-      // Sync links: delete auto-managed types and re-insert
+      // Sync links: delete auto-managed types and re-insert. A type someone set
+      // by hand is skipped entirely, including its DELETE, so an owner who
+      // cleared a dead link does not get it back on the next pass.
       const AUTO_LINK_TYPES = ['homepage', 'github', 'forum'] as const
       for (const linkType of AUTO_LINK_TYPES) {
+        if (!crawlOwnsLink(linkType, humanEdited)) continue
         await tx.delete(toolLinks).where(
           and(eq(toolLinks.toolId, existingToolId), eq(toolLinks.linkType, linkType)),
         )
       }
-      if (candidate.canonicalUrl) {
+      if (candidate.canonicalUrl && crawlOwnsLink('homepage', humanEdited)) {
         await tx.insert(toolLinks).values({ toolId: existingToolId, linkType: 'homepage', url: candidate.canonicalUrl })
       }
       const githubUrlUpd = meta.githubUrl as string | undefined
-      if (githubUrlUpd) {
+      if (githubUrlUpd && crawlOwnsLink('github', humanEdited)) {
         await tx.insert(toolLinks).values({ toolId: existingToolId, linkType: 'github', url: githubUrlUpd })
       }
-      if (candidate.sourceUrl?.includes('chiefdelphi.com')) {
+      if (candidate.sourceUrl?.includes('chiefdelphi.com') && crawlOwnsLink('forum', humanEdited)) {
         await tx.insert(toolLinks).values({ toolId: existingToolId, linkType: 'forum', url: candidate.sourceUrl })
       }
 
-      // Sync programs
-      await tx.delete(toolPrograms).where(eq(toolPrograms.toolId, existingToolId))
-      const programSlugsUpd = (classification.programs as string[] | undefined) ?? []
-      if (programSlugsUpd.length > 0) {
-        const programRows = await tx.select({ id: programs.id }).from(programs).where(inArray(programs.slug, programSlugsUpd))
-        if (programRows.length > 0) {
-          await tx.insert(toolPrograms).values(programRows.map((p) => ({ toolId: existingToolId, programId: p.id })))
+      // Sync programs. Skipped whole when an admin filed this tool by hand:
+      // the delete and the re-insert are one decision, and honouring half of it
+      // would leave the listing with no programs at all.
+      if (!isHumanEdited(humanEdited, 'programs')) {
+        await tx.delete(toolPrograms).where(eq(toolPrograms.toolId, existingToolId))
+        const programSlugsUpd = (classification.programs as string[] | undefined) ?? []
+        if (programSlugsUpd.length > 0) {
+          const programRows = await tx.select({ id: programs.id }).from(programs).where(inArray(programs.slug, programSlugsUpd))
+          if (programRows.length > 0) {
+            await tx.insert(toolPrograms).values(programRows.map((p) => ({ toolId: existingToolId, programId: p.id })))
+          }
         }
       }
 
       // Sync audience roles
-      await tx.delete(toolAudiencePrimaryRoles).where(eq(toolAudiencePrimaryRoles.toolId, existingToolId))
-      const audienceRoleSlugsUpd = (classification.audienceRoles as string[] | undefined) ?? []
-      if (audienceRoleSlugsUpd.length > 0) {
-        const roleRows = await tx.select({ id: audiencePrimaryRoles.id }).from(audiencePrimaryRoles).where(inArray(audiencePrimaryRoles.slug, audienceRoleSlugsUpd))
-        if (roleRows.length > 0) {
-          await tx.insert(toolAudiencePrimaryRoles).values(roleRows.map((r) => ({ toolId: existingToolId, roleId: r.id })))
+      if (!isHumanEdited(humanEdited, 'audienceRoles')) {
+        await tx.delete(toolAudiencePrimaryRoles).where(eq(toolAudiencePrimaryRoles.toolId, existingToolId))
+        const audienceRoleSlugsUpd = (classification.audienceRoles as string[] | undefined) ?? []
+        if (audienceRoleSlugsUpd.length > 0) {
+          const roleRows = await tx.select({ id: audiencePrimaryRoles.id }).from(audiencePrimaryRoles).where(inArray(audiencePrimaryRoles.slug, audienceRoleSlugsUpd))
+          if (roleRows.length > 0) {
+            await tx.insert(toolAudiencePrimaryRoles).values(roleRows.map((r) => ({ toolId: existingToolId, roleId: r.id })))
+          }
         }
       }
 
       // Sync audience functions
-      await tx.delete(toolAudienceFunctions).where(eq(toolAudienceFunctions.toolId, existingToolId))
-      const audienceFunctionSlugsUpd = (classification.audienceFunctions as string[] | undefined) ?? []
-      if (audienceFunctionSlugsUpd.length > 0) {
-        const functionRows = await tx.select({ id: audienceFunctions.id }).from(audienceFunctions).where(inArray(audienceFunctions.slug, audienceFunctionSlugsUpd))
-        if (functionRows.length > 0) {
-          await tx.insert(toolAudienceFunctions).values(functionRows.map((f) => ({ toolId: existingToolId, functionId: f.id })))
+      if (!isHumanEdited(humanEdited, 'audienceFunctions')) {
+        await tx.delete(toolAudienceFunctions).where(eq(toolAudienceFunctions.toolId, existingToolId))
+        const audienceFunctionSlugsUpd = (classification.audienceFunctions as string[] | undefined) ?? []
+        if (audienceFunctionSlugsUpd.length > 0) {
+          const functionRows = await tx.select({ id: audienceFunctions.id }).from(audienceFunctions).where(inArray(audienceFunctions.slug, audienceFunctionSlugsUpd))
+          if (functionRows.length > 0) {
+            await tx.insert(toolAudienceFunctions).values(functionRows.map((f) => ({ toolId: existingToolId, functionId: f.id })))
+          }
         }
       }
 

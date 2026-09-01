@@ -91,10 +91,14 @@ function ReviewCard({
         </p>
       )}
 
+      {/* Optional on an approval, required on a rejection. Approving explains
+          itself: the claimant can see they now manage the listing. A rejection
+          explains nothing on its own, and this text is the body of the email
+          they get, so Reject stays disabled until it is written. */}
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        placeholder="Optional note (why approved or rejected)"
+        placeholder="Note. Optional to approve, required to reject."
         className="input mt-3"
       />
 
@@ -110,7 +114,8 @@ function ReviewCard({
         <button
           type="button"
           onClick={() => resolve(false)}
-          disabled={pending}
+          disabled={pending || !note.trim()}
+          title={note.trim() ? 'Turn this claim down' : 'Write a reason first'}
           className="rounded-md border border-border-subtle px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-foreground disabled:opacity-40"
         >
           Reject

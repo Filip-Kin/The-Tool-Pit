@@ -19,6 +19,7 @@ import {
 import type { PublicEvent } from '@/lib/events/event-display'
 import { PinMap } from '@/components/fields/pin-map'
 import { approveEvent, suppressEvent, unsuppressEvent, deleteEvent, updateEvent, type EventEditInput } from './actions'
+import { ReasonButton } from '@/components/admin/reason-button'
 
 /** The account behind a submission, when the submitter was signed in. Null is normal. */
 export interface SubmitterAccount {
@@ -112,9 +113,13 @@ export function EventAdminRow({ listing, account }: { listing: EventListing; acc
               <RotateCcw className="h-3 w-3" /> Restore
             </button>
           ) : (
-            <button onClick={() => run(() => suppressEvent(listing.id))} disabled={pending} className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2">
-              <X className="h-3 w-3" /> Suppress
-            </button>
+            <ReasonButton
+              label={<><X className="h-3 w-3" /> Suppress</>}
+              confirmLabel={listing.status === 'published' ? 'Remove' : 'Reject'}
+              disabled={pending}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2 disabled:opacity-50"
+              onConfirm={(reason) => suppressEvent(listing.id, reason)}
+            />
           )}
           <button
             onClick={() => {

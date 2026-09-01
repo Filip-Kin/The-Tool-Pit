@@ -37,6 +37,10 @@
       "bun": "./src/robot-code-enums.ts",
       "default": "./dist/robot-code-enums.js"
     },
+    "./human-edited": {
+      "bun": "./src/human-edited.ts",
+      "default": "./dist/human-edited.js"
+    },
     "./client": {
       "bun": "./src/client.ts",
       "default": "./dist/client.js"

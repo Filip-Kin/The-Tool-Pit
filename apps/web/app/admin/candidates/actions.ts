@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { crawlCandidates } from '@the-tool-pit/db'
 import { adminPublishCandidate } from '@/lib/admin/publish-candidate'
-import { notifyToolPublished } from '@/lib/notify/approvals'
+import { notifyToolPublished, notifyToolCandidateRejected } from '@/lib/notify/approvals'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -26,17 +26,41 @@ export async function approveCandidate(candidateId: string): Promise<{ error?: s
   return {}
 }
 
-export async function suppressCandidate(candidateId: string, rejectionReason?: string): Promise<void> {
+/**
+ * Refuse a candidate, or take down the listing it already produced.
+ *
+ * Same double duty as the field and event queues. A candidate that reached
+ * 'published' has a tool in the directory people can find, and suppressing it
+ * is a takedown, so the status is read before it is written and the email says
+ * which of the two happened. The reason is required: it is that email.
+ */
+export async function suppressCandidate(
+  candidateId: string,
+  rejectionReason: string,
+): Promise<{ error?: string }> {
   await assertAdmin()
+  const clean = rejectionReason?.trim() ?? ''
+  if (!clean) return { error: 'Give a reason. It is what the submitter is told.' }
+
   const db = getDb()
+  const [before] = await db
+    .select({ status: crawlCandidates.status })
+    .from(crawlCandidates)
+    .where(eq(crawlCandidates.id, candidateId))
+    .limit(1)
+  if (!before) return { error: 'Candidate not found' }
+
   await db
     .update(crawlCandidates)
     .set({
       status: 'suppressed',
-      rejectionReason: rejectionReason?.trim() || null,
+      rejectionReason: clean,
       updatedAt: new Date(),
     })
     .where(eq(crawlCandidates.id, candidateId))
+  // Only a candidate that came from a public submission has anyone to tell.
+  await notifyToolCandidateRejected(candidateId, before.status === 'published', clean)
   revalidatePath('/admin/candidates')
   revalidatePath(`/admin/candidates/${candidateId}`)
+  return {}
 }

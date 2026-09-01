@@ -17,6 +17,7 @@ import type { FieldCoverage, FieldElements } from '@the-tool-pit/db'
 import { FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db/field-enums'
 import { PinMap } from '@/components/fields/pin-map'
 import { approveField, suppressField, unsuppressField, deleteField, updateField, addFieldPhotos, removeFieldPhoto, type FieldEditInput } from './actions'
+import { ReasonButton } from '@/components/admin/reason-button'
 
 /**
  * The account behind a submission, when the submitter happened to be signed in.
@@ -110,9 +111,13 @@ export function FieldAdminRow({
               <RotateCcw className="h-3 w-3" /> Restore
             </button>
           ) : (
-            <button onClick={() => run(() => suppressField(field.id))} disabled={pending} className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2">
-              <X className="h-3 w-3" /> Suppress
-            </button>
+            <ReasonButton
+              label={<><X className="h-3 w-3" /> Suppress</>}
+              confirmLabel={field.status === 'published' ? 'Remove' : 'Reject'}
+              disabled={pending}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2 disabled:opacity-50"
+              onConfirm={(reason) => suppressField(field.id, reason)}
+            />
           )}
           <button
             onClick={() => {

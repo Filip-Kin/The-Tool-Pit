@@ -161,7 +161,7 @@ const TOOL_FORM: ListingFormSpec = {
       key: 'crawled_links',
       title: 'Main links',
       blurb:
-        'Our crawler fills these three in from the tool’s own pages, so a later pass can replace what you put here. The links below are yours alone.',
+        'Our crawler fills these three in from the tool’s own pages until you change one. A link you set, or clear, stays the way you left it.',
     },
     { key: 'links', title: 'Other links' },
   ],

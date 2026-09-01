@@ -83,6 +83,24 @@ export const tools = pgTable(
     /** Internal admin-only notes, e.g. why a tool was suppressed or flagged. */
     adminNotes: text('admin_notes'),
 
+    /**
+     * The parts of this listing a PERSON set, which a crawl must not overwrite.
+     *
+     * Column names for columns ('name', 'summary'), the join-table names the
+     * editors post under ('programs', 'audienceRoles', 'audienceFunctions'),
+     * and 'link:<type>' for a link. See src/human-edited.ts for why the links
+     * are markers in this array rather than a boolean on tool_links: an owner
+     * who CLEARS a dead link leaves no row behind to carry a flag, and the next
+     * crawl would put the link straight back.
+     *
+     * Empty is the normal state. A tool nobody has touched is refreshed in full
+     * by every crawl, which is what we want.
+     */
+    humanEditedFields: text('human_edited_fields')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+
     publishedAt: timestamp('published_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

@@ -11,6 +11,7 @@ import {
   uploadAlbumCover,
   deletePublishedAlbum,
 } from './actions'
+import { ReasonButton } from '@/components/admin/reason-button'
 
 export function AlbumCandidateActions({
   candidateId,
@@ -81,13 +82,13 @@ export function AlbumCandidateActions({
             </button>
           )}
           {status !== 'suppressed' && (
-            <button
+            <ReasonButton
+              label="Suppress"
+              confirmLabel="Reject"
               disabled={pending}
-              onClick={() => run(() => suppressAlbumCandidate(candidateId))}
               className="rounded bg-surface-3 px-2.5 py-1 text-xs font-medium text-muted hover:text-foreground transition-colors disabled:opacity-40"
-            >
-              {pending ? '…' : 'Suppress'}
-            </button>
+              onConfirm={(reason) => suppressAlbumCandidate(candidateId, reason)}
+            />
           )}
         </div>
       )}
@@ -143,17 +144,17 @@ export function AlbumCandidateActions({
               Upload cover
             </button>
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={onCoverChosen} />
-            <button
+            {/* The only route a LIVE album comes down, which is why the
+                takedown email is wired here and not on Suppress: Suppress is
+                only ever offered on a candidate that was never published. */}
+            <ReasonButton
+              label="Remove"
+              confirmLabel="Remove"
+              placeholder="Why it is coming down. The submitter is sent this."
               disabled={pending}
-              onClick={() => {
-                if (confirm('Remove this published album? It will be unpublished and returned to the queue.')) {
-                  run(() => deletePublishedAlbum(candidateId))
-                }
-              }}
               className="rounded bg-frc/15 px-2 py-1 text-xs font-medium text-frc hover:bg-frc/25 transition-colors disabled:opacity-40"
-            >
-              {pending ? '…' : 'Remove'}
-            </button>
+              onConfirm={(reason) => deletePublishedAlbum(candidateId, reason)}
+            />
           </div>
         </div>
       )}

@@ -22,6 +22,12 @@ export const submissions = pgTable(
      * pending | processing | published | duplicate | rejected | needs_review
      */
     status: text('status').notNull().default('pending'),
+    /**
+     * Why an admin said no. Required by rejectSubmission, kept here for the
+     * same reason every other queue table keeps one: it is the record of the
+     * decision, and it is what the submitter was told in the email.
+     */
+    rejectionReason: text('rejection_reason'),
     /** Set when the submission results in a tool record */
     resolvedToolId: uuid('resolved_tool_id').references(() => tools.id, { onDelete: 'set null' }),
     /** JSON log of pipeline stages: what happened at each step */

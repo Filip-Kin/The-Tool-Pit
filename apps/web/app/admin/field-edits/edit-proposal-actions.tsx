@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Check, X } from 'lucide-react'
 import { applyFieldEdit, rejectFieldEdit } from './actions'
+import { ReasonButton } from '@/components/admin/reason-button'
 
 export function EditProposalActions({ proposalId }: { proposalId: string }) {
   const [pending, startTransition] = useTransition()
@@ -22,13 +23,13 @@ export function EditProposalActions({ proposalId }: { proposalId: string }) {
       >
         <Check className="h-3 w-3" /> Apply
       </button>
-      <button
-        onClick={() => startTransition(() => rejectFieldEdit(proposalId))}
+      <ReasonButton
+        label={<><X className="h-3 w-3" /> Reject</>}
+        confirmLabel="Reject"
         disabled={pending}
-        className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2"
-      >
-        <X className="h-3 w-3" /> Reject
-      </button>
+        className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2 disabled:opacity-50"
+        onConfirm={(reason) => rejectFieldEdit(proposalId, reason)}
+      />
       {msg && <span className="text-xs text-official">{msg}</span>}
     </div>
   )

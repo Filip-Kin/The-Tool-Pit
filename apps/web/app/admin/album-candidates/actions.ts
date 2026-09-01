@@ -9,7 +9,7 @@ import { albumCandidates, albums, albumSources, albumCovers, events } from '@the
 import type { AlbumCandidateMetadata } from '@the-tool-pit/db'
 import { adminPublishAlbum } from '@/lib/admin/publish-album'
 import { fetchOgImage } from '@/lib/albums/og'
-import { notifyAlbumPublished } from '@/lib/notify/approvals'
+import { notifyAlbumPublished, notifyAlbumCandidateRejected } from '@/lib/notify/approvals'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -149,19 +149,32 @@ export async function uploadAlbumCover(candidateId: string, formData: FormData):
  * Remove a published album. Deletes the album + its source evidence and returns
  * the candidate to 'suppressed' (it keeps its event match, so it can be
  * re-approved later if the removal was a mistake).
+ *
+ * THE ONLY ROUTE A LIVE ALBUM COMES DOWN, which is why the takedown email is
+ * wired here. Suppress on this screen is only ever offered on a candidate that
+ * was never published, so it sends the "we did not list it" email instead. The
+ * reason is required on both, because the reason is the email.
  */
-export async function deletePublishedAlbum(candidateId: string): Promise<{ error?: string }> {
+export async function deletePublishedAlbum(
+  candidateId: string,
+  reason: string,
+): Promise<{ error?: string }> {
   await assertAdmin()
+  const clean = reason?.trim() ?? ''
+  if (!clean) return { error: 'Give a reason. It is what the submitter is told.' }
+
   const loaded = await loadPublishedAlbum(candidateId)
   if ('error' in loaded) return loaded
   const { db, album } = loaded
 
   await db
     .update(albumCandidates)
-    .set({ status: 'suppressed', matchedAlbumId: null, updatedAt: new Date() })
+    .set({ status: 'suppressed', matchedAlbumId: null, rejectionReason: clean, updatedAt: new Date() })
     .where(eq(albumCandidates.id, candidateId))
   await db.delete(albumSources).where(eq(albumSources.albumId, album.id))
   await db.delete(albums).where(eq(albums.id, album.id))
+  // wasLive is true by construction: loadPublishedAlbum refuses anything else.
+  await notifyAlbumCandidateRejected(candidateId, true, clean)
 
   revalidatePath('/admin/album-candidates')
   await revalidateEventPublic(album.eventId)
@@ -179,14 +192,37 @@ export async function approveAlbumCandidate(candidateId: string): Promise<{ erro
   return {}
 }
 
-export async function suppressAlbumCandidate(candidateId: string, rejectionReason?: string): Promise<void> {
+/**
+ * Refuse an album, or take down one that is already on an event page.
+ *
+ * Same double duty as the other queues, same fix: read the status first, send
+ * the email that matches, and require the reason because the reason IS the
+ * email. deletePublishedAlbum is the harder takedown next to this one and also
+ * suppresses the candidate, so both routes off a published album say so.
+ */
+export async function suppressAlbumCandidate(
+  candidateId: string,
+  rejectionReason: string,
+): Promise<{ error?: string }> {
   await assertAdmin()
+  const clean = rejectionReason?.trim() ?? ''
+  if (!clean) return { error: 'Give a reason. It is what the submitter is told.' }
+
   const db = getDb()
+  const [before] = await db
+    .select({ status: albumCandidates.status })
+    .from(albumCandidates)
+    .where(eq(albumCandidates.id, candidateId))
+    .limit(1)
+  if (!before) return { error: 'Candidate not found' }
+
   await db
     .update(albumCandidates)
-    .set({ status: 'suppressed', rejectionReason: rejectionReason?.trim() || null, updatedAt: new Date() })
+    .set({ status: 'suppressed', rejectionReason: clean, updatedAt: new Date() })
     .where(eq(albumCandidates.id, candidateId))
+  await notifyAlbumCandidateRejected(candidateId, before.status === 'published', clean)
   revalidatePath('/admin/album-candidates')
+  return {}
 }
 
 /**

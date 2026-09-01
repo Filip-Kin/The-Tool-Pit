@@ -2,6 +2,7 @@ export * from './schema/index'
 export * from './client'
 export * from './notifications'
 export * from './album-url'
+export * from './human-edited'
 
 // Re-export common drizzle operators so consumers (and top-level scripts that
 // can't resolve drizzle-orm from their own dir) can import them from here.

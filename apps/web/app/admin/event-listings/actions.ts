@@ -12,7 +12,7 @@ import {
   REGISTRATION_STATUSES,
   VOLUNTEER_STATUSES,
 } from '@the-tool-pit/db'
-import { notifyEventPublished } from '@/lib/notify/approvals'
+import { notifyEventPublished, notifyEventRejected } from '@/lib/notify/approvals'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -45,14 +45,33 @@ export async function approveEvent(id: string): Promise<{ error?: string }> {
   return {}
 }
 
-export async function suppressEvent(id: string, reason?: string): Promise<void> {
+/**
+ * Refuse a pending listing, or take a live one back off the map.
+ *
+ * Same double duty as suppressField, same fix: the status is read before it is
+ * written, and the submitter gets the email that matches what actually
+ * happened. The reason is required because it is the body of that email.
+ */
+export async function suppressEvent(id: string, reason: string): Promise<{ error?: string }> {
   await assertAdmin()
+  const clean = reason?.trim() ?? ''
+  if (!clean) return { error: 'Give a reason. It is what the submitter is told.' }
+
   const db = getDb()
+  const [before] = await db
+    .select({ status: eventListings.status })
+    .from(eventListings)
+    .where(eq(eventListings.id, id))
+    .limit(1)
+  if (!before) return { error: 'Event not found' }
+
   await db
     .update(eventListings)
-    .set({ status: 'suppressed', rejectionReason: reason?.trim() || null, updatedAt: new Date() })
+    .set({ status: 'suppressed', rejectionReason: clean, updatedAt: new Date() })
     .where(eq(eventListings.id, id))
+  await notifyEventRejected(id, before.status === 'published', clean)
   revalidateAll()
+  return {}
 }
 
 export async function unsuppressEvent(id: string): Promise<void> {

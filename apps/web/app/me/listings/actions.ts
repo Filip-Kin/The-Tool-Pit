@@ -14,6 +14,10 @@ import {
   toolLinks,
   tools,
   TOOL_TYPES,
+  addHumanEdits,
+  changedKeys,
+  linkMarker,
+  HUMAN_EDITABLE_TOOL_KEYS,
   type ClaimEvidence,
   type ListingEntityType,
   type ListingOwnerRole,
@@ -483,6 +487,12 @@ export async function removeOwner(
 /**
  * Admin resolves a pending claim. isAdmin is a DB-only flag (never a Firebase
  * claim), so this cannot be reached by a self-asserted admin.
+ *
+ * The note is OPTIONAL on an approval and REQUIRED on a rejection. Approving
+ * explains itself: the claimant now manages the listing and can see that they
+ * do. A rejection explains nothing on its own, and "no" with no reason is the
+ * thing people write back about, so the note is the body of the email and the
+ * decision does not go through without one.
  */
 export async function adminResolveClaim(
   claimId: string,
@@ -492,6 +502,10 @@ export async function adminResolveClaim(
   const user = await getCurrentUser()
   if (!user) return { error: 'Your session expired. Sign in again and retry.' }
   if (!user.isAdmin) return { error: 'Admins only.' }
+  const cleanNote = note?.trim() || null
+  if (!approve && !cleanNote) {
+    return { error: 'Give a reason for turning the claim down. It is what the claimant is told.' }
+  }
 
   const db = getDb()
   const [claim] = await db.select().from(listingClaims).where(eq(listingClaims.id, claimId)).limit(1)
@@ -508,22 +522,22 @@ export async function adminResolveClaim(
     .update(listingClaims)
     .set({
       status: approve ? 'verified' : 'rejected',
-      reviewerNote: note,
+      reviewerNote: cleanNote,
       decidedByUserId: user.id,
       decidedAt: new Date(),
     })
     .where(eq(listingClaims.id, claim.id))
 
   // A rejection is not an approval, and it gets its own email saying so, with
-  // the reviewer's note verbatim when there is one. Guarded above by the
-  // status !== 'pending' check, so a second decision cannot send a second time.
+  // the reviewer's note verbatim. Guarded above by the status !== 'pending'
+  // check, so a second decision cannot send a second time.
   await notifyClaimResolved(
     claim.id,
     claim.entityType,
     claim.entityId,
     claim.userId,
     approve ? 'verified' : 'rejected',
-    note,
+    cleanNote,
   )
 
   revalidatePath('/me/listings')
@@ -552,12 +566,13 @@ export async function adminResolveClaim(
 // Anonymous submit and suggest-edit are untouched by any of this.
 //
 // THE CRAWLER. apps/worker/src/pipeline/publish.ts re-publishes a tool whose
-// crawl candidate is matched to it, and that path overwrites the tool row and
-// deletes and re-inserts the homepage, github and forum links. So an owner's
-// edit to a crawled tool can be replaced by a later pass. That is true of every
-// field on the tool form and always has been, not just the links, so the form
-// says it once, plainly, above the three links it bites hardest. The real fix
-// is a marker the re-publish honours, which belongs in the worker.
+// crawl candidate is matched to it, and that path used to overwrite the whole
+// tool row and re-insert the homepage, github and forum links, which reverted
+// every edit made here. It now reads tools.human_edited_fields and leaves
+// anything in that list alone, and saveToolListing below is what writes it.
+// A field is claimed by being CHANGED, not by the form being submitted, so a
+// listing keeps getting fresher summaries and links for everything its owner
+// has not spoken for. See packages/db/src/human-edited.ts.
 
 /** Drop the keys a select left undefined, so they are not written as null. */
 function columnSet(
@@ -618,12 +633,34 @@ export async function saveToolListing(formData: FormData): Promise<OwnershipActi
   const { entityId, values } = step
 
   const db = getDb()
+  const set = columnSet(values, columnKeys('tool'))
+
+  // Read the row BEFORE the write. It is the only moment the before-state
+  // exists, and a claim is earned by moving a value, not by pressing Save: an
+  // autosave that changed nothing must not claim a summary the owner never read
+  // and lock the crawler out of it forever.
+  const [before] = await db
+    .select()
+    .from(tools)
+    .where(eq(tools.id, entityId))
+    .limit(1)
+
+  const claimed = [
+    ...changedKeys(set, (before ?? {}) as Record<string, unknown>, HUMAN_EDITABLE_TOOL_KEYS),
+    ...(await saveToolLinks(entityId, values)).map(linkMarker),
+  ]
+  const humanEditedFields = addHumanEdits(before?.humanEditedFields, claimed)
+
   await db
     .update(tools)
-    .set({ ...columnSet(values, columnKeys('tool')), updatedAt: new Date() })
+    .set({
+      ...set,
+      // Only when something was actually added, so a no-op save leaves the
+      // column, and its ordering, exactly as it was.
+      ...(humanEditedFields ? { humanEditedFields } : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(tools.id, entityId))
-
-  await saveToolLinks(entityId, values)
 
   revalidatePath('/me/listings')
   return { message: 'Saved.' }
@@ -637,10 +674,15 @@ export async function saveToolListing(formData: FormData): Promise<OwnershipActi
  * already been round. So the current rows are read first and a type is only
  * deleted and re-inserted when its URL actually moved. A type an owner clears
  * is deleted and not replaced, which is how you take a dead link down.
+ *
+ * Returns the types that moved, so the caller can mark them as claimed.
+ * CLEARING a link counts: it leaves no row behind to carry a flag, which is
+ * exactly why the marker lives on tools rather than on tool_links.
  */
-async function saveToolLinks(toolId: string, values: Record<string, unknown>): Promise<void> {
+async function saveToolLinks(toolId: string, values: Record<string, unknown>): Promise<string[]> {
   const db = getDb()
   const current = await loadToolLinks(toolId)
+  const changed: string[] = []
 
   for (const type of OWNER_LINK_TYPES) {
     const next = (values[linkFieldKey(type)] as string | null) ?? null
@@ -648,7 +690,10 @@ async function saveToolLinks(toolId: string, values: Record<string, unknown>): P
 
     await db.delete(toolLinks).where(and(eq(toolLinks.toolId, toolId), eq(toolLinks.linkType, type)))
     if (next) await db.insert(toolLinks).values({ toolId, linkType: type, url: next })
+    changed.push(type)
   }
+
+  return changed
 }
 
 export async function saveAlbumListing(formData: FormData): Promise<OwnershipActionResult> {

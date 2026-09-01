@@ -51,8 +51,11 @@ export function CandidateDetailActions({
       {/* Suppress with reason */}
       {status !== 'suppressed' && (
         <div className="flex flex-col gap-2">
+          {/* Required, not decoration: this text is the body of the email the
+              submitter gets, and a rejection with no reason is the thing people
+              write back about. */}
           <label className="text-xs text-muted font-medium">
-            Rejection reason <span className="text-muted-2">(optional)</span>
+            Rejection reason <span className="text-muted-2">(required)</span>
           </label>
           <input
             type="text"
@@ -62,11 +65,16 @@ export function CandidateDetailActions({
             className="input text-sm"
           />
           <button
-            disabled={approvePending || suppressPending}
+            disabled={approvePending || suppressPending || !reason.trim()}
+            title={reason.trim() ? 'Suppress with this reason' : 'Type a reason first'}
             onClick={() =>
               startSuppress(async () => {
                 setError(null)
-                await suppressCandidate(candidateId, reason || undefined)
+                const result = await suppressCandidate(candidateId, reason)
+                if (result.error) {
+                  setError(result.error)
+                  return
+                }
                 router.refresh()
               })
             }

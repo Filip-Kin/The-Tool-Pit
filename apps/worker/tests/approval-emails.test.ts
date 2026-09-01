@@ -212,6 +212,22 @@ describe('the kind list', () => {
       'grant_published',
       'claim_approved',
       'claim_rejected',
+      // Every moderation action does double duty: it refuses something pending
+      // AND takes down something already live. One email cannot be right for
+      // both, so each vertical has two kinds and the action picks by reading
+      // the status before it writes. See rejection-emails.test.ts.
+      'field_rejected',
+      'field_removed',
+      'event_rejected',
+      'event_removed',
+      'tool_rejected',
+      'tool_removed',
+      'album_rejected',
+      'album_removed',
+      'grant_rejected',
+      'grant_removed',
+      'submission_rejected',
+      'field_edit_rejected',
     ]
     expect([...APPROVAL_EMAIL_KINDS]).toEqual(expected)
   })

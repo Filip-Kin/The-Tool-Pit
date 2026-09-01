@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import { readPhotoFiles } from '@/lib/fields/form-parse'
-import { notifyFieldPublished } from '@/lib/notify/approvals'
+import { notifyFieldPublished, notifyFieldRejected } from '@/lib/notify/approvals'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -43,14 +43,38 @@ export async function approveField(id: string): Promise<{ error?: string }> {
   return {}
 }
 
-export async function suppressField(id: string, reason?: string): Promise<void> {
+/**
+ * Refuse a pending field, or take a live one back off the map.
+ *
+ * ONE ACTION, TWO EVENTS. The status it writes is the same either way; what it
+ * MEANS depends on what the row was a second ago, so the status is read first
+ * and the submitter gets the email that matches. "We did not list this" and
+ * "we removed this" are not the same news.
+ *
+ * The reason is required. It is the body of the email, and a rejection with no
+ * reason is the thing people write back about.
+ */
+export async function suppressField(id: string, reason: string): Promise<{ error?: string }> {
   await assertAdmin()
+  const clean = reason?.trim() ?? ''
+  if (!clean) return { error: 'Give a reason. It is what the submitter is told.' }
+
   const db = getDb()
+  const [before] = await db
+    .select({ status: practiceFields.status })
+    .from(practiceFields)
+    .where(eq(practiceFields.id, id))
+    .limit(1)
+  if (!before) return { error: 'Field not found' }
+
   await db
     .update(practiceFields)
-    .set({ status: 'suppressed', rejectionReason: reason?.trim() || null, updatedAt: new Date() })
+    .set({ status: 'suppressed', rejectionReason: clean, updatedAt: new Date() })
     .where(eq(practiceFields.id, id))
+  // After the write, never before, and never in a way that can fail it.
+  await notifyFieldRejected(id, before.status === 'published', clean)
   revalidateAll()
+  return {}
 }
 
 export async function unsuppressField(id: string): Promise<void> {

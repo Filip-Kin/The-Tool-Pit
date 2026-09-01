@@ -7,7 +7,7 @@ import { eq, and, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos } from '@the-tool-pit/db'
 import type { FieldEditProposalData } from '@the-tool-pit/db'
-import { describeFieldEditChanges, notifyFieldEditApplied } from '@/lib/notify/approvals'
+import { describeFieldEditChanges, notifyFieldEditApplied, notifyFieldEditRejected } from '@/lib/notify/approvals'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -106,14 +106,30 @@ export async function applyFieldEdit(proposalId: string): Promise<{ error?: stri
   return {}
 }
 
-export async function rejectFieldEdit(proposalId: string): Promise<void> {
+/**
+ * Do not apply a suggested edit.
+ *
+ * Never a takedown: the field itself is untouched and stays live exactly as it
+ * reads now, which is what the email says so nobody thinks their suggestion
+ * took the listing with it. The reason is required, same as everywhere else,
+ * and it is what the submitter is sent.
+ */
+export async function rejectFieldEdit(
+  proposalId: string,
+  reason: string,
+): Promise<{ error?: string }> {
   await assertAdmin()
+  const clean = reason?.trim() ?? ''
+  if (!clean) return { error: 'Give a reason. It is what the submitter is told.' }
+
   const db = getDb()
   // Drop the pending photo bytes; the proposal row stays for the record.
   await db.delete(fieldEditProposalPhotos).where(eq(fieldEditProposalPhotos.proposalId, proposalId))
   await db
     .update(fieldEditProposals)
-    .set({ status: 'rejected', updatedAt: new Date() })
+    .set({ status: 'rejected', rejectionReason: clean, updatedAt: new Date() })
     .where(eq(fieldEditProposals.id, proposalId))
+  await notifyFieldEditRejected(proposalId, clean)
   revalidatePath('/admin/field-edits')
+  return {}
 }

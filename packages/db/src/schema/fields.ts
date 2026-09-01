@@ -194,6 +194,11 @@ export const fieldEditProposals = pgTable(
     submittedByUserId: uuid('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     /** FIELD_EDIT_STATUSES */
     status: text('status').notNull().default('pending'),
+    /**
+     * Why an admin did not apply it. Required by rejectFieldEdit, and the same
+     * text the submitter is sent, so "what did we tell them" is a SELECT.
+     */
+    rejectionReason: text('rejection_reason'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

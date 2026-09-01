@@ -509,3 +509,370 @@ export async function notifyClaimResolved(
 }
 
 // #endregion
+
+// #region the answer was no
+//
+// EVERY ACTION IN HERE DOES DOUBLE DUTY, and the split is the whole point.
+//
+// suppressField, suppressEvent, suppressCandidate, suppressAlbumCandidate and
+// suppressGrantCandidate all write the same status. What that MEANS depends on
+// what the row was a second earlier: on a pending submission it is "we read
+// this and we are not listing it", on a published listing it is "this was live
+// and it is gone now". Telling somebody their field "was not accepted" when it
+// has been on the map since March reads as though we lost it, so the caller
+// reads the status BEFORE it writes and passes `wasLive`, exactly the way
+// applyFieldEdit reads the field before it patches it.
+//
+// A REASON IS REQUIRED. Not decoration and not optional: it is the body of the
+// email, and a rejection with no reason is the thing people write back about.
+// Every function here refuses to queue without one, and every calling action
+// refuses to run without one, so there are two guards and neither is the only
+// one. The three rules at the top of this file still hold, unchanged: no user
+// means no email, nothing here ever throws, and the payload names the thing.
+
+/** No reason, no email. The caller has already suppressed the row either way. */
+function rejectionPayload(
+  title: string,
+  reason: string,
+  rows: Array<{ label: string; value: string | null | undefined }>,
+): ApprovalEmailPayload | null {
+  const clean = reason.trim()
+  if (!clean) return null
+  return { title, url: null, facts: facts(rows), reviewerNote: clean }
+}
+
+/** A practice field was refused, or taken back off the map. */
+export async function notifyFieldRejected(
+  fieldId: string,
+  wasLive: boolean,
+  reason: string,
+): Promise<void> {
+  await attempt(`field_${wasLive ? 'removed' : 'rejected'} ${fieldId}`, async () => {
+    const db = getDb()
+    const [row] = await db
+      .select({
+        id: practiceFields.id,
+        name: practiceFields.name,
+        city: practiceFields.city,
+        region: practiceFields.region,
+        country: practiceFields.country,
+        teamNumber: practiceFields.teamNumber,
+        teamName: practiceFields.teamName,
+        userId: practiceFields.submittedByUserId,
+      })
+      .from(practiceFields)
+      .where(eq(practiceFields.id, fieldId))
+      .limit(1)
+    if (!row?.userId) return
+
+    const payload = rejectionPayload(row.name, reason, [
+      { label: 'Where', value: place([row.city, row.region, row.country]) },
+      { label: 'Host', value: team(row.teamNumber, row.teamName) },
+    ])
+    if (!payload) return
+
+    await queueNotification({
+      userId: row.userId,
+      kind: wasLive ? 'field_removed' : 'field_rejected',
+      subjectType: 'practice_field',
+      subjectId: row.id,
+      payload,
+    })
+  })
+}
+
+/** An off-season event was refused, or taken back off the map. */
+export async function notifyEventRejected(
+  listingId: string,
+  wasLive: boolean,
+  reason: string,
+): Promise<void> {
+  await attempt(`event_${wasLive ? 'removed' : 'rejected'} ${listingId}`, async () => {
+    const db = getDb()
+    const [row] = await db
+      .select({
+        id: eventListings.id,
+        name: eventListings.name,
+        venueName: eventListings.venueName,
+        city: eventListings.city,
+        region: eventListings.region,
+        country: eventListings.country,
+        startDate: eventListings.startDate,
+        endDate: eventListings.endDate,
+        userId: eventListings.submittedByUserId,
+      })
+      .from(eventListings)
+      .where(eq(eventListings.id, listingId))
+      .limit(1)
+    if (!row?.userId) return
+
+    const payload = rejectionPayload(row.name, reason, [
+      { label: 'Dates', value: dateRange(row.startDate, row.endDate) },
+      { label: 'Where', value: place([row.venueName, row.city, row.region, row.country]) },
+    ])
+    if (!payload) return
+
+    await queueNotification({
+      userId: row.userId,
+      kind: wasLive ? 'event_removed' : 'event_rejected',
+      subjectType: 'event_listing',
+      subjectId: row.id,
+      payload,
+    })
+  })
+}
+
+/**
+ * A tool candidate was refused, or its published listing was taken down.
+ *
+ * Keyed on the SUBMISSION for the same reason notifyToolPublished is: that is
+ * where the submitter's user id lives, and a candidate a crawler found has no
+ * submitter at all, so a crawl-found candidate falls straight through here.
+ *
+ * The title is the LIVE tool's name on a takedown and the candidate's own title
+ * on a refusal, because on a takedown the reader is looking for the listing
+ * they knew, not the page we scraped a year ago.
+ */
+export async function notifyToolCandidateRejected(
+  candidateId: string,
+  wasLive: boolean,
+  reason: string,
+): Promise<void> {
+  await attempt(`tool_${wasLive ? 'removed' : 'rejected'} ${candidateId}`, async () => {
+    const db = getDb()
+    const [candidate] = await db
+      .select({
+        submissionId: crawlCandidates.submissionId,
+        rawMetadata: crawlCandidates.rawMetadata,
+        canonicalUrl: crawlCandidates.canonicalUrl,
+        sourceUrl: crawlCandidates.sourceUrl,
+        matchedToolId: crawlCandidates.matchedToolId,
+      })
+      .from(crawlCandidates)
+      .where(eq(crawlCandidates.id, candidateId))
+      .limit(1)
+    if (!candidate?.submissionId) return
+
+    const [submission] = await db
+      .select({
+        id: submissions.id,
+        userId: submissions.submittedByUserId,
+        teamNumber: submissions.teamNumber,
+        seasonYear: submissions.seasonYear,
+      })
+      .from(submissions)
+      .where(eq(submissions.id, candidate.submissionId))
+      .limit(1)
+    if (!submission?.userId) return
+
+    let name = candidate.rawMetadata?.title?.trim() || null
+    if (candidate.matchedToolId) {
+      const [tool] = await db
+        .select({ name: tools.name })
+        .from(tools)
+        .where(eq(tools.id, candidate.matchedToolId))
+        .limit(1)
+      if (tool) name = tool.name
+    }
+
+    const payload = rejectionPayload(name || 'your submission', reason, [
+      { label: 'Link', value: candidate.canonicalUrl ?? candidate.sourceUrl },
+      { label: 'Team', value: submission.teamNumber ? `Team ${submission.teamNumber}` : null },
+      { label: 'Season', value: submission.seasonYear ? String(submission.seasonYear) : null },
+    ])
+    if (!payload) return
+
+    await queueNotification({
+      userId: submission.userId,
+      kind: wasLive ? 'tool_removed' : 'tool_rejected',
+      subjectType: 'submission',
+      subjectId: submission.id,
+      payload,
+    })
+  })
+}
+
+/** An album was refused, or its published album was taken down. */
+export async function notifyAlbumCandidateRejected(
+  candidateId: string,
+  wasLive: boolean,
+  reason: string,
+): Promise<void> {
+  await attempt(`album_${wasLive ? 'removed' : 'rejected'} ${candidateId}`, async () => {
+    const db = getDb()
+    const [candidate] = await db
+      .select({
+        submissionId: albumCandidates.submissionId,
+        rawMetadata: albumCandidates.rawMetadata,
+        canonicalUrl: albumCandidates.canonicalUrl,
+        matchedEventId: albumCandidates.matchedEventId,
+      })
+      .from(albumCandidates)
+      .where(eq(albumCandidates.id, candidateId))
+      .limit(1)
+    if (!candidate?.submissionId) return
+
+    const [submission] = await db
+      .select({ id: albumSubmissions.id, userId: albumSubmissions.submittedByUserId })
+      .from(albumSubmissions)
+      .where(eq(albumSubmissions.id, candidate.submissionId))
+      .limit(1)
+    if (!submission?.userId) return
+
+    let eventLabel: string | null = null
+    if (candidate.matchedEventId) {
+      const [event] = await db
+        .select({ name: events.name, year: events.year })
+        .from(events)
+        .where(eq(events.id, candidate.matchedEventId))
+        .limit(1)
+      if (event) eventLabel = [event.name, event.year ? String(event.year) : null].filter(Boolean).join(' ')
+    }
+
+    const payload = rejectionPayload(
+      candidate.rawMetadata?.title?.trim() || eventLabel || 'your album',
+      reason,
+      [
+        { label: 'Event', value: eventLabel },
+        { label: 'Album', value: candidate.canonicalUrl },
+      ],
+    )
+    if (!payload) return
+
+    await queueNotification({
+      userId: submission.userId,
+      kind: wasLive ? 'album_removed' : 'album_rejected',
+      subjectType: 'album_submission',
+      subjectId: submission.id,
+      payload,
+    })
+  })
+}
+
+/** A grant was refused, or its published listing was taken down. */
+export async function notifyGrantCandidateRejected(
+  candidateId: string,
+  wasLive: boolean,
+  reason: string,
+): Promise<void> {
+  await attempt(`grant_${wasLive ? 'removed' : 'rejected'} ${candidateId}`, async () => {
+    const db = getDb()
+    const [candidate] = await db
+      .select({
+        id: grantCandidates.id,
+        userId: grantCandidates.submittedByUserId,
+        rawMetadata: grantCandidates.rawMetadata,
+        canonicalUrl: grantCandidates.canonicalUrl,
+        sourceUrl: grantCandidates.sourceUrl,
+      })
+      .from(grantCandidates)
+      .where(eq(grantCandidates.id, candidateId))
+      .limit(1)
+    if (!candidate?.userId) return
+
+    const payload = rejectionPayload(
+      candidate.rawMetadata?.title?.trim() || 'the grant you sent us',
+      reason,
+      [
+        { label: 'Funder', value: candidate.rawMetadata?.funderName ?? null },
+        { label: 'Link', value: candidate.canonicalUrl ?? candidate.sourceUrl },
+      ],
+    )
+    if (!payload) return
+
+    await queueNotification({
+      userId: candidate.userId,
+      kind: wasLive ? 'grant_removed' : 'grant_rejected',
+      subjectType: 'grant_candidate',
+      subjectId: candidate.id,
+      payload,
+    })
+  })
+}
+
+/**
+ * A submission was rejected before it ever became a candidate.
+ *
+ * No wasLive: the admin screen only offers Reject on a pending or
+ * needs_review submission, and a submission is not a listing, so there is
+ * nothing here that could have been live. The tool a submission produced is
+ * taken down through notifyToolCandidateRejected instead.
+ */
+export async function notifySubmissionRejected(submissionId: string, reason: string): Promise<void> {
+  await attempt(`submission_rejected ${submissionId}`, async () => {
+    const db = getDb()
+    const [row] = await db
+      .select({
+        id: submissions.id,
+        url: submissions.url,
+        userId: submissions.submittedByUserId,
+        teamNumber: submissions.teamNumber,
+        seasonYear: submissions.seasonYear,
+        artifactKind: submissions.artifactKind,
+      })
+      .from(submissions)
+      .where(eq(submissions.id, submissionId))
+      .limit(1)
+    if (!row?.userId) return
+
+    const artifact = row.artifactKind === 'cad' ? 'CAD' : row.artifactKind === 'code' ? 'Robot code' : null
+
+    // A submission has no name of its own, so the URL is what the reader
+    // recognises. It is the thing they pasted into the box.
+    const payload = rejectionPayload(row.url, reason, [
+      { label: 'Team', value: row.teamNumber ? `Team ${row.teamNumber}` : null },
+      { label: 'Season', value: row.seasonYear ? String(row.seasonYear) : null },
+      { label: 'Sent as', value: artifact },
+    ])
+    if (!payload) return
+
+    await queueNotification({
+      userId: row.userId,
+      kind: 'submission_rejected',
+      subjectType: 'submission',
+      subjectId: row.id,
+      payload,
+    })
+  })
+}
+
+/**
+ * A suggested edit to a published field was not applied.
+ *
+ * Always a refusal, never a takedown: the field itself is untouched by this and
+ * stays exactly as it reads now, which the copy says out loud so nobody thinks
+ * their edit took the listing with it.
+ */
+export async function notifyFieldEditRejected(proposalId: string, reason: string): Promise<void> {
+  await attempt(`field_edit_rejected ${proposalId}`, async () => {
+    const db = getDb()
+    const [row] = await db
+      .select({
+        id: fieldEditProposals.id,
+        userId: fieldEditProposals.submittedByUserId,
+        fieldName: practiceFields.name,
+        city: practiceFields.city,
+        region: practiceFields.region,
+      })
+      .from(fieldEditProposals)
+      .innerJoin(practiceFields, eq(practiceFields.id, fieldEditProposals.fieldId))
+      .where(eq(fieldEditProposals.id, proposalId))
+      .limit(1)
+    if (!row?.userId) return
+
+    const payload = rejectionPayload(row.fieldName, reason, [
+      { label: 'Where', value: place([row.city, row.region]) },
+    ])
+    if (!payload) return
+
+    await queueNotification({
+      userId: row.userId,
+      kind: 'field_edit_rejected',
+      subjectType: 'field_edit_proposal',
+      subjectId: row.id,
+      payload,
+    })
+  })
+}
+
+// #endregion
