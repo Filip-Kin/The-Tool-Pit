@@ -24,7 +24,9 @@ export default async function AdminClaimsPage() {
   const claims = await listPendingClaimsForAdmin()
 
   return (
-    <div className="flex flex-col gap-6">
+    // Padding here, not on the layout: every admin page owns its own, and this
+    // one was the only one with none, so it sat flush against the sidebar.
+    <div className="flex flex-col gap-6 p-4 md:p-8">
       <div>
         <h1 className="text-xl font-semibold text-foreground">Listing claims</h1>
         <p className="mt-1 text-sm text-muted">

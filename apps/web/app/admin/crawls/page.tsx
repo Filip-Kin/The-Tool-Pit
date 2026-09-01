@@ -23,7 +23,18 @@ import { ClickableRow } from '@/components/admin/clickable-row'
  * with a different import at the top. The question this screen answers is also
  * usually cross-vertical: the overnight sweeps land within two hours of each
  * other, and "did anything run last night, and did anything blow up" is one
- * look, not five. Each vertical's sidebar entry links straight to its own tab.
+ * look, not five.
+ *
+ * NO VERTICAL VALUE MEANS ALL FIVE, merged newest first. It used to mean tools,
+ * which made the sidebar's "Crawl jobs, all" a link that quietly showed one
+ * vertical. The five loads run in parallel and each is already capped, so the
+ * merged view costs one round of queries and answers the cross-vertical
+ * question directly.
+ *
+ * The vertical is chosen from the sidebar, which has an entry per vertical
+ * already. This page used to repeat those six links as a tab strip across the
+ * top, which is the same navigation twice, so the heading names the vertical
+ * instead.
  *
  * Only tools rows link out to a detail page, because only tools has one.
  */
@@ -53,11 +64,24 @@ interface JobRow {
   error: string | null
   createdAt: Date
   sourceLabel: string | null
+  /** Which table the row came from. Only shown in the merged view. */
+  vertical: VerticalKey
+}
+
+/** All five, newest first, for the merged view. */
+async function loadAllJobs(): Promise<JobRow[]> {
+  const perVertical = await Promise.all(VERTICALS.map((v) => loadJobs(v.key)))
+  return perVertical
+    .flat()
+    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+    .slice(0, LIMIT)
 }
 
 async function loadJobs(vertical: VerticalKey): Promise<JobRow[]> {
   const db = getDb()
-  const bare = (rows: Omit<JobRow, 'sourceLabel'>[]): JobRow[] => rows.map((r) => ({ ...r, sourceLabel: null }))
+  const bare = (rows: Omit<JobRow, 'sourceLabel' | 'vertical'>[]): JobRow[] =>
+    rows.map((r) => ({ ...r, sourceLabel: null, vertical }))
+  const tag = (rows: Omit<JobRow, 'vertical'>[]): JobRow[] => rows.map((r) => ({ ...r, vertical }))
 
   if (vertical === 'tools') {
     return bare(
@@ -98,59 +122,65 @@ async function loadJobs(vertical: VerticalKey): Promise<JobRow[]> {
   }
 
   if (vertical === 'grants') {
-    return db
-      .select({
-        id: grantCrawlJobs.id,
-        connector: grantCrawlJobs.connector,
-        status: grantCrawlJobs.status,
-        startedAt: grantCrawlJobs.startedAt,
-        finishedAt: grantCrawlJobs.finishedAt,
-        stats: grantCrawlJobs.stats,
-        error: grantCrawlJobs.error,
-        createdAt: grantCrawlJobs.createdAt,
-        sourceLabel: grantSources.label,
-      })
-      .from(grantCrawlJobs)
-      .leftJoin(grantSources, eq(grantSources.id, grantCrawlJobs.sourceId))
-      .orderBy(desc(grantCrawlJobs.createdAt))
-      .limit(LIMIT)
+    return tag(
+      await db
+        .select({
+          id: grantCrawlJobs.id,
+          connector: grantCrawlJobs.connector,
+          status: grantCrawlJobs.status,
+          startedAt: grantCrawlJobs.startedAt,
+          finishedAt: grantCrawlJobs.finishedAt,
+          stats: grantCrawlJobs.stats,
+          error: grantCrawlJobs.error,
+          createdAt: grantCrawlJobs.createdAt,
+          sourceLabel: grantSources.label,
+        })
+        .from(grantCrawlJobs)
+        .leftJoin(grantSources, eq(grantSources.id, grantCrawlJobs.sourceId))
+        .orderBy(desc(grantCrawlJobs.createdAt))
+        .limit(LIMIT),
+    )
   }
 
   if (vertical === 'events') {
-    return db
-      .select({
-        id: eventListingCrawlJobs.id,
-        connector: eventListingCrawlJobs.connector,
-        status: eventListingCrawlJobs.status,
-        startedAt: eventListingCrawlJobs.startedAt,
-        finishedAt: eventListingCrawlJobs.finishedAt,
-        stats: eventListingCrawlJobs.stats,
-        error: eventListingCrawlJobs.error,
-        createdAt: eventListingCrawlJobs.createdAt,
-        sourceLabel: eventListingCrawlSources.label,
-      })
-      .from(eventListingCrawlJobs)
-      .leftJoin(eventListingCrawlSources, eq(eventListingCrawlSources.id, eventListingCrawlJobs.sourceId))
-      .orderBy(desc(eventListingCrawlJobs.createdAt))
-      .limit(LIMIT)
+    return tag(
+      await db
+        .select({
+          id: eventListingCrawlJobs.id,
+          connector: eventListingCrawlJobs.connector,
+          status: eventListingCrawlJobs.status,
+          startedAt: eventListingCrawlJobs.startedAt,
+          finishedAt: eventListingCrawlJobs.finishedAt,
+          stats: eventListingCrawlJobs.stats,
+          error: eventListingCrawlJobs.error,
+          createdAt: eventListingCrawlJobs.createdAt,
+          sourceLabel: eventListingCrawlSources.label,
+        })
+        .from(eventListingCrawlJobs)
+        .leftJoin(eventListingCrawlSources, eq(eventListingCrawlSources.id, eventListingCrawlJobs.sourceId))
+        .orderBy(desc(eventListingCrawlJobs.createdAt))
+        .limit(LIMIT),
+    )
   }
 
-  return db
-    .select({
-      id: practiceFieldCrawlJobs.id,
-      connector: practiceFieldCrawlJobs.connector,
-      status: practiceFieldCrawlJobs.status,
-      startedAt: practiceFieldCrawlJobs.startedAt,
-      finishedAt: practiceFieldCrawlJobs.finishedAt,
-      stats: practiceFieldCrawlJobs.stats,
-      error: practiceFieldCrawlJobs.error,
-      createdAt: practiceFieldCrawlJobs.createdAt,
-      sourceLabel: practiceFieldCrawlSources.label,
-    })
-    .from(practiceFieldCrawlJobs)
-    .leftJoin(practiceFieldCrawlSources, eq(practiceFieldCrawlSources.id, practiceFieldCrawlJobs.sourceId))
-    .orderBy(desc(practiceFieldCrawlJobs.createdAt))
-    .limit(LIMIT)
+  return tag(
+    await db
+      .select({
+        id: practiceFieldCrawlJobs.id,
+        connector: practiceFieldCrawlJobs.connector,
+        status: practiceFieldCrawlJobs.status,
+        startedAt: practiceFieldCrawlJobs.startedAt,
+        finishedAt: practiceFieldCrawlJobs.finishedAt,
+        stats: practiceFieldCrawlJobs.stats,
+        error: practiceFieldCrawlJobs.error,
+        createdAt: practiceFieldCrawlJobs.createdAt,
+        sourceLabel: practiceFieldCrawlSources.label,
+      })
+      .from(practiceFieldCrawlJobs)
+      .leftJoin(practiceFieldCrawlSources, eq(practiceFieldCrawlSources.id, practiceFieldCrawlJobs.sourceId))
+      .orderBy(desc(practiceFieldCrawlJobs.createdAt))
+      .limit(LIMIT),
+  )
 }
 
 export default async function CrawlJobsPage({
@@ -160,31 +190,28 @@ export default async function CrawlJobsPage({
 }) {
   await assertAdmin()
   const params = await searchParams
-  const active = (VERTICALS.find((v) => v.key === params.vertical)?.key ?? 'tools') as VerticalKey
-  const vertical = VERTICALS.find((v) => v.key === active)!
-  const jobs = await loadJobs(active)
+  const vertical = VERTICALS.find((v) => v.key === params.vertical) ?? null
+  const active: VerticalKey | null = vertical?.key ?? null
+  const jobs = active ? await loadJobs(active) : await loadAllJobs()
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold text-foreground">Crawl jobs</h1>
-        <Link href={vertical.sourcesHref} className="text-xs text-primary hover:underline">
-          {vertical.label} sources →
-        </Link>
-      </div>
-
-      <div className="flex gap-1 overflow-x-auto border-b border-border-subtle">
-        {VERTICALS.map((v) => (
-          <Link
-            key={v.key}
-            href={`/admin/crawls?vertical=${v.key}`}
-            className={`whitespace-nowrap px-3 py-2 text-sm transition-colors ${
-              active === v.key ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'
-            }`}
-          >
-            {v.label}
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">
+            {vertical ? `${vertical.label} crawl jobs` : 'Crawl jobs'}
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            {vertical
+              ? `The last ${LIMIT} runs. Pick another vertical in the sidebar.`
+              : `The last ${LIMIT} runs across all five verticals, newest first.`}
+          </p>
+        </div>
+        {vertical && (
+          <Link href={vertical.sourcesHref} className="text-xs text-primary hover:underline">
+            {vertical.label} sources →
           </Link>
-        ))}
+        )}
       </div>
 
       {jobs.length === 0 ? (
@@ -211,6 +238,13 @@ export default async function CrawlJobsPage({
                   <>
                     <td className="px-4 py-2">
                       <p className="font-mono text-xs text-foreground">{job.connector}</p>
+                      {/* Merged view only: a connector name does not always say
+                          which vertical ran it. */}
+                      {!active && (
+                        <p className="text-[10px] text-muted">
+                          {VERTICALS.find((v) => v.key === job.vertical)?.label}
+                        </p>
+                      )}
                       {job.sourceLabel && <p className="text-[10px] text-muted-2">{job.sourceLabel}</p>}
                     </td>
                     <td className="px-4 py-2">
@@ -252,8 +286,8 @@ export default async function CrawlJobsPage({
 
                 // Tools jobs have a detail page; the other four do not, and a
                 // row that navigates to a 404 is worse than a row that does not
-                // navigate.
-                return active === 'tools' ? (
+                // navigate. Checked per row, because the merged view mixes them.
+                return job.vertical === 'tools' ? (
                   <ClickableRow
                     key={job.id}
                     href={`/admin/crawls/${job.id}`}

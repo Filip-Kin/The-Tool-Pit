@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
+import type { AdminQueueCounts } from '@/lib/admin/queue-counts'
 
 /**
  * Admin navigation: the verticals down the side, each with the same slots.
@@ -17,11 +18,22 @@ import { usePathname, useSearchParams } from 'next/navigation'
  * tables have identical columns and the overnight sweeps all land within two
  * hours of each other, so the answer to "did anything run last night" is one
  * screen.
+ *
+ * THE BADGES. Each queue page used to carry its own strip of status tabs that
+ * repeated these links and put a count on them, so the same navigation existed
+ * twice and only the copy nobody had chosen said how much was waiting. The
+ * counts belong here, on the link you actually navigate with. They are resolved
+ * once for the whole sidebar in the layout, never per entry.
+ *
+ * A zero renders nothing. A queue at zero is the normal state and a row of
+ * badges saying 0 reads as a wall of alarms that all mean "fine".
  */
 
 interface NavItem {
   href: string
   label: string
+  /** The queue behind this link, when it has one. Nothing else gets a badge. */
+  queue?: keyof AdminQueueCounts
 }
 
 interface NavGroup {
@@ -38,8 +50,8 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Tools',
     items: [
-      { href: '/admin/submissions', label: 'Submissions' },
-      { href: '/admin/candidates', label: 'Candidates' },
+      { href: '/admin/submissions', label: 'Submissions', queue: 'toolSubmissions' },
+      { href: '/admin/candidates', label: 'Candidates', queue: 'toolCandidates' },
       { href: '/admin/crawls?vertical=tools', label: 'Crawl jobs' },
       { href: '/admin/tools', label: 'All tools' },
       { href: '/admin/sources', label: 'Sources' },
@@ -50,7 +62,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Photos',
     items: [
       { href: '/admin/album-submissions', label: 'Submissions' },
-      { href: '/admin/album-candidates', label: 'Candidates' },
+      { href: '/admin/album-candidates', label: 'Candidates', queue: 'albumCandidates' },
       { href: '/admin/crawls?vertical=photos', label: 'Crawl jobs' },
       { href: '/admin/album-sources', label: 'Sources' },
     ],
@@ -58,8 +70,8 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Off-season events',
     items: [
-      { href: '/admin/event-listings', label: 'Submissions' },
-      { href: '/admin/event-listings/candidates', label: 'Candidates' },
+      { href: '/admin/event-listings', label: 'Submissions', queue: 'eventSubmissions' },
+      { href: '/admin/event-listings/candidates', label: 'Candidates', queue: 'eventCandidates' },
       { href: '/admin/crawls?vertical=events', label: 'Crawl jobs' },
       { href: '/admin/event-listings?status=all', label: 'All events' },
       { href: '/admin/event-listings/sources', label: 'Sources' },
@@ -68,27 +80,27 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Practice fields',
     items: [
-      { href: '/admin/practice-fields', label: 'Submissions' },
-      { href: '/admin/practice-fields/candidates', label: 'Candidates' },
+      { href: '/admin/practice-fields', label: 'Submissions', queue: 'fieldSubmissions' },
+      { href: '/admin/practice-fields/candidates', label: 'Candidates', queue: 'fieldCandidates' },
       { href: '/admin/crawls?vertical=fields', label: 'Crawl jobs' },
       { href: '/admin/practice-fields?status=all', label: 'All fields' },
       { href: '/admin/practice-fields/sources', label: 'Sources' },
-      { href: '/admin/field-edits', label: 'Suggested edits' },
+      { href: '/admin/field-edits', label: 'Suggested edits', queue: 'fieldEdits' },
     ],
   },
   {
     label: 'Grants',
     items: [
-      { href: '/admin/grants/candidates', label: 'Candidates' },
+      { href: '/admin/grants/candidates', label: 'Candidates', queue: 'grantCandidates' },
       { href: '/admin/crawls?vertical=grants', label: 'Crawl jobs' },
       { href: '/admin/grants', label: 'All grants' },
       { href: '/admin/grants/sources', label: 'Sources' },
-      { href: '/admin/grants/changes', label: 'Changes' },
+      { href: '/admin/grants/changes', label: 'Changes', queue: 'grantChanges' },
     ],
   },
   {
     label: 'Accounts',
-    items: [{ href: '/admin/claims', label: 'Listing claims' }],
+    items: [{ href: '/admin/claims', label: 'Listing claims', queue: 'listingClaims' }],
   },
   {
     label: 'System',
@@ -134,10 +146,12 @@ function activeHref(pathname: string, search: URLSearchParams): string | null {
   return best
 }
 
-export function AdminNav() {
+export function AdminNav({ counts }: { counts: AdminQueueCounts }) {
   const pathname = usePathname()
   const search = useSearchParams()
   const active = activeHref(pathname, search)
+
+  const waiting = (item: NavItem) => (item.queue ? counts[item.queue] : 0)
 
   // Null until the browser has been read, so the first render matches the
   // server's and hydration does not complain.
@@ -184,7 +198,7 @@ export function AdminNav() {
               </span>
             )}
             {group.items.map((item) => (
-              <NavLink key={item.href} item={item} active={item.href === active} />
+              <NavLink key={item.href} item={item} active={item.href === active} count={waiting(item)} />
             ))}
           </div>
         ))}
@@ -197,30 +211,35 @@ export function AdminNav() {
             return (
               <div key="root" className="flex flex-col">
                 {group.items.map((item) => (
-                  <NavLink key={item.href} item={item} active={item.href === active} />
+                  <NavLink key={item.href} item={item} active={item.href === active} count={waiting(item)} />
                 ))}
               </div>
             )
           }
 
           const open = isOpen(group)
+          // Collapsed, the group's own badges are hidden, so it carries their
+          // total. Without it a closed group is a place work can pile up
+          // unseen, which is the one thing the badges exist to prevent.
+          const groupWaiting = group.items.reduce((sum, item) => sum + waiting(item), 0)
           return (
             <div key={group.label} className="mt-3 flex flex-col first:mt-0">
               <button
                 type="button"
                 aria-expanded={open}
                 onClick={() => toggle(group.label!, !open)}
-                className="flex items-center justify-between rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-2 transition-colors hover:bg-surface-2 hover:text-foreground"
+                className="flex items-center gap-2 rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-2 transition-colors hover:bg-surface-2 hover:text-foreground"
               >
                 <span>{group.label}</span>
-                <span aria-hidden className={`transition-transform ${open ? 'rotate-90' : ''}`}>
+                {!open && <QueueBadge count={groupWaiting} />}
+                <span aria-hidden className={`ml-auto transition-transform ${open ? 'rotate-90' : ''}`}>
                   ›
                 </span>
               </button>
               {open && (
                 <div className="flex flex-col">
                   {group.items.map((item) => (
-                    <NavLink key={item.href} item={item} active={item.href === active} indent />
+                    <NavLink key={item.href} item={item} active={item.href === active} count={waiting(item)} indent />
                   ))}
                 </div>
               )}
@@ -232,15 +251,40 @@ export function AdminNav() {
   )
 }
 
-function NavLink({ item, active, indent }: { item: NavItem; active: boolean; indent?: boolean }) {
+function NavLink({
+  item,
+  active,
+  count,
+  indent,
+}: {
+  item: NavItem
+  active: boolean
+  count: number
+  indent?: boolean
+}) {
   return (
     <Link
       href={item.href}
-      className={`block whitespace-nowrap rounded-md py-2 text-sm transition-colors ${
+      className={`flex items-center gap-2 whitespace-nowrap rounded-md py-2 text-sm transition-colors ${
         indent ? 'pl-5 pr-3' : 'px-3'
       } ${active ? 'bg-surface-2 font-medium text-foreground' : 'text-muted hover:bg-surface-2 hover:text-foreground'}`}
     >
       {item.label}
+      <QueueBadge count={count} />
     </Link>
+  )
+}
+
+/**
+ * Nothing at all below one. Pushed right with ml-auto so the numbers line up
+ * down the sidebar instead of trailing each label at a different indent.
+ */
+function QueueBadge({ count }: { count: number }) {
+  if (count < 1) return null
+  return (
+    <span className="ml-auto shrink-0 rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted">
+      {count > 999 ? '999+' : count}
+      <span className="sr-only"> waiting</span>
+    </span>
   )
 }

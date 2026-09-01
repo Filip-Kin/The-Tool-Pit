@@ -3,15 +3,15 @@ import { Pager } from '@/components/admin/pager'
 import { and, asc, desc, eq, ilike, isNull, or, sql, type SQL } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
-import { grantCandidates, grantChanges, grantCycles, grantFunders, grants } from '@the-tool-pit/db'
+import { grantCycles, grantFunders, grants } from '@the-tool-pit/db'
 
 /**
- * The grants admin index: every listing, plus the three queues that feed it.
+ * The grants admin index: every listing we hold.
  *
- * The counters at the top are the whole health check for the vertical. Pending
- * changes is the one that matters most, because an unreviewed change means a
- * published listing whose date we already suspect is wrong, and that is the
- * exact state this vertical exists to avoid.
+ * The three queues that feed it (Changes, Candidates, Sources) used to be
+ * repeated here as a row of cards, which was the sidebar's Grants group said
+ * twice. The counts that made the cards worth having now sit on the sidebar
+ * entries themselves, so this page is the list and nothing else.
  */
 
 const STATUS_TABS = ['published', 'pending', 'unverified', 'suppressed', 'archived'] as const
@@ -40,7 +40,7 @@ export default async function AdminGrantsPage({
     : undefined
   const where = searchFilter ? and(statusFilter, searchFilter)! : statusFilter
 
-  const [rows, [{ total }], statusCounts, [{ unverified }], [{ pendingCandidates }], [{ pendingChanges }]] =
+  const [rows, [{ total }], statusCounts, [{ unverified }]] =
     await Promise.all([
       db
         .select({
@@ -61,11 +61,6 @@ export default async function AdminGrantsPage({
       db.select({ total: sql<number>`count(*)::int` }).from(grants).leftJoin(grantFunders, eq(grantFunders.id, grants.funderId)).where(where),
       db.select({ status: grants.status, count: sql<number>`count(*)::int` }).from(grants).groupBy(grants.status),
       db.select({ unverified: sql<number>`count(*)::int` }).from(grants).where(isNull(grants.verifiedAt)),
-      db
-        .select({ pendingCandidates: sql<number>`count(*)::int` })
-        .from(grantCandidates)
-        .where(eq(grantCandidates.status, 'pending')),
-      db.select({ pendingChanges: sql<number>`count(*)::int` }).from(grantChanges).where(eq(grantChanges.status, 'pending')),
     ])
 
   const countMap: Record<string, number> = Object.fromEntries(statusCounts.map((r) => [r.status, r.count]))
@@ -84,28 +79,6 @@ export default async function AdminGrantsPage({
           Saved as /grants/{params.published}. It is not public until its status is published.
         </p>
       )}
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <QueueCard
-          href="/admin/grants/changes"
-          label="Changes waiting"
-          value={pendingChanges}
-          note="The only route a scraped date has onto a published listing."
-          urgent={pendingChanges > 0}
-        />
-        <QueueCard
-          href="/admin/grants/candidates"
-          label="Candidates waiting"
-          value={pendingCandidates}
-          note="Pages a crawler thinks might be grants. None are public."
-        />
-        <QueueCard
-          href="/admin/grants/sources"
-          label="Discovery sources"
-          value={null}
-          note="Cadence, yield, reject, and the Brave monthly budget."
-        />
-      </div>
 
       <form method="get" className="flex gap-2">
         <input type="hidden" name="status" value={status} />
@@ -216,32 +189,5 @@ export default async function AdminGrantsPage({
 
       <Pager page={page} totalPages={totalPages} href={(n) => `/admin/grants?status=${status}&page=${n}${q ? `&q=${encodeURIComponent(q)}` : ''}`} />
     </div>
-  )
-}
-
-function QueueCard({
-  href,
-  label,
-  value,
-  note,
-  urgent,
-}: {
-  href: string
-  label: string
-  value: number | null
-  note: string
-  urgent?: boolean
-}) {
-  return (
-    <Link
-      href={href}
-      className={`rounded-lg border p-4 transition-colors hover:bg-surface-2 ${
-        urgent ? 'border-official/50 bg-official/10' : 'border-border bg-surface'
-      }`}
-    >
-      {value != null && <p className={`text-2xl font-bold ${urgent ? 'text-official' : 'text-foreground'}`}>{value}</p>}
-      <p className="text-xs font-medium text-foreground">{label}</p>
-      <p className="mt-1 text-[10px] text-muted-2">{note}</p>
-    </Link>
   )
 }
