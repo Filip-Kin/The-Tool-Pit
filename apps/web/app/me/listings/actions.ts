@@ -1,7 +1,7 @@
 'use server'
 
 import { randomBytes, createHash } from 'crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { getDb } from '@/lib/db'
 import {
@@ -371,6 +371,17 @@ export async function acceptInvite(token: string): Promise<OwnershipActionResult
   }
   if (!isListingEntityType(invite.entityType)) return { error: 'Unknown listing type.' }
 
+  // Claim the invite ATOMICALLY before granting anything. The WHERE requires
+  // it to still be unused, so of two people racing the same single-use link,
+  // only one UPDATE returns a row; the other gets nothing and is turned away.
+  // Grant only after we have won that update, never before.
+  const [claimed] = await db
+    .update(listingInvites)
+    .set({ usedAt: new Date(), usedByUserId: user.id })
+    .where(and(eq(listingInvites.id, invite.id), isNull(listingInvites.usedAt)))
+    .returning({ id: listingInvites.id })
+  if (!claimed) return { error: 'That invite link has already been used.' }
+
   await grantOwnership(
     invite.entityType,
     invite.entityId,
@@ -379,12 +390,6 @@ export async function acceptInvite(token: string): Promise<OwnershipActionResult
     'invite',
     invite.invitedByUserId,
   )
-  // Mark used, but pin it to this token so two people racing the same link
-  // cannot both consume it: the WHERE still matches only the unused row.
-  await db
-    .update(listingInvites)
-    .set({ usedAt: new Date(), usedByUserId: user.id })
-    .where(and(eq(listingInvites.id, invite.id), eq(listingInvites.tokenHash, invite.tokenHash)))
 
   revalidatePath('/me/listings')
   return { message: 'You now have access to this listing.' }
