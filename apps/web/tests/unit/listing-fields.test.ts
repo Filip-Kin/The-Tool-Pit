@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   LISTING_FORMS,
   OWNER_LINK_TYPES,
+  TOOL_TAG_KEYS,
   linkFieldKey,
   listingFormSpec,
   parseListingValues,
@@ -161,6 +162,155 @@ describe('the spec itself', () => {
   })
 })
 
+describe('the tool archive variant', () => {
+  /**
+   * WHAT WENT WRONG, AND WHY IT IS A SPEC RULE RATHER THAN A RENDER ONE.
+   *
+   * The team group rendered on every tool's edit form, so every owner of a
+   * calculator was invited to tick "this is a team's robot code". Taking the
+   * group out of the RENDER alone would have been worse than leaving it: an
+   * absent checkbox parses as false, the whole form posts on every autosave, so
+   * the first time the owner of a real robot-code listing fixed a typo, the two
+   * boxes nobody showed them would have gone false and dropped the repository
+   * out of the archive. So the variant reaches the parser, and these tests are
+   * about the parser, not about what is on screen.
+   */
+
+  it('gives an ordinary tool no team group at all', () => {
+    const spec = listingFormSpec('tool')
+    expect(spec.groups.map((g) => g.key)).not.toContain('archive')
+    const keys = spec.fields.map((f) => f.key)
+    for (const key of ['isTeamCode', 'isTeamCad', 'teamNumber', 'seasonYear']) {
+      expect(keys).not.toContain(key)
+    }
+  })
+
+  it('keeps the team number and season on a robot-code listing', () => {
+    // The archive quality we want: an owner fixing a wrong team number.
+    const spec = listingFormSpec('tool', { inTeamArchive: true })
+    expect(spec.groups.map((g) => g.key)).toContain('archive')
+    const keys = spec.fields.map((f) => f.key)
+    expect(keys).toContain('teamNumber')
+    expect(keys).toContain('seasonYear')
+  })
+
+  it('keeps the two archive flags off both variants, because they are a moderation call', () => {
+    // Which archive a listing belongs in decides where it appears for everyone,
+    // not just on its own page, so it is not an owner's box to tick.
+    for (const context of [{}, { inTeamArchive: true }]) {
+      const keys = listingFormSpec('tool', context).fields.map((f) => f.key)
+      expect(keys).not.toContain('isTeamCode')
+      expect(keys).not.toContain('isTeamCad')
+    }
+  })
+
+  it('cannot clear isTeamCode when an ordinary tool saves', () => {
+    // The trap, asserted directly. The key must be ABSENT from the parsed
+    // values, not false: the update set is built from these keys, and a false
+    // would be written.
+    const res = parseListingValues(listingFormSpec('tool'), minimal('tool'), {
+      toolType: TOOL_TYPES,
+    })
+    expect('values' in res).toBe(true)
+    if ('values' in res) {
+      expect(Object.hasOwn(res.values, 'isTeamCode')).toBe(false)
+      expect(Object.hasOwn(res.values, 'isTeamCad')).toBe(false)
+      expect(Object.hasOwn(res.values, 'teamNumber')).toBe(false)
+      expect(Object.hasOwn(res.values, 'seasonYear')).toBe(false)
+    }
+  })
+
+  it('cannot clear isTeamCode when a robot-code listing saves either', () => {
+    // Same assertion on the other variant. The archive form has the team number
+    // and the season, and still never speaks for the flags.
+    const spec = listingFormSpec('tool', { inTeamArchive: true })
+    const fd = minimal('tool')
+    fd.set('isTeamCode', 'true')
+    fd.set('teamNumber', '3538')
+    const res = parseListingValues(spec, fd, { toolType: TOOL_TYPES })
+    expect('values' in res).toBe(true)
+    if ('values' in res) {
+      expect(Object.hasOwn(res.values, 'isTeamCode')).toBe(false)
+      expect(res.values.teamNumber).toBe(3538)
+    }
+  })
+
+  it('holds the archive variant to every rule the plain forms follow', () => {
+    // The invariants above walk LISTING_FORMS, which the variant is not in.
+    const spec = listingFormSpec('tool', { inTeamArchive: true })
+    const groups = new Set(spec.groups.map((g) => g.key))
+    for (const field of spec.fields) expect(groups.has(field.group)).toBe(true)
+    const keys = spec.fields.map((f) => f.key)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(keys.filter((k) => LISTING_FORMS.tool.fields.every((f) => f.key !== k))).toEqual([
+      'teamNumber',
+      'seasonYear',
+    ])
+  })
+})
+
+describe('tag fields', () => {
+  const PROGRAMS = ['frc', 'ftc', 'fll'] as const
+  const ROLES = ['student', 'mentor', 'volunteer'] as const
+
+  it('offers a picker for each of the three taxonomies', () => {
+    const tags = LISTING_FORMS.tool.fields.filter((f) => f.kind === 'tags')
+    expect(tags.map((f) => f.key)).toEqual([...TOOL_TAG_KEYS])
+  })
+
+  it('takes the choices from the caller, the way the tool type does', () => {
+    // The rows are seed data in the database. A hardcoded copy here would be
+    // the fourth in the repo and the second to drift.
+    for (const field of LISTING_FORMS.tool.fields.filter((f) => f.kind === 'tags')) {
+      expect(field.options).toBeNull()
+    }
+  })
+
+  it('reads a repeated key as a set of slugs', () => {
+    const fd = minimal('tool')
+    fd.append('programs', 'frc')
+    fd.append('programs', 'fll')
+    const res = parseListingValues(listingFormSpec('tool'), fd, {
+      toolType: TOOL_TYPES,
+      programs: PROGRAMS,
+      audienceRoles: ROLES,
+    })
+    // Declared order, not posted order, so the same set always serialises the
+    // same way and an autosave that changed nothing is not a diff.
+    expect('values' in res && res.values.programs).toEqual(['frc', 'fll'])
+  })
+
+  it('drops a slug that is not one of the choices', () => {
+    const fd = minimal('tool')
+    fd.append('programs', 'frc')
+    fd.append('programs', 'vex')
+    const res = parseListingValues(listingFormSpec('tool'), fd, {
+      toolType: TOOL_TYPES,
+      programs: PROGRAMS,
+    })
+    expect('values' in res && res.values.programs).toEqual(['frc'])
+  })
+
+  it('reads no tags at all as an empty set, so an owner can clear one', () => {
+    const res = parseListingValues(listingFormSpec('tool'), minimal('tool'), {
+      toolType: TOOL_TYPES,
+      programs: PROGRAMS,
+    })
+    expect('values' in res && res.values.programs).toEqual([])
+  })
+
+  it('dedupes a key posted twice with the same value', () => {
+    const fd = minimal('tool')
+    fd.append('audienceRoles', 'mentor')
+    fd.append('audienceRoles', 'mentor')
+    const res = parseListingValues(listingFormSpec('tool'), fd, {
+      toolType: TOOL_TYPES,
+      audienceRoles: ROLES,
+    })
+    expect('values' in res && res.values.audienceRoles).toEqual(['mentor'])
+  })
+})
+
 describe('parseListingValues', () => {
   it('refuses a blank name rather than storing one', () => {
     const res = parseListingValues(listingFormSpec('tool'), form({ name: '   ' }), {
@@ -209,9 +359,11 @@ describe('parseListingValues', () => {
   })
 
   it('refuses a number that is not one', () => {
+    // On the archive variant, because teamNumber is only a field there now.
+    const spec = listingFormSpec('tool', { inTeamArchive: true })
     const fd = minimal('tool')
     fd.set('teamNumber', '3538a')
-    expect(parseListingValues(listingFormSpec('tool'), fd, { toolType: TOOL_TYPES })).toEqual({
+    expect(parseListingValues(spec, fd, { toolType: TOOL_TYPES })).toEqual({
       error: 'Team number has to be a whole number.',
     })
   })
@@ -257,17 +409,18 @@ describe('parseListingValues', () => {
   it('reads an absent checkbox as false rather than leaving it alone', () => {
     // An unticked box is simply missing from a FormData, and the form posts
     // every field, so absent has to mean off or a box could never be unticked.
-    const res = parseListingValues(listingFormSpec('tool'), minimal('tool'), {
-      toolType: TOOL_TYPES,
-    })
-    expect('values' in res && res.values.isTeamCode).toBe(false)
+    // Asserted on a field, because that is where the checkboxes are: the tool
+    // form's two moved out to a reviewer, and this exact rule is why they had
+    // to leave the SPEC and not just the render. See the archive tests below.
+    const res = parseListingValues(listingFormSpec('field'), minimal('field'))
+    expect('values' in res && res.values.hasFms).toBe(false)
   })
 
   it('reads a ticked checkbox as true', () => {
-    const fd = minimal('tool')
-    fd.set('isTeamCode', 'true')
-    expect(parseListingValues(listingFormSpec('tool'), fd, { toolType: TOOL_TYPES })).toMatchObject({
-      values: { isTeamCode: true },
+    const fd = minimal('field')
+    fd.set('hasFms', 'true')
+    expect(parseListingValues(listingFormSpec('field'), fd)).toMatchObject({
+      values: { hasFms: true },
     })
   })
 

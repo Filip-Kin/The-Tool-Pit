@@ -58,6 +58,12 @@ export type ListingFieldKind =
   | 'date'
   | 'select'
   | 'checkbox'
+  /**
+   * A set of taxonomy slugs, posted as one FormData key repeated. Backed by a
+   * join table rather than a column, so it is loaded and written on its own
+   * path. See the tag fields on the tool form.
+   */
+  | 'tags'
 
 export interface ListingFieldSpec {
   /** FormData key, and the column it writes (link_* fields are the exception). */
@@ -76,7 +82,7 @@ export interface ListingFieldSpec {
   /** int and number: inclusive bounds. Out of range is refused, not clamped. */
   min?: number
   max?: number
-  /** select: allowed values. null means the page supplies them as a prop. */
+  /** select and tags: allowed values. null means the page supplies them as a prop. */
   options?: readonly string[] | null
   optionLabels?: Record<string, string>
   /** textarea height. */
@@ -154,6 +160,53 @@ const LINK_FIELDS: ListingFieldSpec[] = OWNER_LINK_TYPES.map((type) => ({
 }))
 
 /**
+ * The three taxonomies a tool owner sets, and the form key each posts under.
+ *
+ * These are the only fields on any of these forms that are NOT a column on the
+ * listing's own table. Each one is a join table (tool_programs,
+ * tool_audience_primary_roles, tool_audience_functions), so listingColumnFields
+ * drops them and the save action writes them on its own path, the same way the
+ * link fields work. The values are taxonomy SLUGS, which is what the picker
+ * posts and what the writer resolves back to ids.
+ *
+ * The rows themselves are seed data and are read from the database, so the
+ * options arrive as a prop rather than being restated here. A hardcoded list
+ * would be the copy that drifts the day somebody adds a role.
+ */
+export const TOOL_TAG_KEYS = ['programs', 'audienceRoles', 'audienceFunctions'] as const
+export type ToolTagKey = (typeof TOOL_TAG_KEYS)[number]
+
+const TOOL_TAG_FIELDS: ListingFieldSpec[] = [
+  {
+    key: 'programs',
+    label: 'Programs',
+    kind: 'tags',
+    group: 'tags',
+    options: null,
+    wide: true,
+    hint: 'Which FIRST programs this is useful for. Leave it empty if it suits all of them equally.',
+  },
+  {
+    key: 'audienceRoles',
+    label: 'Who it is for',
+    kind: 'tags',
+    group: 'tags',
+    options: null,
+    wide: true,
+    hint: 'The people who get the most out of it.',
+  },
+  {
+    key: 'audienceFunctions',
+    label: 'What it helps with',
+    kind: 'tags',
+    group: 'tags',
+    options: null,
+    wide: true,
+    hint: 'The job it does on a team.',
+  },
+]
+
+/**
  * FRC's first season. A season year below it is a typo, not a vintage repo.
  * The upper bound is read once when the module loads; a season a year out is a
  * far better error than no bound at all.
@@ -161,74 +214,104 @@ const LINK_FIELDS: ListingFieldSpec[] = OWNER_LINK_TYPES.map((type) => ({
 const FIRST_SEASON = 1992
 const LATEST_SEASON = new Date().getUTCFullYear() + 1
 
+const TOOL_GROUPS: ListingGroup[] = [
+  { key: 'about', title: 'About' },
+  {
+    key: 'tags',
+    title: 'Tags',
+    blurb:
+      'How people find this in the directory. Pick the programs it works for and who it is for. Nothing here is required.',
+  },
+  {
+    key: 'crawled_links',
+    title: 'Main links',
+    blurb:
+      'Our crawler fills these three in from the tool’s own pages until you change one. A link you set, or clear, stays the way you left it.',
+  },
+  { key: 'links', title: 'Other links' },
+]
+
+const TOOL_ABOUT_FIELDS: ListingFieldSpec[] = [
+  { key: 'name', label: 'Name', kind: 'text', group: 'about', required: true, maxLength: 200 },
+  {
+    key: 'toolType',
+    label: 'Type',
+    kind: 'select',
+    group: 'about',
+    // TOOL_TYPES cannot be value-imported here. The page passes it down.
+    options: null,
+  },
+  {
+    key: 'summary',
+    label: 'Summary',
+    kind: 'text',
+    group: 'about',
+    maxLength: 500,
+    wide: true,
+    hint: 'One or two sentences. This is the line under the name on every card.',
+  },
+  {
+    key: 'description',
+    label: 'Description',
+    kind: 'textarea',
+    group: 'about',
+    maxLength: 20_000,
+    rows: 8,
+    wide: true,
+    hint: 'Markdown is fine.',
+  },
+  {
+    key: 'vendorName',
+    label: 'Vendor name',
+    kind: 'text',
+    group: 'about',
+    maxLength: 200,
+    hint: 'Leave blank unless a company publishes this.',
+  },
+]
+
+/**
+ * The archive fields, and the two that are NOT here.
+ *
+ * teamNumber and seasonYear file a repository in the Robot Code or Robot CAD
+ * archive under a team and a game year, and an owner correcting a wrong team
+ * number is exactly the archive quality we want, so they are theirs.
+ *
+ * isTeamCode and isTeamCad are not. They decide which archive a listing belongs
+ * in at all, which is a moderation call and not a box on every tool's form. On
+ * an ordinary tool the whole group is absent, which is the point: the group
+ * rendered on all 1200 tools and invited any owner to declare their calculator
+ * was a team's robot code.
+ */
+const TOOL_ARCHIVE_GROUP: ListingGroup = {
+  key: 'archive',
+  title: 'Team and season',
+  blurb:
+    'This listing is in the robot archive. These two put it under the right team and game year. Ask us if it is in the wrong archive, or in one it should not be in.',
+}
+
+const TOOL_ARCHIVE_FIELDS: ListingFieldSpec[] = [
+  { key: 'teamNumber', label: 'Team number', kind: 'int', group: 'archive', min: 1, max: 99_999 },
+  {
+    key: 'seasonYear',
+    label: 'Season',
+    kind: 'int',
+    group: 'archive',
+    min: FIRST_SEASON,
+    max: LATEST_SEASON,
+    hint: 'The game year the code was written for.',
+  },
+]
+
 const TOOL_FORM: ListingFormSpec = {
-  groups: [
-    { key: 'about', title: 'About' },
-    {
-      key: 'team',
-      title: 'Team code and CAD',
-      blurb:
-        'Filled in, these put the repository in the Robot Code archive under your team and season. Left blank, it stays out of it.',
-    },
-    {
-      key: 'crawled_links',
-      title: 'Main links',
-      blurb:
-        'Our crawler fills these three in from the tool’s own pages until you change one. A link you set, or clear, stays the way you left it.',
-    },
-    { key: 'links', title: 'Other links' },
-  ],
-  fields: [
-    { key: 'name', label: 'Name', kind: 'text', group: 'about', required: true, maxLength: 200 },
-    {
-      key: 'toolType',
-      label: 'Type',
-      kind: 'select',
-      group: 'about',
-      // TOOL_TYPES cannot be value-imported here. The page passes it down.
-      options: null,
-    },
-    {
-      key: 'summary',
-      label: 'Summary',
-      kind: 'text',
-      group: 'about',
-      maxLength: 500,
-      wide: true,
-      hint: 'One or two sentences. This is the line under the name on every card.',
-    },
-    {
-      key: 'description',
-      label: 'Description',
-      kind: 'textarea',
-      group: 'about',
-      maxLength: 20_000,
-      rows: 8,
-      wide: true,
-      hint: 'Markdown is fine.',
-    },
-    {
-      key: 'vendorName',
-      label: 'Vendor name',
-      kind: 'text',
-      group: 'about',
-      maxLength: 200,
-      hint: 'Leave blank unless a company publishes this.',
-    },
-    { key: 'isTeamCode', label: 'This is a team’s robot code', kind: 'checkbox', group: 'team' },
-    { key: 'isTeamCad', label: 'This is a team’s robot CAD', kind: 'checkbox', group: 'team' },
-    { key: 'teamNumber', label: 'Team number', kind: 'int', group: 'team', min: 1, max: 99_999 },
-    {
-      key: 'seasonYear',
-      label: 'Season',
-      kind: 'int',
-      group: 'team',
-      min: FIRST_SEASON,
-      max: LATEST_SEASON,
-      hint: 'The game year the code was written for.',
-    },
-    ...LINK_FIELDS,
-  ],
+  groups: TOOL_GROUPS,
+  fields: [...TOOL_ABOUT_FIELDS, ...TOOL_TAG_FIELDS, ...LINK_FIELDS],
+}
+
+/** The same form, plus the archive group, for a listing already in the archive. */
+const TOOL_ARCHIVE_FORM: ListingFormSpec = {
+  groups: [TOOL_GROUPS[0], TOOL_ARCHIVE_GROUP, ...TOOL_GROUPS.slice(1)],
+  fields: [...TOOL_ABOUT_FIELDS, ...TOOL_ARCHIVE_FIELDS, ...TOOL_TAG_FIELDS, ...LINK_FIELDS],
 }
 
 // #endregion
@@ -598,6 +681,21 @@ const GRANT_FORM: ListingFormSpec = {
       hint: 'Markdown is fine. What it funds, and what a good application looks like.',
     },
     {
+      key: 'infoUrl',
+      label: 'Funder page',
+      kind: 'url',
+      group: 'about',
+      required: true,
+      maxLength: 1000,
+      wide: true,
+      // NOT NULL on the column, and the page a reviewer reads the dates off, so
+      // it is required here rather than clearable. The owner gets it because a
+      // funder who moves their own page is the person who knows, and a dead
+      // link is what teams hit first. It is still a link, not a date or an
+      // amount, so it does not cross the line the group blurb draws.
+      hint: 'The page teams read about this on. We re-check this page for changes.',
+    },
+    {
       key: 'applicationUrl',
       label: 'Application link',
       kind: 'url',
@@ -621,7 +719,30 @@ export const LISTING_FORMS: Record<ListingEntityType, ListingFormSpec> = {
   grant: GRANT_FORM,
 }
 
-export function listingFormSpec(entityType: ListingEntityType): ListingFormSpec {
+/**
+ * The facts about a listing that change which fields its owner gets.
+ *
+ * Only one so far, and it earns the parameter on its own: a tool in the robot
+ * archive needs the team and season boxes and an ordinary tool must not have
+ * them.
+ *
+ * IT HAS TO REACH THE PARSER, NOT JUST THE RENDER. Hiding a group at render
+ * time and parsing the full spec anyway is the bug this shape exists to make
+ * impossible: parseListingValues reads an absent checkbox as false, so a tool
+ * owner pressing nothing would have cleared isTeamCode and dropped the listing
+ * out of the archive. A field that is not in the spec is never parsed, never in
+ * the column set and never written.
+ */
+export interface ListingFormContext {
+  /** The tool is already filed in the Robot Code or Robot CAD archive. */
+  inTeamArchive?: boolean
+}
+
+export function listingFormSpec(
+  entityType: ListingEntityType,
+  context: ListingFormContext = {},
+): ListingFormSpec {
+  if (entityType === 'tool' && context.inTeamArchive) return TOOL_ARCHIVE_FORM
   return LISTING_FORMS[entityType]
 }
 
@@ -645,6 +766,7 @@ export function listingFormSpec(entityType: ListingEntityType): ListingFormSpec 
  *   - a string for text kinds, or null when the box was cleared
  *   - a number for int kinds, or null
  *   - a boolean for checkboxes, never null
+ *   - an array of slugs for tags, possibly empty, never null
  *   - undefined for a select left blank, meaning "do not write this column",
  *     because every select here backs a NOT NULL column with a default
  */
@@ -659,6 +781,19 @@ export function parseListingValues(
     if (field.kind === 'checkbox') {
       const raw = form.get(field.key)
       values[field.key] = raw === 'true' || raw === 'on' || raw === '1'
+      continue
+    }
+
+    if (field.kind === 'tags') {
+      // One key repeated, the convention the admin tool editor already posts
+      // under. An unknown slug is dropped rather than refused: the picker was
+      // built from the same rows this list is checked against, so anything else
+      // was hand-posted and there is nothing useful to tell the user about it.
+      // Deduped, and kept in the order the options were declared, so two saves
+      // of the same set produce the same array and not a spurious diff.
+      const allowed = field.options ?? dynamicOptions[field.key] ?? []
+      const posted = new Set(form.getAll(field.key).map(String))
+      values[field.key] = allowed.filter((slug) => posted.has(slug))
       continue
     }
 
@@ -751,7 +886,7 @@ function isHttpUrl(value: string): boolean {
  * nothing held back.
  */
 export const LISTING_REVIEW_NOTE: Record<ListingEntityType, string> = {
-  tool: 'Whether a tool is marked official, vendor-published or rookie friendly is set by a reviewer, along with the programs and roles it is filed under.',
+  tool: 'Whether a tool is marked official, vendor-published or rookie friendly is set by a reviewer, and so is which robot archive it belongs in. The tags are yours.',
   album:
     'Which event the album belongs to, and its address, are set by a reviewer: they are what stops the same gallery being listed twice.',
   field:

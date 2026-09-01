@@ -6,9 +6,12 @@ import {
   LISTING_REVIEW_NOTE,
   type ListingFieldSpec,
   type ListingGroup,
+  type ToolTagKey,
 } from './listing-fields'
+import { TagPicker } from './tag-picker'
 import { cn } from '@/lib/utils/cn'
 import type { EditableListing, ListingFormValues } from '@/lib/queries/listing-ownership'
+import type { TagOption } from '@/lib/listings/tool-taxonomy'
 
 /**
  * The owner edit form for a listing.
@@ -63,11 +66,17 @@ function serialiseValues(values: ListingFormValues): string {
  */
 function seedValues(listing: EditableListing): ListingFormValues {
   const out: ListingFormValues = {}
-  for (const field of listingFormSpec(listing.entityType).fields) {
+  for (const field of listingFormSpec(listing.entityType, listing.formContext).fields) {
     const loaded = listing.values[field.key]
-    out[field.key] = loaded ?? (field.kind === 'checkbox' ? false : '')
+    out[field.key] = loaded ?? emptyValue(field.kind)
   }
   return out
+}
+
+function emptyValue(kind: ListingFieldSpec['kind']): string | boolean | string[] {
+  if (kind === 'checkbox') return false
+  if (kind === 'tags') return []
+  return ''
 }
 
 // #endregion
@@ -89,7 +98,10 @@ export function ListingEditForm({
   dynamicOptions: Record<string, readonly string[]>
   saveAction: (formData: FormData) => Promise<{ error?: string; message?: string }>
 }) {
-  const spec = useMemo(() => listingFormSpec(listing.entityType), [listing.entityType])
+  const spec = useMemo(
+    () => listingFormSpec(listing.entityType, listing.formContext),
+    [listing.entityType, listing.formContext],
+  )
   const [values, setValues] = useState<ListingFormValues>(() => seedValues(listing))
   const [status, setStatus] = useState<SaveStatus>({ kind: 'idle', dirty: false })
 
@@ -172,7 +184,7 @@ export function ListingEditForm({
     }, AUTOSAVE_DEBOUNCE_MS)
   }
 
-  function set(key: string, value: string | boolean) {
+  function set(key: string, value: string | boolean | string[]) {
     setValues((prev) => ({ ...prev, [key]: value }))
     setStatus({ kind: 'idle', dirty: true })
     scheduleSave()
@@ -234,6 +246,7 @@ export function ListingEditForm({
                   field={field}
                   value={values[field.key]}
                   options={field.options ?? dynamicOptions[field.key] ?? []}
+                  tagOptions={listing.tagOptions[field.key as ToolTagKey] ?? []}
                   onChange={(v) => set(field.key, v)}
                 />
               </Field>
@@ -254,13 +267,28 @@ function Input({
   field,
   value,
   options,
+  tagOptions,
   onChange,
 }: {
   field: ListingFieldSpec
-  value: string | boolean | undefined
+  value: string | boolean | string[] | undefined
   options: readonly string[]
-  onChange: (value: string | boolean) => void
+  /** kind 'tags' only: the slug and label pairs the picker shows. */
+  tagOptions: readonly TagOption[]
+  onChange: (value: string | boolean | string[]) => void
 }) {
+  if (field.kind === 'tags') {
+    return (
+      <TagPicker
+        name={field.key}
+        label={field.label}
+        options={tagOptions}
+        values={Array.isArray(value) ? value : []}
+        onChange={onChange}
+      />
+    )
+  }
+
   if (field.kind === 'checkbox') {
     return (
       <span className="flex items-center gap-2">
@@ -365,12 +393,25 @@ function Field({ field, children }: { field: ListingFieldSpec; children: React.R
   // A checkbox carries its own label next to the box, so repeating it above
   // would read as two separate settings.
   const showLabel = field.kind !== 'checkbox'
+  // A tag picker is a group of buttons, not one control, so it cannot sit in a
+  // <label>: a label may only name a single form element, and wrapping a dozen
+  // of them makes every chip read as the same thing. It names itself with
+  // aria-label instead and this is a plain container.
+  const Wrapper = field.kind === 'tags' ? 'div' : 'label'
+  const className = field.wide ? 'sm:col-span-2 flex flex-col gap-1.5' : 'flex flex-col gap-1.5'
   return (
-    <label className={field.wide ? 'sm:col-span-2 flex flex-col gap-1.5' : 'flex flex-col gap-1.5'}>
+    <Wrapper className={field.kind === 'tags' ? `${className} gap-2` : className}>
       {showLabel && <span className="text-sm font-medium text-foreground">{field.label}</span>}
+      {field.kind === 'tags' && field.hint && (
+        // Above the chips for a picker. Under them it sat below a wrapping row
+        // of buttons and read as a caption for the next field.
+        <span className="-mt-0.5 text-xs text-muted-2">{field.hint}</span>
+      )}
       {children}
-      {field.hint && <span className="text-xs text-muted-2">{field.hint}</span>}
-    </label>
+      {field.kind !== 'tags' && field.hint && (
+        <span className="text-xs text-muted-2">{field.hint}</span>
+      )}
+    </Wrapper>
   )
 }
 

@@ -32,15 +32,25 @@ import {
   getOwnerRole,
   isListingEntityType,
   listingColumnFields,
+  loadListingFormContext,
   loadToolLinks,
   resolveClaimable,
 } from '@/lib/queries/listing-ownership'
 import {
   OWNER_LINK_TYPES,
+  TOOL_TAG_KEYS,
   linkFieldKey,
   listingFormSpec,
   parseListingValues,
+  type ListingFormContext,
 } from '@/components/me/listing-fields'
+import {
+  loadToolTaxonomy,
+  saveToolTaxonomy,
+  taxonomyOptions,
+  type TaxonomyOptions,
+  type ToolTaxonomy,
+} from '@/lib/listings/tool-taxonomy'
 import { notifyClaimResolved } from '@/lib/notify/approvals'
 import { normaliseUploadedImage } from '@/lib/images/normalise'
 import { sendApprovalNotice, reviewClaimUrl } from '@the-tool-pit/types'
@@ -638,8 +648,25 @@ function columnSet(
 }
 
 /** The spec keys that are real columns on the listing's own table. */
-function columnKeys(entityType: ListingEntityType): string[] {
-  return listingColumnFields(entityType).map((f) => f.key)
+function columnKeys(entityType: ListingEntityType, context: ListingFormContext = {}): string[] {
+  return listingColumnFields(entityType, context).map((f) => f.key)
+}
+
+/** The allowed slugs per tag field, for the parser to check a post against. */
+function tagSlugs(options: TaxonomyOptions): Record<string, readonly string[]> {
+  const out: Record<string, readonly string[]> = {}
+  for (const key of TOOL_TAG_KEYS) out[key] = (options[key] ?? []).map((o) => o.value)
+  return out
+}
+
+/** The three tag values out of a parsed form, ready for saveToolTaxonomy. */
+function pickTags(values: Record<string, unknown>): Partial<ToolTaxonomy> {
+  const out: Partial<ToolTaxonomy> = {}
+  for (const key of TOOL_TAG_KEYS) {
+    const value = values[key]
+    if (Array.isArray(value)) out[key] = value.map(String)
+  }
+  return out
 }
 
 /**
@@ -683,37 +710,57 @@ async function saveListing(
   entityType: ListingEntityType,
   formData: FormData,
   dynamicOptions: Record<string, readonly string[]> = {},
-): Promise<{ result: OwnershipActionResult } | { entityId: string; values: Record<string, unknown> }> {
+): Promise<
+  | { result: OwnershipActionResult }
+  | { entityId: string; values: Record<string, unknown>; context: ListingFormContext }
+> {
   const entityId = String(formData.get('entityId') ?? '')
   const gate = await requireEditor(entityType, entityId)
   if ('error' in gate) return { result: gate }
 
-  const parsed = parseListingValues(listingFormSpec(entityType), formData, dynamicOptions)
+  // The context is read AFTER the gate and BEFORE the parse, because it picks
+  // the spec the parse walks. A tool that is not in the robot archive has no
+  // archive group on its form, so isTeamCode and isTeamCad are not fields, are
+  // not parsed and cannot be written. Parsing the full spec and hiding the
+  // group at render time instead would read the two absent checkboxes as false
+  // and quietly drop the listing out of the archive on the owner's first save.
+  const context = await loadListingFormContext(entityType, entityId)
+
+  const parsed = parseListingValues(listingFormSpec(entityType, context), formData, dynamicOptions)
   if ('error' in parsed) return { result: parsed }
 
-  return { entityId, values: parsed.values }
+  return { entityId, values: parsed.values, context }
 }
 
 export async function saveToolListing(formData: FormData): Promise<OwnershipActionResult> {
-  const step = await saveListing('tool', formData, { toolType: TOOL_TYPES })
+  const options = await taxonomyOptions()
+  const step = await saveListing('tool', formData, {
+    toolType: TOOL_TYPES,
+    // The allowed slugs are the rows the picker was built from, so a posted tag
+    // is checked against the same list the user was shown.
+    ...tagSlugs(options),
+  })
   if ('result' in step) return step.result
-  const { entityId, values } = step
+  const { entityId, values, context } = step
 
   const db = getDb()
-  const set = columnSet(values, columnKeys('tool'))
+  const set = columnSet(values, columnKeys('tool', context))
 
   // Read the row BEFORE the write. It is the only moment the before-state
   // exists, and a claim is earned by moving a value, not by pressing Save: an
   // autosave that changed nothing must not claim a summary the owner never read
-  // and lock the crawler out of it forever.
+  // and lock the crawler out of it forever. The tags are read the same way and
+  // for the same reason, one table over.
   const [before] = await db
     .select()
     .from(tools)
     .where(eq(tools.id, entityId))
     .limit(1)
+  const tagsBefore = await loadToolTaxonomy(entityId)
 
   const claimed = [
     ...changedKeys(set, (before ?? {}) as Record<string, unknown>, HUMAN_EDITABLE_TOOL_KEYS),
+    ...(await saveToolTaxonomy(entityId, tagsBefore, pickTags(values))),
     ...(await saveToolLinks(entityId, values)).map(linkMarker),
   ]
   const humanEditedFields = addHumanEdits(before?.humanEditedFields, claimed)

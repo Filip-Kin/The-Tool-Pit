@@ -28,8 +28,10 @@ import {
   linkFieldKey,
   listingFormSpec,
   type ListingFieldSpec,
+  type ListingFormContext,
   type OwnerLinkType,
 } from '@/components/me/listing-fields'
+import { loadToolTaxonomy, taxonomyOptions, type TaxonomyOptions } from '@/lib/listings/tool-taxonomy'
 import { displayEventName } from './albums'
 import { getCurrentUser } from '@/lib/auth/session'
 
@@ -684,13 +686,22 @@ async function submittedByThisUser(
 // Values come back as the strings and booleans an input holds, because the
 // form is the only consumer and the action parses them straight back.
 
-/** One editable listing, flattened to what the form binds to. */
-export type ListingFormValues = Record<string, string | boolean>
+/**
+ * One editable listing, flattened to what the form binds to.
+ *
+ * The array is the tag fields. They are the only values here that are not a
+ * column on the listing's own table, and they arrive as taxonomy slugs.
+ */
+export type ListingFormValues = Record<string, string | boolean | string[]>
 
 export interface EditableListing {
   entityType: ListingEntityType
   facts: ListingFacts
   values: ListingFormValues
+  /** Which variant of the vertical's form this listing gets. See listing-fields.ts. */
+  formContext: ListingFormContext
+  /** Options for the tag pickers, by field key. Empty for verticals with none. */
+  tagOptions: TaxonomyOptions
 }
 
 /** The row each entity type edits. Keep in step with LISTING_ENTITY_TYPES. */
@@ -711,11 +722,37 @@ const EDIT_TABLES = {
  * that is not a column is dropped here rather than reaching a query, so a typo
  * in the spec costs a missing input and never a failed update.
  */
-export function listingColumnFields(entityType: ListingEntityType): ListingFieldSpec[] {
+export function listingColumnFields(
+  entityType: ListingEntityType,
+  context: ListingFormContext = {},
+): ListingFieldSpec[] {
   const table = EDIT_TABLES[entityType] as unknown as Record<string, unknown>
-  return listingFormSpec(entityType).fields.filter(
-    (f) => !f.key.startsWith('link_') && Object.hasOwn(table, f.key),
+  return listingFormSpec(entityType, context).fields.filter(
+    (f) => !f.key.startsWith('link_') && f.kind !== 'tags' && Object.hasOwn(table, f.key),
   )
+}
+
+/**
+ * The facts about a listing that pick which form its owner gets.
+ *
+ * Read BEFORE anything else, because the select in loadListingForEdit and the
+ * update set in the save action are both BUILT from the spec this chooses. A
+ * tool already filed in the robot archive keeps its team and season boxes; an
+ * ordinary tool has no archive group at all, so nothing on that form can reach
+ * isTeamCode or isTeamCad.
+ */
+export async function loadListingFormContext(
+  entityType: ListingEntityType,
+  entityId: string,
+): Promise<ListingFormContext> {
+  if (entityType !== 'tool') return {}
+  const db = getDb()
+  const [row] = await db
+    .select({ isTeamCode: tools.isTeamCode, isTeamCad: tools.isTeamCad })
+    .from(tools)
+    .where(eq(tools.id, entityId))
+    .limit(1)
+  return { inTeamArchive: Boolean(row?.isTeamCode || row?.isTeamCad) }
 }
 
 /** A db value as the input that owns it holds it. */
@@ -734,8 +771,9 @@ export async function loadListingForEdit(
   const facts = (await RESOLVERS[entityType]([entityId])).get(entityId)
   if (!facts) return null
 
+  const formContext = await loadListingFormContext(entityType, entityId)
   const table = EDIT_TABLES[entityType] as unknown as Record<string, PgColumn>
-  const columnFields = listingColumnFields(entityType)
+  const columnFields = listingColumnFields(entityType, formContext)
   const selection: Record<string, PgColumn> = {}
   for (const field of columnFields) selection[field.key] = table[field.key]
 
@@ -749,13 +787,19 @@ export async function loadListingForEdit(
   const values: ListingFormValues = {}
   for (const field of columnFields) values[field.key] = toFormValue(field.kind, row[field.key])
 
+  // Tags and links are the two things on this form that are not columns, so
+  // they are read on their own after the column pass, not selected with it.
+  let tagOptions: TaxonomyOptions = {}
   if (entityType === 'tool') {
     for (const [type, url] of Object.entries(await loadToolLinks(entityId))) {
       values[linkFieldKey(type as OwnerLinkType)] = url
     }
+    const [tags, options] = await Promise.all([loadToolTaxonomy(entityId), taxonomyOptions()])
+    Object.assign(values, tags)
+    tagOptions = options
   }
 
-  return { entityType, facts, values }
+  return { entityType, facts, values, formContext, tagOptions }
 }
 
 /**
