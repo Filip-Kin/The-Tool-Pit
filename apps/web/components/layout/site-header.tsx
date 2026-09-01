@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { SearchBar } from '@/components/search/search-bar'
 import { UserMenu } from '@/components/auth/user-menu'
-import { VerticalSwitcher } from './vertical-switcher'
 
 export function SiteHeader() {
   return (
@@ -14,9 +13,6 @@ export function SiteHeader() {
             The Tool Pit
           </span>
         </Link>
-
-        {/* Which of the four verticals you are in. Same slot in every header. */}
-        <VerticalSwitcher current="tools" className="hidden sm:flex" />
 
         {/* Search, hidden on small screens, shown on md+ */}
         <div className="hidden flex-1 md:block max-w-sm">

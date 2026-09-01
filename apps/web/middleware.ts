@@ -1,59 +1,68 @@
 import { type NextRequest, NextResponse } from 'next/server'
 
+/** Host labels that used to be a vertical of their own. Order does not matter. */
+const VERTICAL_HOSTS = ['photos', 'fields', 'grants'] as const
+
+/**
+ * The one host the verticals are served from.
+ *
+ * Derived from NEXT_PUBLIC_URL so a dev box and prod agree, and NOT by
+ * stripping the leading label off the request host: fields.filipkin.com would
+ * strip to filipkin.com, which is a different site entirely.
+ */
+function canonicalHost(req: NextRequest): string {
+  const configured = process.env.NEXT_PUBLIC_URL
+  if (configured) {
+    try {
+      return new URL(configured).host
+    } catch {
+      // Fall through to the request host rather than redirecting to a
+      // malformed origin.
+    }
+  }
+  const host = req.headers.get('host') ?? ''
+  const labels = host.split('.')
+  return (VERTICAL_HOSTS as readonly string[]).includes(labels[0]?.toLowerCase() ?? '')
+    ? labels.slice(1).join('.')
+    : host
+}
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
   const host = req.headers.get('host') ?? ''
 
-  // photos.* subdomain → serve the /photos route tree with its own chrome.
-  // API routes stay global (same-origin fetches from the subdomain still work),
-  // and already-prefixed / internal paths are passed through untouched.
-  // /me is exempt too: the account pages are one canonical set shared by all
-  // four verticals, and the user menu links to them relatively from every
-  // header, so without the exemption /me would rewrite to /photos/me and 404.
-  if (host.startsWith('photos.')) {
-    if (
-      !pathname.startsWith('/api') &&
-      !pathname.startsWith('/photos') &&
-      !pathname.startsWith('/me') &&
-      !pathname.startsWith('/_next')
-    ) {
-      const url = req.nextUrl.clone()
-      url.pathname = `/photos${pathname}`
-      return NextResponse.rewrite(url)
-    }
-    return NextResponse.next()
-  }
-
-  // fields.* subdomain → serve the /fields route tree (the Practice Field Map)
-  // with its own chrome. Same host-rewrite shape as photos.*.
-  if (host.startsWith('fields.')) {
-    if (
-      !pathname.startsWith('/api') &&
-      !pathname.startsWith('/fields') &&
-      !pathname.startsWith('/me') &&
-      !pathname.startsWith('/_next')
-    ) {
-      const url = req.nextUrl.clone()
-      url.pathname = `/fields${pathname}`
-      return NextResponse.rewrite(url)
-    }
-    return NextResponse.next()
-  }
-
-  // grants.* subdomain → serve the /grants route tree. Same host-rewrite shape
-  // as photos.* and fields.*. Alert emails and cross-vertical cards both build
-  // links as ${GRANTS_ORIGIN}/grants/<slug>, so the already-prefixed pass
-  // through matters as much as the rewrite itself.
-  if (host.startsWith('grants.')) {
-    if (
-      !pathname.startsWith('/api') &&
-      !pathname.startsWith('/grants') &&
-      !pathname.startsWith('/me') &&
-      !pathname.startsWith('/_next')
-    ) {
-      const url = req.nextUrl.clone()
-      url.pathname = `/grants${pathname}`
-      return NextResponse.rewrite(url)
+  // Legacy vertical subdomains redirect to the canonical path form.
+  //
+  // The four verticals now live at /, /photos, /fields and /grants on ONE
+  // host. They used to be photos.*, fields.* and grants.* and those hosts stay
+  // alive, because the links are out in the world, but they send you to the
+  // path now instead of serving a second copy of the site.
+  //
+  // The reason is not tidiness, it is TLS. frc.tools sits behind a Cloudflare
+  // zone we do not control. Cloudflare passes /.well-known/acme-challenge
+  // through to our origin for some hostnames in that zone and not others
+  // (photos.frc.tools reaches Traefik, grants.frc.tools does not), so
+  // Let's Encrypt cannot reliably validate a NEW subdomain and Cloudflare
+  // refuses to serve one whose origin has no certificate. Every new vertical
+  // would be blocked on somebody else's DNS console. A path is blocked on
+  // nothing.
+  //
+  // 308, not 302: it is permanent and it must not turn a POST into a GET.
+  const verticalHost = VERTICAL_HOSTS.find((v) => host.startsWith(`${v}.`))
+  if (verticalHost) {
+    // /api is left serving on the old host so an in-flight same-origin fetch
+    // from a page loaded before this shipped does not fail mid-submit.
+    if (!pathname.startsWith('/api') && !pathname.startsWith('/_next')) {
+      const target = new URL(req.nextUrl)
+      target.host = canonicalHost(req)
+      target.port = ''
+      target.protocol = 'https:'
+      // /me is shared chrome and already lives at the same path on the
+      // canonical host, so it moves across without gaining a prefix.
+      target.pathname = pathname.startsWith('/me') || pathname.startsWith(`/${verticalHost}`)
+        ? pathname
+        : `/${verticalHost}${pathname === '/' ? '' : pathname}`
+      return NextResponse.redirect(target, 308)
     }
     return NextResponse.next()
   }

@@ -71,7 +71,7 @@ export async function notifyNewFieldSubmission(s: FieldSubmissionNotice): Promis
     .filter(Boolean)
     .join(' · ')
   const team = s.teamNumber
-    ? `#${s.teamNumber}${s.teamName ? ` — ${s.teamName}` : ''}`
+    ? `#${s.teamNumber}${s.teamName ? ` ${s.teamName}` : ''}`
     : s.teamName || null
   const ceiling =
     typeof s.ceilingHeightFt === 'number'

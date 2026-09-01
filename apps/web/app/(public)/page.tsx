@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { SearchBar } from '@/components/search/search-bar'
 import { ProgramCards } from '@/components/program/program-cards'
+import { VerticalNav } from '@/components/layout/vertical-switcher'
 import { ToolGrid } from '@/components/tools/tool-grid'
 import { SectionHeader } from '@/components/ui/section-header'
 import {
@@ -66,6 +67,13 @@ export default async function HomePage() {
             </a>
           ))}
         </div>
+
+        {/* The other three verticals. Here rather than in the header: this is
+            where a first-time visitor actually looks, and the header had no
+            room for real labels. */}
+        <div className="relative w-full max-w-3xl pt-6">
+          <VerticalNav current="tools" />
+        </div>
       </section>
 
       {/* Browse by program */}
@@ -77,8 +85,8 @@ export default async function HomePage() {
       {/* Trending */}
       <section className="container mx-auto max-w-6xl px-4">
         <SectionHeader
-          title="Trending"
-          description="Most popular tools right now"
+          title="Popular"
+          description="Widely used and still maintained"
           href="/search?sort=popular"
           linkLabel="See all"
         />

@@ -6,12 +6,23 @@ import type { SearchResponse } from '@/lib/search/search'
 
 export type RobotCodeProgram = 'frc' | 'ftc' | 'fll'
 export interface RobotCodeEntry { year: number | null; slug: string }
-export interface RobotCodeTeam { teamNumber: number; code: RobotCodeEntry[]; cad: RobotCodeEntry[] }
+export interface RobotCodeTeam {
+  teamNumber: number
+  code: RobotCodeEntry[]
+  cad: RobotCodeEntry[]
+  /** Newest season across code and CAD. Null only when nothing carries a year. */
+  latestYear: number | null
+}
 
 /**
- * Team-centric view of the archive: one row per team (numerical order), each carrying the
- * years for which we have that team's code and/or CAD, scoped to a single program. Each
- * (team, kind, year) collapses to the highest-popularity tool so a chip links somewhere useful.
+ * Team-centric view of the archive: one row per team, each carrying the years
+ * for which we have that team's code and/or CAD, scoped to a single program.
+ * Each (team, kind, year) collapses to the highest-popularity tool so a chip
+ * links somewhere useful.
+ *
+ * Ordered by NEWEST SEASON first, then team number. Plain team-number order put
+ * a team whose only upload is 2019 CAD above one with this season's code, which
+ * buries everything current behind a long tail of archive rows.
  */
 export async function getRobotCodeTeams(program: RobotCodeProgram = 'frc'): Promise<RobotCodeTeam[]> {
   const db = getDb()
@@ -58,8 +69,16 @@ export async function getRobotCodeTeams(program: RobotCodeProgram = 'frc'): Prom
       .map(({ year, slug }) => ({ year, slug }))
 
   return [...teams.entries()]
-    .map(([teamNumber, e]) => ({ teamNumber, code: sortYears(e.code), cad: sortYears(e.cad) }))
-    .sort((a, b) => a.teamNumber - b.teamNumber)
+    .map(([teamNumber, e]) => {
+      const code = sortYears(e.code)
+      const cad = sortYears(e.cad)
+      const years = [...code, ...cad].map((x) => x.year).filter((y): y is number => y !== null)
+      return { teamNumber, code, cad, latestYear: years.length ? Math.max(...years) : null }
+    })
+    // Newest season first; within a season, team number ascending. A team with
+    // no dated upload at all sorts last rather than to the top, which is what
+    // treating null as 0 would do.
+    .sort((a, b) => (b.latestYear ?? -1) - (a.latestYear ?? -1) || a.teamNumber - b.teamNumber)
 }
 
 export async function getRobotCodeTools(filters: {

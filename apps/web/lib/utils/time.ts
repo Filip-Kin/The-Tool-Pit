@@ -27,9 +27,12 @@ export function getFreshnessLabel(
   // Fall back to date-based heuristic
   if (lastActivityAt) {
     const d = typeof lastActivityAt === 'string' ? new Date(lastActivityAt) : lastActivityAt
+    // Must match computeFreshnessState in apps/worker/src/jobs/freshness.ts.
+    // FRC is seasonal: in September, 8 months ago was build season. A year is
+    // the first gap worth flagging, two years means a season was missed.
     const days = differenceInDays(new Date(), d)
-    if (days <= 90) return 'Current'
-    if (days <= 365) return 'Stale'
+    if (days <= 365) return 'Current'
+    if (days <= 730) return 'Stale'
     return 'Abandoned'
   }
 

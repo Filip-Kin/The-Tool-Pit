@@ -8,7 +8,6 @@ const PROGRAMS = [
     slug: 'frc',
     name: 'FRC',
     fullName: 'FIRST Robotics Competition',
-    description: 'Full-size robots. Intense competition. Industry-level tools.',
     color: 'var(--color-frc)',
     href: '/frc',
   },
@@ -16,7 +15,6 @@ const PROGRAMS = [
     slug: 'ftc',
     name: 'FTC',
     fullName: 'FIRST Tech Challenge',
-    description: 'Compact robots, big engineering challenges.',
     color: 'var(--color-ftc)',
     href: '/ftc',
   },
@@ -24,7 +22,6 @@ const PROGRAMS = [
     slug: 'fll',
     name: 'FLL',
     fullName: 'FIRST LEGO League',
-    description: 'LEGO robotics and research projects for younger teams.',
     color: 'var(--color-fll)',
     href: '/fll',
   },
@@ -61,7 +58,6 @@ export async function ProgramCards() {
             <span className="text-xl font-bold" style={{ color: p.color }}>{p.name}</span>
             <span className="text-sm font-medium text-foreground">{p.fullName}</span>
           </div>
-          <p className="text-xs text-muted leading-relaxed">{p.description}</p>
           {counts[p.slug] != null && counts[p.slug] > 0 && (
             <p className="text-xs text-muted-2 mt-auto">{counts[p.slug]} tools</p>
           )}

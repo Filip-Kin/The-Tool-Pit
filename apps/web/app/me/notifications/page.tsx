@@ -693,7 +693,7 @@ export default async function NotificationsPage({
                 >
                   <div className="min-w-0">
                     <Link
-                      href={`${GRANTS_ORIGIN}/grants/${w.slug}`}
+                      href={`${GRANTS_ORIGIN}/${w.slug}`}
                       className="text-sm font-medium text-foreground hover:underline"
                     >
                       {w.name}

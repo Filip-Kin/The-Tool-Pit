@@ -64,13 +64,44 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
   }))
 }
 
+/**
+ * The home page's "Trending" row.
+ *
+ * There is no first-party traffic data yet, so this is popularity (GitHub
+ * stars plus Chief Delphi likes plus votes) rather than genuine velocity, and
+ * the section is labelled accordingly. What it must NOT do is lead with a dead
+ * tool: a 5000-star repo nobody has touched in two years outranking a
+ * maintained one is exactly the junk-directory feel the tools vertical already
+ * got burned by.
+ *
+ * So freshness multiplies the score instead of merely tie-breaking it, and
+ * anything abandoned or archived is excluded outright. A stale tool can still
+ * appear when it is genuinely much more popular, but it has to earn the slot
+ * against a 0.35x handicap rather than winning on a star count it collected
+ * years ago.
+ */
 export async function getTrendingTools(limit = 6): Promise<SearchResultRow[]> {
   const db = getDb()
   const rows = await db
     .select()
     .from(tools)
-    .where(eq(tools.status, 'published'))
-    .orderBy(desc(tools.popularityScore))
+    .where(
+      and(
+        eq(tools.status, 'published'),
+        // A dead tool is not trending by any definition. Unknown freshness is
+        // kept: it means we have not checked, not that it is dead.
+        sql`coalesce(${tools.freshnessState}, 'unknown') not in ('inactive', 'archived')`,
+      ),
+    )
+    .orderBy(
+      desc(sql`
+        case coalesce(${tools.freshnessState}, 'unknown')
+          when 'stale' then 0.35
+          when 'unknown' then 0.7
+          else 1.0
+        end * coalesce(${tools.popularityScore}, 0)
+      `),
+    )
     .limit(limit)
   return enrichTools(rows)
 }

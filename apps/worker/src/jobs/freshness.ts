@@ -26,9 +26,15 @@ function computeFreshnessState(
   if (archived) return 'archived'
   if (!lastActivityAt) return 'unknown'
 
+  // FRC runs on a season, not a calendar. Build season is January to April, so
+  // in September a tool last touched 8 months ago was last touched IN SEASON
+  // and is perfectly current. The old 90-day bar marked almost everything
+  // stale for the whole offseason, which made the badge meaningless.
+  // A year without a commit is the first point worth flagging, and two years
+  // means it missed a whole season.
   const daysSince = differenceInDays(new Date(), lastActivityAt)
-  if (daysSince <= 90) return 'active'
-  if (daysSince <= 365) return 'stale'
+  if (daysSince <= 365) return 'active'
+  if (daysSince <= 730) return 'stale'
   return 'inactive'
 }
 

@@ -19,9 +19,17 @@ export interface VerticalLink {
   href: string
 }
 
-export const PHOTOS_ORIGIN = process.env.NEXT_PUBLIC_PHOTOS_URL ?? 'https://photos.ttp.filipkin.com'
-export const FIELDS_ORIGIN = process.env.NEXT_PUBLIC_FIELDS_URL ?? 'https://fields.ttp.filipkin.com'
-export const GRANTS_ORIGIN = process.env.NEXT_PUBLIC_GRANTS_URL ?? 'https://grants.ttp.filipkin.com'
+/**
+ * The verticals are PATHS on one host, not subdomains, so these are path
+ * prefixes and every link built from them is root-relative.
+ *
+ * The old subdomains still resolve and 308 to these paths (see
+ * apps/web/middleware.ts), which also explains why nothing here reads an env
+ * var any more: there is no second origin left to point at.
+ */
+export const PHOTOS_ORIGIN = '/photos'
+export const FIELDS_ORIGIN = '/fields'
+export const GRANTS_ORIGIN = '/grants'
 
 export const VERTICALS: VerticalLink[] = [
   {
@@ -58,19 +66,12 @@ export const VERTICALS: VerticalLink[] = [
  * the origin the entity actually lives on, because a relative path here would
  * resolve against the tools host and 404.
  */
-export function resolveFavoriteHref(entityType: string, href: string): string {
+export function resolveFavoriteHref(_entityType: string, href: string): string {
   if (/^https?:\/\//i.test(href)) return href
-  const path = href.startsWith('/') ? href : `/${href}`
-  switch (entityType) {
-    case 'album':
-    case 'event':
-      return `${PHOTOS_ORIGIN}${path}`
-    case 'field':
-      return `${FIELDS_ORIGIN}${path}`
-    case 'grant':
-      return `${GRANTS_ORIGIN}${path}`
-    default:
-      // Tools are on this host, so the path is already correct.
-      return path
-  }
+  // getFavoritesForUser already returns the canonical path for every type
+  // (/tools/..., /photos/event/..., /fields/..., /grants/...), and all four
+  // verticals are served from one host, so there is nothing left to prefix.
+  // This used to bolt a per-vertical origin on the front; doing that now would
+  // produce /photos/photos/event/... .
+  return href.startsWith('/') ? href : `/${href}`
 }

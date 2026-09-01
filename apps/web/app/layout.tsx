@@ -12,7 +12,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: 'The Tool Pit — FIRST Robotics Tool Directory',
+    default: 'The Tool Pit: FIRST Robotics Tool Directory',
     template: '%s | The Tool Pit',
   },
   description:

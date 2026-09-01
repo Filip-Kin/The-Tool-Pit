@@ -20,11 +20,27 @@ interface Props {
 export function RobotCodeArchive({ teams, program }: Props) {
   const router = useRouter()
   const [filter, setFilter] = useState('')
+  const [year, setYear] = useState<number | null>(null)
+
+  // Every season present in this program, newest first. Built from the rows we
+  // already have rather than a second query, so the list can never offer a year
+  // that filters to nothing.
+  const years = useMemo(() => {
+    const set = new Set<number>()
+    for (const t of teams) {
+      for (const e of [...t.code, ...t.cad]) if (e.year !== null) set.add(e.year)
+    }
+    return [...set].sort((a, b) => b - a)
+  }, [teams])
 
   const filtered = useMemo(() => {
     const q = filter.trim()
-    return q ? teams.filter((t) => String(t.teamNumber).includes(q)) : teams
-  }, [teams, filter])
+    return teams.filter((t) => {
+      if (q && !String(t.teamNumber).includes(q)) return false
+      if (year !== null && ![...t.code, ...t.cad].some((e) => e.year === year)) return false
+      return true
+    })
+  }, [teams, filter, year])
 
   const codeCount = useMemo(() => teams.reduce((n, t) => n + t.code.length, 0), [teams])
   const cadCount = useMemo(() => teams.reduce((n, t) => n + t.cad.length, 0), [teams])
@@ -62,7 +78,49 @@ export function RobotCodeArchive({ teams, program }: Props) {
           placeholder="Filter team #"
           className="w-32 rounded-full border border-border bg-surface px-3 py-1 text-xs text-foreground placeholder:text-muted-2 focus:outline-none focus:border-primary"
         />
+
+        {/* Submit lives on this page because someone looking for their team's
+            code and not finding it is exactly the person who can add it. */}
+        <Link
+          href="/submit"
+          className="ml-auto rounded-full bg-primary px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-primary-hover"
+        >
+          Add your team&apos;s code or CAD
+        </Link>
       </div>
+
+      {/* Season filter */}
+      {years.length > 0 && (
+        <div className="mb-6 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs font-medium text-muted-2">Season</span>
+          <button
+            onClick={() => setYear(null)}
+            className={cn(
+              'rounded-md border px-2 py-0.5 text-xs tabular-nums transition-colors',
+              year === null
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-surface text-muted hover:border-primary hover:text-primary',
+            )}
+          >
+            All
+          </button>
+          {years.map((y) => (
+            <button
+              key={y}
+              onClick={() => setYear(y === year ? null : y)}
+              aria-pressed={y === year}
+              className={cn(
+                'rounded-md border px-2 py-0.5 text-xs tabular-nums transition-colors',
+                y === year
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-surface text-muted hover:border-primary hover:text-primary',
+              )}
+            >
+              {y}
+            </button>
+          ))}
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-12 text-center">
@@ -70,7 +128,11 @@ export function RobotCodeArchive({ teams, program }: Props) {
           <p className="text-xs text-muted">
             {teams.length === 0
               ? `No ${program.toUpperCase()} code or CAD stored yet.`
-              : 'No team matches that number.'}
+              : year !== null && filter.trim()
+                ? `No team matching that number has anything from ${year}.`
+                : year !== null
+                  ? `No ${program.toUpperCase()} team has code or CAD from ${year}.`
+                  : 'No team matches that number.'}
           </p>
         </div>
       ) : (
@@ -87,8 +149,8 @@ export function RobotCodeArchive({ teams, program }: Props) {
               {filtered.map((t) => (
                 <tr key={t.teamNumber} className="border-b border-border-subtle last:border-0 hover:bg-surface/50">
                   <td className="px-4 py-2.5 align-top font-medium tabular-nums text-foreground">{t.teamNumber}</td>
-                  <td className="px-4 py-2.5 align-top"><YearChips entries={t.code} /></td>
-                  <td className="px-4 py-2.5 align-top"><YearChips entries={t.cad} /></td>
+                  <td className="px-4 py-2.5 align-top"><YearChips entries={t.code} highlight={year} /></td>
+                  <td className="px-4 py-2.5 align-top"><YearChips entries={t.cad} highlight={year} /></td>
                 </tr>
               ))}
             </tbody>
@@ -99,19 +161,29 @@ export function RobotCodeArchive({ teams, program }: Props) {
   )
 }
 
-function YearChips({ entries }: { entries: RobotCodeEntry[] }) {
-  if (entries.length === 0) return <span className="text-xs text-muted-2">—</span>
+function YearChips({ entries, highlight }: { entries: RobotCodeEntry[]; highlight: number | null }) {
+  if (entries.length === 0) return <span className="text-xs text-muted-2">none</span>
   return (
     <div className="flex flex-wrap gap-1">
-      {entries.map((e) => (
-        <Link
-          key={`${e.year ?? 'x'}-${e.slug}`}
-          href={`/tools/${e.slug}`}
-          className="rounded-md border border-border bg-surface px-1.5 py-0.5 text-xs tabular-nums text-muted transition-colors hover:border-primary hover:text-primary"
-        >
-          {e.year ?? '?'}
-        </Link>
-      ))}
+      {entries.map((e) => {
+        // With a season selected the row is still the whole team, so the chip
+        // that matched is marked rather than the others being hidden.
+        const isMatch = highlight !== null && e.year === highlight
+        return (
+          <Link
+            key={`${e.year ?? 'x'}-${e.slug}`}
+            href={`/tools/${e.slug}`}
+            className={cn(
+              'rounded-md border px-1.5 py-0.5 text-xs tabular-nums transition-colors hover:border-primary hover:text-primary',
+              isMatch
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-surface text-muted',
+            )}
+          >
+            {e.year ?? '?'}
+          </Link>
+        )
+      })}
     </div>
   )
 }

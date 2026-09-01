@@ -1,15 +1,21 @@
 import { headers } from 'next/headers'
-import { Wrench, Camera, MapPin, Banknote } from 'lucide-react'
+import { Wrench, Camera, MapPin, CircleDollarSign, ChevronLeft } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
 /**
  * The four verticals share one codebase and one deploy, split by host in
- * apps/web/middleware.ts. This control is the only place a visitor is told
- * that, so it appears in all three headers and in the footer.
+ * apps/web/middleware.ts. This module owns every control that crosses between
+ * them.
  *
- * Every vertical styles its own chrome, so the switcher stays deliberately
- * quiet: no colour of its own, icons at all widths, labels only once there is
- * room for them.
+ * Where they appear:
+ *   VerticalNav        the home page, under the search bar. The main way in.
+ *   VerticalHomeCrumb  each vertical's header, as the way back to the home page.
+ *   VerticalFooterLinks every footer, as the quiet complete set.
+ *
+ * The old icon-only switcher that sat in all four headers is gone. It was
+ * cramped, it was hidden below 640px entirely, and on the home page it
+ * competed with the search bar for the one thing a first-time visitor should
+ * see. Buttons under the search bar have room for real labels.
  */
 
 export type VerticalKey = 'tools' | 'photos' | 'fields' | 'grants'
@@ -33,7 +39,7 @@ const VERTICAL_ICONS: Record<VerticalKey, typeof Wrench> = {
   tools: Wrench,
   photos: Camera,
   fields: MapPin,
-  grants: Banknote,
+  grants: CircleDollarSign,
 }
 
 /** Leading host labels the middleware treats as a vertical rather than as part of the base domain. */
@@ -47,12 +53,25 @@ export interface VerticalLink {
 }
 
 /**
- * Resolve one absolute (or relative, see below) link per vertical from the
- * request host. The hosts differ per vertical and the same build serves both
- * ttp.filipkin.com and frc.tools, so nothing here may be hardcoded to a domain:
- * we swap the leading subdomain label on whatever host we were asked on.
+ * Resolve one link per vertical from the request host.
  *
- * Exported so the footer can render the same set as plain text links.
+ * PATHS, NOT SUBDOMAINS. The four verticals live at /, /photos, /fields and
+ * /grants on one host. That is the canonical scheme.
+ *
+ * It used to swap the leading subdomain label instead (photos.frc.tools and
+ * so on). Those hosts still work, because middleware.ts still rewrites them
+ * and the old links are out in the world, but nothing generates them any
+ * more. The reason is concrete: frc.tools sits behind a Cloudflare zone we do
+ * not control, and Cloudflare does not pass /.well-known/acme-challenge
+ * through to our origin, so Let's Encrypt cannot validate a new hostname
+ * there. Every new subdomain would need someone else to act before it could
+ * serve HTTPS at all. A path needs nobody.
+ *
+ * When the visitor is already on a vertical subdomain, links go absolute to
+ * the base host so they land on the canonical path form rather than being
+ * rewritten back into the subdomain's own route tree.
+ *
+ * Exported so the footer and the home page nav render the same set.
  */
 export async function getVerticalLinks(current: VerticalKey): Promise<VerticalLink[]> {
   // Match the middleware, which keys off the plain Host header. Reading headers
@@ -64,26 +83,19 @@ export async function getVerticalLinks(current: VerticalKey): Promise<VerticalLi
 
   const { hostname, port } = splitHost(rawHost)
 
-  // Strip the vertical label to get the base domain shared by all four hosts.
+  // Strip a legacy vertical label to get the host the paths live on.
   const labels = hostname.split('.')
-  const base = VERTICAL_SUBDOMAINS.has(labels[0]!.toLowerCase()) ? labels.slice(1).join('.') : hostname
+  const onSubdomain = VERTICAL_SUBDOMAINS.has(labels[0]!.toLowerCase())
+  const base = onSubdomain ? labels.slice(1).join('.') : hostname
 
-  // A base with no dot (localhost, a bare machine name) or a literal IP cannot
-  // grow a subdomain, so dev falls back to the path-prefixed routes instead.
-  const pathMode = base === '' || !base.includes('.') || isIpLiteral(base)
-
-  const scheme = proto ?? (pathMode ? 'http' : 'https')
+  const scheme = proto ?? 'https'
   const suffix = port ? `:${port}` : ''
 
   return VERTICALS.map(({ key, label, slug }) => {
-    const targetHost = pathMode || slug === null ? base : `${slug}.${base}`
-    const targetPath = pathMode && slug !== null ? `/${slug}` : '/'
-    // Emit a relative href when the target is the host we are already on. That
-    // avoids sending the browser to an absolute URL that guesses the wrong
-    // scheme or drops a dev port, and it keeps the link working behind any
-    // proxy that rewrites the host on the way in.
-    const href =
-      targetHost === hostname ? targetPath : `${scheme}://${targetHost}${suffix}${targetPath}`
+    const path = slug === null ? '/' : `/${slug}`
+    // Relative when we are already on the host the paths live on. Absolute
+    // only to climb out of a legacy vertical subdomain.
+    const href = onSubdomain ? `${scheme}://${base}${suffix}${path}` : path
     return { key, label, href, current: key === current }
   })
 }
@@ -140,7 +152,16 @@ export async function VerticalFooterLinks({
   )
 }
 
-export async function VerticalSwitcher({
+/**
+ * The home page's way into the other three verticals.
+ *
+ * Sits under the search bar, in the gap above "Browse by Program". Labels are
+ * real words at every width, because this is how most people will discover
+ * that the photos, fields and grants sites exist at all. No blurbs: the four
+ * names say what they are, and a sentence under each would be the same filler
+ * the program cards used to carry.
+ */
+export async function VerticalNav({
   current,
   className,
 }: {
@@ -152,10 +173,7 @@ export async function VerticalSwitcher({
   return (
     <nav
       aria-label="Switch product"
-      className={cn(
-        'flex shrink-0 items-center gap-0.5 rounded-md border border-border-subtle p-0.5',
-        className,
-      )}
+      className={cn('flex flex-wrap items-center justify-center gap-2', className)}
     >
       {links.map(({ key, label, href, current: isCurrent }) => {
         const Icon = VERTICAL_ICONS[key]
@@ -163,25 +181,56 @@ export async function VerticalSwitcher({
           <a
             key={key}
             href={href}
-            // Cross-host links are full navigations, so aria-current is the only
-            // signal a screen reader gets about which product it is already in.
             aria-current={isCurrent ? 'page' : undefined}
-            title={label}
             className={cn(
-              'flex items-center gap-1.5 rounded px-2 py-1 text-sm font-medium transition-colors',
+              'flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors',
               isCurrent
-                ? 'bg-surface-2 text-foreground'
-                : 'text-muted-2 hover:bg-surface hover:text-foreground',
+                ? 'border-primary/40 bg-primary/10 text-foreground'
+                : 'border-border bg-surface text-muted hover:border-primary hover:text-foreground',
             )}
           >
-            <Icon className="h-4 w-4" aria-hidden />
-            {/* Below lg the header only has room for icons, but the link still
-                needs a name, so the label goes off-screen rather than to
-                display:none, which would hide it from a screen reader too. */}
-            <span className="sr-only lg:not-sr-only">{label}</span>
+            <Icon className="h-4 w-4 shrink-0" aria-hidden />
+            {label}
           </a>
         )
       })}
     </nav>
+  )
+}
+
+/**
+ * The way back to the main site from inside a vertical.
+ *
+ * Every vertical is its own host, so a relative link cannot get you home and
+ * the browser's back button is the only route once someone lands deep in one
+ * from a search engine. This renders the wordmark as a real link to the tools
+ * host, then the vertical's own name, reading as a breadcrumb.
+ *
+ * It replaces the icon-only switcher that used to occupy this slot and was
+ * hidden below 640px, which left phones with no way out except the footer.
+ */
+export async function VerticalHomeCrumb({
+  current,
+  className,
+}: {
+  current: VerticalKey
+  className?: string
+}) {
+  const links = await getVerticalLinks(current)
+  const home = links.find((l) => l.key === 'tools')
+  if (!home || current === 'tools') return null
+
+  return (
+    <a
+      href={home.href}
+      className={cn(
+        'flex shrink-0 items-center gap-1.5 text-sm font-medium text-muted-2 transition-colors hover:text-foreground',
+        className,
+      )}
+    >
+      <ChevronLeft className="h-4 w-4" aria-hidden />
+      <span className="hidden sm:inline">frc.tools</span>
+      <span className="sr-only sm:hidden">Back to frc.tools</span>
+    </a>
   )
 }

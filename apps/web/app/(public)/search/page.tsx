@@ -28,7 +28,7 @@ interface PageProps {
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const { q } = await searchParams
   return {
-    title: q ? `"${q}" — Search` : 'Search Tools',
+    title: q ? `"${q}" search` : 'Search Tools',
   }
 }
 

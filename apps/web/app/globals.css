@@ -87,6 +87,30 @@
     line-height: 1.5rem;
     outline: none;
     transition: border-color 0.15s;
+    /* An explicit height, because padding and line-height alone do NOT give
+       <select>, <input> and <textarea> the same box. A number input reserves
+       room for its spinner and ends up taller than the selects beside it,
+       which is visible the moment two of them sit in one row (the "Add a
+       team" form). 0.375rem padding x2 + 1.5rem line + 2px border = 2.375rem. */
+    box-sizing: border-box;
+    height: 2.375rem;
+  }
+  /* A textarea has to grow, so it opts out of the fixed height. */
+  textarea.input {
+    height: auto;
+    min-height: 2.375rem;
+  }
+  /* Hide the number spinner. It is what made the box taller in the first
+     place, it clips oddly at this height, and every number field here is one
+     people type rather than step through. */
+  .input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  .input[type='number']::-webkit-outer-spin-button,
+  .input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
   }
   .input:focus {
     border-color: var(--color-primary);

@@ -402,9 +402,16 @@ export function preferencesUrl(): string {
   return `${base}/me/notifications`
 }
 
-/** Public URL of one grant listing, on the grants host. */
+/**
+ * Public URL of one grant listing.
+ *
+ * One host, path per vertical. There is no grants.* host any more: it still
+ * resolves and redirects, but an email should link straight to the final URL
+ * rather than send the reader through a 308 on a hostname whose certificate we
+ * cannot renew.
+ */
 export function grantUrl(slug: string): string {
-  const base = (process.env.NEXT_PUBLIC_GRANTS_URL ?? 'https://grants.ttp.filipkin.com').replace(/\/+$/, '')
+  const base = (process.env.NEXT_PUBLIC_URL ?? 'https://frc.tools').replace(/\/+$/, '')
   return `${base}/grants/${slug}`
 }
 
