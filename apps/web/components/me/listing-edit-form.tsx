@@ -7,6 +7,8 @@ import {
   type ListingFieldSpec,
   type ListingGroup,
 } from './listing-fields'
+import { Check, CloudUpload, Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils/cn'
 import type { EditableListing, ListingFormValues } from '@/lib/queries/listing-ownership'
 
 /**
@@ -414,16 +416,39 @@ function SaveStatusLine({
 
   if (failuresOnly) return null
 
+  // There is no Save button on this form, and the first thing someone does on a
+  // form with no Save button is look for the Save button. This line is the
+  // answer, so it has to be findable: a bordered pill with an icon, stuck to
+  // the top of the form so it stays on screen while a long one is scrolled.
+  // As muted 14px text at the top it read as a caption and got missed.
+  const saving = status.kind === 'saving'
+  const saved = status.kind === 'saved'
+
   return (
-    <div className="flex min-h-9 items-center">
-      <span role="status" className="text-sm text-muted-2">
-        {status.kind === 'saving'
-          ? 'Saving…'
-          : status.kind === 'saved'
+    <div className="sticky top-2 z-10 flex min-h-9 items-center">
+      <span
+        role="status"
+        className={cn(
+          'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium backdrop-blur',
+          saved
+            ? 'border-primary/30 bg-primary/10 text-primary'
+            : 'border-border-subtle bg-surface/90 text-muted',
+        )}
+      >
+        {saving ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : saved ? (
+          <Check className="h-4 w-4" aria-hidden />
+        ) : (
+          <CloudUpload className="h-4 w-4" aria-hidden />
+        )}
+        {saving
+          ? 'Saving your changes'
+          : saved
             ? 'Saved'
             : status.dirty
               ? 'Not saved yet'
-              : 'Saves as you type'}
+              : 'Saves automatically as you type. There is no save button.'}
       </span>
     </div>
   )
