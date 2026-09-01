@@ -20,6 +20,7 @@ import {
   GRANT_DEADLINE_TYPES,
   GRANT_EFFORT_LEVELS,
   GRANT_FIELD_FILL_KINDS,
+  GRANT_APPLY_METHODS,
   GRANT_GEO_SCOPES,
   GRANT_PROGRAMS,
   GRANT_REQUIREMENT_KINDS,
@@ -231,6 +232,11 @@ export function parseGrantFields(form: FormData): ParsedGrantFields {
     description: String(form.get('description') ?? '').trim() || null,
     infoUrl,
     applicationUrl: String(form.get('applicationUrl') ?? '').trim() || null,
+    // How a team actually applies. Defaulting to 'online_form' would hide every
+    // sponsor that wants a posted letter, and those are real, winnable grants.
+    applyMethod: pick(form.get('applyMethod'), GRANT_APPLY_METHODS, 'unknown'),
+    contactEmail: String(form.get('contactEmail') ?? '').trim() || null,
+    mailingAddress: String(form.get('mailingAddress') ?? '').trim() || null,
     programs: programs.length > 0 ? programs : ['any'],
     geoScope,
     countries: countries.length > 0 ? countries : ['US'],

@@ -14,11 +14,11 @@ import {
 /**
  * The four ways a candidate leaves the queue, plus a way back.
  *
- * "Publish" is a LINK, not a button. Everything else here is a one-click
- * decision, but publishing opens the editor at /admin/grants/candidates/<id>
- * where a person corrects the classifier's guesses before anything is written.
- * The classifier's output is a draft, never a fact, so there is deliberately no
- * one-click publish anywhere on this screen.
+ * "Review" is a LINK, not a button. Everything else here is a one-click
+ * decision, but approving opens the deck at /admin/grants/candidates/<id>,
+ * where a person reads each extracted value against the quote it came off
+ * before anything is written. The model's output is a draft, never a fact, so
+ * there is deliberately no one-click publish anywhere on this screen.
  *
  * "To source" is the third door, and the only one that is safe as one click:
  * it creates a DISABLED grant_sources row, so nothing crawls and nothing is
@@ -53,6 +53,8 @@ export function GrantCandidateActions({
     })
   }
 
+  // 'flagged' is not decided: it is a row waiting on a better read, so it keeps
+  // the full set of buttons.
   const decided = status === 'suppressed' || status === 'duplicate'
 
   return (
@@ -60,10 +62,10 @@ export function GrantCandidateActions({
       {status !== 'published' && (
         <div className="flex gap-2">
           <Link
-            href={`/admin/grants/candidates/${candidateId}`}
+            href={`/admin/grants/candidates/${candidateId}?status=${status}`}
             className="rounded bg-primary/20 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/35"
           >
-            Publish…
+            Review…
           </Link>
           <button
             disabled={pending}

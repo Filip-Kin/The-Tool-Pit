@@ -1,4 +1,5 @@
 import {
+  GRANT_APPLY_METHODS,
   GRANT_CYCLE_STATUSES,
   GRANT_DEADLINE_TYPES,
   GRANT_EFFORT_LEVELS,
@@ -24,6 +25,9 @@ export interface GrantFieldDefaults {
   description?: string | null
   infoUrl?: string | null
   applicationUrl?: string | null
+  applyMethod?: string | null
+  contactEmail?: string | null
+  mailingAddress?: string | null
   programs?: string[] | null
   geoScope?: string | null
   countries?: string[] | null
@@ -87,6 +91,24 @@ export function GrantFields({ defaults = {} }: { defaults?: GrantFieldDefaults }
         </Field>
         <Field label="Application URL" hint="Only if applying happens somewhere other than the info page.">
           <input name="applicationUrl" defaultValue={d.applicationUrl ?? ''} className={inputClass} />
+        </Field>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Field label="How to apply" hint="Plenty of real sponsors want a posted letter and have no form at all.">
+          <select name="applyMethod" defaultValue={d.applyMethod ?? 'unknown'} className={inputClass}>
+            {GRANT_APPLY_METHODS.map((m) => (
+              <option key={m} value={m}>
+                {m.replace('_', ' ')}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Contact email" hint="For applications or questions, if the page gives one.">
+          <input name="contactEmail" defaultValue={d.contactEmail ?? ''} className={inputClass} />
+        </Field>
+        <Field label="Mailing address" hint="Where a posted application goes.">
+          <input name="mailingAddress" defaultValue={d.mailingAddress ?? ''} className={inputClass} />
         </Field>
       </div>
 

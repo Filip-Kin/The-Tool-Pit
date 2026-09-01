@@ -17,7 +17,10 @@ import { GrantCandidateActions } from './candidate-actions'
  * produced it is what makes a wrong call obvious in a second.
  */
 
-const STATUS_TABS = ['pending', 'matched', 'published', 'suppressed', 'duplicate'] as const
+// 'flagged' sits next to pending because it is not a rejection: it is a row a
+// moderator wants back with better data, and it is the one tab that fills
+// itself up if the deeper re-read keeps coming back thin.
+const STATUS_TABS = ['pending', 'flagged', 'matched', 'published', 'suppressed', 'duplicate'] as const
 type TabStatus = (typeof STATUS_TABS)[number]
 const PAGE_SIZE = 25
 
@@ -90,8 +93,8 @@ export default async function AdminGrantCandidatesPage({
       </div>
 
       <p className="max-w-3xl text-xs text-muted-2">
-        Nothing here is public. Publishing opens an editor prefilled from the classifier, and what
-        gets saved is what you typed, not what it guessed.
+        Nothing here is public. Review opens the deck: the whole record on one screen with the quote behind
+        every value, three keys to approve, flag or suppress, and the next candidate straight after.
       </p>
 
       <form method="get" className="flex gap-2">

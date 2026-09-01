@@ -5,7 +5,10 @@ import { revalidatePath } from 'next/cache'
 import { eq, or } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
-import { grantCandidates, grantCycles, grants, grantSources } from '@the-tool-pit/db'
+import { grantCandidates, grantCycles, grantRequirements, grants, grantSources } from '@the-tool-pit/db'
+import { GRANT_REJECTION_KINDS, type GrantRejectionKind } from '@the-tool-pit/db'
+import { reviewRequirements } from '@/lib/admin/grant-review'
+import { enqueueGrantExtract } from '@/lib/admin/grant-queue'
 import {
   adminIdentity,
   bumpSourceCounter,
@@ -111,9 +114,35 @@ export async function publishGrantCandidate(
     })
   }
 
+  // Eligibility the moderator confirmed on the deck. Only 'yes' answers write
+  // a rule: a requirement row can rule a team OUT, and "the funder does not
+  // require this" is not a rule. The 'no' and 'unknown' answers stay readable
+  // on the candidate's extraction, which is where "not stated" belongs.
+  const requirements = reviewRequirements(form)
+  if (requirements.length > 0) {
+    await db.insert(grantRequirements).values(
+      requirements.map((r) => ({
+        grantId: created.id,
+        kind: r.kind,
+        operator: r.operator,
+        value: r.value,
+        label: r.label,
+        isBlocking: r.isBlocking,
+        sortOrder: r.sortOrder,
+      })),
+    )
+  }
+
   await db
     .update(grantCandidates)
-    .set({ status: 'published', matchedGrantId: created.id, rejectionReason: null, updatedAt: now })
+    .set({
+      status: 'published',
+      matchedGrantId: created.id,
+      rejectionReason: null,
+      rejectionKind: null,
+      reviewNote: null,
+      updatedAt: now,
+    })
     .where(eq(grantCandidates.id, candidateId))
   await bumpSourceCounter(candidate.sourceId, 'yield')
 
@@ -280,7 +309,11 @@ export async function routeGrantCandidateToSource(candidateId: string): Promise<
  * 'published' has a grant in the directory teams are reading, so suppressing it
  * is a takedown and gets the takedown email, not the "we did not list it" one.
  */
-export async function suppressGrantCandidate(candidateId: string, reason: string): Promise<{ error?: string }> {
+export async function suppressGrantCandidate(
+  candidateId: string,
+  reason: string,
+  kind?: string,
+): Promise<{ error?: string }> {
   await assertAdmin()
   const clean = reason.trim()
   if (!clean) return { error: 'Give a reason, even a short one.' }
@@ -288,15 +321,61 @@ export async function suppressGrantCandidate(candidateId: string, reason: string
   const candidate = await loadCandidate(candidateId)
   if (!candidate) return { error: 'Candidate not found.' }
 
+  // The bucket is the half a machine can read. apps/worker's
+  // suppression-feedback.ts turns recent ones into the classifier's negative
+  // examples, ranked against the page it is judging, so the same list pages
+  // stop coming back to be rejected by hand. An unbucketed suppression still
+  // works, it just teaches nothing.
+  const rejectionKind = (GRANT_REJECTION_KINDS as readonly string[]).includes(kind ?? '')
+    ? (kind as GrantRejectionKind)
+    : null
+
   await getDb()
     .update(grantCandidates)
-    .set({ status: 'suppressed', rejectionReason: clean, updatedAt: new Date() })
+    .set({ status: 'suppressed', rejectionReason: clean, rejectionKind, updatedAt: new Date() })
     .where(eq(grantCandidates.id, candidateId))
   await bumpSourceCounter(candidate.sourceId, 'reject')
   await notifyGrantCandidateRejected(candidateId, candidate.status === 'published', clean)
 
   revalidatePath(QUEUE_PATH)
   return {}
+}
+
+/**
+ * Flag a candidate for better data. The third answer, and NOT a rejection.
+ *
+ * It means the page probably is a grant and what we read off it is wrong or too
+ * thin to publish. So the row stays in the queue with its extraction, nothing
+ * is emailed to anybody, the source's reject tally is untouched, and a deep
+ * re-extraction is queued: refetch the funder's page, follow the application
+ * link, and look at other surfaces for the same grant. Re-reading the one page
+ * that already came back thin is not a second look.
+ *
+ * The moderator's note rides along to the model, so the second pass is told
+ * what was wrong the first time instead of finding the same gap again.
+ */
+export async function flagGrantCandidate(candidateId: string, note: string): Promise<{ error?: string; queued?: boolean }> {
+  await assertAdmin()
+  const clean = note.trim()
+  if (!clean) return { error: 'Say what is wrong or missing. That note is what the re-read is told.' }
+
+  const candidate = await loadCandidate(candidateId)
+  if (!candidate) return { error: 'Candidate not found.' }
+  if (candidate.status === 'published') {
+    return { error: 'This one is published as a grant. Fix it in the grant editor instead.' }
+  }
+
+  await getDb()
+    .update(grantCandidates)
+    .set({ status: 'flagged', reviewNote: clean, rejectionReason: null, updatedAt: new Date() })
+    .where(eq(grantCandidates.id, candidateId))
+
+  // A queue that is down must not lose the flag: the row is already marked, so
+  // the worst case is a re-read that has to be asked for again.
+  const queued = await enqueueGrantExtract({ candidateId, deep: true, reviewNote: clean })
+
+  revalidatePath(QUEUE_PATH)
+  return { queued }
 }
 
 /**
@@ -338,7 +417,14 @@ export async function reopenGrantCandidate(candidateId: string): Promise<{ error
 
   await getDb()
     .update(grantCandidates)
-    .set({ status: 'pending', rejectionReason: null, matchedGrantId: null, updatedAt: new Date() })
+    .set({
+      status: 'pending',
+      rejectionReason: null,
+      rejectionKind: null,
+      reviewNote: null,
+      matchedGrantId: null,
+      updatedAt: new Date(),
+    })
     .where(eq(grantCandidates.id, candidateId))
 
   revalidatePath(QUEUE_PATH)
@@ -354,5 +440,10 @@ export async function publishGrantCandidateForm(candidateId: string, form: FormD
   if (res.error) {
     redirect(`${QUEUE_PATH}/${candidateId}?error=${encodeURIComponent(res.error)}`)
   }
+  // The deck posts the next candidate's id with the form, so approving one
+  // lands on the next one to read rather than back on a list to re-find your
+  // place in. An empty box means that was the last row.
+  const next = String(form.get('nextCandidateId') ?? '').trim()
+  if (next) redirect(`${QUEUE_PATH}/${next}`)
   redirect(`/admin/grants?published=${encodeURIComponent(res.slug ?? '')}`)
 }
