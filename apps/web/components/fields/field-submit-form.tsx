@@ -434,8 +434,8 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
             label="Photos of the field"
             hint={
               editing
-                ? 'Add or remove photos. Changes are reviewed before they go live. Up to 8, max 25 MB each.'
-                : 'Optional. Reviewed before it goes live. Up to 8 photos, max 25 MB each.'
+                ? 'Add or remove photos. Changes are reviewed before they go live. Up to 8, max 25 MB each and 50 MB in total.'
+                : 'Optional. Reviewed before it goes live. Up to 8 photos, max 25 MB each and 50 MB in total.'
             }
           >
             <PhotoEditor

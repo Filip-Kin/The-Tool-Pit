@@ -3,12 +3,14 @@ import { getIpHash } from '@/lib/utils/ip'
 import { getCurrentUser } from '@/lib/auth/session'
 import { checkFieldSubmissionRateLimit } from '@/lib/fields/rate-limit'
 import { createFieldEditProposal } from '@/lib/fields/create-edit'
-import { formStr as str, formNum as num, formBool as bool, formStringArray as strArr, readPhotoFiles } from '@/lib/fields/form-parse'
+import { formStr as str, formNum as num, formBool as bool, formStringArray as strArr, readPhotoFiles, readMultipartForm } from '@/lib/fields/form-parse'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const form = await req.formData()
+    const body = await readMultipartForm(req)
+    if ('error' in body) return NextResponse.json({ error: body.error }, { status: body.status })
+    const { form } = body
 
     const ipHash = getIpHash(req.headers.get('x-forwarded-for') ?? '')
     // Same rule as the submit route: suggesting an edit works signed out, the

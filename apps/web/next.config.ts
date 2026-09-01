@@ -24,8 +24,28 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['bullmq'],
   // Cover-image uploads go through a server action; the default 1 MB body cap
   // rejects most photos, so allow room for a full-size cover.
+  //
+  // This sits deliberately above MAX_UPLOAD_BYTES in lib/images/normalise.ts
+  // (25 MB). Next rejects an over-limit body BEFORE the action runs, and the
+  // browser then shows "An unexpected response was received from the server"
+  // with nothing we can catch. The headroom means the action always gets to
+  // run and can return a real "Image is larger than 25 MB." instead.
+  //
+  // The server downscales and re-encodes every upload now, so the stored row is
+  // a few hundred KB whatever arrives here; this limit only bounds the request.
+  //
+  // middlewareClientMaxBodySize is the same idea for ROUTE HANDLERS, which is
+  // where the public field-photo uploads go (app/api/fields/submit and
+  // app/api/fields/[id]/edit). Next 15.5 defaults it to 10 MB and TRUNCATES a
+  // larger body rather than rejecting it, so req.formData() then throws
+  // "Failed to parse body as FormData" and the submitter gets a 500. That is
+  // why a two-photo submission from a phone has been failing even though the
+  // form offers eight. This sits above MAX_UPLOAD_BATCH_BYTES (50 MB) so the
+  // batch check in lib/images/normalise.ts is what refuses an oversize post,
+  // with a message that says what to do.
   experimental: {
-    serverActions: { bodySizeLimit: '12mb' },
+    serverActions: { bodySizeLimit: '30mb' },
+    middlewareClientMaxBodySize: '56mb',
   },
   // Standalone output is required for Docker/Coolify deployment.
   // Disabled locally on Windows because bun's symlink-based module cache

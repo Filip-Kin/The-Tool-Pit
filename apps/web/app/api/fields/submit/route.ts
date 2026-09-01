@@ -4,11 +4,13 @@ import { getCurrentUser } from '@/lib/auth/session'
 import { submitterOwnsFromForm } from '@/lib/listings/passing-along'
 import { checkFieldSubmissionRateLimit } from '@/lib/fields/rate-limit'
 import { createFieldSubmission } from '@/lib/fields/create-submission'
-import { formStr as str, formNum as num, formBool as bool, readPhotoFiles } from '@/lib/fields/form-parse'
+import { formStr as str, formNum as num, formBool as bool, readPhotoFiles, readMultipartForm } from '@/lib/fields/form-parse'
 
 export async function POST(req: NextRequest) {
   try {
-    const form = await req.formData()
+    const body = await readMultipartForm(req)
+    if ('error' in body) return NextResponse.json({ error: body.error }, { status: body.status })
+    const { form } = body
 
     const name = str(form, 'name')
     if (!name) return NextResponse.json({ error: 'A field name is required.' }, { status: 400 })
