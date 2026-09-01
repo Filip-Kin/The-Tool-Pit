@@ -23,6 +23,7 @@ import { processNotificationDrainJob } from './notifications/outbox.js'
 import { processGrantDeadlineSweepJob } from './grants/deadline-sweeper.js'
 import { enqueueDueGrantMonitors } from './grants/cadence.js'
 import { processListingDiscoverJob } from './listings/discover.js'
+import { processSeasonRenewalJob } from './listings/season-renewal.js'
 import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload, AlbumIngestPayload, AlbumEnrichPayload } from '@the-tool-pit/types'
 import type { GrantDiscoverPayload } from './grants/discover.js'
 import type { GrantEnrichPayload } from './grants/enrich.js'
@@ -243,10 +244,23 @@ const listingDiscoverWorker = new Worker<ListingDiscoverPayload>(
   { connection, concurrency: 1 },
 )
 
+const seasonRenewalWorker = new Worker(
+  'event-season-renewal',
+  async () => {
+    // Fires on a mid-April cron for a week of mornings. Every pass after the
+    // first queues nothing, because the outbox dedupe key already holds each
+    // ask. See listings/season-renewal.ts for why it is scheduled that way.
+    await processSeasonRenewalJob()
+  },
+  // Serial. The sweep writes outbox rows keyed by a dedupe key, and one writer
+  // means no race on that key.
+  { connection, concurrency: 1 },
+)
+
 // #endregion
 
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, seasonRenewalWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -281,6 +295,7 @@ async function shutdown() {
     grantAlertWorker.close(),
     grantDeadlineWorker.close(),
     listingDiscoverWorker.close(),
+    seasonRenewalWorker.close(),
   ])
   process.exit(0)
 }

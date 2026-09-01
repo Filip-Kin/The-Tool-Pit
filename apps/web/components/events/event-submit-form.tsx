@@ -68,6 +68,39 @@ interface FormState {
   submitterContact: string
 }
 
+/**
+ * Last year's listing, as the renewal link hands it over.
+ *
+ * Public columns only, and no dates: see buildRenewal in the submit page for
+ * why. Every field is optional-shaped because it comes off a listing that was
+ * itself allowed to be incomplete.
+ */
+export interface RenewalPrefill {
+  previousListingId: string
+  previousSeasonYear: number | null
+  name: string
+  program: string
+  hostTeamNumber: number | null
+  latitude: number | null
+  longitude: number | null
+  venueName: string | null
+  address: string | null
+  city: string | null
+  region: string | null
+  country: string | null
+  days: number | null
+  parallelDivisions: boolean
+  capacity: number | null
+  costUsd: number | null
+  costNote: string | null
+  website: string | null
+  registrationUrl: string | null
+  volunteerUrl: string | null
+  chiefDelphiUrl: string | null
+  contactEmail: string | null
+  notes: string | null
+}
+
 const INITIAL: FormState = {
   name: '',
   program: 'frc',
@@ -98,6 +131,37 @@ const INITIAL: FormState = {
   submitterContact: '',
 }
 
+/** A prefill, folded onto the empty form. A missing value stays empty. */
+function fromRenewal(r: RenewalPrefill): FormState {
+  const s = (v: string | null) => v ?? ''
+  const n = (v: number | null) => (v == null ? '' : String(v))
+  return {
+    ...INITIAL,
+    name: r.name,
+    program: (['frc', 'ftc', 'fll'] as const).includes(r.program as Program) ? (r.program as Program) : 'frc',
+    hostTeamNumber: n(r.hostTeamNumber),
+    venueName: s(r.venueName),
+    address: s(r.address),
+    city: s(r.city),
+    region: s(r.region),
+    country: s(r.country),
+    days: n(r.days),
+    parallelDivisions: r.parallelDivisions,
+    capacity: n(r.capacity),
+    costUsd: n(r.costUsd),
+    costNote: s(r.costNote),
+    website: s(r.website),
+    registrationUrl: s(r.registrationUrl),
+    volunteerUrl: s(r.volunteerUrl),
+    chiefDelphiUrl: s(r.chiefDelphiUrl),
+    contactEmail: s(r.contactEmail),
+    notes: s(r.notes),
+    // startDate, endDate, registrationStatus and registrationOpensAt keep their
+    // empty defaults on purpose. They are the four fields that are about THIS
+    // year, and carrying last year's across is how a wrong date gets published.
+  }
+}
+
 /**
  * The off-season event submit form. Sign-in is optional throughout: the server
  * reads the session cookie if it is there, and a signed-out submission is a
@@ -105,11 +169,22 @@ const INITIAL: FormState = {
  *
  * There is no edit mode here - the claim-and-edit model for listings is a
  * separate session's (feat/listing-ownership).
+ *
+ * `renewal` turns it into next year's listing for an event that already ran.
+ * It is still a normal submission: same moderation queue, same rules. The only
+ * differences are that most of the boxes arrive filled in and the new row
+ * carries previousListingId, which is what links the two seasons together.
  */
-export function EventSubmitForm() {
+export function EventSubmitForm({ renewal }: { renewal?: RenewalPrefill | null } = {}) {
   const { user } = useSession()
-  const [form, setForm] = useState<FormState>(INITIAL)
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [form, setForm] = useState<FormState>(() => (renewal ? fromRenewal(renewal) : INITIAL))
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    // The pin is the single most tedious part of this form and the venue almost
+    // never moves between years, so a renewal starts with it already dropped.
+    renewal && renewal.latitude != null && renewal.longitude != null
+      ? { lat: renewal.latitude, lng: renewal.longitude }
+      : null,
+  )
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<{ ok?: boolean; message: string } | null>(null)
 
@@ -200,6 +275,7 @@ export function EventSubmitForm() {
       }
       fd.set('latitude', String(coords.lat))
       fd.set('longitude', String(coords.lng))
+      if (renewal) fd.set('previousListingId', renewal.previousListingId)
       if (turnstileToken) fd.set('turnstileToken', turnstileToken)
 
       const res = await fetch('/api/events/submit', { method: 'POST', body: fd })

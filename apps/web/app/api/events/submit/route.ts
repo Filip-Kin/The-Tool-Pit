@@ -63,6 +63,10 @@ export async function POST(req: NextRequest) {
       submitterContact: str(form, 'submitterContact'),
       submitterIpHash: ipHash,
       submittedByUserId: user?.id ?? undefined,
+      // Set by the form when it was opened from /events/submit?renew=<id>.
+      // createEventSubmission checks it against a published listing, so a
+      // hand-edited value gets dropped rather than stored.
+      previousListingId: str(form, 'previousListingId'),
     })
 
     if (result.status === 'error') return NextResponse.json({ error: result.message }, { status: 400 })

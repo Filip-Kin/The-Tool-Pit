@@ -2,16 +2,19 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { Search, LocateFixed, Loader2 } from 'lucide-react'
+import Link from 'next/link'
+import { Search, LocateFixed, Loader2, History } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { SegmentedControl } from '@/components/ui/segmented-control'
-import type { PublicEvent, DistanceUnit } from '@/lib/events/event-display'
+import type { PublicEvent, DistanceUnit, SeasonScope } from '@/lib/events/event-display'
 import {
   eventTiming,
   daysUntil,
   distanceKm,
   formatDistance,
   unitFromLocale,
+  seasonsPresent,
+  seasonRangeLabel,
 } from '@/lib/events/event-display'
 import type { EventProgram } from '@the-tool-pit/db/event-enums'
 import { EventCard } from './event-card'
@@ -35,7 +38,43 @@ type When = 'upcoming' | 'past' | 'all'
 type SortBy = 'date' | 'distance'
 type GeoState = 'idle' | 'locating' | 'granted' | 'denied' | 'unsupported'
 
-export function EventsExplorer({ events, now }: { events: PublicEvent[]; now: Date }) {
+/**
+ * SEASON AND TIMING ARE TWO DIFFERENT AXES AND THIS COMPONENT KEEPS THEM APART.
+ *
+ *   SEASON is which year's offseason a listing belongs to. The offseason ends
+ *   on 31 December, so on 1 January the whole of last year drops out of this
+ *   view in one step. It is chosen by `scope`, which is a URL, not state:
+ *   /events is the season we are in, /events?seasons=earlier is the finished
+ *   ones. The server sends only the scope that was asked for.
+ *
+ *   TIMING is the Upcoming / Past / All control, and it only ever means "among
+ *   the listings on screen". An event that ran last September is Past within
+ *   the 2026 season, and it becomes archived when 2027 starts. Those are two
+ *   separate facts and merging them into one control would make "Past" mean
+ *   both.
+ *
+ * Which is why the When control is HIDDEN in the earlier-years scope. Every
+ * listing there has already run, so the three tabs would offer a choice with
+ * one real answer and quietly suggest that Past and earlier-years are the same
+ * idea. Its absence is the clearest thing we can say about the difference.
+ */
+export function EventsExplorer({
+  events,
+  now,
+  scope = 'current',
+  currentSeason,
+  archivedCount = 0,
+}: {
+  events: PublicEvent[]
+  now: Date
+  /** Which seasons the server sent. Set by the page from the URL. */
+  scope?: SeasonScope
+  /** The calendar year the offseason is currently in. */
+  currentSeason: number
+  /** Published listings sitting in finished seasons, for the link's label. */
+  archivedCount?: number
+}) {
+  const archiveView = scope === 'earlier'
   const [program, setProgram] = useState<EventProgram>('frc')
   const [q, setQ] = useState('')
   // Show everything by default. The map is fed from the same filtered rows as
@@ -90,14 +129,21 @@ export function EventsExplorer({ events, now }: { events: PublicEvent[]; now: Da
     [events, program, now],
   )
 
+  // Which years the server actually sent, for the line that names them.
+  const yearsShown = useMemo(() => seasonsPresent(events), [events])
+
+  // The When control is not rendered in the earlier-years view, so its state
+  // must not still be filtering behind it.
+  const effectiveWhen: When = archiveView ? 'all' : when
+
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase()
     const rows = events
       .filter((e) => {
         if (e.program !== program) return false
         const past = eventTiming(e, now) === 'past'
-        if (when === 'upcoming' && past) return false
-        if (when === 'past' && !past) return false
+        if (effectiveWhen === 'upcoming' && past) return false
+        if (effectiveWhen === 'past' && !past) return false
         if (openOnly && e.registrationStatus !== 'open') return false
         if (query) {
           const hay = [e.name, e.venueName, e.city, e.region].filter(Boolean).join(' ').toLowerCase()
@@ -138,7 +184,7 @@ export function EventsExplorer({ events, now }: { events: PublicEvent[]; now: Da
       return ad - bd
     })
     return rows
-  }, [events, q, when, openOnly, program, sortBy, userLoc, now])
+  }, [events, q, effectiveWhen, openOnly, program, sortBy, userLoc, now])
 
   const mapEvents = useMemo(() => filtered.map((r) => r.event), [filtered])
 
@@ -180,17 +226,21 @@ export function EventsExplorer({ events, now }: { events: PublicEvent[]; now: Da
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <SegmentedControl
-            label="When"
-            size="sm"
-            options={[
-              { value: 'upcoming', label: 'Upcoming' },
-              { value: 'past', label: 'Past' },
-              { value: 'all', label: 'All' },
-            ]}
-            value={when}
-            onChange={setWhen}
-          />
+          {!archiveView && (
+            <SegmentedControl
+              // Named for the season on purpose. "When" on its own reads as if
+              // Past covered every year we hold, and it does not.
+              label={`When in ${currentSeason}`}
+              size="sm"
+              options={[
+                { value: 'upcoming', label: 'Upcoming' },
+                { value: 'past', label: 'Already run' },
+                { value: 'all', label: 'All' },
+              ]}
+              value={when}
+              onChange={setWhen}
+            />
+          )}
           <Chip active={openOnly} onClick={() => setOpenOnly((v) => !v)}>Registration open</Chip>
           {userLoc && (
             <SegmentedControl
@@ -208,6 +258,13 @@ export function EventsExplorer({ events, now }: { events: PublicEvent[]; now: Da
         {geo === 'denied' && (
           <p className="text-xs text-muted-2">Location is off, so events can&apos;t be sorted by distance.</p>
         )}
+
+        <SeasonSwitch
+          archiveView={archiveView}
+          currentSeason={currentSeason}
+          archivedCount={archivedCount}
+          yearsShown={yearsShown}
+        />
       </div>
 
       {/* Map + legend */}
@@ -220,8 +277,17 @@ export function EventsExplorer({ events, now }: { events: PublicEvent[]; now: Da
       <div className="flex min-w-0 flex-col gap-2 lg:col-start-1 lg:row-start-2">
         <p className="text-xs text-muted-2">
           {filtered.length} {filtered.length === 1 ? 'event' : 'events'}
-          {when === 'upcoming' && ' upcoming'}
-          {sortBy === 'distance' && userLoc ? ' · nearest first' : when !== 'past' ? ' · soonest first' : ''}
+          {archiveView ? (
+            <>
+              {yearsShown.length > 0 && ` from ${seasonRangeLabel(yearsShown)}`}
+              {sortBy === 'distance' && userLoc ? ' · nearest first' : ' · most recent first'}
+            </>
+          ) : (
+            <>
+              {when === 'upcoming' && ' upcoming'}
+              {sortBy === 'distance' && userLoc ? ' · nearest first' : when !== 'past' ? ' · soonest first' : ''}
+            </>
+          )}
         </p>
         {filtered.map(({ event: e, km }) => (
           <EventCard
@@ -236,19 +302,75 @@ export function EventsExplorer({ events, now }: { events: PublicEvent[]; now: Da
         {filtered.length === 0 && (
           <p className="rounded-lg border border-border-subtle bg-surface p-6 text-center text-sm text-muted-2">
             {(programCounts[program] ?? 0) === 0
-              ? `No ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} events on the map yet.`
-              : when === 'upcoming'
-                ? `No upcoming ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} events. Try Past or All.`
+              ? archiveView
+                ? `No ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} events from earlier years.`
+                : `No ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} events on the map yet.`
+              : !archiveView && when === 'upcoming'
+                ? `No upcoming ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} events. Try Already run or All.`
                 : 'No events match these filters.'}
           </p>
         )}
-        {when === 'upcoming' && upcomingCount === 0 && (programCounts[program] ?? 0) > 0 && (
-          <p className="text-center text-xs text-muted-2">The season&apos;s events have all run. Switch to Past to see them.</p>
+        {!archiveView && when === 'upcoming' && upcomingCount === 0 && (programCounts[program] ?? 0) > 0 && (
+          <p className="text-center text-xs text-muted-2">
+            Every {currentSeason} event has run. Switch to Already run to see them.
+          </p>
         )}
       </div>
 
       <EventDialog event={events.find((e) => e.id === openId) ?? null} now={now} onClose={() => setOpenId(null)} />
     </div>
+  )
+}
+
+/**
+ * The way across to listings from finished offseasons, and back.
+ *
+ * A link and not a fourth tab on the When control. When is "has this weekend
+ * happened", the season is "which year's offseason is this", and a reader who
+ * has never thought about the difference should not have to work it out from a
+ * row of four buttons. So this sits on its own, below the filters, and says in
+ * words what it does.
+ *
+ * It is also a real navigation, so the earlier-years view has an address that
+ * can be shared and the server only ever sends one season's listings.
+ */
+function SeasonSwitch({
+  archiveView,
+  currentSeason,
+  archivedCount,
+  yearsShown,
+}: {
+  archiveView: boolean
+  currentSeason: number
+  archivedCount: number
+  yearsShown: number[]
+}) {
+  if (archiveView) {
+    const range = seasonRangeLabel(yearsShown)
+    return (
+      <div className="rounded-lg border border-border-subtle bg-surface-2 p-3 text-xs text-muted">
+        <p>
+          These are listings from {range ? `${range}, ` : ''}offseasons that have finished. They have
+          all run. Nothing here is taking registrations.
+        </p>
+        <Link href="/events" className="mt-2 inline-block font-medium text-primary hover:underline">
+          Back to the {currentSeason} offseason
+        </Link>
+      </div>
+    )
+  }
+
+  // Nothing behind the door, so no door.
+  if (archivedCount === 0) return null
+
+  return (
+    <Link
+      href="/events?seasons=earlier"
+      className="inline-flex items-center gap-1.5 self-start rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:text-foreground"
+    >
+      <History className="h-3.5 w-3.5" />
+      Earlier years ({archivedCount})
+    </Link>
   )
 }
 

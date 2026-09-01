@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, integer, boolean, doublePrecision, date, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
+import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { users } from './accounts'
 
@@ -65,6 +66,44 @@ export const eventListings = pgTable(
     /** State / province. */
     region: text('region'),
     country: text('country'),
+
+    // Season (the lifecycle axis, see the season region at the bottom)
+    /**
+     * The calendar year this listing belongs to, e.g. 2026 for "2026 Bot Bash".
+     *
+     * The offseason ends on 31 December, so an offseason listing's season is
+     * simply the calendar year its dates fall in. Normally that is the year of
+     * `startDate` and the two never disagree.
+     *
+     * It is a column and not a `date_part(start_date)` expression for three
+     * reasons. A listing announced before its dates are set has no startDate
+     * and still belongs to a season. Filtering the map on one indexed integer
+     * beats date arithmetic against a moving "now" on every request. And an
+     * admin can correct a season without editing dates that are correct, which
+     * is the case a derived value cannot express at all.
+     *
+     * Nullable, because a listing with no dates and no stated year is a real
+     * thing. A null season is treated as CURRENT, never as archived: a listing
+     * nobody has dated yet must not silently vanish off the map.
+     */
+    seasonYear: integer('season_year'),
+    /**
+     * Last year's listing, when this one is its renewal.
+     *
+     * A renewal is a NEW ROW, never an edit of the old one. The 2026 row keeps
+     * its own dates, its own capacity, its own roster snapshots and its own
+     * URL, and those URLs get shared on Chief Delphi and have to keep meaning
+     * what they meant. So "2027 Bot Bash" is a fresh row that points back at
+     * "2026 Bot Bash", and following the chain gives the whole history of an
+     * event and, with it, the people who run it: the renewal form carries the
+     * previous listing's owners forward onto the new row.
+     *
+     * ON DELETE SET NULL, not cascade. Deleting a 2026 listing must not delete
+     * the 2027 event that is about to happen.
+     */
+    previousListingId: uuid('previous_listing_id').references((): AnyPgColumn => eventListings.id, {
+      onDelete: 'set null',
+    }),
 
     // When
     startDate: date('start_date'),
@@ -157,6 +196,13 @@ export const eventListings = pgTable(
     index('event_listings_start_date_idx').on(table.startDate),
     index('event_listings_event_status_idx').on(table.eventStatus),
     index('event_listings_tba_key_idx').on(table.tbaKey),
+    // Every public read of this table now filters on the season, so this index
+    // carries the default map query rather than a reporting query.
+    index('event_listings_season_year_idx').on(table.seasonYear),
+    // Walked in both directions: "what did this renew" and "has anyone already
+    // renewed this", which is the check that stops the April email asking about
+    // an event whose next listing is already in the queue.
+    index('event_listings_previous_listing_idx').on(table.previousListingId),
   ],
 )
 
@@ -227,6 +273,88 @@ export const eventListingsRelations = relations(eventListings, ({ many }) => ({
 export const eventRosterSnapshotsRelations = relations(eventRosterSnapshots, ({ one }) => ({
   listing: one(eventListings, { fields: [eventRosterSnapshots.eventListingId], references: [eventListings.id] }),
 }))
+
+// ---------------------------------------------------------------------------
+// The season rule
+//
+// THE OFFSEASON SEASON IS THE CALENDAR YEAR. It ends on 31 December and the
+// next one starts on 1 January. That is Filip's rule and it is the one the
+// organisers use, so a "2026 offseason event" is any offseason event whose
+// dates fall in 2026.
+//
+// DO NOT reuse the FTC or FRC competition-season convention that the `events`
+// table uses. Over there the 2025-26 FTC season is stored as 2026 and TOA's
+// "2223" means 2023, because a competition season straddles two calendar
+// years. An offseason listing does not straddle anything. Mixing the two
+// conventions in one database is how a listing ends up filed a year out.
+//
+// Everything below is pure arithmetic on a date. It lives beside the columns
+// it explains so there is one definition of "which season is this" for the
+// web app, the worker and the migration to agree on.
+// ---------------------------------------------------------------------------
+
+/**
+ * The season one set of event dates belongs to: the calendar year of the start
+ * date. Null when there is no date to read, which is the caller's cue to fall
+ * back to the season we are currently in.
+ *
+ * Takes the raw `YYYY-MM-DD` string the `date` columns hold, and reads the year
+ * off the front of it rather than through `new Date()`, because parsing a bare
+ * date string gives midnight UTC and would file a 1 January event in the
+ * previous year for anyone west of Greenwich.
+ */
+export function offseasonSeasonYear(startDate: string | null | undefined): number | null {
+  if (!startDate) return null
+  const year = Number.parseInt(startDate.slice(0, 4), 10)
+  return Number.isInteger(year) && year > 1900 ? year : null
+}
+
+/**
+ * The season that is running now. Rolls over at midnight on 1 January, in the
+ * server's own zone, which is the whole archiving mechanism: on that date every
+ * listing from the year before becomes historical in one step.
+ */
+export function currentOffseasonSeason(now: Date = new Date()): number {
+  return now.getFullYear()
+}
+
+/**
+ * True when this listing belongs to a season that has finished, so it is
+ * hidden from the default view and reachable through the earlier-years view.
+ *
+ * A null season is NEVER archived. An undated listing is one somebody is still
+ * putting together, and dropping it off the map would be the one failure mode
+ * this whole feature must not have.
+ */
+export function isArchivedSeason(seasonYear: number | null | undefined, currentSeason: number): boolean {
+  return seasonYear != null && seasonYear < currentSeason
+}
+
+// ---------------------------------------------------------------------------
+// The renewal ask
+// ---------------------------------------------------------------------------
+
+/** April. The month the renewal email goes out in. Cron months are 1 based. */
+export const SEASON_RENEWAL_MONTH = 4
+
+/**
+ * Mid-April. Far enough into the year that an organiser knows whether they are
+ * running it again, early enough that they can still book a venue and open
+ * registration before the summer events start.
+ */
+export const SEASON_RENEWAL_DAY = 15
+
+/**
+ * How many days running the renewal job is scheduled for, starting on
+ * SEASON_RENEWAL_DAY.
+ *
+ * A once-a-year cron that fires on one day is one worker restart away from
+ * skipping a whole season in silence, and nobody would find out until the
+ * following April. So it is scheduled for a week instead. Every run after the
+ * first is free: the dedupe key already holds the row, so the second through
+ * seventh passes queue nothing.
+ */
+export const SEASON_RENEWAL_WINDOW_DAYS = 7
 
 // ---------------------------------------------------------------------------
 // Types

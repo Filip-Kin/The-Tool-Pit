@@ -1,8 +1,13 @@
+import { and, eq, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import {
   eventListings,
+  listingOwners,
+  currentOffseasonSeason,
+  offseasonSeasonYear,
   EVENT_PROGRAMS,
   EVENT_STATUSES,
+  LISTING_WRITE_ROLES,
   REGISTRATION_STATUSES,
   VOLUNTEER_STATUSES,
 } from '@the-tool-pit/db'
@@ -46,6 +51,15 @@ export interface CreateEventSubmissionInput {
    * attribution and lets the submitter find it again later.
    */
   submittedByUserId?: string
+  /**
+   * Set when this is a renewal, from /events/submit?renew=<id>. It links the
+   * new season's listing back to last year's, which is what carries the
+   * history and the owners forward.
+   *
+   * Never trusted: the id is checked against a published listing before it is
+   * written, so a made up or unpublished id is dropped rather than stored.
+   */
+  previousListingId?: string
 }
 
 export interface CreateEventSubmissionResult {
@@ -93,6 +107,20 @@ export async function createEventSubmission(
   const registrationStatus = pickEnum(input.registrationStatus, REGISTRATION_STATUSES, 'unknown')
   const eventStatus = pickEnum(input.eventStatus, EVENT_STATUSES, 'confirmed')
 
+  const startDate = cleanDate(input.startDate)
+  const endDate = cleanDate(input.endDate)
+
+  // A renewal only counts when it points at a listing that really is published.
+  // The id arrives from a query string, so an unchecked one would let anybody
+  // hang a new row off any uuid they liked.
+  const previousListingId = await resolvePreviousListing(input.previousListingId)
+
+  // The season is the calendar year of the dates. With no dates yet, it is the
+  // year we are in, which is the year somebody filling this form in today is
+  // thinking about. Never inferred from the previous listing plus one: a
+  // renewal that skipped a year would be filed a year early.
+  const seasonYear = offseasonSeasonYear(startDate ?? endDate) ?? currentOffseasonSeason()
+
   const values: NewEventListing = {
     name,
     program: pickEnum(input.program, EVENT_PROGRAMS, 'frc'),
@@ -104,8 +132,10 @@ export async function createEventSubmission(
     city: input.city?.trim() || null,
     region: input.region?.trim() || null,
     country: input.country?.trim() || null,
-    startDate: cleanDate(input.startDate),
-    endDate: cleanDate(input.endDate),
+    seasonYear,
+    previousListingId,
+    startDate,
+    endDate,
     days,
     parallelDivisions: Boolean(input.parallelDivisions),
     capacity,
@@ -131,6 +161,13 @@ export async function createEventSubmission(
   }
 
   const [row] = await db.insert(eventListings).values(values).returning({ id: eventListings.id })
+
+  // A renewal keeps its owner. Somebody who already runs last year's listing
+  // should not have to claim this year's and wait for a moderator to agree
+  // they are still the same person.
+  if (previousListingId && input.submittedByUserId) {
+    await carryOwnershipForward(previousListingId, row.id, input.submittedByUserId)
+  }
 
   void notifyNewEventSubmission({
     listingId: row.id,
@@ -161,3 +198,83 @@ export async function createEventSubmission(
     message: "Thanks! We'll review this event and add it to the map.",
   }
 }
+
+// #region renewal
+
+/**
+ * Check a claimed previous listing and hand back its id, or null.
+ *
+ * Null for anything we cannot stand behind: no id given, not a uuid we hold,
+ * or a listing that is not published. A renewal chain that points at a
+ * rejected or deleted row tells the reader a history that never happened.
+ */
+async function resolvePreviousListing(id: string | undefined): Promise<string | null> {
+  const wanted = id?.trim()
+  if (!wanted) return null
+  try {
+    const db = getDb()
+    const [prev] = await db
+      .select({ id: eventListings.id })
+      .from(eventListings)
+      .where(and(eq(eventListings.id, wanted), eq(eventListings.status, 'published')))
+      .limit(1)
+    return prev?.id ?? null
+  } catch {
+    // A malformed uuid makes Postgres throw rather than return no rows. That is
+    // a bad link, not a broken submission, so the event still goes in without
+    // the chain.
+    return null
+  }
+}
+
+/**
+ * Give the renewing user the same role on the new listing they hold on the old
+ * one.
+ *
+ * ONLY THE SUBMITTER, and only when they ALREADY hold a write role on last
+ * year's listing. This is not a general ownership transfer: copying every
+ * owner across would hand a role to people who have not touched the account in
+ * a year, and copying it for a stranger who guessed the renew link would hand
+ * away the listing outright. The one case this covers is the organiser filling
+ * in next year's form while signed in, which is the case that matters.
+ *
+ * Best effort. The listing is already inserted by this point and a failure to
+ * write a permission row must not turn a good submission into an error; they
+ * can still claim it the normal way.
+ */
+async function carryOwnershipForward(
+  previousListingId: string,
+  newListingId: string,
+  userId: string,
+): Promise<void> {
+  try {
+    const db = getDb()
+    const [held] = await db
+      .select({ role: listingOwners.role })
+      .from(listingOwners)
+      .where(
+        and(
+          eq(listingOwners.entityType, 'event'),
+          eq(listingOwners.entityId, previousListingId),
+          eq(listingOwners.userId, userId),
+          inArray(listingOwners.role, [...LISTING_WRITE_ROLES]),
+        ),
+      )
+      .limit(1)
+    if (!held) return
+
+    await db.insert(listingOwners).values({
+      entityType: 'event',
+      entityId: newListingId,
+      userId,
+      role: held.role,
+      verifiedVia: 'self_submitted',
+    })
+  } catch (err) {
+    console.error(
+      `[events/renew] could not carry ownership from ${previousListingId} to ${newListingId}: ${(err as Error).message}`,
+    )
+  }
+}
+
+// #endregion

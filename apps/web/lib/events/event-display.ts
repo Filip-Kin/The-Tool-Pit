@@ -28,6 +28,13 @@ export interface PublicEvent {
   city: string | null
   region: string | null
   country: string | null
+  /**
+   * The calendar year this listing belongs to. Null when it has no dates yet,
+   * which is read as the current season, never as archived.
+   */
+  seasonYear: number | null
+  /** Last year's listing, when this one renewed it. Null for a first listing. */
+  previousListingId: string | null
   startDate: string | null
   endDate: string | null
   days: number | null
@@ -49,6 +56,80 @@ export interface PublicEvent {
   /** Team count from the latest approved roster snapshot (TBA or a vetted scrape). */
   registeredTeamCount: number | null
   teamCountUpdatedAt: string | null
+}
+
+// ---------------------------------------------------------------------------
+// Season - the OTHER axis, and the one people confuse with timing
+//
+// TWO DIFFERENT QUESTIONS, and the UI has to keep them apart:
+//
+//   SEASON  "which year's offseason is this listing part of"
+//   TIMING  "has this listing's weekend been and gone"
+//
+// The offseason season is the calendar year and it ends on 31 December, so on
+// 1 January every listing from the year before becomes historical in one step.
+// That is what `seasonScope` selects between: the year we are in, or the years
+// that are finished.
+//
+// Timing is what the Upcoming / Past / All control selects between, and it only
+// ever means "within the listings on screen". A Kettering Kickoff that ran last
+// September is PAST inside the 2026 season and it is ARCHIVED once 2027 starts,
+// and those are two separate facts about it.
+//
+// This module owns the season predicate rather than importing it from
+// @the-tool-pit/db, because these functions are called from client components
+// and the db barrel opens a database connection. The rule itself, and the
+// migration that backfills it, live in packages/db/src/schema/event-listings.ts.
+// ---------------------------------------------------------------------------
+
+/** Which years of listings are on screen. */
+export type SeasonScope = 'current' | 'earlier'
+
+/**
+ * True when this listing belongs to a finished season.
+ *
+ * A null season is never archived: a listing with no dates yet is one somebody
+ * is still putting together, and it stays on the map.
+ */
+export function isArchivedListing(
+  ev: Pick<PublicEvent, 'seasonYear'>,
+  currentSeason: number,
+): boolean {
+  return ev.seasonYear != null && ev.seasonYear < currentSeason
+}
+
+/**
+ * Split a mixed list into the seasons that are live and the seasons that are
+ * finished. Used to check the server filter from a test and to label a view
+ * that turned out to hold more than one year.
+ */
+export function partitionBySeason(
+  events: PublicEvent[],
+  currentSeason: number,
+): { current: PublicEvent[]; earlier: PublicEvent[] } {
+  const current: PublicEvent[] = []
+  const earlier: PublicEvent[] = []
+  for (const ev of events) (isArchivedListing(ev, currentSeason) ? earlier : current).push(ev)
+  return { current, earlier }
+}
+
+/**
+ * The distinct seasons present, newest first. Drives the "2026 and 2025" line
+ * on the earlier-years view, so the reader is told which years they are looking
+ * at rather than having to read every card's date.
+ */
+export function seasonsPresent(events: Pick<PublicEvent, 'seasonYear'>[]): number[] {
+  const years = new Set<number>()
+  for (const ev of events) if (ev.seasonYear != null) years.add(ev.seasonYear)
+  return [...years].sort((a, b) => b - a)
+}
+
+/** "2026", "2026 and 2025", "2026 to 2023". Empty string when no year is known. */
+export function seasonRangeLabel(years: number[]): string {
+  if (years.length === 0) return ''
+  if (years.length === 1) return String(years[0])
+  if (years.length === 2) return `${years[0]} and ${years[1]}`
+  return `${years[0]} to ${years[years.length - 1]}`
 }
 
 // ---------------------------------------------------------------------------

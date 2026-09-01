@@ -10,6 +10,14 @@ import type { GrantEnrichPayload } from './grants/enrich.js'
 import type { GrantMonitorPayload } from './grants/monitor.js'
 import type { GrantMatchJobPayload } from './grants/matcher.js'
 import type { ListingDiscoverPayload } from './listings/discover.js'
+// The offseason season rule and the renewal date live beside the column they
+// describe, so the schedule below and the migration that backfills the season
+// cannot drift apart.
+import {
+  SEASON_RENEWAL_MONTH,
+  SEASON_RENEWAL_DAY,
+  SEASON_RENEWAL_WINDOW_DAYS,
+} from '@the-tool-pit/db'
 
 // One Redis connection for all queues
 const connection = getRedis()
@@ -199,6 +207,24 @@ export const listingDiscoverQueue = new Queue<ListingDiscoverPayload>('listing-d
   },
 })
 
+/**
+ * The yearly "are you running it again" ask for last season's event listings.
+ *
+ * attempts: 1, the same reasoning as grant-alert-drain. The retry story lives
+ * in the outbox rows the job writes, which carry their own attempt count and
+ * dedupe key, so a BullMQ retry would only re-enter a sweep that is already
+ * idempotent and buy nothing. If a pass dies halfway, tomorrow's pass in the
+ * same window finishes the job.
+ */
+export const seasonRenewalQueue = new Queue('event-season-renewal', {
+  connection,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: { count: 10 },
+    removeOnFail: { count: 20 },
+  },
+})
+
 // #endregion
 
 /** Schedule recurring jobs. Call once on worker startup. */
@@ -378,6 +404,27 @@ export async function scheduleRecurringJobs() {
     name: 'listing-discover-cd-fields',
     data: { connector: 'cd_practice_fields' },
   })
+
+  // The mid-April renewal ask. A CRON PATTERN AND NOT `every`, and this is the
+  // job the comment above the grants block was written for: `every` counts
+  // from the upsert, which is worker startup, so `every: 365 days` would fire
+  // the whole renewal run on the next deploy, whatever the date.
+  //
+  // Scheduled for a WEEK of mornings from the 15th, not one. A once-a-year job
+  // pinned to a single day is one worker restart, one full disk or one bad
+  // deploy away from skipping a whole season, and nobody would notice until
+  // the following April. Passes two through seven are free: every ask is
+  // already held by its dedupe key in notification_outbox, so they queue
+  // nothing and log a line saying so.
+  //
+  // 09:10 UTC keeps it clear of the discovery sweeps, which all run between
+  // 02:00 and 07:00.
+  const renewalDays = `${SEASON_RENEWAL_DAY}-${SEASON_RENEWAL_DAY + SEASON_RENEWAL_WINDOW_DAYS - 1}`
+  await seasonRenewalQueue.upsertJobScheduler(
+    'event-season-renewal',
+    { pattern: `10 9 ${renewalDays} ${SEASON_RENEWAL_MONTH} *` },
+    { name: 'event-season-renewal', data: {} },
+  )
 
   // Drain queued alerts every 5 minutes. Alerts are written by other jobs and
   // by the deadline sweep, and this is the only thing that turns them into

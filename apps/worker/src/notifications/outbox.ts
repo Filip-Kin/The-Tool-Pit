@@ -28,6 +28,11 @@ import {
 } from '@the-tool-pit/types'
 import { canDeliverTo, sandboxRefusalReason, sendEmail } from '../grants/mailer.js'
 import { resolveEmailRecipient } from './recipients.js'
+import {
+  SEASON_RENEWAL_EMAIL_KIND,
+  isSeasonRenewalPayload,
+  renderSeasonRenewalEmail,
+} from './season-renewal-email.js'
 
 // #region policy
 
@@ -74,6 +79,16 @@ const DEFAULT_DRAIN_LIMIT = 200
  * deploy than the one draining, and a payload with no title.
  */
 function renderRow(kind: string, payload: unknown): EmailBody | null {
+  // The yearly offseason renewal ask. Queued, retried, parked and counted like
+  // every other row in this table; it only renders somewhere else because it
+  // is a question rather than a moderation outcome. See
+  // ./season-renewal-email.ts.
+  if (kind === SEASON_RENEWAL_EMAIL_KIND) {
+    return isSeasonRenewalPayload(payload)
+      ? renderSeasonRenewalEmail(payload, preferencesUrl())
+      : null
+  }
+
   if (!isApprovalEmailKind(kind)) return null
   if (!payload || typeof payload !== 'object') return null
   const p = payload as ApprovalEmailPayload

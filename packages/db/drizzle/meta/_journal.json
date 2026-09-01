@@ -120,6 +120,20 @@
       "when": 1788281240222,
       "tag": "0016_famous_stature",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788284181599,
+      "tag": "0017_dusty_gertrude_yorkes",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788284182599,
+      "tag": "0018_natural_speed",
+      "breakpoints": true
     }
   ]
 }
