@@ -28,6 +28,16 @@ import { delay } from '../connectors/base.js'
 
 export interface PopularityRefreshPayload {
   /**
+   * Refresh ONE listing rather than sweeping every published row.
+   *
+   * Set when somebody has just added or changed a GitHub link. Waiting until
+   * 07:20 tomorrow to find out a tool has 400 stars means the person who added
+   * the link sees a zero and reasonably concludes it did not work. One listing
+   * is two requests, so there is no reason to make them wait.
+   */
+  toolId?: string
+
+  /**
    * Skip the Chief Delphi half. The forum moves far slower than GitHub and it
    * is somebody else's server, so an operator re-running the pass by hand to
    * pick up stars should not make 165 more requests to it.
@@ -88,11 +98,19 @@ export async function processPopularityRefreshJob(
 
   // #region GitHub stars
 
+  const onlyTool = payload.toolId ?? null
+
   const githubTargets = await db
     .select({ id: tools.id, slug: tools.slug, url: toolLinks.url })
     .from(tools)
     .innerJoin(toolLinks, eq(toolLinks.toolId, tools.id))
-    .where(and(eq(tools.status, 'published'), eq(toolLinks.linkType, 'github')))
+    .where(
+      and(
+        eq(tools.status, 'published'),
+        eq(toolLinks.linkType, 'github'),
+        ...(onlyTool ? [eq(tools.id, onlyTool)] : []),
+      ),
+    )
 
   stats.githubConsidered = githubTargets.length
 
@@ -170,7 +188,13 @@ export async function processPopularityRefreshJob(
       .select({ id: tools.id, slug: tools.slug, url: toolLinks.url })
       .from(tools)
       .innerJoin(toolLinks, eq(toolLinks.toolId, tools.id))
-      .where(and(eq(tools.status, 'published'), sql`${toolLinks.url} like '%chiefdelphi.com/t/%'`))
+      .where(
+        and(
+          eq(tools.status, 'published'),
+          sql`${toolLinks.url} like '%chiefdelphi.com/t/%'`,
+          ...(onlyTool ? [eq(tools.id, onlyTool)] : []),
+        ),
+      )
 
     for (const target of cdTargets) {
       const topicId = parseChiefDelphiTopicId(target.url)
@@ -211,7 +235,7 @@ export async function processPopularityRefreshJob(
         select count(*) from tool_votes tv where tv.tool_id = ${tools.id}
       ), 0)`,
     })
-    .where(eq(tools.status, 'published'))
+    .where(and(eq(tools.status, 'published'), ...(onlyTool ? [eq(tools.id, onlyTool)] : [])))
     .returning({ id: tools.id })
   stats.scoresRewritten = rewritten.length
 

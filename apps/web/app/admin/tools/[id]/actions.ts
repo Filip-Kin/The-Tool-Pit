@@ -7,6 +7,7 @@ import { eq, and, inArray, desc } from 'drizzle-orm'
 import { Queue } from 'bullmq'
 import { getDb } from '@/lib/db'
 import { getRedis } from '@/lib/redis'
+import { refreshListingPopularity, linkChangeNeedsPopularityRefresh } from '@/lib/queues/popularity'
 import {
   tools,
   toolPrograms,
@@ -125,9 +126,13 @@ export async function saveTool(formData: FormData) {
   // Sync primary link types (homepage, github, docs, forum)
   // Delete existing entries for these types and re-insert non-empty ones
   const PRIMARY_LINK_TYPES = ['homepage', 'github', 'docs', 'forum'] as const
+  const changedLinkTypes: string[] = []
   for (const linkType of PRIMARY_LINK_TYPES) {
     const url = (formData.get(`link_${linkType}`) as string)?.trim() || null
-    if (!sameValue(url, beforeLinks[linkType] ?? null)) claimed.push(linkMarker(linkType))
+    if (!sameValue(url, beforeLinks[linkType] ?? null)) {
+      claimed.push(linkMarker(linkType))
+      changedLinkTypes.push(linkType)
+    }
     await db
       .delete(toolLinks)
       .where(and(eq(toolLinks.toolId, toolId), eq(toolLinks.linkType, linkType)))
@@ -187,6 +192,12 @@ export async function saveTool(formData: FormData) {
         .insert(toolAudienceFunctions)
         .values(fnRows.map((f) => ({ toolId, functionId: f.id })))
     }
+  }
+
+  // A repo or a forum thread that was just added has no stars or likes counted
+  // against it until something reads them. Do it now rather than at 07:20.
+  if (linkChangeNeedsPopularityRefresh(changedLinkTypes)) {
+    await refreshListingPopularity(toolId)
   }
 
   revalidatePath(`/admin/tools`)

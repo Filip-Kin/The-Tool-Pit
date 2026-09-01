@@ -57,6 +57,7 @@ import { normaliseUploadedImage } from '@/lib/images/normalise'
 import { MAX_PHOTOS, readPhotoFiles } from '@/lib/fields/form-parse'
 import { sendApprovalNotice, reviewClaimUrl } from '@the-tool-pit/types'
 import { entityNoun } from '@/components/me/listing-labels'
+import { refreshListingPopularity, linkChangeNeedsPopularityRefresh } from '@/lib/queues/popularity'
 
 /**
  * Listing ownership writes.
@@ -760,10 +761,11 @@ export async function saveToolListing(formData: FormData): Promise<OwnershipActi
     .limit(1)
   const tagsBefore = await loadToolTaxonomy(entityId)
 
+  const changedLinkTypes = await saveToolLinks(entityId, values)
   const claimed = [
     ...changedKeys(set, (before ?? {}) as Record<string, unknown>, HUMAN_EDITABLE_TOOL_KEYS),
     ...(await saveToolTaxonomy(entityId, tagsBefore, pickTags(values))),
-    ...(await saveToolLinks(entityId, values)).map(linkMarker),
+    ...changedLinkTypes.map(linkMarker),
   ]
   const humanEditedFields = addHumanEdits(before?.humanEditedFields, claimed)
 
@@ -777,6 +779,12 @@ export async function saveToolListing(formData: FormData): Promise<OwnershipActi
       updatedAt: new Date(),
     })
     .where(eq(tools.id, entityId))
+
+  // An owner who has just pasted their repo or their Chief Delphi thread should
+  // see the stars and likes counted, not a zero until tomorrow morning.
+  if (linkChangeNeedsPopularityRefresh(changedLinkTypes)) {
+    await refreshListingPopularity(entityId)
+  }
 
   revalidatePath('/me/listings')
   return { message: 'Saved.' }
