@@ -159,6 +159,15 @@ export default async function AdminSubmissionsPage({
                       >
                         {row.url}
                       </a>
+                      {/* What the submitter stated, not what anything inferred.
+                          Shown here so a reviewer checks three facts against
+                          the link rather than working them out again. */}
+                      {row.artifactKind && (
+                        <p className="mt-1 text-[10px] text-muted tabular-nums">
+                          {(row.program ?? 'frc').toUpperCase()} {row.teamNumber} · {row.seasonYear} ·{' '}
+                          {row.artifactKind === 'cad' ? 'CAD' : 'code'}
+                        </p>
+                      )}
                       {resolvedTool && (
                         <Link
                           href={`/admin/tools/${resolvedTool.id}`}

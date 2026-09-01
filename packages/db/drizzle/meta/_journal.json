@@ -92,6 +92,13 @@
       "when": 1788272536870,
       "tag": "0012_abandoned_red_wolf",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788273070062,
+      "tag": "0013_aspiring_wilson_fisk",
+      "breakpoints": true
     }
   ]
 }

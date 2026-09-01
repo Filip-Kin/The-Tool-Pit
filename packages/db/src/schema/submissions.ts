@@ -1,6 +1,14 @@
-import { pgTable, uuid, text, real, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, real, timestamp, jsonb, integer, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { tools } from './tools'
+import type { FieldProgram } from '../field-enums'
+import type { ArtifactKind } from '../robot-code-enums'
+
+// Enum-like value tuples live in ../robot-code-enums (a zero-dependency module)
+// so the submit form can import them without pulling in the DB client.
+// Re-export here so `@the-tool-pit/db` consumers get them from the barrel.
+export { ARTIFACT_KINDS, MIN_SEASON_YEAR, currentSeasonYear, maxSeasonYear } from '../robot-code-enums'
+export type { ArtifactKind } from '../robot-code-enums'
 
 export const submissions = pgTable(
   'submissions',
@@ -19,6 +27,27 @@ export const submissions = pgTable(
     pipelineLog: jsonb('pipeline_log').$type<PipelineLogEntry[]>(),
     confidenceScore: real('confidence_score'),
     spamScore: real('spam_score'),
+
+    // #region what the submitter told us
+    //
+    // The Robot Code / CAD archive is indexed on team number, season and
+    // code-vs-CAD. Those three are exactly what a submitter knows for certain
+    // and what a classifier gets wrong, and wrong attribution is worse than a
+    // missing entry, so the robot-code form captures them and they travel with
+    // the submission instead of being inferred later.
+    //
+    // All four are nullable: the generic tool submit form does not ask for any
+    // of them, and a tool that is not a team artifact has no season or team.
+    /** FIELD_PROGRAMS ('frc' | 'ftc' | 'fll'). Which program the team competes in. */
+    program: text('program').$type<FieldProgram>(),
+    /** FIRST team number (1-99999) the code or CAD belongs to. */
+    teamNumber: integer('team_number'),
+    /** Season the artifact was built for, e.g. 2026. */
+    seasonYear: integer('season_year'),
+    /** ARTIFACT_KINDS. 'code' sets tools.is_team_code on publish, 'cad' sets is_team_cad. */
+    artifactKind: text('artifact_kind').$type<ArtifactKind>(),
+    // #endregion
+
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

@@ -33,6 +33,10 @@
       "bun": "./src/event-enums.ts",
       "default": "./dist/event-enums.js"
     },
+    "./robot-code-enums": {
+      "bun": "./src/robot-code-enums.ts",
+      "default": "./dist/robot-code-enums.js"
+    },
     "./client": {
       "bun": "./src/client.ts",
       "default": "./dist/client.js"

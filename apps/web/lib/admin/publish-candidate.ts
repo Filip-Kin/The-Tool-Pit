@@ -63,6 +63,15 @@ export async function adminPublishCandidate(candidateId: string): Promise<{ tool
     isOfficial: Boolean(classification.isOfficial),
     isVendor: Boolean(classification.isVendor),
     isRookieFriendly: Boolean(classification.isRookieFriendly),
+    // The four the Robot Code / CAD archive is indexed on. For a public
+    // submission the classification is what the submitter typed, so approving
+    // carries their team number and season through instead of asking the admin
+    // to retype what they were already told. Dropping them here (which this
+    // path used to do) published a team repo that the archive could not list.
+    isTeamCode: Boolean(classification.isTeamCode),
+    isTeamCad: Boolean(classification.isTeamCad),
+    teamNumber: typeof classification.teamNumber === 'number' ? classification.teamNumber : null,
+    seasonYear: typeof classification.seasonYear === 'number' ? classification.seasonYear : null,
     confidenceScore: candidate.confidenceScore ?? 0,
     freshnessState: 'unknown',
     publishedAt: new Date(),
