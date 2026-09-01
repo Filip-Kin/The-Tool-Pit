@@ -283,7 +283,14 @@ export async function resolveWithAI(
     return { error: 'ANTHROPIC_API_KEY is not configured' }
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  // Identity-linked API keys reject any request that does not name the workspace
+  // it acts in, so the header goes here too. Absent variable means no header,
+  // which is correct for an ordinary key.
+  const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim()
+  const client = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    ...(workspaceId ? { defaultHeaders: { 'anthropic-workspace-id': workspaceId } } : {}),
+  })
 
   const groupSummaries = groups.map((g, i) => {
     const tools = g.tools

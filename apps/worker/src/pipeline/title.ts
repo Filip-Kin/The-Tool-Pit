@@ -30,6 +30,7 @@
  * that call gets the handful of candidate strings gathered here rather than raw HTML.
  */
 import Anthropic from '@anthropic-ai/sdk'
+import { anthropic } from '../anthropic.js'
 import { decodeHtmlEntities } from './extract.js'
 
 // #region string shapes
@@ -502,7 +503,7 @@ const TITLE_MODEL = 'claude-haiku-4-5-20251001'
 
 let _client: Anthropic | undefined
 function getClient(): Anthropic {
-  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  if (!_client) _client = anthropic()
   return _client
 }
 
