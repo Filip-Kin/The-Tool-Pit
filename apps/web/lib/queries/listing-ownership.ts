@@ -486,6 +486,82 @@ export async function loadListingForEdit(
 
 // #endregion
 
+// #region admin claim queue
+//
+// Every pending claim across all users, for an admin to resolve. Reads the
+// claimant WITH the claim so a reviewer can see who is asking, and the current
+// owners so a dispute is legible ("this tool is already owned by X").
+
+export interface AdminClaim {
+  id: string
+  entityType: ListingEntityType
+  entityId: string
+  method: string
+  createdAt: Date
+  claimantName: string | null
+  claimantEmail: string | null
+  note: string | null
+  facts: ListingFacts | null
+  currentOwners: OwnerRow[]
+}
+
+export async function listPendingClaimsForAdmin(): Promise<AdminClaim[]> {
+  const db = getDb()
+  const rows = await db
+    .select({
+      id: listingClaims.id,
+      entityType: listingClaims.entityType,
+      entityId: listingClaims.entityId,
+      method: listingClaims.method,
+      evidence: listingClaims.evidence,
+      createdAt: listingClaims.createdAt,
+      claimantName: users.displayName,
+      claimantEmail: users.email,
+    })
+    .from(listingClaims)
+    .innerJoin(users, eq(users.id, listingClaims.userId))
+    .where(eq(listingClaims.status, 'pending'))
+    .orderBy(asc(listingClaims.createdAt))
+
+  const typed = rows.filter((r) => isListingEntityType(r.entityType))
+  if (typed.length === 0) return []
+
+  const idsByType = new Map<ListingEntityType, string[]>()
+  for (const r of typed) {
+    const type = r.entityType as ListingEntityType
+    const list = idsByType.get(type)
+    if (list) list.push(r.entityId)
+    else idsByType.set(type, [r.entityId])
+  }
+  const resolvedPerType = await Promise.all(
+    [...idsByType.entries()].map(
+      async ([type, ids]) => [type, await RESOLVERS[type]([...new Set(ids)])] as const,
+    ),
+  )
+  const byType = new Map<ListingEntityType, Resolved>(resolvedPerType)
+
+  // Owners per entity, one lookup each. Small n (a review queue), so kept simple.
+  return Promise.all(
+    typed.map(async (r) => {
+      const type = r.entityType as ListingEntityType
+      return {
+        id: r.id,
+        entityType: type,
+        entityId: r.entityId,
+        method: r.method,
+        createdAt: r.createdAt,
+        claimantName: r.claimantName,
+        claimantEmail: r.claimantEmail,
+        note: r.evidence?.note ?? null,
+        facts: byType.get(type)?.get(r.entityId) ?? null,
+        currentOwners: await listOwnersOf(type, r.entityId),
+      }
+    }),
+  )
+}
+
+// #endregion
+
 // #region owner listing for one entity (admin + invite UIs)
 
 export interface OwnerRow {

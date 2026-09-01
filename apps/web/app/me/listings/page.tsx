@@ -4,8 +4,14 @@ import { getCurrentUser } from '@/lib/auth/session'
 import { MeShell } from '@/components/me/me-shell'
 import { OwnedListings } from '@/components/me/owned-listings'
 import { PendingClaims } from '@/components/me/pending-claims'
-import { listOwnedListings, listClaimsForUser, VERIFY_FILENAME } from '@/lib/queries/listing-ownership'
-import { removeOwner, verifyRepoClaim } from './actions'
+import { ListingClaimReview } from '@/components/me/listing-claim-review'
+import {
+  listOwnedListings,
+  listClaimsForUser,
+  listPendingClaimsForAdmin,
+  VERIFY_FILENAME,
+} from '@/lib/queries/listing-ownership'
+import { adminResolveClaim, removeOwner, verifyRepoClaim } from './actions'
 
 export const metadata: Metadata = {
   title: 'Your listings',
@@ -18,9 +24,11 @@ export default async function ListingsPage() {
   const user = await getCurrentUser()
   if (!user) redirect('/')
 
-  const [owned, claims] = await Promise.all([
+  const [owned, claims, adminClaims] = await Promise.all([
     listOwnedListings(user.id),
     listClaimsForUser(user.id),
+    // Only load the review queue for an actual admin. isAdmin is a DB flag.
+    user.isAdmin ? listPendingClaimsForAdmin() : Promise.resolve([]),
   ])
   // Settled claims are shown alongside owned listings elsewhere; here we only
   // surface the ones still needing attention or waiting.
@@ -35,6 +43,7 @@ export default async function ListingsPage() {
       <div className="flex flex-col gap-12">
         <OwnedListings listings={owned} leaveAction={removeOwner} />
         <PendingClaims claims={openClaims} verifyFilename={VERIFY_FILENAME} verifyAction={verifyRepoClaim} />
+        {user.isAdmin && <ListingClaimReview claims={adminClaims} resolveAction={adminResolveClaim} />}
 
         <p className="max-w-2xl text-sm text-muted-2">
           Claiming a listing does not take it away from anyone. If someone already manages it, your
