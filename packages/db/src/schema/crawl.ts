@@ -99,6 +99,13 @@ export interface RawCandidateMetadata {
   description?: string
   ogDescription?: string
   githubUrl?: string
+  /**
+   * A GitHub repo the page links but that is not the page's own: a navbar or
+   * footer link, or a link into the repo (/releases, /issues, a line of a file)
+   * rather than to it. Never used to enrich the listing, because on a docs theme
+   * it is the same link on all four hundred pages. A dedup signal only.
+   */
+  referencedGitHubUrl?: string
   homepageUrl?: string
   docsUrl?: string
   keywords?: string[]

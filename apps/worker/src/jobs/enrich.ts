@@ -292,11 +292,15 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
   // 2b-ii. Documentation-subpage gate. Skipped for the two trusted connectors below, which
   //        emit GitHub repos directly and are classified without a model at all.
   if (sourceType !== 'spectrum_cad' && sourceType !== 'github_team_code') {
-    const owner = githubUrl
-      ? await findPublishedToolForRepo(githubUrl, url, candidate.matchedToolId)
+    // The chrome link counts here and nowhere else. extract.ts refuses to treat a
+    // navbar or footer repo as the page's own, which is right, and that same link
+    // is still the clearest evidence that this page belongs to a listed tool.
+    const repoHint = githubUrl ?? (enrichedMetadata.referencedGitHubUrl as string | undefined)
+    const owner = repoHint
+      ? await findPublishedToolForRepo(repoHint, url, candidate.matchedToolId)
       : null
     const docReason = owner
-      ? `Page of an already-listed tool: its GitHub link is ${githubUrl}, already published as "${owner.name}" (${owner.slug})`
+      ? `Page of an already-listed tool: its GitHub link is ${repoHint}, already published as "${owner.name}" (${owner.slug})`
       : detectDocPageTitle(qualityTitle, url)
 
     if (docReason) {

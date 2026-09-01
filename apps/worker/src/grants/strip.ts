@@ -178,12 +178,16 @@ function normaliseWhitespace(text: string): string {
 }
 
 /**
- * Turn a fetched HTML page into the stable text a hash and an extractor can
- * both work from. Returns an empty string for junk input rather than throwing,
- * because the caller treats "no content" as a failed fetch already.
+ * The page with its chrome removed, as a live element rather than as text.
+ * Returns null for junk input rather than throwing.
+ *
+ * Callers that only want the words should use stripToMainContent. This exists
+ * for callers that need to query the surviving tree, for example the crawler
+ * asking "is this GitHub link in the page's own content, or in the navbar of a
+ * documentation theme that puts the same link on all four hundred pages".
  */
-export function stripToMainContent(html: string): string {
-  if (!html || html.length < 40) return ''
+export function mainContentRoot(html: string): HTMLElement | null {
+  if (!html || html.length < 40) return null
 
   let root: HTMLElement
   try {
@@ -193,14 +197,14 @@ export function stripToMainContent(html: string): string {
       blockTextElements: { script: false, noscript: false, style: false, pre: true },
     })
   } catch {
-    return ''
+    return null
   }
 
   for (const el of root.querySelectorAll(DROP_TAGS.join(','))) el.remove()
 
   const body = root.querySelector('body') ?? root
   const bodyLength = body.structuredText.replace(/\s+/g, ' ').trim().length
-  if (bodyLength === 0) return ''
+  if (bodyLength === 0) return null
 
   // Chrome removal by id/class. Walk a snapshot of the list because removing a
   // parent invalidates the children still queued behind it; `isConnected`
@@ -229,7 +233,17 @@ export function stripToMainContent(html: string): string {
     }
   }
 
-  return normaliseWhitespace(scope.structuredText)
+  return scope
+}
+
+/**
+ * Turn a fetched HTML page into the stable text a hash and an extractor can
+ * both work from. Returns an empty string for junk input rather than throwing,
+ * because the caller treats "no content" as a failed fetch already.
+ */
+export function stripToMainContent(html: string): string {
+  const scope = mainContentRoot(html)
+  return scope ? normaliseWhitespace(scope.structuredText) : ''
 }
 
 /**

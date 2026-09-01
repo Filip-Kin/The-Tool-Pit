@@ -2,7 +2,8 @@
  * HTML metadata extraction.
  * Deterministic first — no AI at this stage.
  */
-import { parse } from 'node-html-parser'
+import { parse, type HTMLElement } from 'node-html-parser'
+import { mainContentRoot } from '../grants/strip.js'
 import { politeFetch } from '../connectors/base.js'
 import { parseGitHubUrl, fetchGitHubRepo } from '../connectors/github.js'
 import type { RawCandidateMetadata } from '@the-tool-pit/db'
@@ -190,6 +191,225 @@ export function normalizeTitle(raw: string, siteName?: string): string {
 }
 // #endregion
 
+// #region github link picker
+/**
+ * Picking the page's GitHub repo is the single most consequential thing this
+ * file does, because everything downstream treats that repo as the page's
+ * identity: enrich.ts fetches it and backfills its description, homepage and
+ * topics, and publish.ts writes its star count as the listing's popularity.
+ *
+ * Taking the first github.com anchor in document order got that wrong in the
+ * worst possible way. On a Docusaurus or GitBook page the first one is the
+ * navbar link, identical on every page of the site, so four hundred doc pages
+ * all claimed to be the project. On a Read the Docs page it is the footer theme
+ * credit, which is how a VScouter page came to hold 5075 stars belonging to
+ * readthedocs/sphinx_rtd_theme and led the home page.
+ *
+ * Two signals decide it, and the second matters more than it looks. Chrome
+ * versus content is the obvious one. The other is where in the repo the link
+ * points: a page that IS the project links the repo root, while a page ABOUT
+ * the project links into it, at /releases, /issues, or a line of a file. Real
+ * pages checked while writing this: the AdvantageKit installation page links
+ * only /releases, its template page links a #L90 line anchor, the PhotonVision
+ * quick-install page links /releases/latest. None of them links the root, and
+ * every one of them had been indexed as its own tool holding the repo's stars.
+ *
+ * So a repo root in the page's own content is this page's repo. A root in the
+ * chrome counts only on a site's front page, which is where a project's home
+ * page keeps its GitHub button. Everything else is a reference, not an
+ * identity, and is returned separately so the dedup gate can still use it.
+ */
+
+/** Host labels that say nothing about which project a page belongs to. */
+const GENERIC_HOST_LABELS = new Set([
+  'www', 'docs', 'doc', 'documentation', 'wiki', 'guide', 'guides', 'help', 'support',
+  'app', 'apps', 'web', 'site', 'sites', 'page', 'pages', 'blog', 'api', 'dev', 'io',
+  'com', 'org', 'net', 'edu', 'co', 'uk', 'us', 'me', 'info', 'xyz', 'tech', 'tools',
+  'github', 'gitbook', 'readthedocs', 'netlify', 'vercel', 'herokuapp', 'firebaseapp',
+  'gitlab', 'sourceforge', 'notion', 'gitee', 'surge', 'render', 'fly', 'workers',
+])
+
+/** Words too common in a page title to prove a repo belongs to that page. */
+const GENERIC_TITLE_WORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'your', 'our', 'you', 'this', 'that', 'are',
+  'docs', 'doc', 'documentation', 'home', 'welcome', 'guide', 'guides', 'intro',
+  'introduction', 'overview', 'getting', 'started', 'install', 'installation', 'setup',
+  'usage', 'reference', 'api', 'app', 'web', 'tool', 'tools', 'project', 'projects',
+  'robot', 'robotics', 'first', 'frc', 'ftc', 'fll', 'team', 'teams', 'code', 'library',
+  'page', 'site', 'new', 'how', 'what', 'why', 'use', 'using', 'about',
+])
+
+/**
+ * github.com paths whose first segment is a site feature rather than an owner.
+ * "github.com/orgs/frc" looks exactly like owner/repo to a two-segment regex.
+ */
+const GITHUB_RESERVED_OWNERS = new Set([
+  'orgs', 'users', 'sponsors', 'topics', 'collections', 'settings', 'features',
+  'marketplace', 'apps', 'about', 'pricing', 'login', 'join', 'search', 'explore',
+  'notifications', 'codespaces', 'enterprise', 'site', 'security', 'contact', 'blog',
+  'readme', 'account', 'new', 'stars', 'trending', 'events', 'sitemap',
+])
+
+/** Lowercase alphanumerics only, so "AdvantageKit", "advantage-kit" and "advantage_kit" agree. */
+function alphaNumeric(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+/** Distinctive labels of a hostname, e.g. "docs.advantagekit.org" gives ["advantagekit"]. */
+function hostTokens(hostname: string): string[] {
+  return hostname
+    .toLowerCase()
+    .split('.')
+    .filter((label) => label.length >= 4 && !GENERIC_HOST_LABELS.has(label))
+    .map(alphaNumeric)
+    .filter(Boolean)
+}
+
+/** Distinctive words of a page title. */
+function titleTokens(title: string): string[] {
+  return title
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length >= 4 && !GENERIC_TITLE_WORDS.has(word))
+    .filter(Boolean)
+}
+
+/**
+ * Does this repo plausibly belong to the page it was found on? True when the
+ * owner or the repo name shares a distinctive token with the page's hostname or
+ * its title.
+ */
+export function isRelatedRepo(githubUrl: string, pageUrl: string, title: string): boolean {
+  const parsed = parseGitHubUrl(githubUrl)
+  if (!parsed) return false
+
+  const owner = alphaNumeric(parsed.owner)
+  const repo = alphaNumeric(parsed.repo)
+  if (!owner && !repo) return false
+
+  let tokens: string[] = []
+  try {
+    tokens = hostTokens(new URL(pageUrl).hostname)
+  } catch {
+    tokens = []
+  }
+  tokens = [...tokens, ...titleTokens(title)]
+
+  for (const token of tokens) {
+    if (token.length < 4) continue
+    if (owner.includes(token) || token.includes(owner)) return true
+    if (repo.includes(token) || token.includes(repo)) return true
+  }
+
+  // A repo name written out in the title as separate words, e.g. the page
+  // "FRC API for Google Sheets" and the repo FRC-API-for-Google-Sheets.
+  const flatTitle = alphaNumeric(title)
+  if (repo.length >= 6 && flatTitle.includes(repo)) return true
+
+  return false
+}
+
+/** True for github.com/owner/repo itself, false for anything deeper inside it. */
+export function isRepoRootUrl(githubUrl: string): boolean {
+  try {
+    const u = new URL(githubUrl)
+    if (u.hostname.toLowerCase().replace(/^www\./, '') !== 'github.com') return false
+    const parts = u.pathname.replace(/^\/+|\/+$/g, '').split('/')
+    return parts.length === 2 && Boolean(parts[0]) && Boolean(parts[1])
+  } catch {
+    return false
+  }
+}
+
+/** True when the URL addresses a site's front page rather than a page within it. */
+function isSiteRoot(pageUrl: string): boolean {
+  try {
+    return new URL(pageUrl).pathname.replace(/\/+$/, '').length === 0
+  } catch {
+    return false
+  }
+}
+
+interface RepoLink {
+  href: string
+  inContent: boolean
+}
+
+/** Every github.com repo link under an element, in document order, deduplicated. */
+function repoLinksIn(root: HTMLElement): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const a of root.querySelectorAll('a[href*="github.com"]')) {
+    const href = (a.getAttribute('href') ?? '').trim()
+    if (!/github\.com\/[^/]+\/[^/]+/.test(href)) continue
+    if (!href.startsWith('http')) continue
+    const parsed = parseGitHubUrl(href)
+    if (!parsed || GITHUB_RESERVED_OWNERS.has(parsed.owner.toLowerCase())) continue
+    const key = href.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(href)
+  }
+  return out
+}
+
+export interface GitHubLinkPick {
+  /** The repo we are willing to treat as this page's own. */
+  githubUrl?: string
+  /**
+   * A repo the page links but that we refuse to treat as its identity: a navbar
+   * or footer link, or a link into the repo rather than to it. Never used to
+   * enrich the listing. It is still the clearest evidence that the page belongs
+   * to an already-listed tool, which is all the dedup gate in enrich.ts wants.
+   */
+  referencedGitHubUrl?: string
+}
+
+/**
+ * Choose the GitHub repo for a page. Returns nothing rather than guessing: a
+ * listing with a missing link is one edit away from correct and is visibly
+ * incomplete in the admin, while a listing wearing another project's stars is
+ * invisible and quietly corrupts the ranking.
+ */
+export function pickGitHubUrl(html: string, pageUrl: string, title: string): GitHubLinkPick {
+  let links: RepoLink[] = []
+  try {
+    const all = repoLinksIn(parse(html))
+    if (all.length === 0) return {}
+    const content = mainContentRoot(html)
+    const inContent = new Set((content ? repoLinksIn(content) : []).map((h) => h.toLowerCase()))
+    links = all.map((href) => ({ href, inContent: inContent.has(href.toLowerCase()) }))
+  } catch {
+    return {}
+  }
+  if (links.length === 0) return {}
+
+  const related = (l: RepoLink) => isRelatedRepo(l.href, pageUrl, title)
+  const root = (l: RepoLink) => isRepoRootUrl(l.href)
+
+  // The repo root, in the page's own content, that has something to do with the
+  // page. This is a project home page linking its own source.
+  const best = links.find((l) => l.inContent && root(l) && related(l))
+    // An unrelated repo root in the content is still a deliberate link to a
+    // whole project, which a "see also" list of one is indistinguishable from.
+    // Accept it only when nothing related was found anywhere on the page.
+    ?? (links.some(related) ? undefined : links.find((l) => l.inContent && root(l)))
+    // A project's home page keeps its GitHub button in the navbar. That is fine
+    // on the front page of a site and never fine on a page within it, which is
+    // exactly where a docs theme repeats the same link.
+    ?? (isSiteRoot(pageUrl) ? links.find((l) => root(l) && related(l)) : undefined)
+
+  if (best) return { githubUrl: best.href }
+
+  // Nothing we will stand behind. Keep the most informative one as a hint.
+  const hint = links.find((l) => related(l) && root(l))
+    ?? links.find((l) => related(l))
+    ?? links.find((l) => root(l))
+    ?? links[0]
+  return { referencedGitHubUrl: hint.href }
+}
+// #endregion
+
 export async function extractMetadata(url: string): Promise<RawCandidateMetadata> {
   // GitHub repo URLs — use API, not HTML (HTML gives GitHub's own chrome, not repo data)
   if (parseGitHubUrl(url)) {
@@ -246,14 +466,8 @@ export async function extractMetadata(url: string): Promise<RawCandidateMetadata
       .filter(Boolean)
       .slice(0, 20)
 
-    // Find GitHub links on the page
-    const githubLinks = root
-      .querySelectorAll('a[href*="github.com"]')
-      .map((a) => a.getAttribute('href') ?? '')
-      .filter((href) => /github\.com\/[^/]+\/[^/]+/.test(href))
-      .slice(0, 3)
-
-    const githubUrl = githubLinks[0] ?? undefined
+    // Find this page's own GitHub repo, ignoring chrome and deep links.
+    const { githubUrl, referencedGitHubUrl } = pickGitHubUrl(html, url, title)
 
     // Find docs links (heuristic)
     const docsLinks = root
@@ -279,6 +493,7 @@ export async function extractMetadata(url: string): Promise<RawCandidateMetadata
       description,
       ogDescription: ogDesc ?? undefined,
       githubUrl,
+      referencedGitHubUrl,
       docsUrl: docsLinks[0],
       keywords,
       rawHtml: pageText || undefined,
