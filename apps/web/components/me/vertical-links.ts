@@ -12,7 +12,7 @@
  */
 
 export interface VerticalLink {
-  key: 'tools' | 'photos' | 'fields' | 'grants'
+  key: 'tools' | 'photos' | 'fields' | 'grants' | 'code'
   name: string
   /** One line, written for someone who has never used the site. */
   blurb: string
@@ -30,6 +30,7 @@ export interface VerticalLink {
 export const PHOTOS_ORIGIN = '/photos'
 export const FIELDS_ORIGIN = '/fields'
 export const GRANTS_ORIGIN = '/grants'
+export const CODE_ORIGIN = '/robot-code'
 
 export const VERTICALS: VerticalLink[] = [
   {
@@ -55,6 +56,12 @@ export const VERTICALS: VerticalLink[] = [
     name: 'Grants',
     blurb: 'Funding your team can actually apply for, with human-checked deadlines. Save one to keep an eye on it.',
     href: GRANTS_ORIGIN,
+  },
+  {
+    key: 'code',
+    name: 'Robot Code / CAD',
+    blurb: 'Open-source robot code and CAD other teams have published, by team number and season.',
+    href: CODE_ORIGIN,
   },
 ]
 

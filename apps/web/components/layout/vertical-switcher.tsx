@@ -1,5 +1,5 @@
 import { headers } from 'next/headers'
-import { Wrench, Camera, MapPin, CircleDollarSign, ChevronLeft } from 'lucide-react'
+import { Wrench, Camera, MapPin, CircleDollarSign, Code2, ChevronLeft } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
 /**
@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils/cn'
  * see. Buttons under the search bar have room for real labels.
  */
 
-export type VerticalKey = 'tools' | 'photos' | 'fields' | 'grants'
+export type VerticalKey = 'tools' | 'photos' | 'fields' | 'grants' | 'code'
 
 interface Vertical {
   key: VerticalKey
@@ -32,6 +32,10 @@ const VERTICALS: Vertical[] = [
   { key: 'photos', label: 'Photos', slug: 'photos' },
   { key: 'fields', label: 'Fields', slug: 'fields' },
   { key: 'grants', label: 'Grants', slug: 'grants' },
+  // Robot code and CAD is its own vertical, not a page of the tools directory:
+  // it is browsed by team and season rather than searched by what a tool does,
+  // and it has its own submission route.
+  { key: 'code', label: 'Robot Code', slug: 'robot-code' },
 ]
 
 /** Kept apart from VERTICALS so the footer form, which has no icons, does not carry them. */
@@ -40,10 +44,11 @@ const VERTICAL_ICONS: Record<VerticalKey, typeof Wrench> = {
   photos: Camera,
   fields: MapPin,
   grants: CircleDollarSign,
+  code: Code2,
 }
 
 /** Leading host labels the middleware treats as a vertical rather than as part of the base domain. */
-const VERTICAL_SUBDOMAINS = new Set(VERTICALS.map((v) => v.slug).filter((s): s is string => s !== null))
+const VERTICAL_SUBDOMAINS = new Set(['photos', 'fields', 'grants'])
 
 export interface VerticalLink {
   key: VerticalKey

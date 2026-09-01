@@ -8,6 +8,7 @@ import { AwesomeListConnector } from '../connectors/awesome-list.js'
 import { ChiefDelphiConnector } from '../connectors/chief-delphi.js'
 import { TbaTeamsConnector } from '../connectors/tba-teams.js'
 import { SpectrumCadConnector } from '../connectors/spectrum-cad.js'
+import { GitHubTeamCodeConnector } from '../connectors/github-team-code.js'
 import { extractMetadata, canonicalizeUrl } from '../pipeline/extract.js'
 import { checkDuplicateByUrl, checkDuplicateByName } from '../pipeline/deduplicate.js'
 import { enrichQueue } from '../queues.js'
@@ -22,6 +23,10 @@ const CONNECTOR_REGISTRY: Record<string, () => { run(): Promise<{ candidates: un
   chief_delphi: () => new ChiefDelphiConnector(),
   tba_teams: () => new TbaTeamsConnector(),
   spectrum_cad: () => new SpectrumCadConnector(),
+  // Deliberately NOT on a schedule. One sweep is a few hundred GitHub search
+  // requests and can return thousands of candidates, so it is triggered by
+  // hand from the admin Sources screen rather than firing on deploy.
+  github_team_code: () => new GitHubTeamCodeConnector(),
 }
 
 export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {

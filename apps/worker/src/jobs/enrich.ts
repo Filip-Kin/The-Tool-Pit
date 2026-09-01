@@ -203,6 +203,36 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
     return
   }
 
+  // 2d. GitHub team code / CAD: the connector only emits repos whose team
+  //     number is written into the org, repo name or topics, and the season
+  //     comes from the repo name or its last push. A model has nothing to add
+  //     to that, and a sweep can return thousands of repos, so this is
+  //     classified deterministically for the same reason spectrum_cad is.
+  if (sourceType === 'github_team_code') {
+    const kws = (enrichedMetadata.keywords as string[] | undefined) ?? []
+    const isCad = kws.includes('team_cad')
+    const teamNumber = parseKeywordInt(kws, 'team:')
+    const program = kws.includes('ftc') ? 'ftc' : 'frc'
+    const teamClassification: CandidateClassification = {
+      toolType: 'github_project',
+      programs: [program],
+      isTeamCode: !isCad,
+      isTeamCad: isCad,
+      teamNumber,
+      seasonYear: parseKeywordInt(kws, 'year:'),
+      summary: ((enrichedMetadata.description as string | undefined) || (enrichedMetadata.title as string | undefined) || '').slice(0, 300),
+      confidence: 0.9,
+      reasoning: `Team ${teamNumber ?? '?'} ${isCad ? 'CAD' : 'robot code'} repository (team number read from the repo itself)`,
+    }
+    await db
+      .update(crawlCandidates)
+      .set({ rawMetadata: enrichedMetadata, classification: teamClassification, confidenceScore: 0.9, status: 'pending', rejectionReason: null, updatedAt: new Date() })
+      .where(eq(crawlCandidates.id, candidateId))
+    const result = await publishCandidate(candidateId, sourceType)
+    console.log(`[enrich] candidate ${candidateId} (github_team_code): ${result.action}`)
+    return
+  }
+
   // 3. AI classification — now has full enriched context
   const classification = await classifyCandidate(
     enrichedMetadata,
