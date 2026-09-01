@@ -169,6 +169,13 @@
       "when": 1788297395544,
       "tag": "0023_lonely_mongu",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788302842157,
+      "tag": "0024_stars_have_a_checked_at",
+      "breakpoints": true
     }
   ]
 }

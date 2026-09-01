@@ -1,0 +1,1 @@
+ALTER TABLE "tools" ADD COLUMN "stars_checked_at" timestamp with time zone;

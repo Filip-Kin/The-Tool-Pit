@@ -10,6 +10,7 @@ import type { GrantEnrichPayload, GrantExtractPayload } from './grants/enrich.js
 import type { GrantMonitorPayload } from './grants/monitor.js'
 import type { GrantMatchJobPayload } from './grants/matcher.js'
 import type { ListingDiscoverPayload } from './listings/discover.js'
+import type { PopularityRefreshPayload } from './jobs/popularity.js'
 // The offseason season rule and the renewal date live beside the column they
 // describe, so the schedule below and the migration that backfills the season
 // cannot drift apart.
@@ -57,6 +58,23 @@ export const reindexQueue = new Queue<ReindexPayload>('reindex', {
   defaultJobOptions: {
     attempts: 2,
     removeOnComplete: { count: 50 },
+  },
+})
+
+/**
+ * The daily star and like refresh behind Popular.
+ *
+ * attempts: 1. The pass is a long serial sweep that stops itself on a rate
+ * limit, so a BullMQ retry would start the same six hundred requests again
+ * against a budget that is already spent. Every unit of work in it is
+ * idempotent, so tomorrow's run picks up whatever this one missed.
+ */
+export const popularityQueue = new Queue<PopularityRefreshPayload>('popularity', {
+  connection,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: { count: 30 },
+    removeOnFail: { count: 60 },
   },
 })
 
@@ -290,6 +308,20 @@ export async function scheduleRecurringJobs() {
   await linkCheckQueue.upsertJobScheduler('link-check-pass', { every: 7 * 24 * 60 * 60 * 1000 }, {
     name: 'link-check-pass-trigger',
     data: { toolId: '__all__' },
+  })
+
+  // Popularity refresh — daily, on a CRON PATTERN for the reason spelled out
+  // above the grants block: `every` counts from the upsert, which is worker
+  // startup, so a `every: 24h` sweep fires its full six hundred GitHub requests
+  // on every single deploy.
+  //
+  // 07:20 is the first slot clear of everything else. The discovery sweeps run
+  // 02:10 to 06:40 and the renewal ask is at 09:10, so this sits in the gap and
+  // never shares a minute with another outbound-heavy job. Daily because stars
+  // move daily and a directory that is a week behind on WPILib looks unmanned.
+  await popularityQueue.upsertJobScheduler('popularity-refresh', { pattern: '20 7 * * *' }, {
+    name: 'popularity-refresh',
+    data: {},
   })
 
   // --- Photo album aggregator ---

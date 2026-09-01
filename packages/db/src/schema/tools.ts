@@ -89,6 +89,18 @@ export const tools = pgTable(
     popularityScore: real('popularity_score').notNull().default(0),
     /** Cached GitHub star count. Added to popularityScore as external upvotes. */
     githubStars: integer('github_stars').notNull().default(0),
+    /**
+     * When the star count above was last READ FROM GITHUB, not when it last
+     * changed.
+     *
+     * Null means nobody has ever checked, and that is the distinction the
+     * column exists for: 173 published listings hold a GitHub link and zero
+     * stars, and without this there is no way to tell an honestly unstarred
+     * repo from one we never asked about. A 404 deliberately does not touch it,
+     * so a deleted repo shows as a star count that stopped being confirmed
+     * rather than as a fresh zero.
+     */
+    starsCheckedAt: timestamp('stars_checked_at', { withTimezone: true }),
     /** Like count on the primary ChiefDelphi thread for this tool. Added to popularityScore. */
     chiefDelphiLikes: integer('chief_delphi_likes').notNull().default(0),
 

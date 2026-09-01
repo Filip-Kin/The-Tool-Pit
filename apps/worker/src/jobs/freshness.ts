@@ -80,18 +80,11 @@ export async function processFreshnessJob(payload: FreshnessCheckPayload): Promi
 
   let lastActivityAt: Date | null = tool.lastActivityAt
   let archived = false
-  // Stars were only ever written once, at publish time, so a listing created
-  // before its repo was popular stayed at that number forever and a listing
-  // whose duplicate held the correct count sat at zero. The home page ranks on
-  // popularityScore, so a zero here is not cosmetic. Refresh it on the same
-  // pass that already has the repo in hand.
-  let githubStars: number | null = null
 
   if (githubLink) {
     const repoInfo = await fetchGitHubRepo(githubLink.url)
     if (repoInfo) {
       archived = repoInfo.archived
-      githubStars = repoInfo.stars
 
       if (repoInfo.pushedAt) {
         const pushDate = new Date(repoInfo.pushedAt)
@@ -109,16 +102,19 @@ export async function processFreshnessJob(payload: FreshnessCheckPayload): Promi
 
   const newState = computeFreshnessState(lastActivityAt, archived)
 
+  // Freshness, and only freshness.
+  //
+  // This job used to refresh githubStars and popularityScore here as well,
+  // because it already had the repo in hand. It has to stop, for a reason that
+  // is not tidiness: the score it wrote was githubStars + chiefDelphiLikes,
+  // with no votes in it, so this pass silently erased every upvote cast in the
+  // preceding day. jobs/popularity.ts owns both columns now and writes the sum
+  // that vote.ts also writes.
   await db
     .update(tools)
     .set({
       freshnessState: newState,
       lastActivityAt: lastActivityAt ?? tool.lastActivityAt,
-      // Same formula publish.ts uses, so a refreshed row and a freshly published
-      // one cannot disagree about what popularity means.
-      ...(githubStars !== null
-        ? { githubStars, popularityScore: githubStars + tool.chiefDelphiLikes }
-        : {}),
       updatedAt: new Date(),
     })
     .where(eq(tools.id, tool.id))

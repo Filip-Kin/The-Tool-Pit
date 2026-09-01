@@ -10,6 +10,7 @@ import { processCrawlJob } from './jobs/crawl.js'
 import { processEnrichJob } from './jobs/enrich.js'
 import { processFreshnessJob } from './jobs/freshness.js'
 import { processLinkCheckerJob } from './jobs/link-checker.js'
+import { processPopularityRefreshJob } from './jobs/popularity.js'
 import { processReindexJob } from './jobs/reindex.js'
 import { processSubmissionJob } from './jobs/submission.js'
 import { processAlbumIngestJob } from './jobs/album-ingest.js'
@@ -31,6 +32,7 @@ import type { GrantEnrichPayload, GrantExtractPayload } from './grants/enrich.js
 import type { GrantMonitorPayload } from './grants/monitor.js'
 import type { GrantMatchJobPayload } from './grants/matcher.js'
 import type { ListingDiscoverPayload } from './listings/discover.js'
+import type { PopularityRefreshPayload } from './jobs/popularity.js'
 
 const connection = getRedis()
 const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY ?? '2', 10)
@@ -60,6 +62,18 @@ const freshnessWorker = new Worker<FreshnessCheckPayload>(
     await processFreshnessJob(job.data)
   },
   { connection, concurrency: 4 },
+)
+
+const popularityWorker = new Worker<PopularityRefreshPayload>(
+  'popularity',
+  async (job) => {
+    console.log(`[popularity] starting refresh pass ${job.id}`)
+    await processPopularityRefreshJob()
+  },
+  // Concurrency MUST stay 1. The pass holds the GitHub rate-limit budget in its
+  // own loop and stops when it runs low, and a second copy running beside it
+  // would spend that budget behind its back.
+  { connection, concurrency: 1 },
 )
 
 const linkCheckWorker = new Worker<LinkCheckPayload>(
@@ -324,7 +338,7 @@ const seasonRenewalWorker = new Worker(
 // #endregion
 
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, seasonRenewalWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, seasonRenewalWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -347,6 +361,7 @@ async function shutdown() {
     crawlWorker.close(),
     enrichWorker.close(),
     freshnessWorker.close(),
+    popularityWorker.close(),
     linkCheckWorker.close(),
     reindexWorker.close(),
     submissionWorker.close(),
