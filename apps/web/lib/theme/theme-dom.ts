@@ -46,7 +46,22 @@ export function getResolvedTheme(): ResolvedTheme {
 }
 
 /**
- * Store a preference and paint it.
+ * Paint a preference without recording it.
+ *
+ * The half you want when the preference came from somewhere that has already
+ * written it down, which in practice means another tab. Writing it again there
+ * is not merely redundant: setItem fires a storage event in every OTHER tab
+ * even when the value has not changed, so two tabs writing each other's news
+ * back is a loop that never settles.
+ */
+export function paintPreference(preference: ThemePreference): ResolvedTheme {
+  const resolved = resolveTheme(preference, systemPrefersDark())
+  document.documentElement.setAttribute(THEME_ATTRIBUTE, resolved)
+  return resolved
+}
+
+/**
+ * Record a preference and paint it. What the control calls.
  *
  * The write is best-effort. If storage is closed the choice still applies to
  * this page, it just will not be remembered, which is a better outcome than a
@@ -64,9 +79,7 @@ export function applyPreference(preference: ThemePreference): ResolvedTheme {
   } catch {
     // Private browsing, blocked storage. The paint below still happens.
   }
-  const resolved = resolveTheme(preference, systemPrefersDark())
-  document.documentElement.setAttribute(THEME_ATTRIBUTE, resolved)
-  return resolved
+  return paintPreference(preference)
 }
 
 /**

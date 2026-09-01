@@ -10,6 +10,7 @@ import {
   applyPreference,
   getStoredPreference,
   onStoredPreferenceChange,
+  paintPreference,
 } from '@/lib/theme/theme-dom'
 
 /**
@@ -46,7 +47,9 @@ export function ThemeToggle({ className }: { className?: string }) {
     // same site disagreeing about the theme looks like a bug, because it is.
     return onStoredPreferenceChange((next) => {
       setPreference(next)
-      applyPreference(next)
+      // Paint, do not re-record. The other tab already wrote it, and writing it
+      // back would fire the same event straight back at them.
+      paintPreference(next)
     })
   }, [])
 
