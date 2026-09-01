@@ -207,7 +207,7 @@ function friendlyAuthError(code: string, fallback: string): string {
       // The one people actually hit: they signed up with Google months ago and
       // GitHub carries the same email. Firebase's own text for this names no
       // account and offers no next step, so it gets replaced outright.
-      return 'You already have an account with that email address. Sign in the way you did before, then link GitHub from Your listings.'
+      return 'You already have an account with that email address. Sign in the way you did before, then link GitHub from Listings.'
     case 'auth/credential-already-in-use':
       return 'That GitHub account is already attached to a different account here. Sign in with that one instead.'
     case 'auth/provider-already-linked':

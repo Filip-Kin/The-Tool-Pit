@@ -2,6 +2,7 @@ import { ToolCard } from '@/components/tools/tool-card'
 import { cn } from '@/lib/utils/cn'
 import type { SearchResultRow } from '@/lib/search/search'
 import { getVotedToolIds } from '@/lib/queries/tools'
+import { getFavoritedIds } from '@/lib/queries/favorites'
 
 interface ToolGridProps {
   tools: SearchResultRow[]
@@ -19,7 +20,8 @@ export async function ToolGrid({ tools, className }: ToolGridProps) {
     )
   }
 
-  const voted = await getVotedToolIds(tools.map((t) => t.id))
+  const ids = tools.map((t) => t.id)
+  const [voted, favorited] = await Promise.all([getVotedToolIds(ids), getFavoritedIds('tool', ids)])
 
   return (
     <div
@@ -29,7 +31,12 @@ export async function ToolGrid({ tools, className }: ToolGridProps) {
       )}
     >
       {tools.map((tool) => (
-        <ToolCard key={tool.id} tool={tool} voted={voted.has(tool.id)} />
+        <ToolCard
+          key={tool.id}
+          tool={tool}
+          voted={voted.has(tool.id)}
+          favorited={favorited.has(tool.id)}
+        />
       ))}
     </div>
   )

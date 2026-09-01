@@ -69,12 +69,18 @@ export function UserMenu() {
           <div className="px-3 py-2 text-xs text-muted">{user.email ?? label}</div>
           <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
           {/* One entry per /me tab, in the order MeShell shows them. The menu
-              had two of the four, so "Your listings" and "Notifications" were
-              reachable only by already being on a /me page, which is the one
-              place you do not need a link to them. */}
-          <MenuLink href="/me">Saved items</MenuLink>
-          <MenuLink href="/me/listings">Your listings</MenuLink>
-          <MenuLink href="/me/team">My teams</MenuLink>
+              had two of the four, so Listings and Notifications were reachable
+              only by already being on a /me page, which is the one place you do
+              not need a link to them.
+
+              Bare nouns, no possessive. The four labels used to read "Saved
+              items", "Your listings", "My teams" and "Notifications": three
+              voices in four items. The menu hangs off your own avatar and the
+              tabs sit under your own header, so whose they are is already
+              said. */}
+          <MenuLink href="/me">Saved</MenuLink>
+          <MenuLink href="/me/listings">Listings</MenuLink>
+          <MenuLink href="/me/team">Teams</MenuLink>
           <MenuLink href="/me/notifications">Notifications</MenuLink>
           <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
           <DropdownMenu.Item

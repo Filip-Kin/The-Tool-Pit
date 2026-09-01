@@ -13,7 +13,7 @@ import {
 import { removeOwner, verifyRepoClaim } from './actions'
 
 export const metadata: Metadata = {
-  title: 'Your listings',
+  title: 'Listings',
   robots: { index: false, follow: false },
 }
 
@@ -33,7 +33,7 @@ export default async function ListingsPage() {
 
   return (
     <MeShell
-      title="Your listings"
+      title="Listings"
       intro="Tools, albums, practice fields, off-season events and grants you run."
       active="listings"
     >

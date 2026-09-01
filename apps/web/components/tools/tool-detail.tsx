@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { FreshnessChip } from '@/components/ui/freshness-chip'
 import { VoteButton } from '@/components/tools/vote-button'
 import { ClaimListingButton } from '@/components/auth/claim-listing-button'
+import { FavoriteButton } from '@/components/auth/favorite-button'
 import type { ListingClaimState } from '@/lib/queries/listing-ownership'
 import { formatRelativeTime } from '@/lib/utils/time'
 import { cn } from '@/lib/utils/cn'
@@ -41,6 +42,8 @@ interface ToolDetailProps {
   voted?: boolean
   /** Ownership state, resolved by the page. See listingClaimState. */
   claimState: ListingClaimState
+  /** Whether this visitor has saved it, resolved by the page. */
+  favorited?: boolean
 }
 
 function normalizeUrl(url: string): string {
@@ -52,7 +55,7 @@ function normalizeUrl(url: string): string {
   }
 }
 
-export function ToolDetail({ tool, voted = false, claimState }: ToolDetailProps) {
+export function ToolDetail({ tool, voted = false, favorited = false, claimState }: ToolDetailProps) {
   // One URL, one button, whatever roles the crawler filed it under.
   //
   // 615 published listings hold the same URL under two link types: 612 of them
@@ -132,6 +135,13 @@ export function ToolDetail({ tool, voted = false, claimState }: ToolDetailProps)
                 </span>
               )}
               <VoteButton toolId={tool.id} initialCount={tool.voteCount} initialVoted={voted} />
+              <FavoriteButton
+                entityType="tool"
+                entityId={tool.id}
+                initialFavorited={favorited}
+                label="Save"
+                reason="Sign in to save this tool to your home page"
+              />
               <ClaimListingButton entityType="tool" entityId={tool.id} state={claimState} />
             </div>
           </div>

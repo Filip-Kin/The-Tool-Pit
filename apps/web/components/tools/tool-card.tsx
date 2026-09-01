@@ -3,6 +3,7 @@ import { Github, ArrowUpRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { FreshnessChip } from '@/components/ui/freshness-chip'
 import { VoteButton } from '@/components/tools/vote-button'
+import { FavoriteButton } from '@/components/auth/favorite-button'
 import { cn } from '@/lib/utils/cn'
 import { formatRelativeTime } from '@/lib/utils/time'
 import type { SearchResultRow } from '@/lib/search/search'
@@ -20,10 +21,12 @@ interface ToolCardProps {
    * in ToolGrid rather than per card, which would be one query each.
    */
   voted?: boolean
+  /** Whether this visitor already saved it. Resolved once for the whole grid. */
+  favorited?: boolean
   className?: string
 }
 
-export function ToolCard({ tool, voted = false, className }: ToolCardProps) {
+export function ToolCard({ tool, voted = false, favorited = false, className }: ToolCardProps) {
   return (
     <article
       className={cn(
@@ -94,12 +97,21 @@ export function ToolCard({ tool, voted = false, className }: ToolCardProps) {
           )}
         </div>
 
-        <VoteButton
-          toolId={tool.id}
-          initialCount={tool.voteCount}
-          initialVoted={voted}
-          className="relative z-10"
-        />
+        <div className="flex items-center gap-2">
+          <FavoriteButton
+            entityType="tool"
+            entityId={tool.id}
+            initialFavorited={favorited}
+            reason="Sign in to save this tool to your home page"
+            className="relative z-10"
+          />
+          <VoteButton
+            toolId={tool.id}
+            initialCount={tool.voteCount}
+            initialVoted={voted}
+            className="relative z-10"
+          />
+        </div>
       </div>
     </article>
   )

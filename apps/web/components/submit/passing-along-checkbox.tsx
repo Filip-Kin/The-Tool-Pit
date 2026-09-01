@@ -49,7 +49,7 @@ export function PassingAlongCheckbox({
           <span className="mt-0.5 block text-xs text-muted">
             {checked
               ? `Nothing is listed under your account. Whoever runs this ${noun} can claim it later.`
-              : `Once it is approved it appears in Your listings and you can edit it yourself.`}
+              : `Once it is approved it appears under Listings and you can edit it yourself.`}
           </span>
         </span>
       </label>

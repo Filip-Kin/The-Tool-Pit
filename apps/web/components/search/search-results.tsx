@@ -3,6 +3,7 @@ import { ToolCard } from '@/components/tools/tool-card'
 import { cn } from '@/lib/utils/cn'
 import type { SearchResultRow } from '@/lib/search/search'
 import { getVotedToolIds } from '@/lib/queries/tools'
+import { getFavoritedIds } from '@/lib/queries/favorites'
 
 interface SearchResultsProps {
   results: SearchResultRow[]
@@ -18,7 +19,8 @@ interface SearchResultsProps {
 // while the very same card rendered pressed on a vertical's page.
 export async function SearchResults({ results, total, query, page, pageSize }: SearchResultsProps) {
   const totalPages = Math.ceil(total / pageSize)
-  const voted = await getVotedToolIds(results.map((t) => t.id))
+  const ids = results.map((t) => t.id)
+  const [voted, favorited] = await Promise.all([getVotedToolIds(ids), getFavoritedIds('tool', ids)])
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,7 +60,12 @@ export async function SearchResults({ results, total, query, page, pageSize }: S
       {results.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {results.map((tool) => (
-            <ToolCard key={tool.id} tool={tool} voted={voted.has(tool.id)} />
+            <ToolCard
+              key={tool.id}
+              tool={tool}
+              voted={voted.has(tool.id)}
+              favorited={favorited.has(tool.id)}
+            />
           ))}
         </div>
       )}

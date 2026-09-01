@@ -40,7 +40,7 @@ export async function approveField(id: string): Promise<{ error?: string }> {
   // second click on Approve re-runs this and the outbox dedupe key collapses it
   // to the one email that already went.
   //
-  // Ownership first, so "Your listings" is already true when the email lands.
+  // Ownership first, so Listings is already true when the email lands.
   // It does nothing for an anonymous submission or for somebody who ticked the
   // "just passing it along" box on the form.
   await grantFieldOwnership(id)

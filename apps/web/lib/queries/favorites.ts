@@ -14,6 +14,7 @@ import {
   type Favorite,
 } from '@the-tool-pit/db'
 import { displayEventName } from './albums'
+import { getCurrentUser } from '@/lib/auth/session'
 
 /**
  * Favourites, shared by all four verticals.
@@ -330,6 +331,38 @@ export async function isFavorited(
     )
     .limit(1)
   return Boolean(row)
+}
+
+/**
+ * Which of these ids this visitor has saved, in one query.
+ *
+ * A grid asks once for the whole page. isFavorited answers for a single id,
+ * which is right on a detail page and wrong on a page of forty cards, where it
+ * would be forty round trips. Same shape and same reason as getVotedToolIds.
+ *
+ * Returns an empty set for a signed out visitor rather than throwing, because
+ * every caller is a public page that must still render.
+ */
+export async function getFavoritedIds(
+  entityType: FavoriteEntityType,
+  entityIds: string[],
+): Promise<Set<string>> {
+  if (entityIds.length === 0) return new Set()
+  const user = await getCurrentUser()
+  if (!user) return new Set()
+
+  const db = getDb()
+  const rows = await db
+    .select({ entityId: favorites.entityId })
+    .from(favorites)
+    .where(
+      and(
+        eq(favorites.userId, user.id),
+        eq(favorites.entityType, entityType),
+        inArray(favorites.entityId, entityIds),
+      ),
+    )
+  return new Set(rows.map((r) => r.entityId))
 }
 
 /**

@@ -13,7 +13,7 @@ import { createTeamProfile, saveTeamProfile } from './profile/actions'
 import { getMatchCostSummary, listClaimableTeams, listProfilesForUser } from './profile/queries'
 
 export const metadata: Metadata = {
-  title: 'My teams',
+  title: 'Teams',
   // The expanded profile carries an EIN, a mailing address and a named
   // contact, so this route is private by definition.
   robots: { index: false, follow: false },
@@ -154,7 +154,7 @@ export default async function MyTeamsPage({
   }
 
   return (
-    <MeShell title="My teams" active="team">
+    <MeShell title="Teams" active="team">
       <TeamManager
         cards={cards}
         openProfileId={open ? open.profile.id : null}
