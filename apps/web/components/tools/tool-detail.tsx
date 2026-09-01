@@ -50,21 +50,35 @@ function normalizeUrl(url: string): string {
 }
 
 export function ToolDetail({ tool, voted = false }: ToolDetailProps) {
-  const githubLink = tool.links.find((l) => l.linkType === 'github')
-  const githubNorm = githubLink ? normalizeUrl(githubLink.url) : null
-  const prominentLinks = tool.links.filter((l) => {
-    if (l.isBroken) return false
-    if (l.linkType === 'github') return true
-    if (l.linkType === 'homepage') {
-      // Suppress homepage button when it points to the same URL as github
-      if (githubNorm && normalizeUrl(l.url) === githubNorm) return false
+  // One URL, one button, whatever roles the crawler filed it under.
+  //
+  // 615 published listings hold the same URL under two link types: 612 of them
+  // are a repo that is also the project's homepage, which is honest data and
+  // must not be deleted, plus a handful like the Avatar Store filed as both
+  // homepage and website. Rendering both put the same address on the page
+  // twice, once as a button and again under "more links". Deduping here rather
+  // than in the database keeps the roles the crawler found while showing each
+  // destination once.
+  const seen = new Set<string>()
+  // github is considered first so a repo that is also the homepage keeps the
+  // "View source" button rather than becoming a generic homepage link.
+  const prominentLinks = tool.links
+    .filter((l) => !l.isBroken && (l.linkType === 'github' || l.linkType === 'homepage'))
+    .sort((a, b) => (a.linkType === 'github' ? -1 : b.linkType === 'github' ? 1 : 0))
+    .filter((l) => {
+      const key = normalizeUrl(l.url)
+      if (seen.has(key)) return false
+      seen.add(key)
       return true
-    }
-    return false
+    })
+  const otherLinks = tool.links.filter((l) => {
+    if (l.isBroken) return false
+    if (l.linkType === 'github' || l.linkType === 'homepage') return false
+    const key = normalizeUrl(l.url)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
   })
-  const otherLinks = tool.links.filter(
-    (l) => l.linkType !== 'github' && l.linkType !== 'homepage' && !l.isBroken,
-  )
 
   const breadcrumbHref = tool.isTeamCode
     ? '/robot-code'
