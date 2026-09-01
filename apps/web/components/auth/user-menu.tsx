@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Button } from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
 import { signOut } from '@/lib/auth/client'
 import { useSession } from './session-provider'
 import { SignInDialog } from './sign-in-dialog'
@@ -14,6 +15,7 @@ import { SignInDialog } from './sign-in-dialog'
  */
 export function UserMenu() {
   const { user, loading, refresh } = useSession()
+  const router = useRouter()
   const [dialogOpen, setDialogOpen] = useState(false)
 
   if (loading) {
@@ -82,7 +84,15 @@ export function UserMenu() {
           <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
           <DropdownMenu.Item
             onSelect={() => {
-              void signOut().then(refresh)
+              void signOut()
+                .then(refresh)
+                // refresh() updates this provider's user, which is enough for
+                // the header and nothing else. Every server component that
+                // asked who you were, the claim control, the saved hearts, the
+                // upvotes, is baked into the RSC payload sitting in the router
+                // cache, so the page went on showing the signed-in answer.
+                // router.refresh() drops that cache and re-renders them.
+                .then(() => router.refresh())
             }}
             className="cursor-pointer rounded px-3 py-2 text-sm text-foreground outline-none data-[highlighted]:bg-surface"
           >

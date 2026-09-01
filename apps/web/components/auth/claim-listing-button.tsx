@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils/cn'
 import type { ListingEntityType } from '@the-tool-pit/db'
 import type { ListingClaimState } from '@/lib/queries/listing-ownership'
 import { claimAffordance } from '@/lib/listings/claim-affordance'
+import { ClaimSignInLink } from './claim-sign-in-link'
 
 /**
  * The ownership control on a public detail page.
@@ -59,6 +60,18 @@ export function ClaimListingButton({
         <Clock className="h-4 w-4" aria-hidden />
         {affordance.label}
       </span>
+    )
+  }
+
+  // Signed out, the same offer needs a sign-in on the way through, and that
+  // needs browser state, so it is the one case drawn by a client component.
+  if (affordance.signInFirst) {
+    return (
+      <ClaimSignInLink
+        href={affordance.href}
+        label={affordance.label}
+        className={cn(BUTTON, 'text-muted hover:text-foreground', className)}
+      />
     )
   }
 

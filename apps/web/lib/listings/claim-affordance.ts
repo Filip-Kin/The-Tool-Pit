@@ -22,18 +22,30 @@ import type { ListingClaimState } from '@/lib/queries/listing-ownership'
 export type ClaimAffordance =
   | { kind: 'edit'; label: string; href: string }
   | { kind: 'pending'; label: string }
-  | { kind: 'claim'; label: string; href: string }
+  | { kind: 'claim'; label: string; href: string; signInFirst?: boolean }
 
-/** Null when there is nothing honest to offer: signed out, or someone else's. */
+/** Null only for someone else's listing, where there is nothing honest to offer. */
 export function claimAffordance(
   entityType: ListingEntityType,
   entityId: string,
   state: ListingClaimState,
 ): ClaimAffordance | null {
-  if (state === 'signed_out' || state === 'owned_by_other') return null
+  if (state === 'owned_by_other') return null
+  // Signed out still gets the offer. It used to render nothing, on the grounds
+  // that claiming needs an account so the button was really a sign-in prompt.
+  // That reasoning was backwards: a visitor who owns the thing has no way to
+  // learn they CAN claim it, and the control is how a directory says so. It
+  // asks them to sign in, then carries on to the same claim page.
+  if (state === 'signed_out') {
+    return { kind: 'claim', label: 'Claim this listing', href: claimHref(entityType, entityId), signInFirst: true }
+  }
   if (state === 'owner') {
     return { kind: 'edit', label: 'Edit your listing', href: `/me/listings/${entityType}/${entityId}` }
   }
   if (state === 'claim_pending') return { kind: 'pending', label: 'Claim under review' }
-  return { kind: 'claim', label: 'Claim this listing', href: `/me/listings/claim?type=${entityType}&id=${entityId}` }
+  return { kind: 'claim', label: 'Claim this listing', href: claimHref(entityType, entityId) }
+}
+
+function claimHref(entityType: ListingEntityType, entityId: string): string {
+  return `/me/listings/claim?type=${entityType}&id=${entityId}`
 }

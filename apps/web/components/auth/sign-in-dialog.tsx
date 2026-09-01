@@ -1,5 +1,7 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
+
 import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Github } from 'lucide-react'
@@ -35,6 +37,7 @@ export function SignInDialog({
   reason?: string
 }) {
   const { refresh } = useSession()
+  const router = useRouter()
   const [mode, setMode] = useState<Mode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -60,6 +63,10 @@ export function SignInDialog({
 
   async function finish() {
     await refresh()
+    // Same reason as sign out: refresh() moves this provider's user, but every
+    // server component that asked who you were is cached in the router. Without
+    // this the page you signed in from keeps showing the signed-out answer.
+    router.refresh()
     onOpenChange(false)
   }
 

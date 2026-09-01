@@ -12,8 +12,29 @@ import { claimAffordance } from '@/lib/listings/claim-affordance'
  * costs less than noticing the drift on a card.
  */
 describe('claimAffordance', () => {
-  it('offers nothing to a signed out visitor', () => {
-    expect(claimAffordance('album', 'a1', 'signed_out')).toBeNull()
+  // This used to assert null. The rule changed: a signed-out visitor who owns
+  // the thing had no way to learn they could say so, so the offer is made and
+  // sign-in happens on the way through.
+  it('offers a signed out visitor the claim, with sign-in on the way', () => {
+    const a = claimAffordance('album', 'a1', 'signed_out')
+    expect(a).toEqual({
+      kind: 'claim',
+      label: 'Claim this listing',
+      href: '/me/listings/claim?type=album&id=a1',
+      signInFirst: true,
+    })
+  })
+
+  it('does not ask a signed in claimant to sign in again', () => {
+    const a = claimAffordance('album', 'a1', 'claimable')
+    expect(a?.kind).toBe('claim')
+    expect((a as { signInFirst?: boolean }).signInFirst).toBeUndefined()
+  })
+
+  it('sends both signed out and signed in claimants to the same page', () => {
+    const out = claimAffordance('field', 'f9', 'signed_out')
+    const inn = claimAffordance('field', 'f9', 'claimable')
+    expect((out as { href: string }).href).toBe((inn as { href: string }).href)
   })
 
   it('offers nothing on a listing someone else owns', () => {
