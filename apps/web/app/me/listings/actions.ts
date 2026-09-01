@@ -9,6 +9,7 @@ import {
   albums,
   eventListings,
   events,
+  fieldPhotos,
   grants,
   listingClaims,
   listingInvites,
@@ -53,6 +54,7 @@ import {
 } from '@/lib/listings/tool-taxonomy'
 import { notifyClaimResolved } from '@/lib/notify/approvals'
 import { normaliseUploadedImage } from '@/lib/images/normalise'
+import { MAX_PHOTOS, readPhotoFiles } from '@/lib/fields/form-parse'
 import { sendApprovalNotice, reviewClaimUrl } from '@the-tool-pit/types'
 import { entityNoun } from '@/components/me/listing-labels'
 
@@ -887,6 +889,87 @@ export async function saveAlbumCover(formData: FormData): Promise<OwnershipActio
   if (event?.tbaKey) revalidatePath(`/photos/event/${event.tbaKey}`)
 
   return { message: 'Cover updated.' }
+}
+
+/**
+ * A field owner adds photos of their own field.
+ *
+ * THE GAP THIS CLOSES. Every published field's page carries a gallery, and
+ * until now only an admin could put anything in it: an owner could correct the
+ * ceiling height and the access hours but could not show a team what the field
+ * looks like, which is the first thing anybody scrolls for. The photos are the
+ * listing.
+ *
+ * Not part of the autosaving form, for the reason the album cover panel gives:
+ * an upload is a deliberate act with its own failures, and it has no business
+ * firing on blur.
+ *
+ * The bytes go through lib/images/normalise.ts, the same path the submit form
+ * and the admin editor use, so a phone photo is downscaled, re-encoded to WebP
+ * and stripped of its GPS tags before it reaches a public page.
+ */
+export async function saveFieldPhotos(formData: FormData): Promise<OwnershipActionResult> {
+  const entityId = String(formData.get('entityId') ?? '')
+  const gate = await requireEditor('field', entityId)
+  if ('error' in gate) return gate
+
+  const parsed = await readPhotoFiles(formData, 'photos')
+  if ('error' in parsed) return { error: parsed.error }
+  if (parsed.photos.length === 0) return { error: 'Choose a photo first.' }
+
+  const db = getDb()
+  const existing = await db
+    .select({ sortOrder: fieldPhotos.sortOrder })
+    .from(fieldPhotos)
+    .where(eq(fieldPhotos.fieldId, entityId))
+  // Counted against what is already stored, not just against this batch. Eight
+  // is the cap the submit form has always used, and a gallery is a gallery, not
+  // an album host.
+  if (existing.length + parsed.photos.length > MAX_PHOTOS) {
+    return {
+      error: `A field can show ${MAX_PHOTOS} photos. Remove one before adding another.`,
+    }
+  }
+
+  let nextOrder = existing.reduce((max, r) => Math.max(max, r.sortOrder + 1), 0)
+  await db.insert(fieldPhotos).values(
+    parsed.photos.map((p) => ({
+      fieldId: entityId,
+      contentType: p.contentType,
+      data: p.data,
+      sortOrder: nextOrder++,
+    })),
+  )
+
+  revalidatePath('/me/listings')
+  revalidatePath('/fields')
+  revalidatePath(`/fields/${entityId}`)
+  return { message: parsed.photos.length === 1 ? 'Photo added.' : 'Photos added.' }
+}
+
+/**
+ * Take one photo back down.
+ *
+ * The photo id comes off the client and proves nothing, so the delete is
+ * scoped to the field the gate just passed on. Without that, an owner of any
+ * one field could delete a photo from any other.
+ */
+export async function removeFieldPhoto(
+  entityId: string,
+  photoId: string,
+): Promise<OwnershipActionResult> {
+  const gate = await requireEditor('field', entityId)
+  if ('error' in gate) return gate
+
+  const db = getDb()
+  await db
+    .delete(fieldPhotos)
+    .where(and(eq(fieldPhotos.id, photoId), eq(fieldPhotos.fieldId, entityId)))
+
+  revalidatePath('/me/listings')
+  revalidatePath('/fields')
+  revalidatePath(`/fields/${entityId}`)
+  return { message: 'Photo removed.' }
 }
 
 export async function saveFieldListing(formData: FormData): Promise<OwnershipActionResult> {

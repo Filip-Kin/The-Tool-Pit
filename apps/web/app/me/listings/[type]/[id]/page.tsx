@@ -7,9 +7,10 @@ import { ListingEditForm } from '@/components/me/listing-edit-form'
 import { ListingAccessPanel } from '@/components/me/listing-access-panel'
 import { LeaveListingPanel } from '@/components/me/leave-listing-panel'
 import { AlbumCoverPanel } from '@/components/me/album-cover-panel'
+import { FieldPhotosPanel } from '@/components/me/field-photos-panel'
 import { entityNoun } from '@/components/me/listing-labels'
-import { albums, TOOL_TYPES } from '@the-tool-pit/db'
-import { eq } from 'drizzle-orm'
+import { albums, fieldPhotos, TOOL_TYPES } from '@the-tool-pit/db'
+import { asc, eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import {
   getOwnerRole,
@@ -17,13 +18,16 @@ import {
   listOwnersOf,
   loadListingForEdit,
 } from '@/lib/queries/listing-ownership'
+import { MAX_PHOTOS } from '@/lib/fields/form-parse'
 import {
   createInvite,
+  removeFieldPhoto,
   removeOwner,
   saveAlbumCover,
   saveAlbumListing,
   saveEventListing,
   saveFieldListing,
+  saveFieldPhotos,
   saveGrantListing,
   saveToolListing,
 } from '../../actions'
@@ -71,9 +75,10 @@ export default async function EditListingPage({
   const [listing, members] = await Promise.all([loadListingForEdit(type, id), listOwnersOf(type, id)])
   if (!listing) notFound()
 
-  // The cover is not a form field (it is a file), so it is read separately and
-  // only for the one vertical that has one.
+  // Neither the album cover nor the field gallery is a form field: they are
+  // files. So they are read separately, and only for the vertical that has one.
   const coverUrl = type === 'album' ? await albumCoverUrl(id) : null
+  const photoIds = type === 'field' ? await fieldPhotoIds(id) : []
 
   return (
     <MeShell
@@ -97,6 +102,17 @@ export default async function EditListingPage({
             its own panel and its own button rather than a field in the form. */}
         {type === 'album' && (
           <AlbumCoverPanel entityId={id} currentUrl={coverUrl} saveAction={saveAlbumCover} />
+        )}
+
+        {/* Practice fields only, and for the same reason. */}
+        {type === 'field' && (
+          <FieldPhotosPanel
+            entityId={id}
+            photos={photoIds}
+            maxPhotos={MAX_PHOTOS}
+            addAction={saveFieldPhotos}
+            removeAction={removeFieldPhoto}
+          />
         )}
 
         <ListingAccessPanel
@@ -137,4 +153,15 @@ async function albumCoverUrl(albumId: string): Promise<string | null> {
     .where(eq(albums.id, albumId))
     .limit(1)
   return row?.coverImageUrl ?? null
+}
+
+/** The field's gallery, in the order the public page shows it. */
+async function fieldPhotoIds(fieldId: string): Promise<string[]> {
+  const db = getDb()
+  const rows = await db
+    .select({ id: fieldPhotos.id })
+    .from(fieldPhotos)
+    .where(eq(fieldPhotos.fieldId, fieldId))
+    .orderBy(asc(fieldPhotos.sortOrder), asc(fieldPhotos.createdAt))
+  return rows.map((r) => r.id)
 }
