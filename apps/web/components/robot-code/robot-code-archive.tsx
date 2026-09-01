@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { ButtonLink } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils/cn'
@@ -101,12 +102,9 @@ export function RobotCodeArchive({ teams, program }: Props) {
 
         {/* Submit lives on this page because someone looking for their team's
             code and not finding it is exactly the person who can add it. */}
-        <Link
-          href="/robot-code/submit"
-          className="ml-auto shrink-0 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
-        >
+        <ButtonLink href="/robot-code/submit" size="sm" className="ml-auto">
           Add your team&apos;s code or CAD
-        </Link>
+        </ButtonLink>
       </div>
 
       {filtered.length === 0 ? (

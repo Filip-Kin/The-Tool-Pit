@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { cardClass } from '@/components/ui/card'
 import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
 import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { SegmentedControl } from '@/components/ui/segmented-control'
@@ -285,13 +287,9 @@ export function RobotCodeSubmitForm() {
 
       {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
 
-      <button
-        type="submit"
-        disabled={submitting || !ready || (Boolean(SITE_KEY) && !turnstileToken)}
-        className="self-start rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50"
-      >
+      <Button type="submit" disabled={submitting || !ready || (Boolean(SITE_KEY) && !turnstileToken)} className="self-start">
         {submitting ? 'Submitting…' : 'Submit'}
-      </button>
+      </Button>
 
       {result && <p className={result.ok ? 'text-sm text-rookie' : 'text-sm text-frc'}>{result.message}</p>}
     </form>
@@ -300,7 +298,7 @@ export function RobotCodeSubmitForm() {
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <fieldset className="flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface p-4">
+    <fieldset className={cardClass({ className: 'flex flex-col gap-4' })}>
       <legend className="px-1 text-sm font-semibold text-foreground">{title}</legend>
       {hint && <p className="-mt-1 text-xs text-muted-2">{hint}</p>}
       {children}
