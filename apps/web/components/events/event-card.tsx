@@ -61,7 +61,10 @@ function RegBadge({ ev }: { ev: PublicEvent }) {
 
 /** A slim fullness bar, shown only when we have a count against a capacity. */
 function FullnessBar({ ev }: { ev: PublicEvent }) {
-  const ratio = fullnessRatio(ev)
+  // A waitlist IS the capacity signal. Most events never publish a team count,
+  // so the bar used to be blank on exactly the events where "can I still get
+  // in" matters most. If they are taking a waiting list, they are full.
+  const ratio = ev.registrationStatus === 'waitlist' ? 1 : fullnessRatio(ev)
   if (ratio == null) return null
   const pct = Math.round(ratio * 100)
   const tone = ratio >= 1 ? 'bg-official' : ratio >= 0.85 ? 'bg-official' : 'bg-rookie'
@@ -70,7 +73,9 @@ function FullnessBar({ ev }: { ev: PublicEvent }) {
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
         <div className={cn('h-full rounded-full', tone)} style={{ width: `${pct}%` }} />
       </div>
-      <span className="shrink-0 text-xs text-muted-2">{pct}% full</span>
+      <span className="shrink-0 text-xs text-muted-2">
+        {ev.registrationStatus === 'waitlist' && fullnessRatio(ev) == null ? 'Full' : `${pct}% full`}
+      </span>
     </div>
   )
 }
@@ -93,14 +98,6 @@ export function EventCard({
   const cost = costLabel(ev)
   const full = fullnessLabel(ev)
   const cancelled = ev.eventStatus === 'cancelled'
-  // A REAL registration link only. The detail view falls back to the website
-  // when there is no registration URL, which is right there and wrong here: on
-  // a card that fallback rendered as a button labelled "Event page", so every
-  // card carried the website and none of them carried what the label promised.
-  // No registration link means no button, and the website is one tap away in
-  // the dialog.
-  const registerHref = ev.registrationUrl
-
   return (
     // The border and background live on this wrapper, not on the button,
     // because the Register link is a SIBLING of the button. An anchor nested
@@ -159,7 +156,8 @@ export function EventCard({
           {cost && (
             <span className="flex items-center gap-1 rounded bg-surface-3 px-1.5 py-0.5 text-xs font-medium text-muted">
               <DollarSign className="h-3 w-3" />
-              {cost}
+              {/* The icon is the currency marker, so the value drops its own. */}
+              {cost.replace(/^\$/, '')}
             </span>
           )}
         </div>
@@ -168,19 +166,6 @@ export function EventCard({
       </div>
     </button>
 
-    {registerHref && !cancelled && (
-      <div className="px-3 pb-3">
-        <a
-          href={registerHref}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-primary-hover"
-        >
-          Register
-          <ExternalLink className="h-3 w-3" />
-        </a>
-      </div>
-    )}
     </div>
   )
 }
@@ -192,12 +177,6 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
   const full = fullnessLabel(ev)
   const days = daysLabel(ev)
   const cancelled = ev.eventStatus === 'cancelled'
-  const mapsHref =
-    ev.latitude != null && ev.longitude != null
-      ? `https://www.openstreetmap.org/?mlat=${ev.latitude}&mlon=${ev.longitude}#map=17/${ev.latitude}/${ev.longitude}`
-      : ev.address
-        ? `https://www.openstreetmap.org/search?query=${encodeURIComponent(ev.address)}`
-        : null
   const registerHref = ev.registrationUrl ?? ev.website ?? ev.chiefDelphiUrl
   // Volunteering falls back the same way registration does: the dedicated link
   // if there is one, otherwise the event's own page, which is where the form
@@ -263,39 +242,48 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
           <Row icon={<Clock className="h-4 w-4" />} label="Registration opens" value={eventDateRange({ startDate: ev.registrationOpensAt, endDate: null })} />
         )}
         {cost && <Row icon={<DollarSign className="h-4 w-4" />} label="Cost" value={cost} />}
-        {!full && ev.capacity != null && <Row icon={<Users className="h-4 w-4" />} label="Capacity" value={`${ev.capacity} teams`} />}
+        {/* Capacity answers "can I still get in", which a finished or
+            cancelled event cannot be asked. */}
+        {!full && ev.capacity != null && !cancelled && eventTiming(ev, now) !== 'past' && (
+          <Row icon={<Users className="h-4 w-4" />} label="Capacity" value={`${ev.capacity} teams`} />
+        )}
         {ev.hostTeamNumber != null && <Row icon={<Users className="h-4 w-4" />} label="Hosted by" value={`Team ${ev.hostTeamNumber}`} />}
       </dl>
 
       {ev.notes && <p className="whitespace-pre-wrap text-sm text-muted">{ev.notes}</p>}
 
-      <div className="flex flex-wrap gap-3">
-        {registerHref && !cancelled && (
-          <a href={registerHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover">
-            {ev.registrationUrl ? 'Register' : 'Event page'} <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        )}
-        {volunteerHref && (
-          <a href={volunteerHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
-            <HandHeart className="h-4 w-4" /> Volunteer <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        )}
-        {ev.website && registerHref !== ev.website && volunteerHref !== ev.website && (
-          <a href={ev.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
-            Website <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        )}
-        {ev.tbaKey && (
-          <a href={`https://www.thebluealliance.com/event/${ev.tbaKey}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
-            The Blue Alliance <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        )}
-        {mapsHref && (
-          <a href={mapsHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
-            Open in map <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        )}
-      </div>
+      {/* Two rows on purpose: the things you DO with this event, then the
+          places you read more about it. Five equal buttons in one wrap read as
+          a pile with no order to them. */}
+      {(registerHref || volunteerHref) && !cancelled && (
+        <div className="flex flex-wrap gap-3">
+          {registerHref && (
+            <a href={registerHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover">
+              {ev.registrationUrl ? 'Register' : 'Event page'} <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+          {volunteerHref && (
+            <a href={volunteerHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
+              <HandHeart className="h-4 w-4" /> Volunteer <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+        </div>
+      )}
+
+      {(ev.website || ev.tbaKey) && (
+        <div className="flex flex-wrap gap-3">
+          {ev.website && registerHref !== ev.website && volunteerHref !== ev.website && (
+            <a href={ev.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
+              Event website <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+          {ev.tbaKey && (
+            <a href={`https://www.thebluealliance.com/event/${ev.tbaKey}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
+              The Blue Alliance <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+        </div>
+      )}
 
       {ev.contactEmail && (
         <div className="flex items-center gap-2 rounded-lg border border-border-subtle bg-surface p-4 text-sm text-muted">

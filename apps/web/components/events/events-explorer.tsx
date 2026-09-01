@@ -115,13 +115,21 @@ export function EventsExplorer({ events, now }: { events: PublicEvent[]; now: Da
 
     rows.sort((a, b) => {
       if (sortBy === 'distance' && userLoc) return (a.km ?? Infinity) - (b.km ?? Infinity)
-      // By date. Upcoming: soonest first. Past: most recent first. Cancelled
-      // upcoming events sink below the live ones so the next real event leads.
-      const at = eventTiming(a.event, now)
-      const bt = eventTiming(b.event, now)
-      if (at === 'past' && bt === 'past') {
-        return dateKey(b.event.startDate) - dateKey(a.event.startDate)
-      }
+      // Past always below upcoming, then within each group by date: upcoming
+      // soonest first, past most recent first.
+      //
+      // The bucket comparison has to come FIRST. Without it a past event and an
+      // upcoming one fell through to daysUntil, which is NEGATIVE for anything
+      // already run, so an event from July sorted above one happening next
+      // week. Kettering Kickoff on 12 September sat below three events that had
+      // already finished.
+      const aPast = eventTiming(a.event, now) === 'past' ? 1 : 0
+      const bPast = eventTiming(b.event, now) === 'past' ? 1 : 0
+      if (aPast !== bPast) return aPast - bPast
+      if (aPast === 1) return dateKey(b.event.startDate) - dateKey(a.event.startDate)
+
+      // Both still to come. A cancelled one sinks below the live ones so the
+      // next real event leads.
       const aCancel = a.event.eventStatus === 'cancelled' ? 1 : 0
       const bCancel = b.event.eventStatus === 'cancelled' ? 1 : 0
       if (aCancel !== bCancel) return aCancel - bCancel
