@@ -34,7 +34,7 @@ import { ClaimSignInLink } from './claim-sign-in-link'
 // One of the three is a <span>, because "waiting on a moderator" is a state
 // rather than something to press, so this is classes and not a component.
 const LINK =
-  'inline-flex items-center gap-1.5 text-sm text-muted underline-offset-4 transition-colors hover:text-foreground hover:underline'
+  'inline-flex items-center gap-1.5 text-sm text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline'
 
 export function ClaimListingButton({
   entityType,
@@ -54,7 +54,7 @@ export function ClaimListingButton({
 
   if (affordance.kind === 'edit') {
     return (
-      <Link href={affordance.href} className={cn(LINK, 'text-foreground hover:text-primary', className)}>
+      <Link href={affordance.href} className={cn(LINK, className)}>
         <Pencil className="h-3.5 w-3.5" aria-hidden />
         {affordance.label}
       </Link>
@@ -63,7 +63,7 @@ export function ClaimListingButton({
 
   if (affordance.kind === 'pending') {
     return (
-      <span className={cn(LINK, 'cursor-default no-underline hover:no-underline', className)}>
+      <span className={cn(LINK, 'cursor-default text-muted no-underline hover:text-muted hover:no-underline', className)}>
         <Clock className="h-3.5 w-3.5" aria-hidden />
         {affordance.label}
       </span>
