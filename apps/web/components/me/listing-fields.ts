@@ -657,7 +657,8 @@ const GRANT_FORM: ListingFormSpec = {
     {
       key: 'about',
       title: 'About this grant',
-      blurb: 'The words teams read. Dates, amounts and who can apply are checked by a reviewer.',
+      blurb:
+        'The words teams read, and the two links they follow. Dates, amounts and who can apply are checked by a reviewer.',
     },
   ],
   fields: [

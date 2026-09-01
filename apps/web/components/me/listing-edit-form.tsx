@@ -398,9 +398,16 @@ function Field({ field, children }: { field: ListingFieldSpec; children: React.R
   // of them makes every chip read as the same thing. It names itself with
   // aria-label instead and this is a plain container.
   const Wrapper = field.kind === 'tags' ? 'div' : 'label'
-  const className = field.wide ? 'sm:col-span-2 flex flex-col gap-1.5' : 'flex flex-col gap-1.5'
   return (
-    <Wrapper className={field.kind === 'tags' ? `${className} gap-2` : className}>
+    <Wrapper
+      className={cn(
+        'flex flex-col',
+        field.wide && 'sm:col-span-2',
+        // A chip row needs a little more air above it than a text box does,
+        // because the chips have a border and the label does not.
+        field.kind === 'tags' ? 'gap-2' : 'gap-1.5',
+      )}
+    >
       {showLabel && <span className="text-sm font-medium text-foreground">{field.label}</span>}
       {field.kind === 'tags' && field.hint && (
         // Above the chips for a picker. Under them it sat below a wrapping row
