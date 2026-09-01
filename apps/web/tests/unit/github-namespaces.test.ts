@@ -6,6 +6,7 @@ import {
   planGithubGrants,
   type OwnershipSnapshot,
 } from '@/lib/github/namespaces'
+import { describeGithubGrant } from '@/lib/github/summary'
 
 /**
  * The matcher decides who gets write access to somebody else's listing, so the
@@ -173,5 +174,41 @@ describe('planGithubGrants', () => {
     expect(planGithubGrants(links, namespaces, NOBODY_OWNS)).toEqual(
       planGithubGrants(links, namespaces, NOBODY_OWNS),
     )
+  })
+})
+
+describe('describeGithubGrant', () => {
+  const base = { login: 'filipkin', granted: [], disputed: [], alreadyYours: 0, sawPrivateOrgs: true }
+  const listing = (id: string) => ({ entityId: id, title: id, href: `/tools/${id}` })
+
+  it('counts what the user got', () => {
+    expect(describeGithubGrant({ ...base, granted: [listing('a'), listing('b')] })).toBe(
+      'You now manage 2 listings.',
+    )
+  })
+
+  it('says one listing in the singular', () => {
+    expect(describeGithubGrant({ ...base, granted: [listing('a')] })).toBe('You now manage 1 listing.')
+  })
+
+  it('says nothing granted plainly, without implying a failure', () => {
+    const msg = describeGithubGrant(base)
+    expect(msg).toContain('Linked as filipkin')
+    expect(msg).toContain('nothing changed')
+  })
+
+  it('tells a re-check that found nothing new that everything is already theirs', () => {
+    expect(describeGithubGrant({ ...base, alreadyYours: 3 })).toBe(
+      'No new listings this time. You already manage everything we matched.',
+    )
+  })
+
+  it('mentions listings held for review', () => {
+    const msg = describeGithubGrant({ ...base, granted: [listing('a')], disputed: [listing('b')] })
+    expect(msg).toContain('1 listing matched but already had an owner')
+  })
+
+  it('explains a missing organisation scope rather than showing a short list silently', () => {
+    expect(describeGithubGrant({ ...base, sawPrivateOrgs: false })).toContain('public organisations')
   })
 })
