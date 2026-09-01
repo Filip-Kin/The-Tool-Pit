@@ -17,11 +17,9 @@ export function AlbumCard({
   favorited: boolean
 }) {
   const title = album.title || providerLabel(album.provider)
-  // The card used to BE the link. Controls cannot live inside an anchor (a
-  // button inside a link is invalid, and every click would navigate away
-  // instead), so the anchor covers the image and the text, and the footer row
-  // sits below it. The group class stays on the outer element so the hover
-  // treatment still covers the whole card.
+  // Controls cannot live inside an anchor: a button inside a link is invalid,
+  // and a click on it navigates as well as acting, so opening the menu also
+  // opened the album. The anchor is stretched behind the content instead.
   return (
     // Keeps its own hover instead of the shared background lift: most of this
     // tile is a photo, and a change of surface underneath a photo reads as
@@ -32,17 +30,19 @@ export function AlbumCard({
         className: 'group relative flex flex-col overflow-hidden transition-colors hover:border-primary/50',
       })}
     >
+      {/* Stretched link, the pattern tool-card already uses. The anchor is a
+          SIBLING of the content, not a wrapper: it covers the tile from behind
+          so the whole card is clickable, while the controls sit above it on
+          their own. Wrapping instead put a button inside an anchor, which is
+          invalid, and opening the menu also opened the album. */}
       <a
         href={album.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex flex-1 flex-col"
-      >
-        {/* Stretched link, the pattern tool-card already uses: the anchor
-            covers the whole tile so the controls can live on the title row
-            without being nested inside it, which is invalid and would navigate
-            on every click. */}
-        <span className="absolute inset-0 z-0" aria-hidden />
+        aria-label={title}
+        className="absolute inset-0 z-0"
+      />
+      <div className="flex flex-1 flex-col">
         <div className="relative aspect-[3/2] w-full overflow-hidden bg-surface-2">
           {album.coverImageUrl ? (
             // Cover images live on many photographer-owned hosts; use a plain img
@@ -101,7 +101,7 @@ export function AlbumCard({
             <AlbumMenu albumId={album.id} albumUrl={album.url} claimState={claimState} />
           </div>
         </div>
-      </a>
+      </div>
     </div>
   )
 }

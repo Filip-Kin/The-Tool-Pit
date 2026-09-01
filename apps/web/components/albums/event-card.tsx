@@ -106,11 +106,13 @@ export function EventCard({
         className: 'group relative flex flex-col overflow-hidden transition-colors hover:border-primary/50',
       })}
     >
-      <Link {...linkProps} className="flex flex-1 flex-col">
-        {/* Stretched link, the pattern tool-card already uses, so the menu can
-            sit on the title row without being nested inside the anchor. A
-            button inside an anchor is invalid and navigates on every click. */}
-        <span className="absolute inset-0 z-0" aria-hidden />
+      {/* Stretched link, the pattern tool-card already uses. The anchor is a
+          SIBLING of the content, not a wrapper: it covers the tile from behind
+          so the whole card is clickable, while the menu sits above it on its
+          own. Wrapping instead put a button inside an anchor, which is invalid,
+          and opening the menu also followed the link. */}
+      <Link {...linkProps} aria-label={event.name} className="absolute inset-0 z-0" />
+      <div className="flex flex-1 flex-col">
         <div className="relative">
           <CoverCollage covers={covers} />
           {isOffseason(event.eventType) ? (
@@ -155,7 +157,7 @@ export function EventCard({
           {/* Above the stretched link, so a click here does not follow it. */}
           {menu && <div className="relative z-10 shrink-0">{menu}</div>}
         </div>
-      </Link>
+      </div>
     </div>
   )
 }

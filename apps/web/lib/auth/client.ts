@@ -8,6 +8,7 @@ import {
   signInWithPopup,
   linkWithPopup,
   reauthenticateWithPopup,
+  onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -117,10 +118,36 @@ export async function signInWithGithub(): Promise<GithubGrantSummary> {
  * which is also the re-check case, so it falls through to the same
  * reauthenticate path.
  */
-export async function linkGithubAccount(): Promise<GithubGrantSummary> {
+/**
+ * The Firebase user, once Firebase has actually finished looking.
+ *
+ * `auth.currentUser` is null until the SDK has rehydrated from storage, which
+ * it does asynchronously after page load. Our own session is a server-side
+ * cookie and is resolved much earlier, so a card could say "signed in" and
+ * enable a button while Firebase still had nobody. Clicking in that window read
+ * `currentUser` as null and told a signed-in person to sign in.
+ *
+ * onAuthStateChanged fires once with the settled answer, so waiting for it is
+ * the difference between "no user" and "no user YET".
+ */
+async function settledFirebaseUser(): Promise<FirebaseUser | null> {
   const auth = getFirebaseAuth()
-  const user = auth.currentUser
-  if (!user) throw new Error('Sign in first, then link GitHub.')
+  if (auth.currentUser) return auth.currentUser
+  return new Promise((resolve) => {
+    const stop = onAuthStateChanged(auth, (user) => {
+      stop()
+      resolve(user)
+    })
+  })
+}
+
+export async function linkGithubAccount(): Promise<GithubGrantSummary> {
+  const user = await settledFirebaseUser()
+  // Genuinely signed out of Firebase while our own cookie is still valid. That
+  // happens when the cookie outlives the Firebase session, and the fix is a
+  // fresh sign-in through GitHub itself rather than sending someone to a sign
+  // in page they are already past.
+  if (!user) return signInWithGithub()
 
   try {
     return await exchangeGithubCredential(await linkWithPopup(user, githubProvider()))
@@ -141,9 +168,8 @@ export async function linkGithubAccount(): Promise<GithubGrantSummary> {
  * for a provider that is already linked; link would refuse it.
  */
 export async function recheckGithubRepos(): Promise<GithubGrantSummary> {
-  const auth = getFirebaseAuth()
-  const user = auth.currentUser
-  if (!user) throw new Error('Sign in first, then re-check your repositories.')
+  const user = await settledFirebaseUser()
+  if (!user) return signInWithGithub()
   return exchangeGithubCredential(await reauthenticateWithPopup(user, githubProvider()))
 }
 
