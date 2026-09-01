@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { CalendarDays } from 'lucide-react'
 import { UserMenu } from '@/components/auth/user-menu'
 import { MobileNav } from '@/components/layout/mobile-nav'
-import { VerticalHomeCrumb } from '@/components/layout/vertical-switcher'
+import { VerticalHomeCrumb, verticalNavItems } from '@/components/layout/vertical-switcher'
 
 /**
  * Off-season events chrome. Same slots and order as the other verticals'
@@ -13,7 +13,7 @@ import { VerticalHomeCrumb } from '@/components/layout/vertical-switcher'
  * 404. The wordmark points at /events (this vertical's home), and the home
  * crumb is the way back out to frc.tools.
  */
-export function EventsHeader() {
+export async function EventsHeader() {
   return (
     <header className="sticky top-0 z-[500] border-b border-border-subtle bg-background/80 backdrop-blur-md">
       <div className="container mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
@@ -38,10 +38,7 @@ export function EventsHeader() {
           <MobileNav
             className="sm:hidden"
             items={[
-              { href: '/events', label: 'Off-Season Events' },
-              { href: '/photos', label: 'Event Photos' },
-              { href: '/fields', label: 'Practice Fields' },
-              { href: '/grants', label: 'Grants' },
+              ...(await verticalNavItems('events')),
               { href: '/events/submit', label: 'Add an event', primary: true },
             ]}
           />

@@ -3,8 +3,9 @@ import { Suspense } from 'react'
 import { SearchBar } from '@/components/search/search-bar'
 import { UserMenu } from '@/components/auth/user-menu'
 import { MobileNav } from './mobile-nav'
+import { verticalNavItems } from './vertical-switcher'
 
-export function SiteHeader() {
+export async function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 border-b border-border-subtle bg-background/80 backdrop-blur-md">
       <div className="container mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
@@ -46,10 +47,7 @@ export function SiteHeader() {
               { href: '/frc', label: 'FRC' },
               { href: '/ftc', label: 'FTC' },
               { href: '/fll', label: 'FLL' },
-              { href: '/robot-code', label: 'Robot Code / CAD' },
-              { href: '/photos', label: 'Event Photos' },
-              { href: '/fields', label: 'Practice Fields' },
-              { href: '/grants', label: 'Grants' },
+              ...(await verticalNavItems('tools')),
               { href: '/submit', label: 'Submit a tool', primary: true },
             ]}
           />

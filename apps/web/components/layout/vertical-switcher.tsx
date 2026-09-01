@@ -170,6 +170,26 @@ export async function VerticalFooterLinks({
  * names say what they are, and a sentence under each would be the same filler
  * the program cards used to carry.
  */
+/**
+ * The other verticals, as items for a header's mobile menu.
+ *
+ * Derived from VERTICALS rather than hand-listed per header. Every header used
+ * to carry its own copy and they drifted badly: the events vertical was missing
+ * from all four older menus, so from photos or fields there was no way to reach
+ * it at all, and two menus labelled `/` as their own vertical when `/` is the
+ * tools directory. A hardcoded list is a list that goes stale the next time a
+ * vertical is added, which has now happened twice.
+ *
+ * The current vertical is left out. You are already looking at it, and its own
+ * call to action sits below these in the same menu.
+ */
+export async function verticalNavItems(current: VerticalKey): Promise<{ href: string; label: string }[]> {
+  const links = await getVerticalLinks(current)
+  return links
+    .filter((l) => l.key !== current)
+    .map(({ href, label, key }) => ({ href, label: key === 'tools' ? 'Tools directory' : label }))
+}
+
 export async function VerticalNav({
   current,
   className,

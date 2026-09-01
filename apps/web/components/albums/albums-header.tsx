@@ -3,9 +3,9 @@ import { Camera } from 'lucide-react'
 import { AlbumSearchBar } from './album-search-bar'
 import { UserMenu } from '@/components/auth/user-menu'
 import { MobileNav } from '@/components/layout/mobile-nav'
-import { VerticalHomeCrumb } from '@/components/layout/vertical-switcher'
+import { VerticalHomeCrumb, verticalNavItems } from '@/components/layout/vertical-switcher'
 
-export function AlbumsHeader() {
+export async function AlbumsHeader() {
   return (
     <header className="sticky top-0 z-50 border-b border-border-subtle bg-background/80 backdrop-blur-md">
       <div className="container mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
@@ -37,11 +37,8 @@ export function AlbumsHeader() {
           <MobileNav
             className="sm:hidden"
             items={[
-              { href: '/', label: 'FIRST Event Photos' },
-              { href: '/photos', label: 'Event Photos' },
-              { href: '/fields', label: 'Practice Fields' },
-              { href: '/grants', label: 'Grants' },
-              { href: '/submit', label: 'Submit album', primary: true },
+              ...(await verticalNavItems('photos')),
+              { href: '/photos/submit', label: 'Submit album', primary: true },
             ]}
           />
         </nav>

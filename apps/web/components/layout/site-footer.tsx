@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { VerticalFooterLinks } from './vertical-switcher'
+import { SiteCredit } from './site-credit'
 
 export function SiteFooter() {
   return (
@@ -24,7 +25,7 @@ export function SiteFooter() {
         {/* The four verticals, on their own line so they read as siblings of this
             site rather than as more tools-directory nav. */}
         <div className="flex flex-col gap-2 border-t border-border-subtle pt-6 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <span className="text-xs text-muted-2">Part of The Tool Pit</span>
+          <SiteCredit className="text-xs text-muted-2" />
           <VerticalFooterLinks current="tools" />
         </div>
       </div>

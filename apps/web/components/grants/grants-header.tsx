@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { CircleDollarSign } from 'lucide-react'
 import { UserMenu } from '@/components/auth/user-menu'
 import { MobileNav } from '@/components/layout/mobile-nav'
-import { VerticalHomeCrumb } from '@/components/layout/vertical-switcher'
+import { VerticalHomeCrumb, verticalNavItems } from '@/components/layout/vertical-switcher'
 
 /**
  * Grants chrome. Same slots and the same order as the fields and photos
@@ -12,7 +12,7 @@ import { VerticalHomeCrumb } from '@/components/layout/vertical-switcher'
  * path tree onto grants.*, so `/submit` is this vertical's submit page on the
  * subdomain and the vertical switcher is the only thing that crosses hosts.
  */
-export function GrantsHeader() {
+export async function GrantsHeader() {
   return (
     <header className="sticky top-0 z-[500] border-b border-border-subtle bg-background/80 backdrop-blur-md">
       <div className="container mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
@@ -37,11 +37,8 @@ export function GrantsHeader() {
           <MobileNav
             className="sm:hidden"
             items={[
-              { href: '/', label: 'Grants' },
-              { href: '/photos', label: 'Event Photos' },
-              { href: '/fields', label: 'Practice Fields' },
-              { href: '/grants', label: 'Grants' },
-              { href: '/submit', label: 'Submit a grant', primary: true },
+              ...(await verticalNavItems('grants')),
+              { href: '/grants/submit', label: 'Submit a grant', primary: true },
             ]}
           />
         </nav>

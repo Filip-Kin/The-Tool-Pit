@@ -2,9 +2,9 @@ import Link from 'next/link'
 import { MapPin } from 'lucide-react'
 import { UserMenu } from '@/components/auth/user-menu'
 import { MobileNav } from '@/components/layout/mobile-nav'
-import { VerticalHomeCrumb } from '@/components/layout/vertical-switcher'
+import { VerticalHomeCrumb, verticalNavItems } from '@/components/layout/vertical-switcher'
 
-export function FieldsHeader() {
+export async function FieldsHeader() {
   return (
     <header className="sticky top-0 z-[500] border-b border-border-subtle bg-background/80 backdrop-blur-md">
       <div className="container mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
@@ -32,11 +32,8 @@ export function FieldsHeader() {
           <MobileNav
             className="sm:hidden"
             items={[
-              { href: '/', label: 'Practice Field Map' },
-              { href: '/photos', label: 'Event Photos' },
-              { href: '/fields', label: 'Practice Fields' },
-              { href: '/grants', label: 'Grants' },
-              { href: '/submit', label: 'Add a field', primary: true },
+              ...(await verticalNavItems('fields')),
+              { href: '/fields/submit', label: 'Add a field', primary: true },
             ]}
           />
         </nav>

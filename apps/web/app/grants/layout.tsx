@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { GrantsHeader } from '@/components/grants/grants-header'
 import { VerticalFooterLinks } from '@/components/layout/vertical-switcher'
+import { SiteCredit } from '@/components/layout/site-credit'
 
 export const metadata: Metadata = {
   title: {
@@ -19,7 +20,7 @@ export default function GrantsLayout({ children }: { children: React.ReactNode }
       <main className="flex-1">{children}</main>
       <footer className="border-t border-border-subtle py-6">
         <div className="container mx-auto flex max-w-6xl flex-col gap-3 px-4 text-sm text-muted-2 sm:flex-row sm:items-center sm:justify-between">
-          <span>Grants</span>
+          <SiteCredit className="text-xs text-muted-2" />
           <div className="flex flex-wrap items-center gap-4">
             <Link href="/grants/submit" className="hover:text-foreground">Submit a grant</Link>
             {/* The header switcher is hidden below sm, so on a phone this row

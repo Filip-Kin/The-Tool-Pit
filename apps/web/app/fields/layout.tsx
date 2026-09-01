@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { FieldsHeader } from '@/components/fields/fields-header'
 import { VerticalFooterLinks } from '@/components/layout/vertical-switcher'
+import { SiteCredit } from '@/components/layout/site-credit'
 
 export const metadata: Metadata = {
   title: {
@@ -19,7 +20,7 @@ export default async function FieldsLayout({ children }: { children: React.React
       <main className="flex-1">{children}</main>
       <footer className="border-t border-border-subtle py-6">
         <div className="container mx-auto flex max-w-6xl flex-col gap-2 px-4 text-sm text-muted-2 sm:flex-row sm:items-center sm:justify-between">
-          <span>Practice Field Map</span>
+          <SiteCredit className="text-xs text-muted-2" />
           <div className="flex flex-wrap items-center gap-4">
             <Link href="/fields/submit" className="hover:text-foreground">Add a field</Link>
             <Link href="/admin" className="hover:text-foreground">Admin</Link>

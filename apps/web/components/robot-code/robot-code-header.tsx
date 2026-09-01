@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Code2 } from 'lucide-react'
 import { UserMenu } from '@/components/auth/user-menu'
-import { VerticalHomeCrumb } from '@/components/layout/vertical-switcher'
+import { VerticalHomeCrumb, verticalNavItems } from '@/components/layout/vertical-switcher'
 import { MobileNav } from '@/components/layout/mobile-nav'
 
 /**
@@ -9,7 +9,7 @@ import { MobileNav } from '@/components/layout/mobile-nav'
  * and photos headers: back to the main site, wordmark, the one call to action,
  * account menu.
  */
-export function RobotCodeHeader() {
+export async function RobotCodeHeader() {
   return (
     <header className="sticky top-0 z-[500] border-b border-border-subtle bg-background/80 backdrop-blur-md">
       <div className="container mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
@@ -34,11 +34,8 @@ export function RobotCodeHeader() {
           <MobileNav
             className="sm:hidden"
             items={[
-              { href: '/', label: 'Tools directory' },
-              { href: '/photos', label: 'Event Photos' },
-              { href: '/fields', label: 'Practice Fields' },
-              { href: '/grants', label: 'Grants' },
-              { href: '/submit', label: 'Add your team', primary: true },
+              ...(await verticalNavItems('code')),
+              { href: '/robot-code/submit', label: 'Add your team', primary: true },
             ]}
           />
         </nav>
