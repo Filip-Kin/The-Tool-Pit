@@ -93,9 +93,13 @@ export function EventCard({
   const cost = costLabel(ev)
   const full = fullnessLabel(ev)
   const cancelled = ev.eventStatus === 'cancelled'
-  // Same fallback chain the detail view uses, so the card and the dialog never
-  // point at different places for the same event.
-  const registerHref = ev.registrationUrl ?? ev.website ?? ev.chiefDelphiUrl
+  // A REAL registration link only. The detail view falls back to the website
+  // when there is no registration URL, which is right there and wrong here: on
+  // a card that fallback rendered as a button labelled "Event page", so every
+  // card carried the website and none of them carried what the label promised.
+  // No registration link means no button, and the website is one tap away in
+  // the dialog.
+  const registerHref = ev.registrationUrl
 
   return (
     // The border and background live on this wrapper, not on the button,
@@ -172,7 +176,7 @@ export function EventCard({
           rel="noreferrer"
           className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-primary-hover"
         >
-          {ev.registrationUrl ? 'Register' : 'Event page'}
+          Register
           <ExternalLink className="h-3 w-3" />
         </a>
       </div>
