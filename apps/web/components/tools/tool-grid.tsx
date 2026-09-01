@@ -1,13 +1,16 @@
 import { ToolCard } from '@/components/tools/tool-card'
 import { cn } from '@/lib/utils/cn'
 import type { SearchResultRow } from '@/lib/search/search'
+import { getVotedToolIds } from '@/lib/queries/tools'
 
 interface ToolGridProps {
   tools: SearchResultRow[]
   className?: string
 }
 
-export function ToolGrid({ tools, className }: ToolGridProps) {
+// Async so the visitor's existing votes are resolved ONCE for the whole grid
+// rather than per card. A card cannot do it itself without a query each.
+export async function ToolGrid({ tools, className }: ToolGridProps) {
   if (tools.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border p-12 text-center">
@@ -15,6 +18,8 @@ export function ToolGrid({ tools, className }: ToolGridProps) {
       </div>
     )
   }
+
+  const voted = await getVotedToolIds(tools.map((t) => t.id))
 
   return (
     <div
@@ -24,7 +29,7 @@ export function ToolGrid({ tools, className }: ToolGridProps) {
       )}
     >
       {tools.map((tool) => (
-        <ToolCard key={tool.id} tool={tool} />
+        <ToolCard key={tool.id} tool={tool} voted={voted.has(tool.id)} />
       ))}
     </div>
   )

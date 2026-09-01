@@ -1,5 +1,6 @@
 import { sql, eq, desc, and, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
+import { currentVoterFingerprint } from '@/lib/voting/fingerprint'
 import { tools, toolPrograms, toolLinks, toolVotes, programs, audiencePrimaryRoles, audienceFunctions, toolAudiencePrimaryRoles, toolAudienceFunctions } from '@the-tool-pit/db'
 import type { SearchResultRow } from '@/lib/search/search'
 
@@ -236,4 +237,23 @@ export async function getToolBySlug(slug: string): Promise<ToolDetailData | null
     links: linkRows,
     voteCount: (voteCountResult[0]?.count ?? 0) + (tool.githubStars ?? 0) + (tool.chiefDelphiLikes ?? 0),
   }
+}
+
+/**
+ * Which of these tools the current visitor has already upvoted.
+ *
+ * One query for a whole grid rather than one per card. Returns an empty set for
+ * a visitor with no vote cookie, which is the common case and costs nothing.
+ */
+export async function getVotedToolIds(toolIds: string[]): Promise<Set<string>> {
+  if (toolIds.length === 0) return new Set()
+  const fingerprint = await currentVoterFingerprint()
+  if (!fingerprint) return new Set()
+
+  const db = getDb()
+  const rows = await db
+    .select({ toolId: toolVotes.toolId })
+    .from(toolVotes)
+    .where(and(inArray(toolVotes.toolId, toolIds), eq(toolVotes.voterFingerprint, fingerprint)))
+  return new Set(rows.map((r) => r.toolId))
 }

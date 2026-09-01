@@ -15,10 +15,15 @@ const PROGRAM_LABELS: Record<string, string> = {
 
 interface ToolCardProps {
   tool: SearchResultRow
+  /**
+   * Whether this visitor already upvoted it. Resolved once for the whole grid
+   * in ToolGrid rather than per card, which would be one query each.
+   */
+  voted?: boolean
   className?: string
 }
 
-export function ToolCard({ tool, className }: ToolCardProps) {
+export function ToolCard({ tool, voted = false, className }: ToolCardProps) {
   return (
     <article
       className={cn(
@@ -92,6 +97,7 @@ export function ToolCard({ tool, className }: ToolCardProps) {
         <VoteButton
           toolId={tool.id}
           initialCount={tool.voteCount}
+          initialVoted={voted}
           className="relative z-10"
         />
       </div>

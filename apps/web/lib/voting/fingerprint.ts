@@ -30,10 +30,27 @@ export function resolveVoterIdentity(req: NextRequest): VoterIdentity {
   }
 }
 
-function hashFingerprint(input: string): string {
+export function hashFingerprint(input: string): string {
   const secret = process.env.VOTE_COOKIE_SECRET ?? 'dev-secret'
   return createHash('sha256')
     .update(secret + ':' + input)
     .digest('hex')
     .slice(0, 48)
+}
+
+/**
+ * The current visitor's fingerprint during a SERVER RENDER, or null when they
+ * have never voted.
+ *
+ * The vote route resolves identity from a NextRequest and may mint a cookie. A
+ * server component cannot set one, and does not need to: with no cookie there
+ * are no votes to show. Reading it here is what lets a page render the button
+ * already pressed. Without this the button always rendered unpressed after a
+ * reload, so a vote that had definitely been counted looked like it had not.
+ */
+export async function currentVoterFingerprint(): Promise<string | null> {
+  const { cookies } = await import('next/headers')
+  const jar = await cookies()
+  const value = jar.get(VOTE_COOKIE_NAME)?.value
+  return value ? hashFingerprint(value) : null
 }
