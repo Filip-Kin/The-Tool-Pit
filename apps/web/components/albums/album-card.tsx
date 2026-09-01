@@ -1,4 +1,5 @@
 import { ExternalLink, Camera, Images, Calendar } from 'lucide-react'
+import { cardClass } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { FavoriteButton } from '@/components/auth/favorite-button'
 import type { AlbumDTO } from '@the-tool-pit/types'
@@ -22,7 +23,15 @@ export function AlbumCard({
   // sits below it. The group class stays on the outer element so the hover
   // treatment still covers the whole card.
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:border-primary/50">
+    // Keeps its own hover instead of the shared background lift: most of this
+    // tile is a photo, and a change of surface underneath a photo reads as
+    // nothing at all. The border is the affordance here.
+    <div
+      className={cardClass({
+        pad: 'none',
+        className: 'group relative flex flex-col overflow-hidden transition-colors hover:border-primary/50',
+      })}
+    >
       <a
         href={album.url}
         target="_blank"

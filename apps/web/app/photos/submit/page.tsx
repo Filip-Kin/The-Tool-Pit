@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { cardClass } from '@/components/ui/card'
 import { AlbumSubmitForm } from '@/components/albums/album-submit-form'
 
 export const metadata: Metadata = {
@@ -14,7 +15,7 @@ export default function SubmitAlbumPage() {
         Know an FRC or FTC event album that isn&apos;t here yet? Paste the link and we&apos;ll add it.
         Works with SmugMug, Flickr, Google Photos, Google Drive, Dropbox, Pixieset, and most other hosts.
       </p>
-      <ol className="mb-8 flex flex-col gap-1.5 rounded-lg border border-border-subtle bg-surface p-4 text-xs text-muted">
+      <ol className={cardClass({ className: 'mb-8 flex flex-col gap-1.5 text-xs text-muted' })}>
         <li><span className="font-medium text-foreground">1.</span> Paste the album&apos;s share link (the gallery, not a single photo).</li>
         <li><span className="font-medium text-foreground">2.</span> Tell us the event and its year so it lands on the right page.</li>
         <li><span className="font-medium text-foreground">3.</span> We review every submission before it goes live.</li>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
 import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { SegmentedControl } from '@/components/ui/segmented-control'
@@ -300,13 +301,13 @@ export function AlbumSubmitForm() {
 
       {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
 
-      <button
+      <Button
         type="submit"
         disabled={submitting || !url.trim() || (Boolean(SITE_KEY) && !turnstileToken)}
-        className="self-start rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50"
+        className="self-start"
       >
         {submitting ? 'Submitting…' : 'Submit album'}
-      </button>
+      </Button>
 
       {result && <p className={result.ok ? 'text-sm text-official' : 'text-sm text-frc'}>{result.message}</p>}
     </form>

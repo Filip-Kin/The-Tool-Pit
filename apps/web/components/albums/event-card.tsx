@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Calendar, MapPin, Images } from 'lucide-react'
+import { cardClass } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils/cn'
 import type { EventSearchResult } from '@the-tool-pit/types'
@@ -96,7 +97,15 @@ export function EventCard({
   // of opening. The link covers the card content and the footer sits below it,
   // with group still on the outer element so hover treats the tile as one.
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:border-primary/50">
+    // Keeps its own hover instead of the shared background lift: most of this
+    // tile is a photo, and a change of surface underneath a photo reads as
+    // nothing at all. The border is the affordance here.
+    <div
+      className={cardClass({
+        pad: 'none',
+        className: 'group relative flex flex-col overflow-hidden transition-colors hover:border-primary/50',
+      })}
+    >
       <Link {...linkProps} className="flex flex-1 flex-col">
         {/* Stretched link, the pattern tool-card already uses, so the menu can
             sit on the title row without being nested inside the anchor. A
