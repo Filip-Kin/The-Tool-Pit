@@ -37,10 +37,11 @@ function tooltipHtml(ev: PublicEvent): string {
 }
 
 /**
- * The explore map: every published event as a pin coloured by TIME (accent for
- * the next month, lighter for further out, grey for past, red for cancelled).
- * Hovering shows a tooltip; clicking opens the detail dialog. Leaflet is
- * dynamic-imported so it never runs during SSR. Mirrors the fields map.
+ * The explore map: every published event as a pin coloured by REGISTRATION
+ * (accent for open, amber for opens later, red for closed or waitlist, grey
+ * once it has run or been called off). Hovering shows a tooltip; clicking
+ * opens the detail dialog. Leaflet is dynamic-imported so it never runs during
+ * SSR. Mirrors the fields map.
  */
 export function EventMap({ events, now, selectedId, onSelect, userLoc, height = 560 }: EventMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -147,7 +148,10 @@ export function EventMap({ events, now, selectedId, onSelect, userLoc, height = 
         selectedFromMapRef.current = false
       } else {
         const marker = markersRef.current.get(selectedId)
-        if (marker) map.setView(marker.getLatLng(), Math.max(map.getZoom(), 11), { animate: true })
+        // Selected from the list: highlight it, and pan only far enough to get
+        // it on screen. Zoom stays where the visitor put it, so picking through
+        // the list never yanks them out of the area they were looking at.
+        if (marker) map.panInside(marker.getLatLng(), { padding: [48, 48], animate: true })
       }
     }
   }, [selectedId])

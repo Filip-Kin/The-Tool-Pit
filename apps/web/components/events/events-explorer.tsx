@@ -37,7 +37,10 @@ type GeoState = 'idle' | 'locating' | 'granted' | 'denied' | 'unsupported'
 export function EventsExplorer({ events, now }: { events: PublicEvent[]; now: Date }) {
   const [program, setProgram] = useState<EventProgram>('frc')
   const [q, setQ] = useState('')
-  const [when, setWhen] = useState<When>('upcoming')
+  // Show everything by default. The map is fed from the same filtered rows as
+  // the list, so hiding past events hid a third of the pins, and the sort
+  // already floats upcoming events to the top without deleting the rest.
+  const [when, setWhen] = useState<When>('all')
   const [openOnly, setOpenOnly] = useState(false)
   const [sortBy, setSortBy] = useState<SortBy>('date')
   const [selectedId, setSelectedId] = useState<string | null>(null)

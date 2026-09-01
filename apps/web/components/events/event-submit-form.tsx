@@ -60,6 +60,7 @@ interface FormState {
   eventStatus: string
   website: string
   registrationUrl: string
+  volunteerUrl: string
   chiefDelphiUrl: string
   contactEmail: string
   notes: string
@@ -89,6 +90,7 @@ const INITIAL: FormState = {
   eventStatus: 'confirmed',
   website: '',
   registrationUrl: '',
+  volunteerUrl: '',
   chiefDelphiUrl: '',
   contactEmail: '',
   notes: '',
@@ -380,6 +382,9 @@ export function EventSubmitForm() {
             </Field>
           </div>
         </div>
+        <Field label="Volunteer sign-up link" hint="Where volunteers apply, when that is a separate form.">
+          <input type="url" value={form.volunteerUrl} onChange={(e) => set('volunteerUrl', e.target.value)} placeholder="https://…" className="input" />
+        </Field>
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="flex-1">
             <Field label="Chief Delphi thread" hint="For events with no site of their own.">

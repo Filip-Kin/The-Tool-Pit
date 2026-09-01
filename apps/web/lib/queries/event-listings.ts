@@ -30,6 +30,7 @@ const publicColumns = {
   eventStatus: eventListings.eventStatus,
   website: eventListings.website,
   registrationUrl: eventListings.registrationUrl,
+  volunteerUrl: eventListings.volunteerUrl,
   chiefDelphiUrl: eventListings.chiefDelphiUrl,
   contactEmail: eventListings.contactEmail,
   notes: eventListings.notes,

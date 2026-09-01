@@ -1,9 +1,9 @@
 /**
  * Shared, framework-agnostic display helpers for off-season event listings: the
- * pin colour scheme (keyed on TIME, because the whole vertical is about what is
- * coming up next), human labels for the enum-like columns, date and cost and
- * fullness formatting, and the public DTO shape. Used by the map, list, card,
- * legend, and admin. No React here.
+ * pin colour scheme (keyed on REGISTRATION, because "can I still get in" is the
+ * question a glance at the map has to answer), human labels for the enum-like
+ * columns, date and cost and fullness formatting, and the public DTO shape.
+ * Used by the map, list, card, legend, and admin. No React here.
  */
 import type {
   EventStatus,
@@ -41,6 +41,7 @@ export interface PublicEvent {
   eventStatus: EventStatus
   website: string | null
   registrationUrl: string | null
+  volunteerUrl: string | null
   chiefDelphiUrl: string | null
   contactEmail: string | null
   notes: string | null
@@ -78,9 +79,9 @@ export function eventTiming(ev: PublicEvent, now: Date): EventTiming {
 }
 
 // ---------------------------------------------------------------------------
-// Pin colour scheme: hue = timing/status, so the map reads at a glance as
-// "what is happening soon". Cancelled and past sink to grey; the next month
-// is the bright accent; further-out upcoming events are a lighter accent.
+// Pin colour scheme: hue = registration state. Every card already carries the
+// date, so timing is not what the colour has to tell you. Whether you can sign
+// up is. Size backs the colour up: the pins you can act on are the big ones.
 // ---------------------------------------------------------------------------
 
 export interface MarkerStyle {
@@ -88,17 +89,26 @@ export interface MarkerStyle {
   size: number
 }
 
-const SOON = '#7c3aed' // brand accent - happening within SOON_DAYS
-const UPCOMING = '#a78bfa' // lighter accent - upcoming but further out
-const PAST = '#6b7280' // grey - already run
-const CANCELLED = '#ef4444' // error red - called off
+const OPEN = '#7c3aed' // brand accent - taking registrations now
+const SHUT = '#ef4444' // error red - closed, or full and running a waitlist
+const NOT_OPEN_YET = '#f59e0b' // amber - opens later, which is not "you missed it"
+const MOOT = '#6b7280' // grey - already run, cancelled, or nobody has told us
 
 export function eventMarkerStyle(ev: PublicEvent, now: Date): MarkerStyle {
-  if (ev.eventStatus === 'cancelled') return { color: CANCELLED, size: 15 }
-  const timing = eventTiming(ev, now)
-  if (timing === 'past') return { color: PAST, size: 14 }
-  if (timing === 'soon') return { color: SOON, size: 20 }
-  return { color: UPCOMING, size: 17 }
+  // Once an event is off the table there is nothing to register for, so a
+  // cancelled or finished event never wears the open or closed colours.
+  if (ev.eventStatus === 'cancelled' || eventTiming(ev, now) === 'past') return { color: MOOT, size: 13 }
+  switch (ev.registrationStatus) {
+    case 'open':
+      return { color: OPEN, size: 20 }
+    case 'not_open':
+      return { color: NOT_OPEN_YET, size: 17 }
+    case 'waitlist':
+    case 'closed':
+      return { color: SHUT, size: 15 }
+    default:
+      return { color: MOOT, size: 13 }
+  }
 }
 
 // ---------------------------------------------------------------------------

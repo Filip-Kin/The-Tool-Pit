@@ -103,6 +103,8 @@ export const eventListings = pgTable(
     website: text('website'),
     /** A dedicated registration / sign-up link, when it differs from the site. */
     registrationUrl: text('registration_url'),
+    /** Where volunteers sign up. Usually a separate form from registration. */
+    volunteerUrl: text('volunteer_url'),
     /** A Chief Delphi thread, for the "CD Post" events with no site of their own. */
     chiefDelphiUrl: text('chief_delphi_url'),
     /** Organiser contact email. */

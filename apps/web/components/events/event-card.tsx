@@ -2,7 +2,6 @@ import {
   MapPin,
   CalendarDays,
   Users,
-  Ticket,
   DollarSign,
   ExternalLink,
   Mail,
@@ -23,8 +22,6 @@ import {
   daysUntil,
   EVENT_STATUS_LABEL,
   REGISTRATION_STATUS_SHORT,
-  REGISTRATION_STATUS_LABEL,
-  VOLUNTEER_STATUS_LABEL,
 } from '@/lib/events/event-display'
 
 /** A small round swatch matching this event's pin colour. */
@@ -172,6 +169,13 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
         ? `https://www.openstreetmap.org/search?query=${encodeURIComponent(ev.address)}`
         : null
   const registerHref = ev.registrationUrl ?? ev.website ?? ev.chiefDelphiUrl
+  // Volunteering falls back the same way registration does: the dedicated link
+  // if there is one, otherwise the event's own page, which is where the form
+  // usually lives. Null when nobody is asking for volunteers or we have no
+  // link at all, because a button that lands you nowhere useful is worse than
+  // no button.
+  const volunteerHref =
+    ev.volunteerStatus === 'open' && !cancelled ? (ev.volunteerUrl ?? ev.website ?? ev.chiefDelphiUrl) : null
 
   return (
     <div className="flex flex-col gap-5">
@@ -225,15 +229,11 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
       )}
 
       <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
-        <Row icon={<Ticket className="h-4 w-4" />} label="Registration" value={REGISTRATION_STATUS_LABEL[ev.registrationStatus]} />
         {ev.registrationOpensAt && ev.registrationStatus === 'not_open' && (
           <Row icon={<Clock className="h-4 w-4" />} label="Registration opens" value={eventDateRange({ startDate: ev.registrationOpensAt, endDate: null })} />
         )}
         {cost && <Row icon={<DollarSign className="h-4 w-4" />} label="Cost" value={cost} />}
         {!full && ev.capacity != null && <Row icon={<Users className="h-4 w-4" />} label="Capacity" value={`${ev.capacity} teams`} />}
-        {ev.volunteerStatus !== 'unknown' && (
-          <Row icon={<HandHeart className="h-4 w-4" />} label="Volunteers" value={VOLUNTEER_STATUS_LABEL[ev.volunteerStatus]} />
-        )}
         {ev.hostTeamNumber != null && <Row icon={<Users className="h-4 w-4" />} label="Hosted by" value={`Team ${ev.hostTeamNumber}`} />}
       </dl>
 
@@ -245,7 +245,12 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
             {ev.registrationUrl ? 'Register' : 'Event page'} <ExternalLink className="h-3.5 w-3.5" />
           </a>
         )}
-        {ev.website && registerHref !== ev.website && (
+        {volunteerHref && (
+          <a href={volunteerHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
+            <HandHeart className="h-4 w-4" /> Volunteer <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
+        {ev.website && registerHref !== ev.website && volunteerHref !== ev.website && (
           <a href={ev.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
             Website <ExternalLink className="h-3.5 w-3.5" />
           </a>

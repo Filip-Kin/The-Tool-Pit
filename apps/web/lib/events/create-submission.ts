@@ -33,6 +33,7 @@ export interface CreateEventSubmissionInput {
   eventStatus?: string
   website?: string
   registrationUrl?: string
+  volunteerUrl?: string
   chiefDelphiUrl?: string
   contactEmail?: string
   notes?: string
@@ -117,6 +118,7 @@ export async function createEventSubmission(
     eventStatus,
     website: input.website?.trim() || null,
     registrationUrl: input.registrationUrl?.trim() || null,
+    volunteerUrl: input.volunteerUrl?.trim() || null,
     chiefDelphiUrl: input.chiefDelphiUrl?.trim() || null,
     contactEmail: input.contactEmail?.trim() || null,
     notes: input.notes?.trim() || null,

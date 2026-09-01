@@ -162,9 +162,10 @@ export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }
         selectedFromMapRef.current = false
       } else {
         const marker = markersRef.current.get(selectedId)
-        // Selected from the list: bring the picked field into view; if we're
-        // zoomed way out (global dataset), zoom in enough that it's usable.
-        if (marker) map.setView(marker.getLatLng(), Math.max(map.getZoom(), 12), { animate: true })
+        // Selected from the list: pan only far enough to get the pin on screen
+        // and leave the zoom alone, so stepping down the list never throws away
+        // the view the visitor set.
+        if (marker) map.panInside(marker.getLatLng(), { padding: [48, 48], animate: true })
       }
     }
   }, [selectedId])
