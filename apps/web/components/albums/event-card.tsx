@@ -81,7 +81,7 @@ export function EventCard({
   //
   // A multi-album event gets NO menu: its card leads to the event page, where
   // every album card has its own. A menu here would be a second route to the
-  // same items.
+  // same items, and the card then renders exactly as it always did.
   const menu =
     direct && event.soleAlbumId ? (
       <AlbumMenu
@@ -98,6 +98,10 @@ export function EventCard({
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:border-primary/50">
       <Link {...linkProps} className="flex flex-1 flex-col">
+        {/* Stretched link, the pattern tool-card already uses, so the menu can
+            sit on the title row without being nested inside the anchor. A
+            button inside an anchor is invalid and navigates on every click. */}
+        <span className="absolute inset-0 z-0" aria-hidden />
         <div className="relative">
           <CoverCollage covers={covers} />
           {isOffseason(event.eventType) ? (
@@ -115,31 +119,34 @@ export function EventCard({
           </span>
         </div>
 
-        <div className="flex flex-col gap-1 p-3">
-          <h3 className="line-clamp-1 font-semibold leading-tight text-foreground group-hover:text-primary transition-colors">
-            {event.name}
-          </h3>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted">
-            {dates && (
-              <span className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 shrink-0" />
-                {dates}
-              </span>
-            )}
-            {location && (
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3 w-3 shrink-0" />
-                {location}
-              </span>
-            )}
+        {/* Title, details and the menu share one row. The menu spent a version
+            on a line of its own below the details, which added an empty band to
+            every card for the sake of one small control. */}
+        <div className="flex items-start justify-between gap-2 p-3">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h3 className="line-clamp-1 font-semibold leading-tight text-foreground group-hover:text-primary transition-colors">
+              {event.name}
+            </h3>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted">
+              {dates && (
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3 shrink-0" />
+                  {dates}
+                </span>
+              )}
+              {location && (
+                <span className="flex items-center gap-1">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  {location}
+                </span>
+              )}
+            </div>
           </div>
+
+          {/* Above the stretched link, so a click here does not follow it. */}
+          {menu && <div className="relative z-10 shrink-0">{menu}</div>}
         </div>
       </Link>
-
-      {/* Footer row, where every card in the app keeps its controls. The photo
-          count badge already sits over the thumbnail, and two floating
-          controls on one image is worse than one in a row of its own. */}
-      {menu && <div className="flex items-center justify-end px-3 pb-3">{menu}</div>}
     </div>
   )
 }

@@ -14,11 +14,15 @@ import { cn } from '@/lib/utils/cn'
  * rather than built. So the trigger, the panel and the item live here once and
  * a card supplies only the items.
  *
- * The trigger belongs in the card FOOTER, next to whatever other controls that
- * card has. It started in the top corner of the thumbnail and was easy to
- * miss there, and a control laid over a photo has no contrast it can count on.
- * It is styled to sit beside FavoriteButton, which is the other thing living
- * in that row.
+ * The trigger belongs on the card's TITLE row, pushed to the right, not on a
+ * row of its own underneath. It started in the top corner of the thumbnail,
+ * where it was easy to miss and had no contrast it could count on, and then
+ * spent a version on its own line below the details, which just added an empty
+ * band to every card.
+ *
+ * Bare dots, no border and no background. A bordered pill reads as a primary
+ * control, and this is an overflow affordance sitting next to a title. The hit
+ * area is kept honest with padding and a hover surface rather than an outline.
  *
  * Item classes match components/auth/user-menu.tsx, which was the first menu in
  * the app and is still the reference.
@@ -46,7 +50,7 @@ export function CardMenu({
         <button
           type="button"
           aria-label={label}
-          className="inline-flex shrink-0 items-center rounded-full border border-border-subtle bg-background/80 p-1.5 text-muted transition-colors hover:text-foreground"
+          className="-mr-1 inline-flex shrink-0 items-center rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-foreground data-[state=open]:bg-surface-2 data-[state=open]:text-foreground"
         >
           <MoreVertical className="h-4 w-4" aria-hidden />
         </button>
