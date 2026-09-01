@@ -54,13 +54,66 @@ export function AlbumCandidateActions({
     })
   }
 
+/**
+ * Longest edge we keep for a cover. An album cover is rendered at a few hundred
+ * pixels; anything past this is bytes nobody sees.
+ */
+const COVER_MAX_EDGE = 1600
+const COVER_QUALITY = 0.85
+
+/**
+ * Shrink an image in the browser before it is uploaded.
+ *
+ * Covers were failing with "An unexpected response was received from the
+ * server", which is what a server action shows when the response is not a valid
+ * action response at all. The cause is size: a phone photo is routinely 8 to 12
+ * MB and the whole action payload has to fit under next.config's 12mb
+ * serverActions limit, so files near it are rejected BEFORE the action runs and
+ * there is no clean error to report.
+ *
+ * Downscaling here means the request is a few hundred KB rather than megabytes,
+ * which also matters because these are stored as bytea in Postgres and served
+ * back through an API route.
+ *
+ * Returns the original file untouched if anything goes wrong, so a browser
+ * without canvas support degrades to the old behaviour rather than blocking the
+ * upload.
+ */
+async function shrinkImage(file: File): Promise<File> {
+  try {
+    if (!file.type.startsWith('image/') || file.type === 'image/gif') return file
+    const bitmap = await createImageBitmap(file)
+    const scale = Math.min(1, COVER_MAX_EDGE / Math.max(bitmap.width, bitmap.height))
+    if (scale === 1 && file.size < 2 * 1024 * 1024) return file
+
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(bitmap.width * scale)
+    canvas.height = Math.round(bitmap.height * scale)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return file
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    bitmap.close()
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', COVER_QUALITY),
+    )
+    if (!blob || blob.size >= file.size) return file
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' })
+  } catch {
+    return file
+  }
+}
+
   function onCoverChosen(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const fd = new FormData()
-    fd.set('cover', file)
-    run(() => uploadAlbumCover(candidateId, fd))
     e.target.value = ''
+    run(async () => {
+      const shrunk = await shrinkImage(file)
+      const fd = new FormData()
+      fd.set('cover', shrunk)
+      return uploadAlbumCover(candidateId, fd)
+    })
   }
 
   const canModerate = status === 'pending' || status === 'matched' || status === 'suppressed'
