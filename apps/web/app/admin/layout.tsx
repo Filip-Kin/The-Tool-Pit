@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { isAdmin } from '@/lib/admin/auth'
 import { getAdminQueueCounts } from '@/lib/admin/queue-counts'
+import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { AdminNav } from './admin-nav'
 
 /**
@@ -28,11 +29,19 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="flex min-h-screen flex-col md:flex-row">
       {/* Sidebar on desktop; a sticky top bar with a horizontally-scrolling nav on mobile. */}
       <aside className="shrink-0 border-b border-border-subtle bg-surface md:w-56 md:border-b-0 md:border-r">
-        <div className="flex items-center justify-between gap-3 px-4 py-3 md:block md:py-4">
-          <Link href="/" className="text-xs text-muted hover:text-foreground">
-            ← The Tool Pit
-          </Link>
-          <p className="text-sm font-semibold text-foreground md:mt-1">Admin</p>
+        {/* The toggle sits at the trailing edge of the top bar, the same place
+            it sits in every public header. The admin has no header to put it
+            in, and an admin whose machine is set to light opening a dashboard
+            built for near-black needs the control on the first screen, not
+            three pages in. */}
+        <div className="flex items-center gap-3 px-4 py-3 md:py-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3 md:block">
+            <Link href="/" className="text-xs text-muted hover:text-foreground">
+              ← The Tool Pit
+            </Link>
+            <p className="text-sm font-semibold text-foreground md:mt-1">Admin</p>
+          </div>
+          <ThemeToggle />
         </div>
         {/* Suspense because the nav reads the query string, which Next requires
             a boundary for on any route that can be prerendered. */}

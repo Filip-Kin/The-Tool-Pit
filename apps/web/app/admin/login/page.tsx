@@ -1,3 +1,5 @@
+import { ThemeToggle } from '@/components/layout/theme-toggle'
+
 const ERRORS: Record<string, string> = {
   denied: 'That account is not an admin.',
   state: 'Login session expired. Please try again.',
@@ -18,7 +20,13 @@ export default async function AdminLoginPage({
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="flex w-80 flex-col gap-4 rounded-lg border border-border bg-surface p-6">
-        <h1 className="text-lg font-semibold text-foreground">Admin</h1>
+        {/* The sidebar carries the theme toggle, and the sidebar does not exist
+            until you are signed in. This screen is the one an admin lands on
+            from a bookmark, so it gets its own. */}
+        <div className="flex items-center gap-3">
+          <h1 className="flex-1 text-lg font-semibold text-foreground">Admin</h1>
+          <ThemeToggle />
+        </div>
         <p className="text-sm text-muted">Sign in with your Authelia account.</p>
         {message && <p className="text-xs text-frc">{message}</p>}
         <a
