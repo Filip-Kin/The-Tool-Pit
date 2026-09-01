@@ -15,9 +15,15 @@ import { cn } from '@/lib/utils/cn'
  * card containers, so most call sites collapse to <Card> with no props.
  */
 
-type Pad = 'sm' | 'md' | 'lg'
+type Pad = 'none' | 'sm' | 'md' | 'lg'
 
 const PAD: Record<Pad, string> = {
+  /**
+   * The padding lives inside, not on the shell. One case so far: an event card
+   * puts its border on a wrapper because the Register link is a sibling of the
+   * button, so the button carries the padding and the wrapper carries the box.
+   */
+  none: '',
   /** A dense row in a list, where the card is one of many on a phone. */
   sm: 'p-3',
   /** The default. Anything that is one item among several. */

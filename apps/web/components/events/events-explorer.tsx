@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { Search, LocateFixed, Loader2, History } from 'lucide-react'
+import { ButtonLink } from '@/components/ui/button'
 import { cn } from '@/lib/utils/cn'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import type { PublicEvent, DistanceUnit, SeasonScope } from '@/lib/events/event-display'
@@ -364,13 +365,10 @@ function SeasonSwitch({
   if (archivedCount === 0) return null
 
   return (
-    <Link
-      href="/events?seasons=earlier"
-      className="inline-flex items-center gap-1.5 self-start rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:text-foreground"
-    >
+    <ButtonLink href="/events?seasons=earlier" variant="secondary" size="sm" className="self-start">
       <History className="h-3.5 w-3.5" />
       Earlier years ({archivedCount})
-    </Link>
+    </ButtonLink>
   )
 }
 

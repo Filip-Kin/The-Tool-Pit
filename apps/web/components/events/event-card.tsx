@@ -8,6 +8,8 @@ import {
   HandHeart,
   Clock,
 } from 'lucide-react'
+import { ButtonLink } from '@/components/ui/button'
+import { Card, cardClass } from '@/components/ui/card'
 import { cn } from '@/lib/utils/cn'
 import type { PublicEvent } from '@/lib/events/event-display'
 import {
@@ -89,12 +91,7 @@ export function EventCard({
     // because the Register link is a SIBLING of the button. An anchor nested
     // inside a button is invalid HTML and the two click targets fight over the
     // same tap.
-    <div
-      className={cn(
-        'rounded-lg border transition-colors',
-        selected ? 'border-primary bg-surface-2' : 'border-border-subtle bg-surface hover:bg-surface-2',
-      )}
-    >
+    <div className={cardClass({ pad: 'none', interactive: true, selected })}>
     <button
       type="button"
       onClick={() => onSelect(ev.id)}
@@ -202,7 +199,7 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
       </div>
 
       {full && fullnessRatio(ev) != null && (
-        <div className="rounded-lg border border-border-subtle bg-surface p-4">
+        <Card>
           <div className="flex items-center justify-between text-sm">
             <span className="flex items-center gap-1.5 font-medium text-foreground">
               <Users className="h-4 w-4" /> {full}
@@ -220,7 +217,7 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
               Team count last checked {new Date(ev.teamCountUpdatedAt).toLocaleDateString()}
             </p>
           )}
-        </div>
+        </Card>
       )}
 
       <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
@@ -244,14 +241,14 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
       {(registerHref || volunteerHref) && !cancelled && (
         <div className="flex flex-wrap gap-3">
           {registerHref && (
-            <a href={registerHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover">
+            <ButtonLink href={registerHref} external>
               {ev.registrationUrl ? 'Register' : 'Event page'} <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+            </ButtonLink>
           )}
           {volunteerHref && (
-            <a href={volunteerHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
+            <ButtonLink href={volunteerHref} external variant="secondary">
               <HandHeart className="h-4 w-4" /> Volunteer <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+            </ButtonLink>
           )}
         </div>
       )}
@@ -259,23 +256,23 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
       {(ev.website || ev.tbaKey) && (
         <div className="flex flex-wrap gap-3">
           {ev.website && registerHref !== ev.website && volunteerHref !== ev.website && (
-            <a href={ev.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
+            <ButtonLink href={ev.website} external variant="secondary">
               Event website <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+            </ButtonLink>
           )}
           {ev.tbaKey && (
-            <a href={`https://www.thebluealliance.com/event/${ev.tbaKey}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
+            <ButtonLink href={`https://www.thebluealliance.com/event/${ev.tbaKey}`} external variant="secondary">
               The Blue Alliance <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+            </ButtonLink>
           )}
         </div>
       )}
 
       {ev.contactEmail && (
-        <div className="flex items-center gap-2 rounded-lg border border-border-subtle bg-surface p-4 text-sm text-muted">
+        <Card className="flex items-center gap-2 text-sm text-muted">
           <Mail className="h-4 w-4 shrink-0 text-muted-2" />
           <a href={`mailto:${ev.contactEmail}`} className="text-primary hover:underline">{ev.contactEmail}</a>
-        </div>
+        </Card>
       )}
     </div>
   )
