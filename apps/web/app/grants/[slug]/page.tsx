@@ -7,11 +7,10 @@ import { getGrantApplyContext, getGrantBySlug, isGrantFavorited, isGrantWatched 
 import { listProfilesForUser } from '@/app/me/team/profile/queries'
 import { buildPrefillUrl } from '@/lib/grants/prefill'
 import { getVerticalLinks } from '@/components/layout/vertical-switcher'
-import { FavoriteButton } from '@/components/auth/favorite-button'
 import { ApplyPanel } from '@/components/grants/apply-panel'
 import { GrantCycles } from '@/components/grants/grant-cycles'
 import { GrantRequirements } from '@/components/grants/grant-requirements'
-import { WatchButton } from '@/components/grants/watch-button'
+import { SaveGrantButton } from '@/components/grants/save-grant-button'
 import {
   DEADLINE_STATE_LABEL,
   DEADLINE_TYPE_LABEL,
@@ -196,18 +195,9 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
               Read the funder&apos;s page <ExternalLink className="h-3.5 w-3.5" aria-hidden />
             </a>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <FavoriteButton
-                entityType="grant"
-                entityId={grant.id}
-                initialFavorited={favorited}
-                label="Save"
-                reason="Sign in to save this grant to your home page"
-              />
-            </div>
-
-            <WatchButton
+            <SaveGrantButton
               grantId={grant.id}
+              initialSaved={favorited}
               initialWatching={watching}
               hasDeadline={resolved.cycle?.deadlineAt != null && !resolved.isEstimated}
             />

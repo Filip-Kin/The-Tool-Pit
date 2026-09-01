@@ -624,7 +624,7 @@ export default async function NotificationsPage({
 
           {watches.length === 0 ? (
             <p className="mt-4 rounded-lg border border-border-subtle bg-surface p-4 text-sm text-muted">
-              You are not watching any grants yet. Open a listing and press Watch, and you will hear
+              You are not watching any grants yet. Open a listing and press Save, and you will hear
               before the deadline instead of after it.{' '}
               <Link href={GRANTS_ORIGIN} className="text-primary hover:underline">
                 Browse grants
