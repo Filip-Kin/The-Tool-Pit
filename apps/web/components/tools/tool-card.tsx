@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Github, ArrowUpRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { cardClass } from '@/components/ui/card'
 import { FreshnessChip } from '@/components/ui/freshness-chip'
 import { VoteButton } from '@/components/tools/vote-button'
 import { FavoriteButton } from '@/components/auth/favorite-button'
@@ -28,12 +29,7 @@ interface ToolCardProps {
 
 export function ToolCard({ tool, voted = false, favorited = false, className }: ToolCardProps) {
   return (
-    <article
-      className={cn(
-        'group relative flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border/80 hover:bg-surface-2',
-        className,
-      )}
-    >
+    <article className={cardClass({ interactive: true, className: cn('group relative flex flex-col gap-3', className) })}>
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col gap-1.5 min-w-0">

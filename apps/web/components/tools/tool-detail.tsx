@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { Github, ExternalLink, BookOpen, Bug, FileText, Globe, MessageCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { buttonClass } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { FreshnessChip } from '@/components/ui/freshness-chip'
 import { VoteButton } from '@/components/tools/vote-button'
 import { ClaimListingButton } from '@/components/auth/claim-listing-button'
@@ -154,6 +156,9 @@ export function ToolDetail({ tool, voted = false, favorited = false, claimState 
                 const Icon = cfg.icon
                 const isGithub = link.linkType === 'github'
                 return (
+                  // Not <ButtonLink>: the click has to be tracked before the
+                  // browser leaves, so this anchor keeps its own onClick. It
+                  // still takes the Button box, which is the part that drifted.
                   <a
                     key={link.url}
                     href={link.url}
@@ -161,10 +166,10 @@ export function ToolDetail({ tool, voted = false, favorited = false, claimState 
                     rel="noopener noreferrer"
                     onClick={() => trackClick(tool.id, link.linkType)}
                     className={cn(
-                      'flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors',
+                      buttonClass({ variant: 'none' }),
                       isGithub
-                        ? 'border-border bg-surface-2 text-foreground hover:bg-surface-3'
-                        : 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20',
+                        ? 'border border-border bg-surface-2 text-foreground hover:bg-surface-3'
+                        : 'border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20',
                     )}
                   >
                     <Icon className="h-4 w-4" />
@@ -198,7 +203,11 @@ export function ToolDetail({ tool, voted = false, favorited = false, claimState 
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() => trackClick(tool.id, link.linkType)}
-                      className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs text-muted hover:text-foreground hover:bg-surface-2 transition-colors"
+                      className={buttonClass({
+                        variant: 'none',
+                        size: 'sm',
+                        className: 'border border-border bg-surface text-muted hover:bg-surface-2 hover:text-foreground',
+                      })}
                     >
                       <Icon className="h-3.5 w-3.5" />
                       {link.label ?? cfg.label}
@@ -212,7 +221,7 @@ export function ToolDetail({ tool, voted = false, favorited = false, claimState 
 
         {/* Sidebar */}
         <aside className="flex flex-col gap-6">
-          <div className="rounded-lg border border-border bg-surface p-4 flex flex-col gap-4">
+          <Card className="flex flex-col gap-4">
             <MetaRow label="Type" value={formatToolType(tool.toolType)} />
             {tool.audienceRoles.length > 0 && (
               <MetaTagRow label="Audience" tags={tool.audienceRoles.map((r) => ROLE_LABELS[r] ?? r)} />
@@ -227,7 +236,7 @@ export function ToolDetail({ tool, voted = false, favorited = false, claimState 
                 More from this team ↗
               </a>
             )}
-          </div>
+          </Card>
         </aside>
       </div>
     </div>

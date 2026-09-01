@@ -1,5 +1,6 @@
 'use client'
 
+import { Card } from '@/components/ui/card'
 import { useSession } from '@/components/auth/session-provider'
 
 /**
@@ -36,7 +37,7 @@ export function PassingAlongCheckbox({
   if (loading || !user) return null
 
   return (
-    <div className="rounded-lg border border-border-subtle bg-surface p-3">
+    <Card pad="sm">
       <label className="flex cursor-pointer items-start gap-2.5">
         <input
           type="checkbox"
@@ -53,6 +54,6 @@ export function PassingAlongCheckbox({
           </span>
         </span>
       </label>
-    </div>
+    </Card>
   )
 }

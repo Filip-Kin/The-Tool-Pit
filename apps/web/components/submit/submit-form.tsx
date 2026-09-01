@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect, useRef } from 'react'
 import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
 import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils/cn'
+import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
 // Extend Window to hold the Turnstile API injected by Cloudflare's script
@@ -191,14 +191,10 @@ export function SubmitForm() {
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={isPending || (!!SITE_KEY && !turnstileToken)}
-        className="flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
-      >
+      <Button type="submit" disabled={isPending || (!!SITE_KEY && !turnstileToken)}>
         {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
         {isPending ? 'Submitting…' : 'Submit Tool'}
-      </button>
+      </Button>
 
       <p className="text-xs text-muted-2">
         No account required. We review all submissions before publishing.

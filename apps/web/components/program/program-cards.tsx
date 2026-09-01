@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { cardClass } from '@/components/ui/card'
 import { getDb } from '@/lib/db'
 import { tools, toolPrograms, programs } from '@the-tool-pit/db'
 import { eq, and, sql } from 'drizzle-orm'
@@ -47,7 +48,7 @@ export async function ProgramCards() {
         <Link
           key={p.slug}
           href={p.href}
-          className="group flex flex-col gap-3 rounded-lg border border-border bg-surface p-6 transition-all hover:border-border/80 hover:bg-surface-2"
+          className={cardClass({ interactive: true, className: 'group flex flex-col gap-3' })}
           style={{ '--program-color': p.color } as React.CSSProperties}
         >
           <div

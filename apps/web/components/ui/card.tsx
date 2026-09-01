@@ -26,30 +26,44 @@ const PAD: Record<Pad, string> = {
   lg: 'p-5',
 }
 
-export function Card({
-  pad = 'md',
-  interactive = false,
-  selected = false,
-  className,
-  children,
-  ...rest
-}: React.HTMLAttributes<HTMLDivElement> & {
+export interface CardShell {
   pad?: Pad
   /** Adds the hover treatment. Use when the whole card is a click target. */
   interactive?: boolean
   selected?: boolean
-}) {
+  className?: string
+}
+
+/**
+ * The shell as a class string, for cards that are not a <div>.
+ *
+ * Half the cards on this site are some other element and cannot use <Card>: a
+ * grant card IS the link, a field row IS the button that selects it, a tool
+ * card is an <article> because it is one of a grid of them. Making Card
+ * polymorphic to cover that would be a lot of generics for one line of output,
+ * so those call sites take the classes and keep their own element. Either way
+ * the shell is defined here once.
+ */
+export function cardClass({ pad = 'md', interactive = false, selected = false, className }: CardShell = {}) {
+  return cn(
+    'rounded-lg border bg-surface',
+    PAD[pad],
+    selected ? 'border-primary bg-surface-2' : 'border-border-subtle',
+    interactive && !selected && 'transition-colors hover:bg-surface-2',
+    className,
+  )
+}
+
+export function Card({
+  pad,
+  interactive,
+  selected,
+  className,
+  children,
+  ...rest
+}: React.HTMLAttributes<HTMLDivElement> & CardShell) {
   return (
-    <div
-      className={cn(
-        'rounded-lg border bg-surface',
-        PAD[pad],
-        selected ? 'border-primary bg-surface-2' : 'border-border-subtle',
-        interactive && !selected && 'transition-colors hover:bg-surface-2',
-        className,
-      )}
-      {...rest}
-    >
+    <div className={cardClass({ pad, interactive, selected, className })} {...rest}>
       {children}
     </div>
   )

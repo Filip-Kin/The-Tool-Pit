@@ -20,13 +20,20 @@ import { cn } from '@/lib/utils/cn'
  * missing focus ring kept coming from.
  */
 
-type Variant = 'primary' | 'secondary' | 'ghost'
+/**
+ * `none` is the box with no colours, for the handful of call sites that carry a
+ * tone of their own: the GitHub link on a tool page, the tinted admin verdict
+ * buttons. They still get one padding, one radius and one font size, which is
+ * the part that had drifted.
+ */
+type Variant = 'primary' | 'secondary' | 'ghost' | 'none'
 type Size = 'sm' | 'md'
 
 const VARIANT: Record<Variant, string> = {
   primary: 'bg-primary text-white hover:bg-primary-hover',
   secondary: 'border border-border text-foreground hover:bg-surface-2',
   ghost: 'text-muted hover:bg-surface-2 hover:text-foreground',
+  none: '',
 }
 
 const SIZE: Record<Size, string> = {
@@ -45,15 +52,29 @@ type CommonProps = {
   children: React.ReactNode
 }
 
-export function Button({
+/**
+ * The same classes without the element, for the few controls that cannot be a
+ * Button: an anchor that has to track the click before the browser leaves, a
+ * Radix trigger that owns its own tag. Same reason cardClass exists beside
+ * Card. Prefer <Button> or <ButtonLink> wherever the element is free.
+ */
+export function buttonClass({
   variant = 'primary',
   size = 'md',
+  className,
+}: Omit<CommonProps, 'children'> = {}) {
+  return cn(BASE, VARIANT[variant], SIZE[size], className)
+}
+
+export function Button({
+  variant,
+  size,
   className,
   children,
   ...rest
 }: CommonProps & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button className={cn(BASE, VARIANT[variant], SIZE[size], className)} {...rest}>
+    <button className={buttonClass({ variant, size, className })} {...rest}>
       {children}
     </button>
   )
@@ -67,12 +88,12 @@ export function Button({
 export function ButtonLink({
   href,
   external = false,
-  variant = 'primary',
-  size = 'md',
+  variant,
+  size,
   className,
   children,
 }: CommonProps & { href: string; external?: boolean }) {
-  const classes = cn(BASE, VARIANT[variant], SIZE[size], className)
+  const classes = buttonClass({ variant, size, className })
   if (external) {
     return (
       <a href={href} target="_blank" rel="noreferrer" className={classes}>

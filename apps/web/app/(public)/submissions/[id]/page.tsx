@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { submissions, tools } from '@the-tool-pit/db'
+import { Card } from '@/components/ui/card'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -71,7 +72,7 @@ export default async function SubmissionStatusPage({ params }: PageProps) {
           <h1 className="mt-2 text-2xl font-bold text-foreground">Submission Status</h1>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface p-5 flex flex-col gap-4">
+        <Card pad="lg" className="flex flex-col gap-4">
           {/* Status */}
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm font-medium text-muted">Status</span>
@@ -115,7 +116,7 @@ export default async function SubmissionStatusPage({ params }: PageProps) {
               </Link>
             </div>
           )}
-        </div>
+        </Card>
 
         {/* Pipeline log */}
         {logEntries.length > 0 && (
