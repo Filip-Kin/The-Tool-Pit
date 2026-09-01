@@ -80,6 +80,74 @@ const GITHUB_DELAY_MS = 250
  */
 const RATE_LIMIT_FLOOR = 100
 
+/** One published listing and the Chief Delphi thread it points at. */
+export interface ToolThreadShare {
+  toolId: string
+  slug: string
+  topicId: number
+}
+
+/**
+ * Thread links turned into one row per listing per thread.
+ *
+ * Deduplicated on the pair. A listing can carry the same thread twice in
+ * tool_links, once as the announcement and once as a deep link into a reply,
+ * and counting that listing twice would divide the likes by a number of
+ * listings that does not exist.
+ */
+export function toolThreadShares(links: Array<{ toolId: string; slug?: string; url: string }>): ToolThreadShare[] {
+  const seen = new Set<string>()
+  const out: ToolThreadShare[] = []
+  for (const link of links) {
+    const topicId = parseChiefDelphiTopicId(link.url)
+    if (topicId === null) continue // a category or user page, not a thread
+    const key = `${link.toolId}:${topicId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ toolId: link.toolId, slug: link.slug ?? link.toolId, topicId })
+  }
+  return out
+}
+
+/** How many published listings point at each thread. */
+export function countToolsPerTopic(shares: ToolThreadShare[]): Map<number, number> {
+  const counts = new Map<number, number>()
+  for (const share of shares) counts.set(share.topicId, (counts.get(share.topicId) ?? 0) + 1)
+  return counts
+}
+
+/**
+ * One listing's share of the likes on a thread it does not have to itself.
+ *
+ * A thread that announces several tools was liked for what the thread
+ * announced, not once for each tool in it. Crediting the full count to every
+ * listing was measured in production and it is not a rounding error: the Open
+ * Alliance 2024 directory thread has 60 likes and seven listings were each
+ * carrying all 60, the YAMS announcement has 60 across four, PurpleLib 13
+ * across four. Eleven listings sat above where they belong because of it, and
+ * chief_delphi_likes feeds popularity_score, which orders Popular and carries
+ * 0.35 of the search rank.
+ *
+ * FLOOR, not round. The listings that share a thread must not between them be
+ * credited with more approval than the thread actually got, and rounding up
+ * does exactly that: 60 across seven rounds to 9 each, which is 63. Floor gives
+ * 8 each and leaves the remainder uncredited, which is the honest direction to
+ * lose a like in.
+ *
+ * A thread with one listing is `share = likes`, unchanged. In production 165
+ * published listings carry a thread across 102 distinct threads, and 37 of
+ * those threads are shared by 100 listings between them, so the undivided case
+ * is still 65 listings.
+ *
+ * Idempotent by construction. The share is computed from the live opening-post
+ * count every time, never from the stored column, so running the pass twice
+ * writes the same number twice instead of dividing again.
+ */
+export function shareOfThreadLikes(openingPostLikes: number, sharers: number): number {
+  if (sharers <= 1) return openingPostLikes
+  return Math.floor(openingPostLikes / sharers)
+}
+
 export async function processPopularityRefreshJob(
   payload: PopularityRefreshPayload = {},
 ): Promise<PopularityRefreshStats> {
@@ -182,38 +250,63 @@ export async function processPopularityRefreshJob(
   // decision on fifteen points and it is not made here: parity is the
   // conservative reading, and the ratio is written down so it can be revisited
   // against the full corpus once this job has actually populated the column.
+  //
+  // The count is DIVIDED between the listings that share a thread. One thread
+  // often announces several tools, and giving each of them the whole count was
+  // inventing approval that nobody gave. See shareOfThreadLikes.
 
   if (!payload.skipChiefDelphi) {
-    const cdTargets = await db
+    // Every published listing with a Chief Delphi thread, and deliberately NOT
+    // narrowed by onlyTool. How many listings share a thread is a fact about
+    // the thread, so a single-listing refresh has to see all of them or it
+    // would write the undivided count back.
+    const cdLinks = await db
       .select({ id: tools.id, slug: tools.slug, url: toolLinks.url })
       .from(tools)
       .innerJoin(toolLinks, eq(toolLinks.toolId, tools.id))
-      .where(
-        and(
-          eq(tools.status, 'published'),
-          sql`${toolLinks.url} like '%chiefdelphi.com/t/%'`,
-          ...(onlyTool ? [eq(tools.id, onlyTool)] : []),
-        ),
-      )
+      .where(and(eq(tools.status, 'published'), sql`${toolLinks.url} like '%chiefdelphi.com/t/%'`))
 
-    for (const target of cdTargets) {
-      const topicId = parseChiefDelphiTopicId(target.url)
-      if (topicId === null) continue
-      stats.chiefDelphiConsidered++
+    const allShares = toolThreadShares(cdLinks.map((row) => ({ toolId: row.id, url: row.url })))
+    const sharerCounts = countToolsPerTopic(allShares)
 
+    const targets = onlyTool ? allShares.filter((s) => s.toolId === onlyTool) : allShares
+    stats.chiefDelphiConsidered = targets.length
+
+    // Grouped by thread, because seven listings used to mean seven requests for
+    // the same thread. One read answers for all of them.
+    const byTopic = new Map<number, ToolThreadShare[]>()
+    for (const share of targets) {
+      const list = byTopic.get(share.topicId) ?? []
+      list.push(share)
+      byTopic.set(share.topicId, list)
+    }
+
+    for (const [topicId, sharing] of byTopic) {
       // The Discourse client paces itself, so there is no delay call here.
       const detail = await fetchChiefDelphiTopic(topicId)
       if (!detail) {
-        stats.chiefDelphiFailed++
-        console.warn(`[popularity] ${target.slug}: chief delphi topic ${topicId} did not answer`)
+        stats.chiefDelphiFailed += sharing.length
+        console.warn(
+          `[popularity] chief delphi topic ${topicId} did not answer, leaving ${sharing.map((s) => s.slug).join(', ')}`,
+        )
         continue
       }
 
-      await db
-        .update(tools)
-        .set({ chiefDelphiLikes: detail.openingPostLikes, updatedAt: new Date() })
-        .where(eq(tools.id, target.id))
-      stats.chiefDelphiRefreshed++
+      const sharers = sharerCounts.get(topicId) ?? 1
+      const share = shareOfThreadLikes(detail.openingPostLikes, sharers)
+      if (sharers > 1) {
+        console.log(
+          `[popularity] topic ${topicId}: ${detail.openingPostLikes} likes split ${sharers} ways, ${share} each`,
+        )
+      }
+
+      for (const target of sharing) {
+        await db
+          .update(tools)
+          .set({ chiefDelphiLikes: share, updatedAt: new Date() })
+          .where(eq(tools.id, target.toolId))
+        stats.chiefDelphiRefreshed++
+      }
     }
   }
 
