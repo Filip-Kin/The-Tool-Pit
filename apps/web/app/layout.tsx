@@ -4,6 +4,7 @@ import './globals.css'
 import { SessionProvider } from '@/components/auth/session-provider'
 import { getCurrentUser } from '@/lib/auth/session'
 import { Analytics } from '@/components/layout/analytics'
+import { THEME_INIT_SCRIPT } from '@/lib/theme/theme'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -31,7 +32,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const user = await getCurrentUser()
 
   return (
-    <html lang="en" className={inter.variable}>
+    // suppressHydrationWarning because the head script below sets data-theme on
+    // this element before React ever sees it. The attribute is the one thing in
+    // the document the server genuinely cannot know: it depends on the
+    // visitor's localStorage and on what their OS is doing.
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <head>
+        {/* Resolve the theme before the first paint. In a useEffect this is a
+            white flash on every load for anyone running a light desktop. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body>
         <SessionProvider
           initialUser={

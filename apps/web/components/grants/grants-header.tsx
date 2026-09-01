@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { CircleDollarSign } from 'lucide-react'
 import { ButtonLink } from '@/components/ui/button'
 import { UserMenu } from '@/components/auth/user-menu'
+import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { MobileNav } from '@/components/layout/mobile-nav'
 import { VerticalHomeCrumb, verticalNavItems } from '@/components/layout/vertical-switcher'
 
@@ -35,6 +36,7 @@ export async function GrantsHeader() {
           >
             Submit a grant
           </ButtonLink>
+          <ThemeToggle />
           <UserMenu />
           <MobileNav
             className="sm:hidden"

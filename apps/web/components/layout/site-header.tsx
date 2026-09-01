@@ -3,6 +3,7 @@ import { Suspense } from 'react'
 import { ButtonLink } from '@/components/ui/button'
 import { SearchBar } from '@/components/search/search-bar'
 import { UserMenu } from '@/components/auth/user-menu'
+import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { MobileNav } from './mobile-nav'
 import { verticalNavItems } from './vertical-switcher'
 
@@ -36,7 +37,8 @@ export async function SiteHeader() {
               Submit
             </ButtonLink>
           </div>
-          <div className="ml-2">
+          <div className="ml-2 flex items-center gap-1">
+            <ThemeToggle />
             <UserMenu />
           </div>
           <MobileNav

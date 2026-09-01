@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Code2 } from 'lucide-react'
 import { ButtonLink } from '@/components/ui/button'
 import { UserMenu } from '@/components/auth/user-menu'
+import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { VerticalHomeCrumb, verticalNavItems } from '@/components/layout/vertical-switcher'
 import { MobileNav } from '@/components/layout/mobile-nav'
 
@@ -32,6 +33,7 @@ export async function RobotCodeHeader() {
           >
             Add your team
           </ButtonLink>
+          <ThemeToggle />
           <UserMenu />
           <MobileNav
             className="sm:hidden"
