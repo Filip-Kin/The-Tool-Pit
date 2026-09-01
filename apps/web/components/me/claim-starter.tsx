@@ -10,8 +10,8 @@ import type { ClaimableListing } from '@/lib/queries/listing-ownership'
  * Start a claim on a specific listing the user reached from its public page.
  *
  * The button explains what will happen before it happens: instant for a field
- * you submitted, a repo token for a tool with a GitHub repo, a wait for a human
- * otherwise. Honesty here is the point, because a claim that quietly does
+ * or event you submitted, a repo token for a tool with a GitHub repo, a wait for
+ * a human otherwise. Honesty here is the point, because a claim that quietly does
  * nothing is how people conclude the feature is broken.
  *
  * The review path asks for evidence in writing before it will send anything.

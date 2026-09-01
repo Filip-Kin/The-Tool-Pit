@@ -1,7 +1,9 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm'
+import type { PgColumn } from 'drizzle-orm/pg-core'
 import { getDb } from '@/lib/db'
 import {
   albums,
+  eventListings,
   events,
   listingClaims,
   listingOwners,
@@ -15,6 +17,13 @@ import {
   type ListingEntityType,
   type ListingOwnerRole,
 } from '@the-tool-pit/db'
+import {
+  OWNER_LINK_TYPES,
+  linkFieldKey,
+  listingFormSpec,
+  type ListingFieldSpec,
+  type OwnerLinkType,
+} from '@/components/me/listing-fields'
 import { displayEventName } from './albums'
 
 /**
@@ -135,10 +144,37 @@ async function resolveFields(ids: string[]): Promise<Resolved> {
   return out
 }
 
+async function resolveEvents(ids: string[]): Promise<Resolved> {
+  const db = getDb()
+  const rows = await db
+    .select({
+      id: eventListings.id,
+      name: eventListings.name,
+      city: eventListings.city,
+      region: eventListings.region,
+      startDate: eventListings.startDate,
+      status: eventListings.status,
+    })
+    .from(eventListings)
+    .where(inArray(eventListings.id, ids))
+  const out: Resolved = new Map()
+  for (const r of rows) {
+    const place = [r.city, r.region].filter(Boolean).join(', ')
+    const status = r.status === 'published' ? null : `(${r.status})`
+    out.set(r.id, {
+      title: r.name,
+      subtitle: [r.startDate, place, status].filter(Boolean).join(' · ') || null,
+      href: `/events/${r.id}`,
+    })
+  }
+  return out
+}
+
 const RESOLVERS: Record<ListingEntityType, (ids: string[]) => Promise<Resolved>> = {
   tool: resolveTools,
   album: resolveAlbums,
   field: resolveFields,
+  event: resolveEvents,
 }
 
 /**
@@ -370,9 +406,10 @@ export interface ClaimableListing {
   /** For tools: a repo we can verify against, when there is one. */
   repoUrl: string | null
   /**
-   * True when the signed-in user is the one who submitted this field. Only
-   * fields carry a submitter id; the strongest possible proof, so it short-
-   * circuits to instant ownership in the claim action.
+   * True when the signed-in user is the one who submitted this listing. Only
+   * practice fields and off-season events carry a submitter id; the strongest
+   * possible proof, so it short-circuits to instant ownership in the claim
+   * action.
    */
   isSelfSubmitted: boolean
   /**
@@ -414,6 +451,14 @@ export async function resolveClaimable(
       .where(eq(practiceFields.id, entityId))
       .limit(1)
     isSelfSubmitted = row?.submittedByUserId === userId
+  } else if (entityType === 'event') {
+    const db = getDb()
+    const [row] = await db
+      .select({ submittedByUserId: eventListings.submittedByUserId })
+      .from(eventListings)
+      .where(eq(eventListings.id, entityId))
+      .limit(1)
+    isSelfSubmitted = row?.submittedByUserId === userId
   }
 
   const db = getDb()
@@ -441,37 +486,57 @@ export async function resolveClaimable(
 
 // #region load one listing for the owner edit form
 //
-// Returns the editable columns for the type. Safe to read the whole row here
-// because every caller has already proven canEditListing; the returned shape
-// still names only the columns the owner form actually writes, so a widening of
-// the select cannot leak a private column into a form.
+// The select is BUILT FROM the form spec rather than written out beside it.
+// Every caller has already proven canEditListing, so reading the whole row
+// would be safe as far as permissions go, but a hand-written select next to a
+// separate list of form fields is how a private column ends up in a form the
+// day someone widens one and not the other. Deriving one from the other makes
+// that impossible: a column that is not in components/me/listing-fields.ts is
+// never read, and a spec entry with no matching column is never invented.
+//
+// Values come back as the strings and booleans an input holds, because the
+// form is the only consumer and the action parses them straight back.
 
-export interface EditableToolValues {
-  name: string
-  summary: string | null
-  description: string | null
-  vendorName: string | null
-  toolType: string
-}
-export interface EditableAlbumValues {
-  title: string | null
-  photographer: string | null
-  description: string | null
-  dateText: string | null
-}
-export interface EditableFieldValues {
-  name: string
-  hours: string | null
-  contactInfo: string | null
-  contactUrl: string | null
-  website: string | null
-  notes: string | null
+/** One editable listing, flattened to what the form binds to. */
+export type ListingFormValues = Record<string, string | boolean>
+
+export interface EditableListing {
+  entityType: ListingEntityType
+  facts: ListingFacts
+  values: ListingFormValues
 }
 
-export type EditableListing =
-  | { entityType: 'tool'; facts: ListingFacts; values: EditableToolValues }
-  | { entityType: 'album'; facts: ListingFacts; values: EditableAlbumValues }
-  | { entityType: 'field'; facts: ListingFacts; values: EditableFieldValues }
+/** The row each entity type edits. Keep in step with LISTING_ENTITY_TYPES. */
+const EDIT_TABLES = {
+  tool: tools,
+  album: albums,
+  field: practiceFields,
+  event: eventListings,
+} as const
+
+/**
+ * The spec fields for a vertical that are real columns on its own table.
+ *
+ * The single answer to "which keys may be read and written", shared by the
+ * loader below and by the update set in app/me/listings/actions.ts. Link fields
+ * live one table over and are handled separately; anything else the spec names
+ * that is not a column is dropped here rather than reaching a query, so a typo
+ * in the spec costs a missing input and never a failed update.
+ */
+export function listingColumnFields(entityType: ListingEntityType): ListingFieldSpec[] {
+  const table = EDIT_TABLES[entityType] as unknown as Record<string, unknown>
+  return listingFormSpec(entityType).fields.filter(
+    (f) => !f.key.startsWith('link_') && Object.hasOwn(table, f.key),
+  )
+}
+
+/** A db value as the input that owns it holds it. */
+function toFormValue(kind: string, value: unknown): string | boolean {
+  if (kind === 'checkbox') return Boolean(value)
+  if (value == null) return ''
+  if (value instanceof Date) return value.toISOString().slice(0, 10)
+  return String(value)
+}
 
 export async function loadListingForEdit(
   entityType: ListingEntityType,
@@ -481,49 +546,52 @@ export async function loadListingForEdit(
   const facts = (await RESOLVERS[entityType]([entityId])).get(entityId)
   if (!facts) return null
 
-  if (entityType === 'tool') {
-    const [row] = await db
-      .select({
-        name: tools.name,
-        summary: tools.summary,
-        description: tools.description,
-        vendorName: tools.vendorName,
-        toolType: tools.toolType,
-      })
-      .from(tools)
-      .where(eq(tools.id, entityId))
-      .limit(1)
-    if (!row) return null
-    return { entityType, facts, values: row }
-  }
-  if (entityType === 'album') {
-    const [row] = await db
-      .select({
-        title: albums.title,
-        photographer: albums.photographer,
-        description: albums.description,
-        dateText: albums.dateText,
-      })
-      .from(albums)
-      .where(eq(albums.id, entityId))
-      .limit(1)
-    if (!row) return null
-    return { entityType, facts, values: row }
-  }
+  const table = EDIT_TABLES[entityType] as unknown as Record<string, PgColumn>
+  const columnFields = listingColumnFields(entityType)
+  const selection: Record<string, PgColumn> = {}
+  for (const field of columnFields) selection[field.key] = table[field.key]
+
   const [row] = await db
-    .select({
-      name: practiceFields.name,
-      hours: practiceFields.hours,
-      contactInfo: practiceFields.contactInfo,
-      contactUrl: practiceFields.contactUrl,
-      website: practiceFields.website,
-      notes: practiceFields.notes,
-    })
-    .from(practiceFields)
-    .where(eq(practiceFields.id, entityId))
+    .select(selection)
+    .from(EDIT_TABLES[entityType])
+    .where(eq(table.id, entityId))
     .limit(1)
   if (!row) return null
-  return { entityType, facts, values: row }
+
+  const values: ListingFormValues = {}
+  for (const field of columnFields) values[field.key] = toFormValue(field.kind, row[field.key])
+
+  if (entityType === 'tool') {
+    for (const [type, url] of Object.entries(await loadToolLinks(entityId))) {
+      values[linkFieldKey(type as OwnerLinkType)] = url
+    }
+  }
+
+  return { entityType, facts, values }
+}
+
+/**
+ * The owner-editable links on a tool, one URL per type.
+ *
+ * tool_links has no uniqueness on (tool_id, link_type) and a crawl can leave
+ * two rows of the same type behind, so the newest wins here. A duplicate the
+ * owner does not touch is left alone: collapsing rows nobody asked about would
+ * mean an edit to one link quietly deleting another.
+ */
+export async function loadToolLinks(toolId: string): Promise<Partial<Record<OwnerLinkType, string>>> {
+  const db = getDb()
+  const rows = await db
+    .select({ linkType: toolLinks.linkType, url: toolLinks.url, createdAt: toolLinks.createdAt })
+    .from(toolLinks)
+    .where(eq(toolLinks.toolId, toolId))
+    .orderBy(asc(toolLinks.createdAt))
+
+  const out: Partial<Record<OwnerLinkType, string>> = {}
+  const owned = new Set<string>(OWNER_LINK_TYPES)
+  for (const r of rows) {
+    if (owned.has(r.linkType)) out[r.linkType as OwnerLinkType] = r.url
+  }
+  return out
 }
 
 // #endregion

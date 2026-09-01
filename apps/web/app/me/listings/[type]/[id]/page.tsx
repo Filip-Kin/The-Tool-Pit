@@ -17,6 +17,7 @@ import {
   createInvite,
   removeOwner,
   saveAlbumListing,
+  saveEventListing,
   saveFieldListing,
   saveToolListing,
 } from '../../actions'
@@ -32,7 +33,18 @@ const SAVE_ACTIONS = {
   tool: saveToolListing,
   album: saveAlbumListing,
   field: saveFieldListing,
+  event: saveEventListing,
 } as const
+
+/**
+ * Option tuples the field spec cannot hold itself.
+ *
+ * TOOL_TYPES comes from the db barrel, which re-exports the postgres client, so
+ * the form takes it as a prop rather than importing it and pulling net and tls
+ * into the browser bundle. Everything else the form needs is on a zero-
+ * dependency enum subpath and is in the spec already.
+ */
+const DYNAMIC_OPTIONS: Record<string, readonly string[]> = { toolType: TOOL_TYPES }
 
 export default async function EditListingPage({
   params,
@@ -66,7 +78,7 @@ export default async function EditListingPage({
         <ListingEditForm
           entityId={id}
           listing={listing}
-          toolTypeOptions={TOOL_TYPES}
+          dynamicOptions={DYNAMIC_OPTIONS}
           saveAction={SAVE_ACTIONS[type]}
         />
 

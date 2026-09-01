@@ -34,8 +34,8 @@ export function OwnedListings({
 
       {listings.length === 0 ? (
         <p className="mt-4 rounded-lg border border-border-subtle bg-surface p-4 text-sm text-muted">
-          You do not manage any listings yet. Open a tool, album or practice field you run and use
-          &ldquo;Claim this listing&rdquo; to start.
+          You do not manage any listings yet. Open a tool, album, practice field or off-season event
+          you run and use &ldquo;Claim this listing&rdquo; to start.
         </p>
       ) : (
         <ul className="mt-4 flex flex-col gap-2">

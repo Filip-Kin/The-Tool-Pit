@@ -10,6 +10,7 @@ const ENTITY_NOUNS: Record<ListingEntityType, string> = {
   tool: 'Tool',
   album: 'Photo album',
   field: 'Practice field',
+  event: 'Off-season event',
 }
 
 export function entityNoun(type: ListingEntityType): string {

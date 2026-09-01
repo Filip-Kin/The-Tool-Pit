@@ -6,10 +6,12 @@ import { revalidatePath } from 'next/cache'
 import { getDb } from '@/lib/db'
 import {
   albums,
+  eventListings,
   listingClaims,
   listingInvites,
   listingOwners,
   practiceFields,
+  toolLinks,
   tools,
   TOOL_TYPES,
   type ClaimEvidence,
@@ -22,8 +24,16 @@ import {
   countOwners,
   getOwnerRole,
   isListingEntityType,
+  listingColumnFields,
+  loadToolLinks,
   resolveClaimable,
 } from '@/lib/queries/listing-ownership'
+import {
+  OWNER_LINK_TYPES,
+  linkFieldKey,
+  listingFormSpec,
+  parseListingValues,
+} from '@/components/me/listing-fields'
 import { notifyClaimResolved } from '@/lib/notify/approvals'
 
 /**
@@ -154,9 +164,9 @@ export async function startClaim(
     return { message: 'This claim is already waiting for review.' }
   }
 
-  // PATH 1: you submitted this field. Strongest signal, and only for an unowned
-  // listing, so it can grant on the spot.
-  if (entityType === 'field' && target.isSelfSubmitted && !target.alreadyOwned) {
+  // PATH 1: you submitted this field or event while signed in. Strongest
+  // signal, and only for an unowned listing, so it can grant on the spot.
+  if (target.isSelfSubmitted && !target.alreadyOwned) {
     await grantOwnership(entityType, entityId, user.id, 'owner', 'self_submitted', null)
     await db.insert(listingClaims).values({
       entityType,
@@ -524,17 +534,46 @@ export async function adminResolveClaim(
 
 // #region owner edits
 //
-// An owner (or editor) edits their listing's DESCRIPTIVE fields directly. The
-// admin-only columns (status, scores, isOfficial, adminNotes, freshness) are
-// never in these forms and are not writable here. Anonymous and non-owner
-// suggestions still go through the existing moderation queues, untouched.
+// An owner (or editor) edits their listing's DESCRIPTIVE fields directly.
+//
+// WHAT IS NOT HERE, AND WHY. An owner never writes a column that expresses our
+// judgement of their listing or its place in a ranking: status, isOfficial,
+// isVendor, isRookieFriendly, confidenceScore, popularityScore, githubStars,
+// chiefDelphiLikes, freshnessState, adminNotes and slug on a tool; provider,
+// sourceType, canonicalUrl, url and eventId on an album; status, source and
+// rejectionReason everywhere; tbaKey, registeredTeamCount and the roster
+// counts on an event; and every submitter audit column wherever one exists.
+// The update set is built from components/me/listing-fields.ts, so none of them
+// can arrive by accident: a column that is not a form field is not in the set.
+//
+// A practice field's LOCATION and equipment spec stay on field_edit_proposals.
+// A change to where a field IS keeps its review; a change to how you reach it
+// does not. An event's map coordinates are held back for the same reason.
+// Anonymous submit and suggest-edit are untouched by any of this.
+//
+// THE CRAWLER. apps/worker/src/pipeline/publish.ts re-publishes a tool whose
+// crawl candidate is matched to it, and that path overwrites the tool row and
+// deletes and re-inserts the homepage, github and forum links. So an owner's
+// edit to a crawled tool can be replaced by a later pass. That is true of every
+// field on the tool form and always has been, not just the links, so the form
+// says it once, plainly, above the three links it bites hardest. The real fix
+// is a marker the re-publish honours, which belongs in the worker.
 
-function editText(form: FormData, name: string, maxLength: number): string | null {
-  const raw = form.get(name)
-  if (typeof raw !== 'string') return null
-  const trimmed = raw.trim()
-  if (trimmed === '') return null
-  return trimmed.slice(0, maxLength)
+/** Drop the keys a select left undefined, so they are not written as null. */
+function columnSet(
+  values: Record<string, unknown>,
+  keys: readonly string[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const key of keys) {
+    if (values[key] !== undefined) out[key] = values[key]
+  }
+  return out
+}
+
+/** The spec keys that are real columns on the listing's own table. */
+function columnKeys(entityType: ListingEntityType): string[] {
+  return listingColumnFields(entityType).map((f) => f.key)
 }
 
 async function requireEditor(
@@ -550,76 +589,113 @@ async function requireEditor(
   return { userId: user.id }
 }
 
-export async function saveToolListing(formData: FormData): Promise<OwnershipActionResult> {
+/**
+ * The one door every owner edit goes through.
+ *
+ * Gate, parse, write, in that order and never a different one. The gate reads
+ * listing_owners for the signed-in user; the entity id comes off the form but
+ * proves nothing on its own, which is exactly why the gate runs against it
+ * before a single column is read or written.
+ */
+async function saveListing(
+  entityType: ListingEntityType,
+  formData: FormData,
+  dynamicOptions: Record<string, readonly string[]> = {},
+): Promise<{ result: OwnershipActionResult } | { entityId: string; values: Record<string, unknown> }> {
   const entityId = String(formData.get('entityId') ?? '')
-  const gate = await requireEditor('tool', entityId)
-  if ('error' in gate) return gate
+  const gate = await requireEditor(entityType, entityId)
+  if ('error' in gate) return { result: gate }
 
-  const name = editText(formData, 'name', 200)
-  if (!name) return { error: 'A tool needs a name.' }
-  const toolTypeRaw = String(formData.get('toolType') ?? '')
-  const toolType = (TOOL_TYPES as readonly string[]).includes(toolTypeRaw) ? toolTypeRaw : undefined
+  const parsed = parseListingValues(listingFormSpec(entityType), formData, dynamicOptions)
+  if ('error' in parsed) return { result: parsed }
+
+  return { entityId, values: parsed.values }
+}
+
+export async function saveToolListing(formData: FormData): Promise<OwnershipActionResult> {
+  const step = await saveListing('tool', formData, { toolType: TOOL_TYPES })
+  if ('result' in step) return step.result
+  const { entityId, values } = step
 
   const db = getDb()
   await db
     .update(tools)
-    .set({
-      name,
-      summary: editText(formData, 'summary', 500),
-      description: editText(formData, 'description', 20_000),
-      vendorName: editText(formData, 'vendorName', 200),
-      ...(toolType ? { toolType } : {}),
-      updatedAt: new Date(),
-    })
+    .set({ ...columnSet(values, columnKeys('tool')), updatedAt: new Date() })
     .where(eq(tools.id, entityId))
+
+  await saveToolLinks(entityId, values)
+
   revalidatePath('/me/listings')
   return { message: 'Saved.' }
 }
 
+/**
+ * Write the owner's links, one row per type, touching only what changed.
+ *
+ * Rewriting all seven on every autosave would reset lastCheckedAt and isBroken
+ * on links nobody edited, which is the link checker's memory of what it has
+ * already been round. So the current rows are read first and a type is only
+ * deleted and re-inserted when its URL actually moved. A type an owner clears
+ * is deleted and not replaced, which is how you take a dead link down.
+ */
+async function saveToolLinks(toolId: string, values: Record<string, unknown>): Promise<void> {
+  const db = getDb()
+  const current = await loadToolLinks(toolId)
+
+  for (const type of OWNER_LINK_TYPES) {
+    const next = (values[linkFieldKey(type)] as string | null) ?? null
+    if ((current[type] ?? null) === next) continue
+
+    await db.delete(toolLinks).where(and(eq(toolLinks.toolId, toolId), eq(toolLinks.linkType, type)))
+    if (next) await db.insert(toolLinks).values({ toolId, linkType: type, url: next })
+  }
+}
+
 export async function saveAlbumListing(formData: FormData): Promise<OwnershipActionResult> {
-  const entityId = String(formData.get('entityId') ?? '')
-  const gate = await requireEditor('album', entityId)
-  if ('error' in gate) return gate
+  const step = await saveListing('album', formData)
+  if ('result' in step) return step.result
 
   const db = getDb()
   await db
     .update(albums)
-    .set({
-      title: editText(formData, 'title', 300),
-      photographer: editText(formData, 'photographer', 200),
-      description: editText(formData, 'description', 5000),
-      dateText: editText(formData, 'dateText', 120),
-      updatedAt: new Date(),
-    })
-    .where(eq(albums.id, entityId))
+    .set({ ...columnSet(step.values, columnKeys('album')), updatedAt: new Date() })
+    .where(eq(albums.id, step.entityId))
   revalidatePath('/me/listings')
   return { message: 'Saved.' }
 }
 
 export async function saveFieldListing(formData: FormData): Promise<OwnershipActionResult> {
-  const entityId = String(formData.get('entityId') ?? '')
-  const gate = await requireEditor('field', entityId)
-  if ('error' in gate) return gate
-
-  const name = editText(formData, 'name', 200)
-  if (!name) return { error: 'A field needs a name.' }
+  const step = await saveListing('field', formData)
+  if ('result' in step) return step.result
 
   const db = getDb()
-  // Owner edits the access/contact/notes columns directly. Location and field
-  // spec still route through field_edit_proposals, so a change to where a field
-  // IS keeps its admin review; a change to how you reach it does not.
   await db
     .update(practiceFields)
-    .set({
-      name,
-      hours: editText(formData, 'hours', 500),
-      contactInfo: editText(formData, 'contactInfo', 1000),
-      contactUrl: editText(formData, 'contactUrl', 500),
-      website: editText(formData, 'website', 500),
-      notes: editText(formData, 'notes', 2000),
-      updatedAt: new Date(),
-    })
-    .where(eq(practiceFields.id, entityId))
+    .set({ ...columnSet(step.values, columnKeys('field')), updatedAt: new Date() })
+    .where(eq(practiceFields.id, step.entityId))
+  revalidatePath('/me/listings')
+  return { message: 'Saved.' }
+}
+
+export async function saveEventListing(formData: FormData): Promise<OwnershipActionResult> {
+  const step = await saveListing('event', formData)
+  if ('result' in step) return step.result
+  const set = columnSet(step.values, columnKeys('event'))
+
+  // One rule the columns cannot express on their own, taken from
+  // lib/events/create-submission.ts so a submitted event and an edited one end
+  // up in the same shape: an opening date only means anything while
+  // registration has not opened. Only applied when the status was actually
+  // posted, so a column we did not receive never clears one we did.
+  if (set.registrationStatus !== undefined && set.registrationStatus !== 'not_open') {
+    set.registrationOpensAt = null
+  }
+
+  const db = getDb()
+  await db
+    .update(eventListings)
+    .set({ ...set, updatedAt: new Date() })
+    .where(eq(eventListings.id, step.entityId))
   revalidatePath('/me/listings')
   return { message: 'Saved.' }
 }

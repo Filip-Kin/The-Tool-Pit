@@ -33,7 +33,7 @@ export default async function ListingsPage() {
   return (
     <MeShell
       title="Your listings"
-      intro="Tools, albums and fields you run."
+      intro="Tools, albums, practice fields and off-season events you run."
       active="listings"
     >
       <div className="flex flex-col gap-12">

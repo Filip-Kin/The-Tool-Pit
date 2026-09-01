@@ -17,15 +17,20 @@ import { users } from './accounts'
 // the way app/me/team/profile/queries.ts gates on team_profile_members, never
 // on the claim itself.
 //
-// Polymorphic over three entity types. An off-season event needs no type of
-// its own: it is a tool with toolType 'offseason_event'. Grants already have
-// their own team_profile_members with the same owner/editor/viewer vocabulary;
-// this mirrors it rather than inventing a second one, so grants can move onto
-// this model later without a rename.
+// Polymorphic over four entity types. Grants already have their own
+// team_profile_members with the same owner/editor/viewer vocabulary; this
+// mirrors it rather than inventing a second one, so grants can move onto this
+// model later without a rename.
+//
+// 'event' means a row in event_listings, the curated off-season listing with
+// the cost, capacity, registration state and venue on it. It earned its own
+// entity type once owners could edit: a tool with toolType 'offseason_event'
+// is a page ABOUT an event and has none of those columns, so pointing an
+// organiser at one gave them nothing of theirs to correct.
 // ---------------------------------------------------------------------------
 
-/** The listing tables a claim can point at. `tool` also covers off-season events. */
-export const LISTING_ENTITY_TYPES = ['tool', 'album', 'field'] as const
+/** The listing tables a claim can point at. */
+export const LISTING_ENTITY_TYPES = ['tool', 'album', 'field', 'event'] as const
 export type ListingEntityType = (typeof LISTING_ENTITY_TYPES)[number]
 
 /** Same three roles as team_profile_members, on purpose. 'viewer' may only read. */
@@ -70,7 +75,7 @@ export const listingOwners = pgTable(
   'listing_owners',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    /** LISTING_ENTITY_TYPES. Not an FK: the three targets live in unrelated tables. */
+    /** LISTING_ENTITY_TYPES. Not an FK: the targets live in unrelated tables. */
     entityType: text('entity_type').notNull(),
     entityId: uuid('entity_id').notNull(),
     userId: uuid('user_id')

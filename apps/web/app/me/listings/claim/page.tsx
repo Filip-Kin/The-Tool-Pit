@@ -42,7 +42,7 @@ export default async function ClaimPage({
         <div className="rounded-lg border border-border-subtle bg-surface p-5 text-sm text-muted">
           <p>We could not find that listing to claim.</p>
           <p className="mt-3">
-            Open the tool, album or practice field you run and use its &ldquo;Claim this listing&rdquo;
+            Open the tool, album, practice field or off-season event you run and use its &ldquo;Claim this listing&rdquo;
             button, or head to{' '}
             <a href="/me/listings" className="text-primary hover:underline">
               your listings

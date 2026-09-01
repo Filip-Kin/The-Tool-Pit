@@ -1,182 +1,430 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
-import type { EditableListing } from '@/lib/queries/listing-ownership'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  listingFormSpec,
+  LISTING_REVIEW_NOTE,
+  type ListingFieldSpec,
+  type ListingGroup,
+} from './listing-fields'
+import type { EditableListing, ListingFormValues } from '@/lib/queries/listing-ownership'
 
 /**
  * The owner edit form for a listing.
  *
- * One component, three field sets, because the three verticals genuinely edit
- * different things. Only the descriptive columns are here: status, ranking and
- * anything an admin controls are deliberately absent, so an owner can improve
- * their own listing without being able to publish or promote it. The action is
- * passed in from the page and re-checks edit access server-side, so this file
- * holds no permission logic.
+ * One component for all four verticals, because they differ only in which
+ * fields they have, and that difference is data: components/me/listing-fields.ts
+ * declares the fields, their groups, their captions and their limits, and this
+ * file renders whatever it is handed. Adding a column to a vertical is an entry
+ * in that file and nothing here.
+ *
+ * The save behaviour is the team profile form's, deliberately identical rather
+ * than merely similar. Filip's standing complaint is that the platform reads
+ * like separate apps stitched together, and two editors on the same site that
+ * save in two different ways is exactly that. So: no Save button, whole-form
+ * autosave on an 800ms debounce, an immediate flush when a field loses focus or
+ * the tab goes away, a snapshot gate so an untouched form never posts, and a
+ * failure that keeps your text and says so instead of pretending.
+ *
+ * Nothing here decides permissions. The page proved edit access before
+ * rendering, and the action proves it again server-side on every save.
  */
+
+// #region autosave
+
+/** Quiet period after the last keystroke. Long enough to not save mid-word. */
+const AUTOSAVE_DEBOUNCE_MS = 800
+
+type SaveStatus =
+  /** Loaded and untouched, or edited and waiting for the debounce. */
+  | { kind: 'idle'; dirty: boolean }
+  | { kind: 'saving' }
+  | { kind: 'saved' }
+  | { kind: 'failed'; message: string }
+
+/**
+ * A comparable snapshot of the form.
+ *
+ * Keys are sorted because the seed fills them in spec order while a link with
+ * no row yet is added later, and insertion order must not read as a change.
+ */
+function serialiseValues(values: ListingFormValues): string {
+  return JSON.stringify(Object.keys(values).sort().map((k) => [k, values[k]]))
+}
+
+/**
+ * Every field the spec declares, whether or not the listing had a value for it.
+ *
+ * A field missing from the state would render as an uncontrolled input and then
+ * flip to controlled on the first keystroke, and an absent FormData key reads
+ * as empty on the server, so a half-seeded form would blank whatever it did not
+ * render. Seeding from the spec makes both impossible.
+ */
+function seedValues(listing: EditableListing): ListingFormValues {
+  const out: ListingFormValues = {}
+  for (const field of listingFormSpec(listing.entityType).fields) {
+    const loaded = listing.values[field.key]
+    out[field.key] = loaded ?? (field.kind === 'checkbox' ? false : '')
+  }
+  return out
+}
+
+// #endregion
+
 export function ListingEditForm({
   entityId,
   listing,
-  toolTypeOptions,
+  dynamicOptions,
   saveAction,
 }: {
   entityId: string
   listing: EditableListing
   /**
-   * The allowed tool types, passed in from the server. Not imported here: the
-   * db schema barrel is server-only, so a client component takes the list as a
-   * prop rather than pulling the whole schema into the browser bundle.
+   * Option tuples the spec cannot carry itself, by field key. TOOL_TYPES lives
+   * in the db barrel, which re-exports the postgres client, so value-importing
+   * it into a client component would drag net and tls into the browser bundle.
+   * The page reads it server-side and passes it down.
    */
-  toolTypeOptions: readonly string[]
+  dynamicOptions: Record<string, readonly string[]>
   saveAction: (formData: FormData) => Promise<{ error?: string; message?: string }>
 }) {
-  const router = useRouter()
-  const [pending, start] = useTransition()
-  const [msg, setMsg] = useState<string | null>(null)
-  const [err, setErr] = useState<string | null>(null)
+  const spec = useMemo(() => listingFormSpec(listing.entityType), [listing.entityType])
+  const [values, setValues] = useState<ListingFormValues>(() => seedValues(listing))
+  const [status, setStatus] = useState<SaveStatus>({ kind: 'idle', dirty: false })
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const data = new FormData(e.currentTarget)
-    setMsg(null)
-    setErr(null)
-    start(async () => {
-      const res = await saveAction(data)
-      if (res.error) setErr(res.error)
-      else {
-        setMsg(res.message ?? 'Saved.')
-        router.refresh()
-      }
-    })
+  const formRef = useRef<HTMLFormElement>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Mirrors values, so the debounced callback reads the newest ones. */
+  const valuesRef = useRef(values)
+  useEffect(() => {
+    valuesRef.current = values
+  }, [values])
+  /**
+   * The snapshot the server last accepted, seeded with what was loaded so an
+   * untouched form never saves. A failed save must NOT update it: that is what
+   * stops a rejected value being treated as stored.
+   */
+  const [loadedSnapshot] = useState(() => serialiseValues(seedValues(listing)))
+  const savedRef = useRef(loadedSnapshot)
+  const savingRef = useRef(false)
+  /** An edit arrived while a save was in flight; run once more when it lands. */
+  const queuedRef = useRef(false)
+
+  /**
+   * Send the whole form.
+   *
+   * Whole-form and not per-field, because the action reads an absent FormData
+   * key as an empty value: posting one field would blank the rest. The FormData
+   * still comes off the DOM rather than from state, so there is one
+   * serialisation and it cannot drift from what the action parses.
+   *
+   * Validation stays entirely on the server. The limits in the spec are shared
+   * with it, so the inputs and the checks agree by construction, but the check
+   * that decides is the server's. What the user must never get is a value the
+   * server rejected sitting in a field that looks saved, so a failure keeps
+   * their text, keeps the stale snapshot, and says so.
+   */
+  const save = useCallback(async () => {
+    const form = formRef.current
+    if (!form) return
+
+    const snapshot = serialiseValues(valuesRef.current)
+    if (snapshot === savedRef.current) return
+    if (savingRef.current) {
+      queuedRef.current = true
+      return
+    }
+
+    savingRef.current = true
+    setStatus({ kind: 'saving' })
+    const res = await saveAction(new FormData(form))
+    savingRef.current = false
+    const queued = queuedRef.current
+    queuedRef.current = false
+
+    if (res.error) {
+      // The snapshot stays stale on purpose, so the next blur or keystroke
+      // retries rather than believing the rejected value is stored.
+      setStatus({ kind: 'failed', message: res.error })
+      return
+    }
+    savedRef.current = snapshot
+    setStatus({ kind: 'saved' })
+
+    // Whatever was typed during the round trip has not been sent yet. The
+    // snapshot check at the top of the next pass makes this a no-op if it has.
+    if (queued) void save()
+  }, [saveAction])
+
+  /** Cancel the pending debounce and go now. Used by blur, tab-away and Retry. */
+  const saveNow = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = null
+    void save()
+  }, [save])
+
+  function scheduleSave() {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null
+      void save()
+    }, AUTOSAVE_DEBOUNCE_MS)
   }
 
+  function set(key: string, value: string | boolean) {
+    setValues((prev) => ({ ...prev, [key]: value }))
+    setStatus({ kind: 'idle', dirty: true })
+    scheduleSave()
+  }
+
+  useEffect(() => {
+    /**
+     * Switching apps on a phone is how a half-typed answer gets lost: the tab
+     * can be discarded while the debounce is still counting. visibilitychange
+     * fires before that, beforeunload covers closing the tab on a desktop.
+     */
+    function onHide() {
+      if (document.visibilityState === 'hidden') saveNow()
+    }
+    function onUnload(e: BeforeUnloadEvent) {
+      if (serialiseValues(valuesRef.current) === savedRef.current) return
+      e.preventDefault()
+      // Older engines ignore preventDefault here and want a set returnValue.
+      e.returnValue = ''
+    }
+    document.addEventListener('visibilitychange', onHide)
+    window.addEventListener('beforeunload', onUnload)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      window.removeEventListener('beforeunload', onUnload)
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [saveNow])
+
+  const reviewNote = LISTING_REVIEW_NOTE[listing.entityType]
+
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-5 rounded-lg border border-border-subtle bg-surface p-5">
+    <form
+      ref={formRef}
+      onSubmit={(e) => {
+        // Enter in a text box still implicit-submits a form with no submit
+        // button. Commit rather than reload the page.
+        e.preventDefault()
+        saveNow()
+      }}
+      /**
+       * Leaving a field commits it. React's onBlur is focusout, which bubbles,
+       * so tabbing between two boxes saves without waiting out the debounce.
+       */
+      onBlur={saveNow}
+      className="flex flex-col gap-8"
+    >
       <input type="hidden" name="entityId" value={entityId} />
 
-      {listing.entityType === 'tool' && <ToolFields values={listing.values} toolTypeOptions={toolTypeOptions} />}
-      {listing.entityType === 'album' && <AlbumFields values={listing.values} />}
-      {listing.entityType === 'field' && <FieldFields values={listing.values} />}
+      <SaveStatusLine status={status} onRetry={saveNow} />
 
-      <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-40"
-        >
-          {pending ? 'Saving…' : 'Save changes'}
-        </button>
-        {msg && <span className="text-sm text-muted">{msg}</span>}
-      </div>
-      {err && (
-        <p role="alert" className="text-sm text-frc">
-          {err}
-        </p>
-      )}
+      {spec.groups.map((group) => (
+        <Group key={group.key} group={group}>
+          {spec.fields
+            .filter((f) => f.group === group.key)
+            .map((field) => (
+              <Field key={field.key} field={field}>
+                <Input
+                  field={field}
+                  value={values[field.key]}
+                  options={field.options ?? dynamicOptions[field.key] ?? []}
+                  onChange={(v) => set(field.key, v)}
+                />
+              </Field>
+            ))}
+        </Group>
+      ))}
+
+      {reviewNote && <p className="text-sm text-muted-2">{reviewNote}</p>}
+
+      <SaveStatusLine status={status} onRetry={saveNow} failuresOnly />
     </form>
   )
 }
 
-function Field({
-  label,
-  children,
-  hint,
+// #region inputs
+
+function Input({
+  field,
+  value,
+  options,
+  onChange,
 }: {
-  label: string
-  children: React.ReactNode
-  hint?: string
+  field: ListingFieldSpec
+  value: string | boolean | undefined
+  options: readonly string[]
+  onChange: (value: string | boolean) => void
 }) {
+  if (field.kind === 'checkbox') {
+    return (
+      <span className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          name={field.key}
+          value="true"
+          checked={value === true}
+          onChange={(e) => onChange(e.target.checked)}
+          className="h-4 w-4 rounded border-border accent-primary"
+        />
+        <span className="text-sm text-foreground">{field.label}</span>
+      </span>
+    )
+  }
+
+  const text = typeof value === 'string' ? value : ''
+
+  if (field.kind === 'select') {
+    return (
+      <select
+        name={field.key}
+        value={text}
+        onChange={(e) => onChange(e.target.value)}
+        className="input"
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {field.optionLabels?.[o] ?? humanize(o)}
+          </option>
+        ))}
+      </select>
+    )
+  }
+
+  if (field.kind === 'textarea') {
+    return (
+      <textarea
+        name={field.key}
+        value={text}
+        onChange={(e) => onChange(e.target.value)}
+        rows={field.rows ?? 4}
+        maxLength={field.maxLength}
+        className="input"
+      />
+    )
+  }
+
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-muted">{label}</span>
+    <input
+      type={inputType(field.kind)}
+      name={field.key}
+      value={text}
+      onChange={(e) => onChange(e.target.value)}
+      maxLength={field.kind === 'int' || field.kind === 'date' ? undefined : field.maxLength}
+      min={field.kind === 'int' ? field.min : undefined}
+      max={field.kind === 'int' ? field.max : undefined}
+      inputMode={field.kind === 'int' ? 'numeric' : undefined}
+      placeholder={field.kind === 'url' ? 'https://' : undefined}
+      className="input"
+    />
+  )
+}
+
+function inputType(kind: ListingFieldSpec['kind']): string {
+  switch (kind) {
+    case 'int':
+      return 'number'
+    case 'date':
+      return 'date'
+    case 'email':
+      return 'email'
+    case 'url':
+      return 'url'
+    default:
+      return 'text'
+  }
+}
+
+/** snake_case enum member to something readable, when no label was given. */
+function humanize(value: string): string {
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+// #endregion
+
+// #region chrome
+
+function Group({ group, children }: { group: ListingGroup; children: React.ReactNode }) {
+  return (
+    <section>
+      <h2 className="text-lg font-semibold text-foreground">{group.title}</h2>
+      {group.blurb && <p className="mt-1 max-w-2xl text-sm text-muted">{group.blurb}</p>}
+      <div className="mt-4 grid gap-5 sm:grid-cols-2">{children}</div>
+    </section>
+  )
+}
+
+function Field({ field, children }: { field: ListingFieldSpec; children: React.ReactNode }) {
+  // A checkbox carries its own label next to the box, so repeating it above
+  // would read as two separate settings.
+  const showLabel = field.kind !== 'checkbox'
+  return (
+    <label className={field.wide ? 'sm:col-span-2 flex flex-col gap-1.5' : 'flex flex-col gap-1.5'}>
+      {showLabel && <span className="text-sm font-medium text-foreground">{field.label}</span>}
       {children}
-      {hint && <span className="text-xs text-muted-2">{hint}</span>}
+      {field.hint && <span className="text-xs text-muted-2">{field.hint}</span>}
     </label>
   )
 }
 
-function humanizeToolType(t: string): string {
-  return t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-function ToolFields({
-  values,
-  toolTypeOptions,
+/**
+ * The save state, in words.
+ *
+ * Nothing here is pinned, for the reason the team profile form gives: an
+ * on-screen keyboard shrinks the visual viewport, so a bottom-pinned bar pops
+ * in and out on every scroll. It sits in the flow at a fixed height so a status
+ * change never moves the field under the cursor, and it renders twice: once
+ * above the fields and, when a save has failed, once below them. A failure is
+ * the one state where the user has text that is not stored.
+ */
+function SaveStatusLine({
+  status,
+  onRetry,
+  failuresOnly,
 }: {
-  values: Extract<EditableListing, { entityType: 'tool' }>['values']
-  toolTypeOptions: readonly string[]
+  status: SaveStatus
+  onRetry: () => void
+  /** The copy below the fields, which stays out of the way unless something broke. */
+  failuresOnly?: boolean
 }) {
+  if (status.kind === 'failed') {
+    return (
+      <div className="flex flex-wrap items-center gap-3 rounded-md border border-frc/30 bg-frc/10 px-3 py-2">
+        {/* role=alert, not status: this is the message that costs the user
+            something. Only the first copy announces, or it is read out twice. */}
+        <span role={failuresOnly ? undefined : 'alert'} className="text-sm text-frc">
+          Not saved. {status.message}
+        </span>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="rounded-md border border-frc/40 px-2.5 py-1 text-sm font-medium text-frc transition-colors hover:bg-frc/10"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  if (failuresOnly) return null
+
   return (
-    <>
-      <Field label="Name">
-        <input name="name" defaultValue={values.name} required maxLength={200} className="input" />
-      </Field>
-      <Field label="Type">
-        <select name="toolType" defaultValue={values.toolType} className="input">
-          {toolTypeOptions.map((t) => (
-            <option key={t} value={t}>
-              {humanizeToolType(t)}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Summary" hint="One or two sentences shown on the card.">
-        <input name="summary" defaultValue={values.summary ?? ''} maxLength={500} className="input" />
-      </Field>
-      <Field label="Description" hint="Markdown is fine.">
-        <textarea name="description" defaultValue={values.description ?? ''} rows={8} className="input" />
-      </Field>
-      <Field label="Vendor name" hint="Leave blank unless a company publishes this.">
-        <input name="vendorName" defaultValue={values.vendorName ?? ''} maxLength={200} className="input" />
-      </Field>
-    </>
+    <div className="flex min-h-9 items-center">
+      <span role="status" className="text-sm text-muted-2">
+        {status.kind === 'saving'
+          ? 'Saving…'
+          : status.kind === 'saved'
+            ? 'Saved'
+            : status.dirty
+              ? 'Not saved yet'
+              : 'Saves as you type'}
+      </span>
+    </div>
   )
 }
 
-function AlbumFields({ values }: { values: Extract<EditableListing, { entityType: 'album' }>['values'] }) {
-  return (
-    <>
-      <Field label="Title">
-        <input name="title" defaultValue={values.title ?? ''} maxLength={300} className="input" />
-      </Field>
-      <Field label="Photographer">
-        <input name="photographer" defaultValue={values.photographer ?? ''} maxLength={200} className="input" />
-      </Field>
-      <Field label="Date" hint="How the date shows on the album, e.g. Apr 12-14.">
-        <input name="dateText" defaultValue={values.dateText ?? ''} maxLength={120} className="input" />
-      </Field>
-      <Field label="Description">
-        <textarea name="description" defaultValue={values.description ?? ''} rows={5} className="input" />
-      </Field>
-    </>
-  )
-}
-
-function FieldFields({ values }: { values: Extract<EditableListing, { entityType: 'field' }>['values'] }) {
-  return (
-    <>
-      <Field label="Field name">
-        <input name="name" defaultValue={values.name} required maxLength={200} className="input" />
-      </Field>
-      <Field label="Open hours" hint="Free text, e.g. weekends by arrangement.">
-        <input name="hours" defaultValue={values.hours ?? ''} maxLength={500} className="input" />
-      </Field>
-      <Field label="How to arrange access">
-        <textarea name="contactInfo" defaultValue={values.contactInfo ?? ''} rows={3} className="input" />
-      </Field>
-      <Field label="Booking or contact link">
-        <input name="contactUrl" defaultValue={values.contactUrl ?? ''} maxLength={500} className="input" />
-      </Field>
-      <Field label="Website">
-        <input name="website" defaultValue={values.website ?? ''} maxLength={500} className="input" />
-      </Field>
-      <Field label="Notes">
-        <textarea name="notes" defaultValue={values.notes ?? ''} rows={4} className="input" />
-      </Field>
-      <p className="text-xs text-muted-2">
-        The field&apos;s location and equipment spec are changed through the suggest-edit flow so a
-        move gets a second look. Everything here you can change directly.
-      </p>
-    </>
-  )
-}
+// #endregion
