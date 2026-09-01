@@ -377,6 +377,36 @@ function cleanDeadline(raw: unknown): string | null {
  * Everything else is a fact about money, dates, eligibility or contact, and a
  * fact with no quote behind it is exactly what this pass exists not to write.
  */
+/**
+ * A URL is not a claim you quote, it is a link that is either on the page or is
+ * not. Asking the model for a supporting sentence was the wrong question, and
+ * it showed: across the first full backfill only 3 of 74 records kept an
+ * applicationUrl, and nearly every drop was "no supporting quote". The URL was
+ * usually right there in the page. It was an anchor, not a sentence.
+ *
+ * So a URL field verifies against the evidence by PRESENCE. That is a stricter
+ * test than a prose quote, not a looser one: the model cannot invent a link
+ * that the page does not contain.
+ *
+ * Compared without the scheme, a trailing slash or a www, because a page that
+ * writes href="/apply" and a model that resolves it to the absolute URL are
+ * describing the same destination.
+ */
+export function verifyUrlPresence(url: string, evidence: GrantEvidence): GrantEvidenceSource | null {
+  const bare = (u: string) =>
+    u
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .replace(/\/+$/, '')
+  const needle = bare(url)
+  if (!needle) return null
+  if (bare(evidence.funderPage).includes(needle)) return 'funder_page'
+  if (evidence.aggregator && bare(evidence.aggregator).includes(needle)) return 'aggregator'
+  return null
+}
+
 const QUOTE_EXEMPT: ReadonlySet<keyof GrantExtractionFields> = new Set([
   'name',
   'funderName',
@@ -508,6 +538,19 @@ export function validateGrantExtraction(
       out[key] = emptyField()
       continue
     }
+
+    // A URL proves itself by being in the page. See verifyUrlPresence.
+    if (key === 'applicationUrl' && typeof value === 'string') {
+      const found = verifyUrlPresence(value, evidence)
+      if (!found) {
+        notes.push(`applicationUrl: not found in either text, dropped (${value})`)
+        out[key] = emptyField()
+        continue
+      }
+      out[key] = { value, quote: source ? quote : null, source: found, conflict }
+      continue
+    }
+
     if (!exempt && !source) {
       if (!quote) notes.push(`${key}: no supporting quote, dropped`)
       out[key] = emptyField()

@@ -6,6 +6,7 @@ import {
   shouldExtractCandidate,
   validateGrantExtraction,
   verifyQuote,
+  verifyUrlPresence,
   type GrantEvidence,
   type RawExtractionPayload,
 } from '../src/grants/candidate-extract.js'
@@ -452,5 +453,38 @@ describe('verifyQuote, typographic punctuation', () => {
 
   it('still refuses a quote that is simply absent', () => {
     expect(verifyQuote('awards up to $5,000', page('This programme supports robotics teams.'))).toBeNull()
+  })
+})
+
+describe('applicationUrl verifies by presence, not by prose', () => {
+  // Only 3 of 74 records kept an applicationUrl on the first full backfill, and
+  // nearly every drop said "no supporting quote". The URL was usually right
+  // there on the page as an anchor. A link is not a sentence.
+  const page = (body: string) => evidence(body)
+
+  it('keeps a url that appears in the page', () => {
+    expect(
+      verifyUrlPresence('https://example.org/apply', page('Apply at https://example.org/apply today')),
+    ).toBe('funder_page')
+  })
+
+  it('ignores the scheme, a www and a trailing slash', () => {
+    expect(verifyUrlPresence('https://www.example.org/apply/', page('see http://example.org/apply'))).toBe(
+      'funder_page',
+    )
+  })
+
+  it('finds one in the aggregator blurb when the page does not have it', () => {
+    expect(verifyUrlPresence('https://example.org/apply', evidence('nothing here', 'apply: example.org/apply'))).toBe(
+      'aggregator',
+    )
+  })
+
+  it('refuses a url the model invented', () => {
+    expect(verifyUrlPresence('https://example.org/apply', page('This programme has no online form.'))).toBeNull()
+  })
+
+  it('refuses an empty url', () => {
+    expect(verifyUrlPresence('   ', page('anything'))).toBeNull()
   })
 })
