@@ -491,11 +491,11 @@ function SaveStatusLine({
           className={cn(
             'h-2 w-2 shrink-0 rounded-full',
             saving
-              ? 'animate-pulse bg-amber-400'
+              ? 'animate-pulse bg-official'
               : saved
                 ? 'bg-primary'
                 : status.dirty
-                  ? 'bg-amber-400'
+                  ? 'bg-official'
                   : 'bg-muted-2',
           )}
         />

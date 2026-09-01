@@ -124,12 +124,15 @@ html[data-theme='light'] {
   --color-ftc: #1d4ed8;
   --color-fll: #15803d;
 
-  --color-official: #a8520a;
+  /* Deeper than the ratio against white alone needs. The amber is worn as
+     `bg-official/20 text-official`, a badge label on a tint of itself, and that
+     pairing is the one that decides how dark it has to be: 4.87:1 there. */
+  --color-official: #944707;
   --color-vendor: #7c3aed;
   --color-rookie: #047051;
 
   --color-current: #15803d;
-  --color-stale: #a8520a;
+  --color-stale: #944707;
   --color-abandoned: #5b6472;
 
   /* The light basemap is a pale grey, so the pins step darker to keep 3:1

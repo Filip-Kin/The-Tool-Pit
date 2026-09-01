@@ -14,18 +14,18 @@ export const metadata: Metadata = {
 }
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
-  pending:      { label: 'Pending',      className: 'bg-yellow-500/15 text-yellow-600 border-yellow-500/30' },
-  processing:   { label: 'Processing',   className: 'bg-yellow-500/15 text-yellow-600 border-yellow-500/30' },
-  published:    { label: 'Published',    className: 'bg-green-500/15 text-green-600 border-green-500/30' },
-  needs_review: { label: 'Needs Review', className: 'bg-orange-500/15 text-orange-600 border-orange-500/30' },
+  pending:      { label: 'Pending',      className: 'bg-official/15 text-official border-official/30' },
+  processing:   { label: 'Processing',   className: 'bg-official/15 text-official border-official/30' },
+  published:    { label: 'Published',    className: 'bg-rookie/15 text-rookie border-rookie/30' },
+  needs_review: { label: 'Needs Review', className: 'bg-official/15 text-official border-official/30' },
   duplicate:    { label: 'Duplicate',    className: 'bg-surface-2 text-muted border-border' },
-  rejected:     { label: 'Rejected',     className: 'bg-red-500/15 text-red-500 border-red-500/30' },
+  rejected:     { label: 'Rejected',     className: 'bg-frc/15 text-frc border-frc/30' },
 }
 
 const PIPELINE_STATUS_COLORS: Record<string, string> = {
-  ok:   'text-green-600',
-  warn: 'text-yellow-600',
-  error: 'text-red-500',
+  ok:   'text-rookie',
+  warn: 'text-official',
+  error: 'text-frc',
   skip: 'text-muted',
 }
 
@@ -106,11 +106,11 @@ export default async function SubmissionStatusPage({ params }: PageProps) {
 
           {/* Resolved tool link */}
           {resolvedTool && (
-            <div className="flex items-center justify-between gap-3 rounded-lg bg-green-500/10 border border-green-500/20 px-3 py-2">
-              <span className="text-sm font-medium text-green-700">Your tool is live!</span>
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-rookie/10 border border-rookie/20 px-3 py-2">
+              <span className="text-sm font-medium text-rookie">Your tool is live!</span>
               <Link
                 href={`/tools/${resolvedTool.slug}`}
-                className="text-sm font-medium text-green-700 underline hover:no-underline"
+                className="text-sm font-medium text-rookie underline hover:no-underline"
               >
                 View {resolvedTool.name} →
               </Link>

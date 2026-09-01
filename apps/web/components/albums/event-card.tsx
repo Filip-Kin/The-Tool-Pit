@@ -116,11 +116,11 @@ export function EventCard({
         <div className="relative">
           <CoverCollage covers={covers} />
           {isOffseason(event.eventType) ? (
-            <span className="absolute right-2 top-2 whitespace-nowrap rounded-full bg-sky-500 px-2 py-0.5 text-xs font-semibold text-white shadow">
+            <span className="absolute right-2 top-2 whitespace-nowrap rounded-full bg-ftc px-2 py-0.5 text-xs font-semibold text-white shadow">
               Offseason
             </span>
           ) : event.week != null ? (
-            <span className="absolute right-2 top-2 whitespace-nowrap rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-black shadow">
+            <span className="absolute right-2 top-2 whitespace-nowrap rounded-full bg-official px-2 py-0.5 text-xs font-semibold text-background shadow">
               Week {event.week}
             </span>
           ) : null}

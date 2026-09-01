@@ -200,9 +200,9 @@ export function AdminFormFieldEditor({
             Import
           </button>
         </div>
-        {parseError && <p className="mt-2 text-xs text-red-400">{parseError}</p>}
+        {parseError && <p className="mt-2 text-xs text-frc">{parseError}</p>}
         {parseWarnings.map((w) => (
-          <p key={w} className="mt-1 text-xs text-amber-400">
+          <p key={w} className="mt-1 text-xs text-official">
             {w}
           </p>
         ))}
@@ -259,7 +259,7 @@ export function AdminFormFieldEditor({
       {problems.length > 0 && (
         <ul className="flex flex-col gap-1">
           {problems.map((p) => (
-            <li key={p} className="flex items-start gap-1.5 text-xs text-amber-400">
+            <li key={p} className="flex items-start gap-1.5 text-xs text-official">
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               {p}
             </li>
@@ -285,8 +285,8 @@ export function AdminFormFieldEditor({
         >
           {pending ? 'Saving…' : 'Save field map'}
         </button>
-        {saved && !pending && <span className="text-xs text-green-400">Saved</span>}
-        {saveError && <span className="text-xs text-red-400">{saveError}</span>}
+        {saved && !pending && <span className="text-xs text-rookie">Saved</span>}
+        {saveError && <span className="text-xs text-frc">{saveError}</span>}
       </div>
     </div>
   )
@@ -337,7 +337,7 @@ function FieldRow({
           placeholder={needsParam ? 'entry.1234567890' : 'not used'}
           className={cn(
             'w-44 rounded border bg-surface-2 px-2 py-1 text-xs text-foreground outline-none focus:border-primary',
-            needsParam && !row.paramName.trim() ? 'border-amber-500/60' : 'border-border',
+            needsParam && !row.paramName.trim() ? 'border-official/60' : 'border-border',
             !needsParam && 'opacity-40',
           )}
         />
@@ -350,7 +350,7 @@ function FieldRow({
           placeholder="profile path, e.g. boilerplate.mission"
           className={cn(
             'w-60 rounded border bg-surface-2 px-2 py-1 text-xs text-foreground outline-none focus:border-primary',
-            pathKnown ? 'border-border' : 'border-amber-500/60',
+            pathKnown ? 'border-border' : 'border-official/60',
           )}
         />
 
@@ -378,7 +378,7 @@ function FieldRow({
             disabled={disabled}
             onClick={onRemove}
             title="Remove this field"
-            className="rounded border border-border p-1 text-muted hover:text-red-400 disabled:opacity-30"
+            className="rounded border border-border p-1 text-muted hover:text-frc disabled:opacity-30"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>

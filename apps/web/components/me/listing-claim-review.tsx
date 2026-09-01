@@ -83,7 +83,7 @@ function ReviewCard({
       {claim.note && <p className="mt-1 text-sm text-muted-2">Note: {claim.note}</p>}
 
       {claim.currentOwners.length > 0 && (
-        <p className="mt-2 text-sm text-amber-400">
+        <p className="mt-2 text-sm text-official">
           Already managed by{' '}
           {claim.currentOwners
             .map((o) => `${o.displayName ?? o.email ?? 'someone'} (${roleLabel(o.role)})`)

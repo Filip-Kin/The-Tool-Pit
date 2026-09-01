@@ -207,7 +207,7 @@ function ReadyState({
       {prefill.missingFields.length > 0 && (
         <div className="mt-4 rounded-md border border-border-subtle bg-surface-2 p-3">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-            <Info className="h-4 w-4 text-amber-400" />
+            <Info className="h-4 w-4 text-official" />
             {prefill.missingFields.length} question
             {prefill.missingFields.length === 1 ? '' : 's'} your profile cannot answer yet
           </div>
@@ -295,7 +295,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       className={buttonClass({
         variant: 'none',
         size: 'sm',
-        className: cn('border border-border', copied ? 'text-green-400' : 'text-muted hover:text-foreground'),
+        className: cn('border border-border', copied ? 'text-rookie' : 'text-muted hover:text-foreground'),
       })}
     >
       {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}

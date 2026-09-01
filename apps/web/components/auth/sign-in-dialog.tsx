@@ -150,7 +150,7 @@ export function SignInDialog({
               />
             )}
 
-            {error && <p className="text-sm text-red-400">{error}</p>}
+            {error && <p className="text-sm text-frc">{error}</p>}
             {notice && <p className="text-sm text-muted">{notice}</p>}
 
             <Button type="submit" disabled={busy}>

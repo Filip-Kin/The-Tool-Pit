@@ -122,7 +122,7 @@ export function FavoriteButton({
           'inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border-subtle bg-background/80 p-1.5 text-muted backdrop-blur transition-colors',
           'hover:text-foreground disabled:opacity-50',
           favorited && 'text-primary hover:text-primary',
-          error && 'border-red-500/60 text-red-400',
+          error && 'border-frc/60 text-frc',
           label && 'px-2.5 py-1 text-sm',
           className,
         )}

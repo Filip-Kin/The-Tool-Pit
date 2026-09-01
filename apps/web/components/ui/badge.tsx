@@ -13,9 +13,9 @@ const variantClasses: Record<BadgeVariant, string> = {
   vendor: 'bg-vendor/15 text-vendor border-vendor/30',
   rookie: 'bg-rookie/15 text-rookie border-rookie/30',
   program: 'bg-primary/15 text-primary border-primary/30',
-  team: 'bg-violet-500/15 text-violet-400 border-violet-500/20',
-  season: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
-  offseason: 'bg-sky-500/15 text-sky-400 border-sky-500/20',
+  team: 'bg-vendor/15 text-vendor border-vendor/20',
+  season: 'bg-official/15 text-official border-official/20',
+  offseason: 'bg-ftc/15 text-ftc border-ftc/20',
   default: 'bg-surface-2 text-muted border-border',
   muted: 'bg-transparent text-muted-2 border-border-subtle',
 }
