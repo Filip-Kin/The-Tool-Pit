@@ -192,7 +192,7 @@ export function RobotCodeSubmitForm() {
             type="url"
             value={form.url}
             onChange={(e) => set('url', e.target.value)}
-            placeholder="https://github.com/frc5577/2026-robot"
+            placeholder="https://github.com/your-team/robot-code"
             className="input"
             required
           />

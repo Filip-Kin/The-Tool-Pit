@@ -4,6 +4,19 @@ import { SectionHeader } from '@/components/ui/section-header'
 import { InfiniteEventList } from '@/components/albums/infinite-event-list'
 import { getEventsByDatePage } from '@/lib/queries/albums'
 
+/**
+ * Not frozen at build time.
+ *
+ * Without this the page is statically rendered once during the build and
+ * served with a year-long cache, so it shows whatever the database said at
+ * build time forever. That is how a tool kept showing "Stale" on the home page
+ * after the freshness thresholds were widened and the rows had already been
+ * recomputed, and how a suppressed listing can keep appearing until the next
+ * unrelated deploy. Sixty seconds is far fresher than a deploy and still cheap.
+ */
+export const revalidate = 60
+
+
 // Absolute so the home tab reads "FIRST Event Photos", not the parent
 // product's "… | The Tool Pit" template.
 export const metadata: Metadata = {

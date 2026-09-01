@@ -11,6 +11,18 @@ import {
   getOfficialTools,
 } from '@/lib/queries/tools'
 
+/**
+ * Not frozen at build time.
+ *
+ * Without this the page is statically rendered once during the build and
+ * served with a year-long cache, so it shows whatever the database said at
+ * build time forever. That is how a tool kept showing "Stale" on the home page
+ * after the freshness thresholds were widened and the rows had already been
+ * recomputed, and how a suppressed listing can keep appearing until the next
+ * unrelated deploy. Sixty seconds is far fresher than a deploy and still cheap.
+ */
+export const revalidate = 60
+
 export default async function HomePage() {
   const [trending, recent, rookie, official] = await Promise.all([
     getTrendingTools(6),

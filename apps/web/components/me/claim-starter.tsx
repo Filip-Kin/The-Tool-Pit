@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from '@/components/auth/session-provider'
 import { entityNoun } from './listing-labels'
 import type { ClaimableListing } from '@/lib/queries/listing-ownership'
 
@@ -66,14 +67,16 @@ export function ClaimStarter({
     })
   }
 
+  const { user } = useSession()
+
   const how =
     path === 'self'
-      ? 'You submitted this field, so claiming it makes you its owner right away.'
+      ? 'You submitted this, so it becomes yours right away.'
       : path === 'repo'
-        ? 'This tool has a GitHub repo, so you can prove ownership by committing a token to it.'
+        ? 'Prove it by committing a token to the repo.'
         : target.alreadyOwned
-          ? 'Someone already manages this listing, so your claim goes to a person to review.'
-          : 'We cannot verify this one automatically, so your claim goes to a person to review.'
+          ? 'Someone already manages this listing. A reviewer decides.'
+          : 'Reviewed by hand.'
 
   return (
     <div className="rounded-lg border border-border-subtle bg-surface p-5">
@@ -86,18 +89,24 @@ export function ClaimStarter({
       {path === 'review' && !token && (
         <label className="mt-4 flex flex-col gap-1.5">
           <span className="text-sm font-medium text-foreground">
-            How you run it<span className="text-frc"> *</span>
+            Your connection to it<span className="text-frc"> *</span>
           </span>
+          {/* The single most useful thing a claimant can do is point at
+              something public that already names them, and the account email
+              is usually it. Saying which address the reviewer will see turns a
+              vague "prove it" box into a concrete one: people recognise their
+              own address in a site footer or a repo commit. */}
           <span className="text-xs text-muted-2">
-            Say who you are and what your connection to it is. A reviewer is deciding between you and
-            whoever else asks, and they can only go on what you tell them.
+            {user?.email
+              ? `Sent as ${user.email}. Point at somewhere public that shows the same address, or anything else a reviewer can check.`
+              : 'Point at somewhere public a reviewer can check.'}
           </span>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={4}
             maxLength={1000}
-            placeholder="I am the lead mentor for team 5577 and I set this up. Our website lists me as the contact."
+            placeholder="This address is listed as the contact on the site footer."
             className="input"
           />
         </label>
