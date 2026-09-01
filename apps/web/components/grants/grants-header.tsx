@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Banknote } from 'lucide-react'
+import { CircleDollarSign } from 'lucide-react'
 import { UserMenu } from '@/components/auth/user-menu'
 import { MobileNav } from '@/components/layout/mobile-nav'
 import { VerticalHomeCrumb } from '@/components/layout/vertical-switcher'
@@ -19,7 +19,7 @@ export function GrantsHeader() {
         <VerticalHomeCrumb current="grants" />
 
         <Link href="/" className="flex shrink-0 items-center gap-2">
-          <Banknote className="h-5 w-5 text-primary" />
+          <CircleDollarSign className="h-5 w-5 text-primary" />
           <span className="whitespace-nowrap text-lg font-bold tracking-tight text-foreground">Grants</span>
         </Link>
 
@@ -28,7 +28,7 @@ export function GrantsHeader() {
           {/* Below sm the call to action moves into the hamburger: this
               wordmark is long and the bar was overflowing on a phone. */}
           <Link
-            href="/submit"
+            href="/grants/submit"
             className="hidden shrink-0 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover sm:block"
           >
             Submit a grant

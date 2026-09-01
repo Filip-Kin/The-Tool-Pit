@@ -24,6 +24,7 @@ export default function EventsLayout({ children }: { children: React.ReactNode }
             <Link href="/events/submit" className="hover:text-foreground">Add an event</Link>
             {/* The header switcher is hidden below sm, so on a phone this row
                 is the only way across to the other verticals. */}
+            <Link href="/admin" className="hover:text-foreground">Admin</Link>
             <VerticalFooterLinks current="events" />
           </div>
         </div>

@@ -26,7 +26,7 @@ export default async function GrantsHomePage() {
           Funding your team can actually apply for: who gives it, how much, what you have to be, and when it
           closes. Nothing is listed until a person has checked it against the funder&apos;s own page, so every
           listing carries the date it was last verified.{' '}
-          <Link href="/submit" className="text-primary hover:underline">
+          <Link href="/grants/submit" className="text-primary hover:underline">
             Found one we are missing?
           </Link>
         </p>
@@ -71,7 +71,7 @@ function EmptyState() {
 
       <div className="flex flex-wrap items-center gap-3">
         <Link
-          href="/submit"
+          href="/grants/submit"
           className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover"
         >
           Submit a grant you know of

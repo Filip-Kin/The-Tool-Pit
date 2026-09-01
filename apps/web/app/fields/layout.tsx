@@ -21,7 +21,8 @@ export default async function FieldsLayout({ children }: { children: React.React
         <div className="container mx-auto flex max-w-6xl flex-col gap-2 px-4 text-sm text-muted-2 sm:flex-row sm:items-center sm:justify-between">
           <span>Practice Field Map</span>
           <div className="flex flex-wrap items-center gap-4">
-            <Link href="/submit" className="hover:text-foreground">Add a field</Link>
+            <Link href="/fields/submit" className="hover:text-foreground">Add a field</Link>
+            <Link href="/admin" className="hover:text-foreground">Admin</Link>
             <VerticalFooterLinks current="fields" />
           </div>
         </div>

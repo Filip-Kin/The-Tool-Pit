@@ -82,7 +82,7 @@ export function RobotCodeArchive({ teams, program }: Props) {
         {/* Submit lives on this page because someone looking for their team's
             code and not finding it is exactly the person who can add it. */}
         <Link
-          href="/submit"
+          href="/robot-code/submit"
           className="ml-auto rounded-full bg-primary px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-primary-hover"
         >
           Add your team&apos;s code or CAD

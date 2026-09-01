@@ -21,7 +21,8 @@ export default function RobotCodeLayout({ children }: { children: React.ReactNod
         <div className="container mx-auto flex max-w-6xl flex-col gap-3 px-4 text-sm text-muted-2 sm:flex-row sm:items-center sm:justify-between">
           <span>Robot Code / CAD</span>
           <div className="flex flex-wrap items-center gap-4">
-            <Link href="/submit" className="hover:text-foreground">Add your team</Link>
+            <Link href="/robot-code/submit" className="hover:text-foreground">Add your team</Link>
+            <Link href="/admin" className="hover:text-foreground">Admin</Link>
             <VerticalFooterLinks current="code" />
           </div>
         </div>

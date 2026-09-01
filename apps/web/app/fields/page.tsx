@@ -21,7 +21,7 @@ export default async function FieldsHomePage() {
           Teams sharing their practice fields with the community. FRC first, with FTC and FLL fields
           welcome too. Pick a program, filter by field type and availability, then reach out to the host
           team to arrange a visit.{' '}
-          <Link href="/submit" className="text-primary hover:underline">Add your field</Link>.
+          <Link href="/fields/submit" className="text-primary hover:underline">Add your field</Link>.
         </p>
       </div>
 
@@ -29,7 +29,7 @@ export default async function FieldsHomePage() {
         <div className="rounded-lg border border-border-subtle bg-surface p-10 text-center">
           <p className="text-muted">No practice fields on the map yet.</p>
           <Link
-            href="/submit"
+            href="/fields/submit"
             className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover"
           >
             Be the first to add one

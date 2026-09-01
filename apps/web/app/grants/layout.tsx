@@ -21,9 +21,10 @@ export default function GrantsLayout({ children }: { children: React.ReactNode }
         <div className="container mx-auto flex max-w-6xl flex-col gap-3 px-4 text-sm text-muted-2 sm:flex-row sm:items-center sm:justify-between">
           <span>Grants</span>
           <div className="flex flex-wrap items-center gap-4">
-            <Link href="/submit" className="hover:text-foreground">Submit a grant</Link>
+            <Link href="/grants/submit" className="hover:text-foreground">Submit a grant</Link>
             {/* The header switcher is hidden below sm, so on a phone this row
                 is the only way across to the other three verticals. */}
+            <Link href="/admin" className="hover:text-foreground">Admin</Link>
             <VerticalFooterLinks current="grants" />
           </div>
         </div>
