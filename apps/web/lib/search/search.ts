@@ -118,18 +118,37 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
       ) then 0.4 else 0 end`
     : sql<number>`0`
 
-  // Freshness decay: 1.0 for active, 0.5 for stale, 0.0 for abandoned
+  // Freshness. Abandoned is PENALISED, not merely unrewarded, which is the
+  // difference between "does not get a bonus" and "does not lead the page".
+  // Searching "scouting" put a tool nobody had touched in three years first,
+  // ahead of maintained ones with twice the upvotes, because an exact title
+  // match plus a zero freshness score still beat everything.
+  //
+  // 'unknown' sits just above stale on purpose: it means we have not checked,
+  // usually because there is no repo to check, and a resource with no commit
+  // history is not the same thing as a dead project.
   const freshnessScore = sql<number>`case
-    when ${tools.freshnessState} in ('active', 'evergreen', 'seasonal') then 0.2
-    when ${tools.freshnessState} = 'stale' then 0.1
-    else 0
+    when ${tools.freshnessState} in ('active', 'evergreen', 'seasonal') then 0.25
+    when ${tools.freshnessState} = 'stale' then 0.05
+    when ${tools.freshnessState} in ('inactive', 'archived') then -0.35
+    else 0.1
   end`
 
   // Official boost
   const officialBoost = sql<number>`case when ${tools.isOfficial} then 0.3 else 0 end`
 
-  // Popularity (normalized 0–1 assuming max score ~1000)
-  const popularityNorm = sql<number>`least(${tools.popularityScore} / 1000.0, 1.0) * 0.3`
+  // Popularity, on a LOG scale.
+  //
+  // The old formula divided by 1000, which assumed a range this data does not
+  // have: the median published tool scores 0, the 90th percentile is 14 and
+  // only the 99th reaches 253. That made a 14-upvote tool worth 0.004, so
+  // upvotes may as well not have been in the formula at all, and the whole
+  // ranking came down to text match.
+  //
+  // A log curve puts the difference where it is actually felt, between 5 and 50,
+  // rather than between 500 and 1000 where almost nothing sits. Divided by
+  // ln(1300), the current maximum, so the best tool scores about 1.
+  const popularityNorm = sql<number>`least(ln(1 + greatest(${tools.popularityScore}, 0)) / 7.2, 1.0) * 0.35`
 
   // Type weight boost — preferred tool types rank higher
   const typeWeightExpr = sql<number>`case ${tools.toolType}

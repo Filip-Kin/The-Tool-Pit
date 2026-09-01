@@ -63,11 +63,9 @@ export default async function HomePage() {
           {[
             { label: 'Scouting Apps', href: '/search?q=scouting' },
             { label: 'CAD Tools', href: '/search?q=cad' },
-            { label: 'Path Planning', href: '/search?q=path+planning' },
             { label: 'Mechanism Calculators', href: '/search?q=mechanism+calculator' },
             { label: 'Volunteer Tools', href: '/search?q=volunteer' },
             { label: 'Programming', href: '/search?q=programming' },
-            { label: 'Simulation', href: '/search?q=simulation' },
           ].map(({ label, href }) => (
             <a
               key={label}
