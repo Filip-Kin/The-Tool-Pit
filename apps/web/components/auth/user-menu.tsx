@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { Button } from '@/components/ui/button'
 import { signOut } from '@/lib/auth/client'
 import { useSession } from './session-provider'
 import { SignInDialog } from './sign-in-dialog'
@@ -22,13 +23,9 @@ export function UserMenu() {
   if (!user) {
     return (
       <>
-        <button
-          type="button"
-          onClick={() => setDialogOpen(true)}
-          className="shrink-0 whitespace-nowrap rounded-md border border-border-subtle px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-surface"
-        >
+        <Button variant="secondary" size="sm" onClick={() => setDialogOpen(true)}>
           Sign in
-        </button>
+        </Button>
         <SignInDialog open={dialogOpen} onOpenChange={setDialogOpen} />
       </>
     )

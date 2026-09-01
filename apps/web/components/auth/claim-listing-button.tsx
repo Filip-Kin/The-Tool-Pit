@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { ShieldCheck, Pencil, Clock } from 'lucide-react'
+import { buttonClass } from '@/components/ui/button'
 import { cn } from '@/lib/utils/cn'
 import type { ListingEntityType } from '@the-tool-pit/db'
 import type { ListingClaimState } from '@/lib/queries/listing-ownership'
@@ -23,8 +24,9 @@ import { claimAffordance } from '@/lib/listings/claim-affordance'
  * client tree and get the same control the /fields/[id] page renders. Nothing
  * here touches a server API, only the state prop, which is why that works.
  */
-const BUTTON =
-  'inline-flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm font-medium transition-colors'
+// One of the three is a <span>, because "waiting on a moderator" is a state
+// rather than something to press, so this takes the box and not the component.
+const BUTTON = buttonClass({ variant: 'none', className: 'border border-border-subtle bg-surface-2' })
 
 export function ClaimListingButton({
   entityType,

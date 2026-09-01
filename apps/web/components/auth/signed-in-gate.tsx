@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { useSession } from './session-provider'
 import { SignInDialog } from './sign-in-dialog'
 
@@ -19,17 +21,12 @@ export function SignedInGate({ reason, children }: { reason: string; children: R
   if (user) return <>{children}</>
 
   return (
-    <div className="rounded-lg border border-border-subtle bg-surface p-5">
+    <Card pad="lg">
       <p className="text-sm text-muted">{reason}</p>
-      <button
-        type="button"
-        onClick={() => setDialogOpen(true)}
-        disabled={loading}
-        className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-40"
-      >
+      <Button onClick={() => setDialogOpen(true)} disabled={loading} className="mt-4">
         Sign in
-      </button>
+      </Button>
       <SignInDialog open={dialogOpen} onOpenChange={setDialogOpen} reason={reason} />
-    </div>
+    </Card>
   )
 }

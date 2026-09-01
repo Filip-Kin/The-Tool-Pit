@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Github } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   signInWithGoogle,
   signInWithGithub,
@@ -83,23 +84,23 @@ export function SignInDialog({
 
           {mode !== 'reset' && (
             <>
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 disabled={busy}
                 onClick={() => run(signInWithGoogle, finish)}
-                className="mt-5 flex w-full items-center justify-center gap-2 rounded-md border border-border-subtle px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface disabled:opacity-50"
+                className="mt-5 w-full"
               >
                 Continue with Google
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="secondary"
                 disabled={busy}
                 onClick={() => run(signInWithGithub, finish)}
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-border-subtle px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface disabled:opacity-50"
+                className="mt-2 w-full"
               >
                 <Github className="h-4 w-4" aria-hidden />
                 Continue with GitHub
-              </button>
+              </Button>
               <p className="mt-2 text-xs text-muted-2">
                 Signing in with GitHub also gives you any listing built from your repositories. We only
                 ask to read your profile and the organisations you belong to.
@@ -152,13 +153,9 @@ export function SignInDialog({
             {error && <p className="text-sm text-red-400">{error}</p>}
             {notice && <p className="text-sm text-muted">{notice}</p>}
 
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50"
-            >
+            <Button type="submit" disabled={busy}>
               {busy ? 'Working…' : mode === 'register' ? 'Create account' : mode === 'reset' ? 'Send reset link' : 'Sign in'}
-            </button>
+            </Button>
           </form>
 
           <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">

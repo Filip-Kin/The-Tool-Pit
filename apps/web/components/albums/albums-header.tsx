@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Camera } from 'lucide-react'
 import { AlbumSearchBar } from './album-search-bar'
+import { ButtonLink } from '@/components/ui/button'
 import { UserMenu } from '@/components/auth/user-menu'
 import { MobileNav } from '@/components/layout/mobile-nav'
 import { VerticalHomeCrumb, verticalNavItems } from '@/components/layout/vertical-switcher'
@@ -27,12 +28,13 @@ export async function AlbumsHeader() {
         <nav className="ml-auto flex items-center gap-2">
           {/* Below sm the call to action moves into the hamburger: this
               wordmark is long and the bar was overflowing on a phone. */}
-          <Link
+          <ButtonLink
             href="/photos/submit"
-            className="hidden shrink-0 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover sm:block"
+            size="sm"
+            className="hidden sm:inline-flex"
           >
             Submit album
-          </Link>
+          </ButtonLink>
           <UserMenu />
           <MobileNav
             className="sm:hidden"

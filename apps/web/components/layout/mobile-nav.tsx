@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Menu, X } from 'lucide-react'
+import { ButtonLink } from '@/components/ui/button'
 import { cn } from '@/lib/utils/cn'
 
 export interface MobileNavItem {
@@ -88,13 +89,9 @@ export function MobileNav({ items, className }: { items: MobileNavItem[]; classN
               {items
                 .filter((i) => i.primary)
                 .map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className="mt-1.5 rounded-md bg-primary px-3 py-2 text-center text-sm font-medium text-white transition-colors hover:bg-primary-hover"
-                  >
+                  <ButtonLink key={item.href} href={item.href} className="mt-1.5">
                     {item.label}
-                  </Link>
+                  </ButtonLink>
                 ))}
             </nav>
           </div>

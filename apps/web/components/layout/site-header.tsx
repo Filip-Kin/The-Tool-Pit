@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
+import { ButtonLink } from '@/components/ui/button'
 import { SearchBar } from '@/components/search/search-bar'
 import { UserMenu } from '@/components/auth/user-menu'
 import { MobileNav } from './mobile-nav'
@@ -31,12 +32,9 @@ export async function SiteHeader() {
             <NavLink href="/frc" label="FRC" color="var(--color-frc)" />
             <NavLink href="/ftc" label="FTC" color="var(--color-ftc)" />
             <NavLink href="/fll" label="FLL" color="var(--color-fll)" />
-            <Link
-              href="/submit"
-              className="ml-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
-            >
+            <ButtonLink href="/submit" size="sm" className="ml-2">
               Submit
-            </Link>
+            </ButtonLink>
           </div>
           <div className="ml-2">
             <UserMenu />

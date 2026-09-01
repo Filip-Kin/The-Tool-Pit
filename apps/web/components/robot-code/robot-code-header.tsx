@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Code2 } from 'lucide-react'
+import { ButtonLink } from '@/components/ui/button'
 import { UserMenu } from '@/components/auth/user-menu'
 import { VerticalHomeCrumb, verticalNavItems } from '@/components/layout/vertical-switcher'
 import { MobileNav } from '@/components/layout/mobile-nav'
@@ -24,12 +25,13 @@ export async function RobotCodeHeader() {
         </Link>
 
         <nav className="ml-auto flex items-center gap-2">
-          <Link
+          <ButtonLink
             href="/robot-code/submit"
-            className="hidden shrink-0 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover sm:block"
+            size="sm"
+            className="hidden sm:inline-flex"
           >
             Add your team
-          </Link>
+          </ButtonLink>
           <UserMenu />
           <MobileNav
             className="sm:hidden"
