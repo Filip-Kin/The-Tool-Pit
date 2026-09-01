@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { ShieldCheck, Pencil, Clock } from 'lucide-react'
-import { buttonClass } from '@/components/ui/button'
 import { cn } from '@/lib/utils/cn'
 import type { ListingEntityType } from '@the-tool-pit/db'
 import type { ListingClaimState } from '@/lib/queries/listing-ownership'
@@ -25,9 +24,17 @@ import { ClaimSignInLink } from './claim-sign-in-link'
  * client tree and get the same control the /fields/[id] page renders. Nothing
  * here touches a server API, only the state prop, which is why that works.
  */
+// A quiet link, not a button.
+//
+// It was a bordered box the size of a call to action, and on a detail page it
+// broke the layout in half for something almost nobody on that page is there to
+// do. Ownership is an aside: the reader wants the tool, and one reader in a
+// hundred also happens to run it. So it reads as a link and gets out of the way.
+//
 // One of the three is a <span>, because "waiting on a moderator" is a state
-// rather than something to press, so this takes the box and not the component.
-const BUTTON = buttonClass({ variant: 'none', className: 'border border-border-subtle bg-surface-2' })
+// rather than something to press, so this is classes and not a component.
+const LINK =
+  'inline-flex items-center gap-1.5 text-sm text-muted underline-offset-4 transition-colors hover:text-foreground hover:underline'
 
 export function ClaimListingButton({
   entityType,
@@ -47,8 +54,8 @@ export function ClaimListingButton({
 
   if (affordance.kind === 'edit') {
     return (
-      <Link href={affordance.href} className={cn(BUTTON, 'text-foreground hover:bg-surface-3', className)}>
-        <Pencil className="h-4 w-4" aria-hidden />
+      <Link href={affordance.href} className={cn(LINK, 'text-foreground hover:text-primary', className)}>
+        <Pencil className="h-3.5 w-3.5" aria-hidden />
         {affordance.label}
       </Link>
     )
@@ -56,8 +63,8 @@ export function ClaimListingButton({
 
   if (affordance.kind === 'pending') {
     return (
-      <span className={cn(BUTTON, 'cursor-default text-muted', className)}>
-        <Clock className="h-4 w-4" aria-hidden />
+      <span className={cn(LINK, 'cursor-default no-underline hover:no-underline', className)}>
+        <Clock className="h-3.5 w-3.5" aria-hidden />
         {affordance.label}
       </span>
     )
@@ -70,14 +77,14 @@ export function ClaimListingButton({
       <ClaimSignInLink
         href={affordance.href}
         label={affordance.label}
-        className={cn(BUTTON, 'text-muted hover:text-foreground', className)}
+        className={cn(LINK, className)}
       />
     )
   }
 
   return (
-    <Link href={affordance.href} className={cn(BUTTON, 'text-muted hover:text-foreground', className)}>
-      <ShieldCheck className="h-4 w-4" aria-hidden />
+    <Link href={affordance.href} className={cn(LINK, className)}>
+      <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
       {affordance.label}
     </Link>
   )
