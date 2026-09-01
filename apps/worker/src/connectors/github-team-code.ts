@@ -54,8 +54,102 @@ const PER_PAGE = 100
  */
 const REQUEST_INTERVAL_MS = 2200
 
-/** CAD-ish signals. A repo hitting one of these is filed as CAD, not code. */
+/**
+ * CAD-ish signals, matched against the repo NAME and DESCRIPTION only.
+ *
+ * Topics are deliberately excluded. FRC2713/hawk-shop is a manufacturing
+ * kanban app that carries the `onshape` topic because it talks to Onshape, and
+ * reading that topic as "this repo is CAD" filed a web app as a team's robot
+ * CAD. A team that publishes CAD says so in the name or the description.
+ */
 const CAD_KEYWORDS = ['cad', 'onshape', 'solidworks', 'fusion360', 'inventor', 'step-files']
+
+/**
+ * Repos that belong to a team but are not its robot code or CAD.
+ *
+ * The attribution is right for these and the archive is still wrong: a sample
+ * of 120 accepted repos was 27% scouting apps, team websites, docs sites and
+ * Chairman's/Impact submissions, which is a directory of team GitHub accounts
+ * rather than a robot code archive. The tools directory has already been
+ * polluted once by an auto-publishing crawler with no such gate, so this one
+ * drops the repo outright rather than filing it and hoping someone reviews it.
+ *
+ * Matched against the repo NAME and DESCRIPTION, again not topics, because a
+ * robot code repo can legitimately carry a `scouting` topic for a subsystem.
+ */
+const NOT_ROBOT_CODE_KEYWORDS = [
+  'scout',
+  'website',
+  '.github.io',
+  'docs',
+  // 'docs' does not cover this: Team2530/Documentation published as robot code
+  // because "documentation" does not contain the substring "docs".
+  'documentation',
+  'blog',
+  'chairmans',
+  'impact',
+  // frc5024/PitCheck is "a checklist for programming in the pit", and a
+  // picklist app is scouting output. Neither says "scout" anywhere.
+  'checklist',
+  'picklist',
+  'wiki',
+]
+
+/**
+ * Topics that disqualify a repo outright, matched EXACTLY.
+ *
+ * Separate from NOT_ROBOT_CODE_KEYWORDS, and deliberately a different shape.
+ * The name/description rule is a substring test because prose is prose. This
+ * one is an exact topic match, because topics are a controlled vocabulary and
+ * a substring test over them would catch `scouting-data` on a robot repo that
+ * merely logs to a scouting sink.
+ *
+ * It exists because the two signals fail in different places. frc1678/viewer
+ * -2019-iOS calls itself "Data visualization app for FRC match strategy and
+ * picklist creation": nothing in the name or the blurb says scouting, and only
+ * the `frc-scouting` topic gives it away. firstwiki/frc4000 is worse. It is
+ * the FIRSTWiki Jekyll shard for teams 4000-4999, not a team repo at all, yet
+ * the repo name reads as team 4000 and the description "FRC Teams 4000-4999"
+ * corroborates it. That is the most dangerous row this connector can produce,
+ * because a wrong attribution that looks plausible is one nobody reports. Its
+ * `wiki` topic is the only honest signal, so the topic gate is what stops it.
+ */
+const DENIED_TOPICS = new Set(['frc-scouting', 'first-robotics-scouting', 'wiki', 'documentation'])
+
+/** True if a topic disqualifies the repo. Exact match, see DENIED_TOPICS. */
+export function hasDeniedTopic(topics: string[] | undefined): boolean {
+  return (topics ?? []).some((t) => DENIED_TOPICS.has(t.toLowerCase()))
+}
+
+/**
+ * Lowest number we will treat as a season year rather than a team number.
+ *
+ * GitHub use in FRC starts around here, and no team-number guard needs to
+ * reach further back than the repos we actually sweep.
+ */
+const SEASON_YEAR_FLOOR = 2005
+
+/**
+ * A number that could be a season rather than a team.
+ *
+ * The ceiling is next year because teams create their season repo before the
+ * season opens: in September 2026 a repo named `frc-2027` is already normal.
+ */
+function looksLikeSeasonYear(n: number): boolean {
+  return n >= SEASON_YEAR_FLOOR && n <= new Date().getUTCFullYear() + 1
+}
+
+/** True if the repo's own name or blurb says it is not robot code or CAD. */
+export function isNotRobotCode(name: string, description: string | null | undefined): boolean {
+  const hay = `${name} ${description ?? ''}`.toLowerCase()
+  return NOT_ROBOT_CODE_KEYWORDS.some((k) => hay.includes(k))
+}
+
+/** True if the repo's own name or blurb says it is CAD rather than code. */
+export function looksLikeCad(name: string, description: string | null | undefined): boolean {
+  const hay = `${name} ${description ?? ''}`.toLowerCase()
+  return CAD_KEYWORDS.some((k) => hay.includes(k))
+}
 
 interface GitHubSearchRepo {
   html_url: string
@@ -76,42 +170,150 @@ interface GitHubSearchRepo {
  * Only patterns that NAME a team count. A four-digit number floating in a repo
  * name is not evidence: "2024Robot" is a season, not team 2024, and treating
  * it as a team is how an archive fills with wrong attributions.
+ *
+ * That rule used to be a comment and nothing more, which cost us. The patterns
+ * below match a season written in the team's own naming convention just as
+ * happily as a team number, so `chopshop-166/frc-2025` read as team 2025, the
+ * topic `frc-2026` on FRC10479PowerHouse/shooting-sim read as team 2026, and
+ * because topics were checked first, `frc-2025` on Team846/pongo overrode the
+ * correct org. On a live sample that was 20% of accepted repos, and a full
+ * sweep would have made phantom teams 2019, 2023, 2025 and 2026 the largest
+ * entries in the archive, each holding a pile of other teams' code.
+ *
+ * So every pattern now contributes a CANDIDATE and a year-shaped candidate is
+ * only accepted from the ORG name. An org is a team's stable identity, so
+ * `frc2019/robot-code` really is team 2019, while a repo name or an `frc-YYYY`
+ * topic is how everyone writes a season and can never be trusted for it.
+ *
+ * This does lose the occasional real team numbered in the 2005..next-year
+ * range when the org does not name it. That is the correct side to err on: a
+ * missing row is invisible, a row credited to the wrong team is a lie on a
+ * public page, and everything this connector emits is auto-published.
  */
 export function teamNumberFromRepo(fullName: string, topics: string[]): number | null {
+  // Provenance travels with each candidate because it decides whether a
+  // year-shaped number is admissible, so a bare list of numbers is not enough.
+  const candidates: Array<{ n: number; fromOrg: boolean }> = []
+
   for (const t of topics.map((x) => x.toLowerCase())) {
     const m = t.match(/^(?:frc|ftc)-(\d{1,5})$/)
-    if (m) return parseInt(m[1]!, 10)
+    if (m) candidates.push({ n: parseInt(m[1]!, 10), fromOrg: false })
   }
 
   const [orgPart = '', repoPart = ''] = fullName.split('/')
   // frc1678, team1678, frc-team-1678, ftcteam1234
-  for (const part of [orgPart, repoPart]) {
+  for (const [part, fromOrg] of [[orgPart, true], [repoPart, false]] as const) {
     const m = part.match(/^(?:frc|ftc)[-_]?(?:team[-_]?)?(\d{1,5})$/i) ?? part.match(/^team[-_]?(\d{1,5})$/i)
-    if (m) {
-      const n = parseInt(m[1]!, 10)
-      if (n > 0 && n < 100000) return n
-    }
+    if (m) candidates.push({ n: parseInt(m[1]!, 10), fromOrg })
   }
-  return null
+
+  const valid = candidates.filter((c) => c.n > 0 && c.n < 100000)
+  // A real team number beats a year-shaped one wherever it appears, which is
+  // what rescues team-3482/Rebuilt2026-Kleio from its own `frc-2026` topic.
+  const unambiguous = valid.find((c) => !looksLikeSeasonYear(c.n))
+  if (unambiguous) return unambiguous.n
+  const orgYear = valid.find((c) => c.fromOrg)
+  return orgYear ? orgYear.n : null
+}
+
+/**
+ * The later year of a two-year season range, or null if there is not one.
+ *
+ * Teams write the range every way there is: "2024-2025", "2025-26", an en dash
+ * out of a word processor, a slash. The second half is accepted as two digits
+ * or four, and the pair has to be consecutive, so a genuine range is caught
+ * while "logs 2019-2024" is left alone.
+ */
+function seasonFromRange(text: string): number | null {
+  const m = text.match(/(?<![0-9])(20[0-9]{2})\s*[-\u2013\u2014/]\s*((?:20)?[0-9]{2})(?![0-9])/)
+  if (!m) return null
+  const first = parseInt(m[1]!, 10)
+  const rawSecond = m[2]!
+  const second = rawSecond.length === 2 ? 2000 + parseInt(rawSecond, 10) : parseInt(rawSecond, 10)
+  if (second !== first + 1) return null
+  if (second < FIRST_SEASON || second > new Date().getUTCFullYear() + 1) return null
+  return second
 }
 
 /**
  * The season this repo is for.
  *
  * Prefers a year written into the repo name, because that is the team saying
- * so. Falls back to the year of the last push, which is right far more often
- * than it is wrong for a repo that is only touched during build season.
+ * so, then a year in the description, then the year of the last push.
+ *
+ * The description step is not decoration. The push-date fallback is wrong in a
+ * specific and damaging direction: a season repo touched after its season ends
+ * gets dated to the current year, so Team846/pongo ("846's Robot Codebase for
+ * 2025") and Team5427/Reefscape ("FRC 2025") both filed as 2026. On a sample
+ * of 78 accepted repos, 6 of the 39 that name a year in the description had
+ * the wrong season, all of them a season late. The archive page sorts newest
+ * season first, so those errors do not sit quietly in the middle of the list,
+ * they crowd the top of it with last year's robots.
+ *
+ * A two-year range resolves differently per program, which is why this needs
+ * to be told the program rather than sniffing it out of the string.
+ *
+ * An FRC season sits inside one calendar year, so a range in an FRC repo is
+ * something else (a rolling repo, a date span) and the first year is taken, as
+ * before. An FTC season spans two, and this platform names it by the SPRING
+ * competition year: seasonKeyToYear in toa-events.ts turns the TOA key "2223"
+ * into 2023, and the events table holds the 2025-26 FTC season as year 2026.
+ * So "INTO THE DEEP 2024-2025" is season 2025 and `2025-2026-Decode` is 2026.
+ *
+ * Do not "simplify" the two branches back together. Making FTC take the first
+ * year files a team's DECODE code under 2025 while every DECODE event in the
+ * same database is 2026, and the archive page then shows a season whose repos
+ * and events disagree.
+ *
+ * Only a RANGE gets this treatment. A lone year in an FTC repo is left as the
+ * team wrote it, because there is no way to tell whether they meant the autumn
+ * kickoff year or the spring competition year, and guessing would move rows
+ * that are already correct.
  */
-export function seasonFromRepo(name: string, pushedAt: string): number | null {
-  const inName = name.match(/\b(20[0-9]{2})\b/)
+export function seasonFromRepo(
+  name: string,
+  pushedAt: string,
+  description?: string | null,
+  program?: 'frc' | 'ftc',
+): number | null {
+  // Lookarounds, not \b. A word boundary needs a non-word character beside the
+  // year, so `\b2025\b` does not match "2025Reefscape" or "R2025", and both
+  // silently fell through to the last-push year: Team2537/2025Reefscape and
+  // Team334/R2025 were both filed as 2026 because that is when they were last
+  // touched. Digit lookarounds match the year wherever the team glued it.
+  // Ranges first, because a single-year match would otherwise take the left
+  // half of "2025-2026-Decode" and never reach the range rule at all.
+  const nameRange = program === 'ftc' ? seasonFromRange(name) : null
+  if (nameRange) return nameRange
+
+  const inName = name.match(/(?<![0-9])(20[0-9]{2})(?![0-9])/)
   if (inName) {
     const y = parseInt(inName[1]!, 10)
     if (y >= 2000 && y <= 2100) return y
   }
+  const descriptionRange = program === 'ftc' ? seasonFromRange(description ?? '') : null
+  if (descriptionRange) return descriptionRange
+
+  const inDescription = (description ?? '').match(/(?<![0-9])(20[0-9]{2})(?![0-9])/)
+  if (inDescription) {
+    const y = parseInt(inDescription[1]!, 10)
+    // Bounded by the sweep floor, not by 2000: a description mentioning a
+    // sponsor's founding year is not a season, and the repo has to have been
+    // pushed inside our window to be here at all.
+    if (y >= FIRST_SEASON && y <= new Date().getUTCFullYear() + 1) return y
+  }
   const pushed = new Date(pushedAt)
   if (!Number.isNaN(pushed.getTime())) {
     const y = pushed.getUTCFullYear()
-    if (y >= FIRST_SEASON) return y
+    // An FTC season runs across the new year and the platform names it by the
+    // spring competition year, so a repo last touched after kickoff belongs to
+    // NEXT year's season, not this one. Without this an FTC repo carrying no
+    // year at all and pushed in, say, October 2025 lands on 2025 while every
+    // event for the season it was written for is stored as 2026.
+    // getUTCMonth is zero-based, so 7 is August, which is early enough to catch
+    // pre-kickoff repos without reaching back into the previous season.
+    const kickoffAdjusted = program === 'ftc' && pushed.getUTCMonth() >= 7 ? y + 1 : y
+    if (kickoffAdjusted >= FIRST_SEASON) return kickoffAdjusted
   }
   return null
 }
@@ -187,10 +389,14 @@ export class GitHubTeamCodeConnector implements Connector {
             const teamNumber = teamNumberFromRepo(repo.full_name, repo.topics ?? [])
             if (teamNumber === null) { skipped++; continue }
 
+            // Right team, wrong shelf. A team's scouting app or website is not
+            // robot code, and this archive is the Robot Code / CAD archive, so
+            // it is dropped here rather than published and left for a human.
+            if (isNotRobotCode(repo.name, repo.description) || hasDeniedTopic(repo.topics)) { skipped++; continue }
+
             seen.add(repo.html_url)
-            const year = seasonFromRepo(repo.name, repo.pushed_at)
-            const haystack = `${repo.name} ${repo.description ?? ''} ${(repo.topics ?? []).join(' ')}`.toLowerCase()
-            const isCad = CAD_KEYWORDS.some((k) => haystack.includes(k))
+            const year = seasonFromRepo(repo.name, repo.pushed_at, repo.description, program)
+            const isCad = looksLikeCad(repo.name, repo.description)
 
             const keywords = [
               program,
