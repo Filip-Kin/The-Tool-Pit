@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { Pager } from '@/components/admin/pager'
+import { StatusChip, StatusText } from '@/components/admin/status'
 import Link from 'next/link'
 import { getDb } from '@/lib/db'
 import { crawlJobs, crawlCandidates } from '@the-tool-pit/db'
@@ -72,7 +73,7 @@ export default async function CrawlJobDetailPage({
         </Link>
         <div className="mt-2 flex items-center gap-3">
           <h1 className="text-2xl font-bold text-foreground font-mono">{job.connector}</h1>
-          <StatusBadge status={job.status} />
+          <StatusChip status={job.status} />
         </div>
         <p className="mt-1 text-xs text-muted-2 font-mono">{job.id}</p>
       </div>
@@ -102,16 +103,16 @@ export default async function CrawlJobDetailPage({
         {/* Stats */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <StatPill label="Discovered" value={stats.discovered} />
-          <StatPill label="New" value={stats.new} color="green" />
-          <StatPill label="Updated" value={stats.updated} color="blue" />
+          <StatPill label="New" value={stats.new} tone="good" />
+          <StatPill label="Updated" value={stats.updated} tone="linked" />
           <StatPill label="Skipped" value={stats.skipped} />
-          <StatPill label="Failed" value={stats.failed} color="red" />
+          <StatPill label="Failed" value={stats.failed} tone="bad" />
         </div>
 
         {job.error && (
-          <div className="rounded-md border border-red-500/30 bg-red-500/5 px-4 py-3">
-            <p className="text-xs font-medium text-red-400 mb-1">Error</p>
-            <p className="text-xs text-red-300 font-mono break-all">{job.error}</p>
+          <div className="rounded-md border border-frc/30 bg-frc/5 px-4 py-3">
+            <p className="text-xs font-medium text-frc mb-1">Error</p>
+            <p className="text-xs text-frc font-mono break-all">{job.error}</p>
           </div>
         )}
       </section>
@@ -195,7 +196,7 @@ export default async function CrawlJobDetailPage({
                         </div>
                       </td>
                       <td className="px-4 py-2 text-center">
-                        <CandidateStatusBadge status={c.status} />
+                        <StatusText status={c.status} />
                       </td>
                       <td className="px-4 py-2 text-right text-xs font-mono text-foreground">
                         {pct}%
@@ -215,52 +216,25 @@ export default async function CrawlJobDetailPage({
   )
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const variants: Record<string, string> = {
-    done: 'bg-green-500/10 text-green-400 border-green-500/30',
-    running: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
-    failed: 'bg-red-500/10 text-red-400 border-red-500/30',
-    queued: 'bg-surface-3 text-muted border-border',
-  }
-  return (
-    <span className={`rounded-full px-2.5 py-1 text-xs font-medium border ${variants[status] ?? 'bg-surface-3 text-muted border-border'}`}>
-      {status}
-    </span>
-  )
-}
-
-function CandidateStatusBadge({ status }: { status: string }) {
-  const variants: Record<string, string> = {
-    pending: 'text-amber-400',
-    published: 'text-green-400',
-    suppressed: 'text-red-400',
-    duplicate: 'text-muted',
-    matched: 'text-blue-400',
-    merged: 'text-blue-400',
-  }
-  return (
-    <span className={`text-xs capitalize ${variants[status] ?? 'text-muted'}`}>{status}</span>
-  )
-}
-
 function StatPill({
   label,
   value,
-  color,
+  tone,
 }: {
   label: string
   value?: number
-  color?: 'green' | 'blue' | 'red'
+  /** Named for what the number means, not for the colour it comes out. */
+  tone?: 'good' | 'linked' | 'bad'
 }) {
-  const colorMap = {
-    green: 'text-green-400',
-    blue: 'text-blue-400',
-    red: 'text-red-400',
+  const toneClass = {
+    good: 'text-rookie',
+    linked: 'text-ftc',
+    bad: 'text-frc',
   }
   return (
     <div className="rounded-md border border-border bg-surface p-3 flex flex-col gap-1">
       <p className="text-[10px] text-muted">{label}</p>
-      <p className={`text-xl font-bold tabular-nums ${color ? colorMap[color] : 'text-foreground'}`}>
+      <p className={`text-xl font-bold tabular-nums ${tone ? toneClass[tone] : 'text-foreground'}`}>
         {value ?? 0}
       </p>
     </div>

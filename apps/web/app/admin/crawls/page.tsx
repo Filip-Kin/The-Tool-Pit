@@ -13,6 +13,7 @@ import {
   practiceFieldCrawlSources,
 } from '@the-tool-pit/db'
 import { ClickableRow } from '@/components/admin/clickable-row'
+import { StatusText } from '@/components/admin/status'
 
 /**
  * Every vertical's crawl runs, on one screen with a filter.
@@ -248,7 +249,7 @@ export default async function CrawlJobsPage({
                       {job.sourceLabel && <p className="text-[10px] text-muted-2">{job.sourceLabel}</p>}
                     </td>
                     <td className="px-4 py-2">
-                      <StatusBadge status={job.status} />
+                      <StatusText status={job.status} />
                     </td>
                     <td className="px-4 py-2 text-[10px] text-muted">
                       {job.stats ? (
@@ -307,14 +308,4 @@ export default async function CrawlJobsPage({
       )}
     </div>
   )
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    done: 'text-rookie',
-    running: 'text-official',
-    failed: 'text-frc',
-    queued: 'text-muted',
-  }
-  return <span className={`text-xs font-medium ${colors[status] ?? 'text-muted'}`}>{status}</span>
 }

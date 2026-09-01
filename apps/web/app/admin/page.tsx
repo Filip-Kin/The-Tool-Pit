@@ -11,6 +11,7 @@ import {
 import { eq, sql, desc, gte } from 'drizzle-orm'
 import Link from 'next/link'
 import { ClickableRow } from '@/components/admin/clickable-row'
+import { StatusText } from '@/components/admin/status'
 import { assertAdmin } from '@/lib/admin/auth'
 
 async function getStats() {
@@ -115,7 +116,7 @@ export default async function AdminOverviewPage() {
                   <ClickableRow key={job.id} href={`/admin/crawls/${job.id}`} className="border-t border-border-subtle hover:bg-surface">
                     <td className="px-4 py-2 font-mono text-xs text-foreground">{job.connector}</td>
                     <td className="px-4 py-2">
-                      <StatusBadge status={job.status} />
+                      <StatusText status={job.status} />
                     </td>
                     <td className="px-4 py-2 text-xs text-muted">
                       {job.startedAt ? new Date(job.startedAt).toLocaleString() : '—'}
@@ -138,20 +139,10 @@ function StatCard({ label, value, highlight, href }: { label: string; value: num
   return (
     <Link
       href={href}
-      className={`rounded-lg border p-4 transition-colors hover:bg-surface-2 ${highlight ? 'border-(--color-official)/40 bg-(--color-official)/5' : 'border-border bg-surface'}`}
+      className={`rounded-lg border p-4 transition-colors hover:bg-surface-2 ${highlight ? 'border-official/40 bg-official/5' : 'border-border bg-surface'}`}
     >
       <p className="text-xs text-muted">{label}</p>
       <p className="mt-1 text-3xl font-bold text-foreground">{value.toLocaleString()}</p>
     </Link>
   )
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    done: 'text-current',
-    running: 'text-official',
-    failed: 'text-frc',
-    queued: 'text-muted',
-  }
-  return <span className={`text-xs font-medium ${colors[status] ?? 'text-muted'}`}>{status}</span>
 }
