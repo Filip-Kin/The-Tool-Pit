@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { toolVotes, tools } from '@the-tool-pit/db'
 import type { VoteResponse } from '@the-tool-pit/types'
@@ -7,6 +7,8 @@ interface ToggleVoteInput {
   toolId: string
   voterFingerprint: string
   ipHash: string
+  /** The signed-in account, when there is one. See the note on toolVotes.userId. */
+  userId?: string | null
 }
 
 /**
@@ -15,26 +17,32 @@ interface ToggleVoteInput {
  */
 export async function toggleVote(input: ToggleVoteInput): Promise<VoteResponse> {
   const db = getDb()
-  const { toolId, voterFingerprint, ipHash } = input
+  const { toolId, voterFingerprint, ipHash, userId } = input
 
-  // Check for existing vote
-  const [existing] = await db
+  // Who this vote belongs to. An account owns its votes across every browser it
+  // signs in from; a signed-out visitor is only ever their cookie. Matching on
+  // the account FIRST is what makes an upvote survive a new browser, and it is
+  // why toggling has to look for either shape before deciding.
+  const owner = userId
+    ? sql`(${toolVotes.userId} = ${userId}::uuid or ${toolVotes.voterFingerprint} = ${voterFingerprint})`
+    : sql`${toolVotes.voterFingerprint} = ${voterFingerprint}`
+
+  const existing = await db
     .select({ id: toolVotes.id })
     .from(toolVotes)
-    .where(
-      sql`${toolVotes.toolId} = ${toolId}::uuid and ${toolVotes.voterFingerprint} = ${voterFingerprint}`,
-    )
-    .limit(1)
+    .where(sql`${toolVotes.toolId} = ${toolId}::uuid and ${owner}`)
 
   let voted: boolean
 
-  if (existing) {
-    // Remove the vote
-    await db.delete(toolVotes).where(eq(toolVotes.id, existing.id))
+  if (existing.length > 0) {
+    // Every matching row, not just the first. A person who voted anonymously
+    // and then signed in can briefly hold two, and un-voting must leave none.
+    await db.delete(toolVotes).where(
+      sql`${toolVotes.id} in (${sql.join(existing.map((r) => sql`${r.id}::uuid`), sql`, `)})`,
+    )
     voted = false
   } else {
-    // Add the vote
-    await db.insert(toolVotes).values({ toolId, voterFingerprint, ipHash })
+    await db.insert(toolVotes).values({ toolId, voterFingerprint, ipHash, userId: userId ?? null })
     voted = true
   }
 

@@ -9,6 +9,7 @@ import {
   getRecentlyUpdatedTools,
   getRookieFriendlyTools,
   getOfficialTools,
+  getFavoriteTools,
 } from '@/lib/queries/tools'
 
 /**
@@ -24,7 +25,8 @@ import {
 export const revalidate = 60
 
 export default async function HomePage() {
-  const [trending, recent, rookie, official] = await Promise.all([
+  const [favorites, trending, recent, rookie, official] = await Promise.all([
+    getFavoriteTools(6),
     getTrendingTools(6),
     getRecentlyUpdatedTools(6),
     getRookieFriendlyTools(6),
@@ -92,6 +94,23 @@ export default async function HomePage() {
       </section>
 
       {/* Trending */}
+      {/* Your own shortlist comes before anything we chose for you, and only
+          when there is one. A signed-out visitor and a signed-in one who has
+          saved nothing both see the page exactly as it was. */}
+      {favorites.length > 0 && (
+        <section className="container mx-auto max-w-6xl px-4">
+          <SectionHeader
+            title="Favorite tools"
+            description="Everything you have saved"
+            href="/me"
+            linkLabel="See all"
+          />
+          <Suspense fallback={<ToolGrid.Skeleton count={favorites.length} />}>
+            <ToolGrid tools={favorites} />
+          </Suspense>
+        </section>
+      )}
+
       <section className="container mx-auto max-w-6xl px-4">
         <SectionHeader
           title="Popular"

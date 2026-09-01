@@ -3,6 +3,7 @@ import { toggleVote } from '@/lib/voting/vote'
 import { resolveVoterIdentity, VOTE_COOKIE_NAME, VOTE_COOKIE_MAX_AGE } from '@/lib/voting/fingerprint'
 import { checkVoteRateLimit } from '@/lib/voting/rate-limit'
 import { getIpHash } from '@/lib/utils/ip'
+import { getCurrentUser } from '@/lib/auth/session'
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,7 +26,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
     }
 
-    const result = await toggleVote({ toolId, voterFingerprint: fingerprint, ipHash })
+    // Signed in, the vote belongs to the account and follows them to any
+    // browser. Signed out it belongs to the cookie, as it always did.
+    const user = await getCurrentUser()
+    const result = await toggleVote({
+      toolId,
+      voterFingerprint: fingerprint,
+      ipHash,
+      userId: user?.id ?? null,
+    })
 
     const response = NextResponse.json(result)
 

@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '../db'
 import { users, type User } from '@the-tool-pit/db'
 import type { FirebaseIdentity } from './verify-token'
+import { claimAnonymousVotes } from '../voting/claim-votes'
 
 /**
  * Sessions.
@@ -70,6 +71,11 @@ export async function createSession(identity: FirebaseIdentity): Promise<User> {
     path: '/',
     maxAge: SESSION_DAYS * 24 * 60 * 60,
   })
+
+  // The upvotes cast from this browser before signing in are this person's, so
+  // they come with them. Deliberately not awaited for its result: it never
+  // throws and a slow claim must not hold up a sign-in.
+  await claimAnonymousVotes(user.id)
 
   return user
 }

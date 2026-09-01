@@ -1,7 +1,8 @@
-import { sql, eq, desc, and, inArray } from 'drizzle-orm'
+import { sql, eq, or, desc, and, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { currentVoterFingerprint } from '@/lib/voting/fingerprint'
-import { tools, toolPrograms, toolLinks, toolVotes, programs, audiencePrimaryRoles, audienceFunctions, toolAudiencePrimaryRoles, toolAudienceFunctions } from '@the-tool-pit/db'
+import { getCurrentUser } from '@/lib/auth/session'
+import { favorites, tools, toolPrograms, toolLinks, toolVotes, programs, audiencePrimaryRoles, audienceFunctions, toolAudiencePrimaryRoles, toolAudienceFunctions } from '@the-tool-pit/db'
 import type { SearchResultRow } from '@/lib/search/search'
 
 // ---------------------------------------------------------------------------
@@ -129,6 +130,37 @@ export async function getRookieFriendlyTools(limit = 6): Promise<SearchResultRow
   return enrichTools(rows)
 }
 
+/**
+ * The signed-in visitor's saved tools, newest save first.
+ *
+ * Returns an empty array for a signed-out visitor, so the home page can simply
+ * not render the section rather than branching on the session itself.
+ *
+ * Newest first, not most popular: this list is the visitor's own shortlist and
+ * the thing they saved a minute ago is the thing they came back for.
+ */
+export async function getFavoriteTools(limit = 6): Promise<SearchResultRow[]> {
+  const user = await getCurrentUser()
+  if (!user) return []
+
+  const db = getDb()
+  const rows = await db
+    .select()
+    .from(tools)
+    .innerJoin(favorites, eq(favorites.entityId, tools.id))
+    .where(
+      and(
+        eq(favorites.userId, user.id),
+        eq(favorites.entityType, 'tool'),
+        eq(tools.status, 'published'),
+      ),
+    )
+    .orderBy(desc(favorites.createdAt))
+    .limit(limit)
+
+  return enrichTools(rows.map((r) => r.tools))
+}
+
 export async function getOfficialTools(limit = 6): Promise<SearchResultRow[]> {
   const db = getDb()
   const rows = await db
@@ -247,13 +279,25 @@ export async function getToolBySlug(slug: string): Promise<ToolDetailData | null
  */
 export async function getVotedToolIds(toolIds: string[]): Promise<Set<string>> {
   if (toolIds.length === 0) return new Set()
-  const fingerprint = await currentVoterFingerprint()
-  if (!fingerprint) return new Set()
+
+  // An account's votes follow the account; a signed-out visitor's follow their
+  // cookie. Reading only the cookie is what made an upvote disappear on a
+  // second browser: the row was there, keyed to a fingerprint this browser had
+  // never had, so the button rendered unpressed over a vote that was counted.
+  const [user, fingerprint] = await Promise.all([getCurrentUser(), currentVoterFingerprint()])
+  if (!user && !fingerprint) return new Set()
 
   const db = getDb()
+  const mine =
+    user && fingerprint
+      ? or(eq(toolVotes.userId, user.id), eq(toolVotes.voterFingerprint, fingerprint))
+      : user
+        ? eq(toolVotes.userId, user.id)
+        : eq(toolVotes.voterFingerprint, fingerprint as string)
+
   const rows = await db
     .select({ toolId: toolVotes.toolId })
     .from(toolVotes)
-    .where(and(inArray(toolVotes.toolId, toolIds), eq(toolVotes.voterFingerprint, fingerprint)))
+    .where(and(inArray(toolVotes.toolId, toolIds), mine))
   return new Set(rows.map((r) => r.toolId))
 }
