@@ -1,0 +1,66 @@
+/**
+ * Public URLs for links inside emails.
+ *
+ * ONE HOST, PATH PER VERTICAL. There is no grants.* or fields.* host any more:
+ * they still resolve and redirect, but an email should link straight to the
+ * final URL rather than send the reader through a 308 on a hostname whose
+ * certificate we cannot renew.
+ *
+ * NEXT_PUBLIC_URL is the canonical origin. It is read at call time rather than
+ * captured at module load so a worker restarted with a different value picks
+ * it up, and it falls back to production rather than to localhost: a link to
+ * localhost in somebody's inbox is worse than a link to the live site.
+ */
+
+/**
+ * Canonical origin, no trailing slash.
+ *
+ * Read off globalThis rather than off `process` directly, because this package
+ * deliberately carries no @types/node: it is pure string building imported by a
+ * Node worker AND by Next server components, and pulling Node's whole type
+ * surface in here to read one environment variable is not a trade worth making.
+ */
+export function siteUrl(): string {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+  return (env?.NEXT_PUBLIC_URL ?? 'https://frc.tools').replace(/\/+$/, '')
+}
+
+/** Where /me/notifications lives. Every email footer points here. */
+export function preferencesUrl(): string {
+  return `${siteUrl()}/me/notifications`
+}
+
+/** Public URL of one grant listing. */
+export function grantListingUrl(slug: string): string {
+  return `${siteUrl()}/grants/${slug}`
+}
+
+/** Public URL of one practice field. Fields have no slug, so it is the id. */
+export function fieldUrl(id: string): string {
+  return `${siteUrl()}/fields/${id}`
+}
+
+/** Public URL of one off-season event listing. */
+export function eventListingUrl(id: string): string {
+  return `${siteUrl()}/events/${id}`
+}
+
+/** Public URL of one tool listing. */
+export function toolUrl(slug: string): string {
+  return `${siteUrl()}/tools/${slug}`
+}
+
+/**
+ * Public URL of the event page an album hangs off.
+ *
+ * Albums have no page of their own: they are cards on their event's page, so
+ * the link has to be the event, keyed by its TBA key.
+ */
+export function albumEventUrl(tbaKey: string): string {
+  return `${siteUrl()}/photos/event/${tbaKey}`
+}
+
+/** Where somebody manages the listings they own. */
+export function myListingsUrl(): string {
+  return `${siteUrl()}/me/listings`
+}

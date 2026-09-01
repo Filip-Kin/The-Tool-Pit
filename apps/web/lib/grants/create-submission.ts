@@ -27,6 +27,12 @@ export interface CreateGrantSubmissionInput {
   submitterName?: string
   submitterContact?: string
   submitterIpHash: string
+  /**
+   * The signed-in user, when there was one. Optional on purpose: sign-in is
+   * never a wall in front of a submission. It only buys attribution and an
+   * email when a moderator gets to it.
+   */
+  submittedByUserId?: string
 }
 
 export type CreateGrantSubmissionResult =
@@ -182,6 +188,7 @@ export async function createGrantSubmission(
       submitterName: input.submitterName?.trim() || null,
       submitterContact: input.submitterContact?.trim() || null,
       submitterIpHash: input.submitterIpHash || null,
+      submittedByUserId: input.submittedByUserId ?? null,
     })
     .returning({ id: grantCandidates.id })
 

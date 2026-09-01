@@ -1,6 +1,7 @@
 import { pgTable, uuid, text, integer, real, boolean, timestamp, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { grants } from './grants'
+import { users } from './accounts'
 
 // ---------------------------------------------------------------------------
 // Grant discovery and monitoring
@@ -101,12 +102,21 @@ export const grantCandidates = pgTable(
     submitterName: text('submitter_name'),
     submitterContact: text('submitter_contact'),
     submitterIpHash: text('submitter_ip_hash'),
+    /**
+     * The signed-in user who submitted this, when there was one. Sign-in is
+     * OPTIONAL here on purpose: an anonymous submission still goes through, so
+     * a mentor without an account is never turned away. Signing in buys
+     * attribution and, since approval emails, an answer when it is reviewed.
+     * NULL therefore means "nobody to tell", and that is the whole check.
+     */
+    submittedByUserId: uuid('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index('grant_candidates_job_idx').on(table.jobId),
+    index('grant_candidates_submitted_by_idx').on(table.submittedByUserId),
     index('grant_candidates_status_idx').on(table.status),
     index('grant_candidates_canonical_url_idx').on(table.canonicalUrl),
   ],

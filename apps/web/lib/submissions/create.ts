@@ -8,6 +8,12 @@ interface CreateSubmissionInput {
   url: string
   note?: string
   submitterIpHash: string
+  /**
+   * The signed-in user, when there was one. Optional on purpose: sign-in is
+   * never a wall in front of a submission. It only buys attribution and an
+   * email when a moderator gets to it.
+   */
+  submittedByUserId?: string
 }
 
 /**
@@ -38,6 +44,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Su
       url: input.url,
       submitterNote: input.note,
       submitterIpHash: input.submitterIpHash,
+      submittedByUserId: input.submittedByUserId ?? null,
       status: 'pending',
       pipelineLog: [
         {

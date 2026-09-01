@@ -7,7 +7,7 @@ import { revalidatePath } from 'next/cache'
 import { getDb } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth/session'
 import { grantWatches, grants, grantFunders, notificationChannels, users } from '@the-tool-pit/db'
-import { renderVerifyEmail } from '@/lib/email/templates'
+import { renderVerifyEmail } from '@the-tool-pit/types'
 import { MeShell } from '@/components/me/me-shell'
 import { GRANTS_ORIGIN } from '@/components/me/vertical-links'
 

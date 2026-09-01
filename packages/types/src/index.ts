@@ -1,7 +1,14 @@
 /**
  * Shared types used by both apps/web and apps/worker.
- * These are pure TypeScript types - no runtime dependencies.
+ *
+ * Almost everything here is a pure TypeScript type with no runtime cost. The
+ * one exception is ./email, which is pure string building with no imports of
+ * its own: it lives here because both apps send the same mail and a template
+ * kept in one app has to be copied into the other, which is how the two grant
+ * alert copies drifted.
  */
+
+export * from './email/index'
 
 // ---------------------------------------------------------------------------
 // Search

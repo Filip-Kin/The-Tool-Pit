@@ -1,5 +1,6 @@
 export * from './schema/index'
 export * from './client'
+export * from './notifications'
 export * from './album-url'
 
 // Re-export common drizzle operators so consumers (and top-level scripts that

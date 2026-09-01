@@ -24,6 +24,7 @@ import {
   isListingEntityType,
   resolveClaimable,
 } from '@/lib/queries/listing-ownership'
+import { notifyClaimResolved } from '@/lib/notify/approvals'
 
 /**
  * Listing ownership writes.
@@ -502,6 +503,18 @@ export async function adminResolveClaim(
       decidedAt: new Date(),
     })
     .where(eq(listingClaims.id, claim.id))
+
+  // A rejection is not an approval, and it gets its own email saying so, with
+  // the reviewer's note verbatim when there is one. Guarded above by the
+  // status !== 'pending' check, so a second decision cannot send a second time.
+  await notifyClaimResolved(
+    claim.id,
+    claim.entityType,
+    claim.entityId,
+    claim.userId,
+    approve ? 'verified' : 'rejected',
+    note,
+  )
 
   revalidatePath('/me/listings')
   return { message: approve ? 'Claim approved.' : 'Claim rejected.' }

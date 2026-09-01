@@ -16,24 +16,31 @@
  *     A recipient we silently never mail is exactly the kind of quiet cap this
  *     product does not allow.
  *
- * WHY THE EMAIL BODIES ARE DUPLICATED HERE
- * apps/web/lib/email/templates.ts is the canonical copy and this is a mirror of
- * it. The worker's tsconfig sets `rootDir: ./src`, so tsc rejects any import
- * that reaches outside apps/worker/src (TS6059), and the templates cannot be
- * imported across the app boundary. The proper fix is to lift the module into
- * packages/types, which both apps already depend on. Until that happens the two
- * copies change in the same commit. Nothing else in this file is duplicated.
+ * The bodies live in @the-tool-pit/types, shared with apps/web. They were
+ * mirrored here until the module was lifted into packages/types: the worker's
+ * tsconfig sets `rootDir: ./src`, so tsc rejects any import that reaches
+ * outside apps/worker/src (TS6059), and a copy is how the two drifted.
  */
 import { and, asc, eq, isNull, lt, lte, sql } from 'drizzle-orm'
+import { getDb, grantAlerts, type AlertChannel, type AlertKind } from '@the-tool-pit/db'
 import {
-  getDb,
-  grantAlerts,
-  notificationChannels,
-  users,
-  type AlertChannel,
-  type AlertKind,
-} from '@the-tool-pit/db'
+  preferencesUrl,
+  renderDeadlineEmail,
+  renderGrantChangeEmail,
+  renderNewMatchEmail,
+  type EmailBody,
+} from '@the-tool-pit/types'
 import { canDeliverTo, sandboxRefusalReason, sendEmail } from './mailer.js'
+import { resolveEmailRecipient } from '../notifications/recipients.js'
+
+/**
+ * Public URL of one grant listing.
+ *
+ * Re-exported under the name the sweeper and the monitor already import. The
+ * builder itself lives with the templates in @the-tool-pit/types, so the web
+ * app can build the same link when it queues something.
+ */
+export { grantListingUrl as grantUrl, preferencesUrl } from '@the-tool-pit/types'
 
 // #region policy
 
@@ -189,247 +196,54 @@ export async function enqueueGrantAlert(input: EnqueueGrantAlertInput): Promise<
 
 // #endregion
 
-// #region rendering (mirror of apps/web/lib/email/templates.ts)
-
-interface EmailBody {
-  subject: string
-  html: string
-  text: string
-}
-
-/** Escape for interpolation into HTML text or an attribute value. */
-function esc(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
+// #region rendering
 
 /**
- * Format a deadline for an email.
+ * Turn a queued row into a body.
  *
- * An email cannot know the reader's clock, so it has to pick one zone and name
- * it. US Eastern by default because these are almost all US funders quoting US
- * closing times, and `timeZoneName: 'short'` means the reader always sees which
- * zone they are being told.
- */
-function formatDeadline(at: Date, timeZone = 'America/New_York'): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone,
-    timeZoneName: 'short',
-  }).format(at)
-}
-
-/** Money as a plain range. Returns null when we do not know the size. */
-function formatAward(min: number | null, max: number | null, currency = 'USD'): string | null {
-  const symbol = currency === 'USD' ? '$' : `${currency} `
-  const n = (v: number) => `${symbol}${v.toLocaleString('en-US')}`
-  if (min != null && max != null) return min === max ? n(min) : `${n(min)} to ${n(max)}`
-  if (max != null) return `up to ${n(max)}`
-  if (min != null) return `from ${n(min)}`
-  return null
-}
-
-interface LayoutInput {
-  heading: string
-  paragraphs: string[]
-  facts?: Array<{ label: string; value: string }>
-  cta?: { label: string; url: string }
-  reason: string
-  preferencesUrl: string
-}
-
-/**
- * One layout for every alert. Inline styles only, because email clients strip
- * <style> blocks, and a light background because most clients ignore
- * prefers-color-scheme and would otherwise render dark text on dark.
- */
-function layout(input: LayoutInput): { html: string; text: string } {
-  const { heading, paragraphs, facts = [], cta, reason, preferencesUrl } = input
-
-  const factRows = facts
-    .map(
-      (f) =>
-        `<tr><td style="padding:4px 16px 4px 0;color:#666;font-size:14px;vertical-align:top;white-space:nowrap">${esc(f.label)}</td>` +
-        `<td style="padding:4px 0;color:#111;font-size:14px">${esc(f.value)}</td></tr>`,
-    )
-    .join('')
-
-  const html = [
-    '<!doctype html><html><body style="margin:0;padding:0;background:#f5f5f5">',
-    '<div style="max-width:560px;margin:0 auto;padding:24px 20px;background:#ffffff;',
-    'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Helvetica,Arial,sans-serif;',
-    'color:#111;line-height:1.5">',
-    `<h1 style="margin:0 0 16px;font-size:18px;font-weight:600;color:#111">${esc(heading)}</h1>`,
-    ...paragraphs.map((p) => `<p style="margin:0 0 12px;font-size:15px;color:#111">${esc(p)}</p>`),
-    factRows
-      ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse">${factRows}</table>`
-      : '',
-    cta
-      ? `<p style="margin:20px 0"><a href="${esc(cta.url)}" style="display:inline-block;padding:10px 16px;` +
-        `background:#4f46e5;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px">${esc(cta.label)}</a></p>`
-      : '',
-    '<hr style="border:none;border-top:1px solid #e5e5e5;margin:24px 0 12px">',
-    `<p style="margin:0 0 6px;font-size:12px;color:#666">${esc(reason)}</p>`,
-    `<p style="margin:0;font-size:12px;color:#666"><a href="${esc(preferencesUrl)}" style="color:#4f46e5">Manage these emails</a></p>`,
-    '</div></body></html>',
-  ]
-    .filter(Boolean)
-    .join('')
-
-  const text = [
-    heading,
-    '',
-    ...paragraphs.flatMap((p) => [p, '']),
-    ...(facts.length ? [...facts.map((f) => `${f.label}: ${f.value}`), ''] : []),
-    ...(cta ? [`${cta.label}: ${cta.url}`, ''] : []),
-    '--',
-    reason,
-    `Manage these emails: ${preferencesUrl}`,
-  ].join('\n')
-
-  return { html, text }
-}
-
-function renderNewMatch(p: NewMatchAlertPayload, preferencesUrl: string): EmailBody {
-  const who = p.teamLabel ? `${p.teamLabel} looks` : 'You look'
-  const strength = p.verdict === 'eligible' ? 'eligible for' : 'a likely fit for'
-
-  const paragraphs = [`${who} ${strength} ${p.grantName}.`]
-  if (p.passedReasons?.length) {
-    paragraphs.push(`Why: ${p.passedReasons.slice(0, 4).join('; ')}.`)
-  }
-  if (p.unknownReasons?.length) {
-    paragraphs.push(
-      `We could not check ${p.unknownReasons.slice(0, 3).join('; ')}. Fill those in on your team profile and the match gets firmer.`,
-    )
-  }
-  paragraphs.push(
-    'Check the funder’s own page before you apply. We match on what we have recorded, and the funder is always the last word.',
-  )
-
-  const facts: Array<{ label: string; value: string }> = []
-  if (p.funderName) facts.push({ label: 'Funder', value: p.funderName })
-  const award = formatAward(p.awardMin ?? null, p.awardMax ?? null, p.awardCurrency ?? 'USD')
-  if (award) facts.push({ label: 'Award', value: award })
-  const deadline = p.deadlineAt ? new Date(p.deadlineAt) : null
-  if (deadline && !Number.isNaN(deadline.getTime())) {
-    facts.push({ label: 'Deadline', value: formatDeadline(deadline) })
-  }
-  if (p.deadlineNote) facts.push({ label: 'Funder’s wording', value: p.deadlineNote })
-
-  const { html, text } = layout({
-    heading: `New grant match: ${p.grantName}`,
-    paragraphs,
-    facts,
-    cta: { label: 'Open the listing', url: p.grantUrl },
-    reason: 'You are getting this because grant matching is on for your team.',
-    preferencesUrl,
-  })
-
-  return { subject: `New grant match: ${p.grantName}`, html, text }
-}
-
-function renderDeadline(p: DeadlineAlertPayload, preferencesUrl: string, now: Date): EmailBody {
-  const at = new Date(p.deadlineAt)
-  // Real days remaining at send time, not the offset the row was queued at. A
-  // reminder that sat in the outbox for two days must not still say 14 days.
-  const daysLeft = Math.max(0, Math.ceil((at.getTime() - now.getTime()) / 86_400_000))
-  const days = daysLeft <= 0 ? 'Closes today' : daysLeft === 1 ? '1 day left' : `${daysLeft} days left`
-
-  const paragraphs = [`${days} to apply for ${p.grantName}.`]
-  const verified = p.verifiedAt ? new Date(p.verifiedAt) : null
-  if (verified && !Number.isNaN(verified.getTime())) {
-    paragraphs.push(
-      `These dates were last confirmed against the funder’s page on ${formatDeadline(verified).split(',')[1]?.trim() ?? formatDeadline(verified)}.`,
-    )
-  } else {
-    // We only ever remind on a funder-published date, so this branch means the
-    // date is published but nobody has re-checked it lately. Say so plainly.
-    paragraphs.push('Nobody has re-checked this date recently, so open the funder’s page before you rely on it.')
-  }
-
-  const facts: Array<{ label: string; value: string }> = [{ label: 'Deadline', value: formatDeadline(at) }]
-  if (p.deadlineNote) facts.push({ label: 'Funder’s wording', value: p.deadlineNote })
-  if (p.funderName) facts.push({ label: 'Funder', value: p.funderName })
-
-  const { html, text } = layout({
-    heading: `${days}: ${p.grantName}`,
-    paragraphs,
-    facts,
-    cta: {
-      label: p.applicationUrl ? 'Start the application' : 'Open the listing',
-      url: p.applicationUrl || p.grantUrl,
-    },
-    reason: 'You are getting this because you are watching this grant.',
-    preferencesUrl,
-  })
-
-  return { subject: `${days}: ${p.grantName}`, html, text }
-}
-
-function renderGrantChange(p: GrantChangeAlertPayload, preferencesUrl: string): EmailBody {
-  const paragraphs = [`Something changed on the ${p.grantName} listing.`]
-  if (p.awaitingReview) {
-    paragraphs.push(
-      'This came off the funder’s page automatically and a moderator has not confirmed it yet. Treat it as a heads-up, not as fact.',
-    )
-  }
-
-  const { html, text } = layout({
-    heading: `Listing changed: ${p.grantName}`,
-    paragraphs,
-    facts: p.changes.slice(0, 8).map((c, i) => ({ label: i === 0 ? 'Changed' : '', value: c })),
-    cta: { label: 'Open the listing', url: p.grantUrl },
-    reason: 'You are getting this because you are watching this grant.',
-    preferencesUrl,
-  })
-
-  return { subject: `Listing changed: ${p.grantName}`, html, text }
-}
-
-/** Where /me/notifications lives. Same host as the tools directory. */
-export function preferencesUrl(): string {
-  const base = (process.env.NEXT_PUBLIC_URL ?? 'https://frc.tools').replace(/\/+$/, '')
-  return `${base}/me/notifications`
-}
-
-/**
- * Public URL of one grant listing.
+ * The templates themselves live in @the-tool-pit/types. They used to be copied
+ * into this file, because the worker tsconfig sets `rootDir: ./src` and tsc
+ * refuses a source outside it (TS6059), so apps/web/lib/email/templates.ts was
+ * unreachable from here. Lifting the module into packages/types, which both
+ * apps already depend on, removed the copy rather than maintaining it.
  *
- * One host, path per vertical. There is no grants.* host any more: it still
- * resolves and redirects, but an email should link straight to the final URL
- * rather than send the reader through a 308 on a hostname whose certificate we
- * cannot renew.
- */
-export function grantUrl(slug: string): string {
-  const base = (process.env.NEXT_PUBLIC_URL ?? 'https://frc.tools').replace(/\/+$/, '')
-  return `${base}/grants/${slug}`
-}
-
-/**
- * Render one queued alert. Returns null for a kind we have no body for, which
- * the drain reports rather than sending a blank email.
+ * All this function does now is the jsonb-to-argument conversion: dates come
+ * back off a jsonb column as ISO strings, and the templates take Date objects.
  */
 function renderAlert(kind: string, payload: unknown, now: Date): EmailBody | null {
   if (!payload || typeof payload !== 'object') return null
   const prefs = preferencesUrl()
+
+  /** A jsonb ISO string as a Date, or null when it is absent or unparseable. */
+  const asDate = (raw: string | null | undefined): Date | null => {
+    if (!raw) return null
+    const at = new Date(raw)
+    return Number.isNaN(at.getTime()) ? null : at
+  }
+
   switch (kind) {
-    case 'new_match':
-      return renderNewMatch(payload as NewMatchAlertPayload, prefs)
-    case 'deadline':
-      return renderDeadline(payload as DeadlineAlertPayload, prefs, now)
+    case 'new_match': {
+      const p = payload as NewMatchAlertPayload
+      return renderNewMatchEmail({ ...p, deadlineAt: asDate(p.deadlineAt), preferencesUrl: prefs })
+    }
+    case 'deadline': {
+      const p = payload as DeadlineAlertPayload
+      const at = asDate(p.deadlineAt)
+      if (!at) return null
+      // Real days remaining at send time, not the offset the row was queued at.
+      // A reminder that sat in the outbox for two days must not still say 14.
+      const daysLeft = Math.max(0, Math.ceil((at.getTime() - now.getTime()) / 86_400_000))
+      return renderDeadlineEmail({
+        ...p,
+        deadlineAt: at,
+        daysLeft,
+        verifiedAt: asDate(p.verifiedAt),
+        preferencesUrl: prefs,
+      })
+    }
     case 'grant_change':
     case 'watch_update':
-      return renderGrantChange(payload as GrantChangeAlertPayload, prefs)
+      return renderGrantChangeEmail({ ...(payload as GrantChangeAlertPayload), preferencesUrl: prefs })
     default:
       return null
   }
@@ -437,50 +251,6 @@ function renderAlert(kind: string, payload: unknown, now: Date): EmailBody | nul
 
 // #endregion
 
-// #region recipients
-
-/**
- * Where one user's email should go, or null when we have nowhere to send.
- *
- * Order matters. A verified notification_channels row is an address the person
- * confirmed for this purpose and it wins. Failing that we fall back to the
- * account's own sign-in address, but ONLY when the identity provider says it is
- * verified: users.emailVerified is Firebase's own email_verified claim copied
- * at sign-in, so that address has been proven to belong to them. An unverified
- * address is never mailed, which is what stops a signed-in user pointing grant
- * alerts at somebody else's inbox.
- */
-async function resolveEmailRecipient(userId: string): Promise<string | null> {
-  const db = getDb()
-
-  const [channel] = await db
-    .select({ address: notificationChannels.address })
-    .from(notificationChannels)
-    .where(
-      and(
-        eq(notificationChannels.userId, userId),
-        eq(notificationChannels.kind, 'email'),
-        eq(notificationChannels.verified, true),
-        isNull(notificationChannels.disabledAt),
-      ),
-    )
-    .orderBy(asc(notificationChannels.createdAt))
-    .limit(1)
-  if (channel?.address) return channel.address
-
-  const [user] = await db
-    .select({ email: users.email, emailVerified: users.emailVerified })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1)
-  if (user?.email && user.emailVerified) return user.email
-
-  return null
-}
-
-// #endregion
-
-// #region drain
 
 export interface GrantAlertDrainStats {
   /** Rows selected as due this pass. */

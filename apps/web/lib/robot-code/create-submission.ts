@@ -36,6 +36,12 @@ export interface CreateRobotCodeSubmissionInput {
   artifactKind: string
   note?: string
   submitterIpHash: string
+  /**
+   * The signed-in user, when there was one. Optional on purpose: sign-in is
+   * never a wall in front of a submission. It only buys attribution and an
+   * email when a moderator gets to it.
+   */
+  submittedByUserId?: string
 }
 
 export type CreateRobotCodeSubmissionResult =
@@ -112,6 +118,7 @@ export async function createRobotCodeSubmission(
       url,
       submitterNote: input.note?.trim() || null,
       submitterIpHash: input.submitterIpHash || null,
+      submittedByUserId: input.submittedByUserId ?? null,
       program,
       teamNumber: input.teamNumber,
       seasonYear: input.seasonYear,

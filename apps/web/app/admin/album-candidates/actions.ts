@@ -9,6 +9,7 @@ import { albumCandidates, albums, albumSources, albumCovers, events } from '@the
 import type { AlbumCandidateMetadata } from '@the-tool-pit/db'
 import { adminPublishAlbum } from '@/lib/admin/publish-album'
 import { fetchOgImage } from '@/lib/albums/og'
+import { notifyAlbumPublished } from '@/lib/notify/approvals'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -172,6 +173,7 @@ export async function approveAlbumCandidate(candidateId: string): Promise<{ erro
   const result = await adminPublishAlbum(candidateId)
   revalidatePath('/admin/album-candidates')
   if ('error' in result) return { error: result.error }
+  await notifyAlbumPublished(candidateId, result.eventId)
   // Refresh the public pages (incl. the parent championship if a division).
   await revalidateEventPublic(result.eventId)
   return {}
@@ -245,6 +247,10 @@ export async function setAlbumEventMatch(candidateId: string, eventKey: string):
       revalidatePath('/admin/album-candidates')
       return { error: result.error }
     }
+    // The second publish door, and it has to notify too: setting the event on a
+    // pending candidate IS the approval, so a submitter whose album went live
+    // this way would otherwise be the only one who never heard.
+    await notifyAlbumPublished(candidateId, result.eventId)
     await revalidateEventPublic(result.eventId)
   }
 

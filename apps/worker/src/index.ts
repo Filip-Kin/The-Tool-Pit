@@ -19,6 +19,7 @@ import { processGrantEnrichJob } from './grants/enrich.js'
 import { processGrantMonitorJob } from './grants/monitor.js'
 import { processGrantMatchJob } from './grants/matcher.js'
 import { processGrantAlertDrainJob } from './grants/alerts.js'
+import { processNotificationDrainJob } from './notifications/outbox.js'
 import { processGrantDeadlineSweepJob } from './grants/deadline-sweeper.js'
 import { enqueueDueGrantMonitors } from './grants/cadence.js'
 import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload, AlbumIngestPayload, AlbumEnrichPayload } from '@the-tool-pit/types'
@@ -181,11 +182,21 @@ const grantMatchWorker = new Worker<GrantMatchJobPayload>(
 const grantAlertWorker = new Worker(
   'grant-alert-drain',
   async () => {
+    // Both outboxes, one after the other, on one queue.
+    //
+    // They are separate tables with separate drains, but they share one mail
+    // transport, and grants/mailer.ts paces sends with a module-level timestamp
+    // to stay under Resend's 2 requests per second. A second queue draining the
+    // notification outbox in parallel would step straight over that pacing, so
+    // the two run in sequence inside this one serial worker instead.
+    //
+    // Sequential also means a broken grant drain cannot silently stop approval
+    // emails: each call handles its own row failures and returns stats rather
+    // than throwing.
     await processGrantAlertDrainJob()
+    await processNotificationDrainJob()
   },
-  // Concurrency MUST stay 1. grants/mailer.ts paces sends with a module-level
-  // timestamp to stay under Resend's 2 requests per second, and a second
-  // concurrent drain in the same process would step straight over that pacing.
+  // Concurrency MUST stay 1, for the pacing reason above.
   { connection, concurrency: 1 },
 )
 

@@ -4,6 +4,7 @@ import { getIpHash } from '@/lib/utils/ip'
 import { formStr as str, formNum as num } from '@/lib/fields/form-parse'
 import { checkRobotCodeSubmissionRateLimit } from '@/lib/robot-code/rate-limit'
 import { createRobotCodeSubmission } from '@/lib/robot-code/create-submission'
+import { getCurrentUser } from '@/lib/auth/session'
 
 /**
  * Public robot code / CAD submission. No account required, same shape as the
@@ -37,8 +38,14 @@ export async function POST(req: NextRequest) {
       if (!outcome.success) return NextResponse.json({ error: 'Verification failed' }, { status: 400 })
     }
 
+    // Sign-in is OPTIONAL on this route and must never turn into a 401. A
+    // signed-out submission still goes through on the IP hash alone; an account
+    // only buys attribution and an email when a moderator gets to it.
+    const user = await getCurrentUser()
+
     const result = await createRobotCodeSubmission({
       url,
+      submittedByUserId: user?.id ?? undefined,
       program: str(form, 'program') ?? '',
       teamNumber: num(form, 'teamNumber') ?? NaN,
       seasonYear: num(form, 'seasonYear') ?? NaN,

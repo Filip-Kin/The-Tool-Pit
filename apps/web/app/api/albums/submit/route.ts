@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { getIpHash } from '@/lib/utils/ip'
 import { checkAlbumSubmissionRateLimit } from '@/lib/albums/rate-limit'
 import { createAlbumSubmission } from '@/lib/albums/create-submission'
+import { getCurrentUser } from '@/lib/auth/session'
 
 export async function POST(req: NextRequest) {
   try {
@@ -45,8 +46,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Sign-in is OPTIONAL on this route and must never turn into a 401. A
+    // signed-out submission still goes through on the IP hash alone; an account
+    // only buys attribution and an email when a moderator gets to it.
+    const user = await getCurrentUser()
+
     const result = await createAlbumSubmission({
       url,
+      submittedByUserId: user?.id ?? undefined,
       eventHint,
       code,
       year: typeof year === 'number' && Number.isInteger(year) ? year : undefined,

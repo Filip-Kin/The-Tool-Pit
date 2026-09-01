@@ -1,6 +1,7 @@
 import { pgTable, uuid, text, integer, real, timestamp, jsonb, index, unique, customType } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { events } from './events'
+import { users } from './accounts'
 import type { PipelineLogEntry } from './submissions'
 
 /** Raw binary column (Postgres bytea) for manually-uploaded cover images. */
@@ -221,11 +222,20 @@ export const albumSubmissions = pgTable(
     pipelineLog: jsonb('pipeline_log').$type<PipelineLogEntry[]>(),
     confidenceScore: real('confidence_score'),
     spamScore: real('spam_score'),
+    /**
+     * The signed-in user who submitted this, when there was one. Sign-in is
+     * OPTIONAL here on purpose: an anonymous submission still goes through, so
+     * a mentor without an account is never turned away. Signing in buys
+     * attribution and, since approval emails, an answer when it is reviewed.
+     * NULL therefore means "nobody to tell", and that is the whole check.
+     */
+    submittedByUserId: uuid('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index('album_submissions_status_idx').on(table.status),
+    index('album_submissions_submitted_by_idx').on(table.submittedByUserId),
     index('album_submissions_created_at_idx').on(table.createdAt),
   ],
 )

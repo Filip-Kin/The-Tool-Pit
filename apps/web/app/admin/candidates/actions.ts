@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { crawlCandidates } from '@the-tool-pit/db'
 import { adminPublishCandidate } from '@/lib/admin/publish-candidate'
+import { notifyToolPublished } from '@/lib/notify/approvals'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -19,6 +20,9 @@ export async function approveCandidate(candidateId: string): Promise<{ error?: s
   revalidatePath(`/admin/candidates/${candidateId}`)
   revalidatePath('/admin/tools')
   if ('error' in result) return { error: result.error }
+  // Only a candidate that came from a public submission has anyone to tell. One
+  // found by a crawler falls straight through this without a query.
+  await notifyToolPublished(candidateId, result.toolId)
   return {}
 }
 

@@ -141,6 +141,21 @@ const RESOLVERS: Record<ListingEntityType, (ids: string[]) => Promise<Resolved>>
   field: resolveFields,
 }
 
+/**
+ * Facts for ONE listing, or null when it no longer exists.
+ *
+ * The single-id door onto the resolvers above, for callers that already know
+ * which listing they mean. The approval emails use it so a claim decision can
+ * name the listing rather than saying "your claim was approved".
+ */
+export async function listingFacts(
+  entityType: ListingEntityType,
+  entityId: string,
+): Promise<ListingFacts | null> {
+  const resolved = await RESOLVERS[entityType]([entityId])
+  return resolved.get(entityId) ?? null
+}
+
 // #endregion
 
 // #region owned listings

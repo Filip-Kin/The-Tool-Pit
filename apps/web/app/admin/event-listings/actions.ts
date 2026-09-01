@@ -12,6 +12,7 @@ import {
   REGISTRATION_STATUSES,
   VOLUNTEER_STATUSES,
 } from '@the-tool-pit/db'
+import { notifyEventPublished } from '@/lib/notify/approvals'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -39,6 +40,7 @@ export async function approveEvent(id: string): Promise<{ error?: string }> {
     .update(eventListings)
     .set({ status: 'published', publishedAt: new Date(), rejectionReason: null, updatedAt: new Date() })
     .where(eq(eventListings.id, id))
+  await notifyEventPublished(id)
   revalidateAll()
   return {}
 }

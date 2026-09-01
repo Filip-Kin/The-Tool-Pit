@@ -15,6 +15,7 @@ import {
   revalidateGrantPublic,
   uniqueGrantSlug,
 } from '@/lib/admin/grants'
+import { notifyGrantPublished } from '@/lib/notify/approvals'
 
 const QUEUE_PATH = '/admin/grants/candidates'
 
@@ -114,6 +115,16 @@ export async function publishGrantCandidate(
     .set({ status: 'published', matchedGrantId: created.id, rejectionReason: null, updatedAt: now })
     .where(eq(grantCandidates.id, candidateId))
   await bumpSourceCounter(candidate.sourceId, 'yield')
+
+  // The name that goes in the email is the one on the LISTING, not the one that
+  // was submitted: a moderator has just read the funder's page and corrected
+  // the form, so telling the submitter what they typed would be telling them
+  // something that is no longer true.
+  await notifyGrantPublished(candidateId, {
+    name: parsed.values.name!,
+    slug: created.slug,
+    funderName: parsed.funderName ?? null,
+  })
 
   revalidatePath(QUEUE_PATH)
   revalidatePath('/admin/grants')

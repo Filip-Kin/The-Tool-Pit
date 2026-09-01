@@ -7,6 +7,7 @@ import { eq, and, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos } from '@the-tool-pit/db'
 import type { FieldEditProposalData } from '@the-tool-pit/db'
+import { describeFieldEditChanges, notifyFieldEditApplied } from '@/lib/notify/approvals'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -58,6 +59,16 @@ export async function applyFieldEdit(proposalId: string): Promise<{ error?: stri
   assign('notes', 'notes')
   if (!p.name || !(p.name as string).trim()) return { error: 'Proposed name is empty.' }
 
+  // Read the field as it stands before the patch lands. This is the only moment
+  // the before-state exists, and the whole point of the email is telling the
+  // submitter WHICH of their suggestions was taken.
+  const [before] = await db
+    .select()
+    .from(practiceFields)
+    .where(eq(practiceFields.id, proposal.fieldId))
+    .limit(1)
+  const changed = before ? describeFieldEditChanges(p, before as unknown as Record<string, unknown>) : []
+
   await db.update(practiceFields).set(patch).where(eq(practiceFields.id, proposal.fieldId))
 
   // Apply the photo changes: remove the requested existing photos, then append
@@ -90,6 +101,7 @@ export async function applyFieldEdit(proposalId: string): Promise<{ error?: stri
     .update(fieldEditProposals)
     .set({ status: 'applied', updatedAt: new Date() })
     .where(eq(fieldEditProposals.id, proposalId))
+  await notifyFieldEditApplied(proposalId, changed)
   revalidateAll()
   return {}
 }

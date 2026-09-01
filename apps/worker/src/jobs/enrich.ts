@@ -6,6 +6,7 @@ import { classifyCandidate } from '../pipeline/classify.js'
 import { fetchGitHubRepo, parseGitHubUrl } from '../connectors/github.js'
 import { publishCandidate } from '../pipeline/publish.js'
 import { extractMetadata } from '../pipeline/extract.js'
+import { notifySubmissionAutoPublished } from '../notifications/submissions.js'
 import type { EnrichJobPayload } from '@the-tool-pit/types'
 
 // #region deterministic junk gate
@@ -439,6 +440,10 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
     if (submissionId) {
       if (result.action === 'created') {
         await resolveSubmission(submissionId, 'published', result.toolId)
+        // The one publish that no admin ever saw. The submitter gets the same
+        // email either way, or the only people who hear back are the ones whose
+        // submission happened to score badly enough to need a human.
+        await notifySubmissionAutoPublished(submissionId, result.toolId)
       } else {
         // 'skipped' means confidence was below threshold inside publishCandidate
         await resolveSubmission(submissionId, 'needs_review')

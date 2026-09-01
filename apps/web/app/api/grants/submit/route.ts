@@ -5,6 +5,7 @@ import { getIpHash } from '@/lib/utils/ip'
 import { formStr as str } from '@/lib/fields/form-parse'
 import { checkGrantSubmissionRateLimit } from '@/lib/grants/rate-limit'
 import { createGrantSubmission } from '@/lib/grants/create-submission'
+import { getCurrentUser } from '@/lib/auth/session'
 
 /**
  * Public grant submission. No account required, same shape as the fields
@@ -38,8 +39,14 @@ export async function POST(req: NextRequest) {
       if (!outcome.success) return NextResponse.json({ error: 'Verification failed' }, { status: 400 })
     }
 
+    // Sign-in is OPTIONAL on this route and must never turn into a 401. A
+    // signed-out submission still goes through on the IP hash alone; an account
+    // only buys attribution and an email when a moderator gets to it.
+    const user = await getCurrentUser()
+
     const result = await createGrantSubmission({
       name,
+      submittedByUserId: user?.id ?? undefined,
       infoUrl,
       funderName: str(form, 'funderName'),
       applicationUrl: str(form, 'applicationUrl'),

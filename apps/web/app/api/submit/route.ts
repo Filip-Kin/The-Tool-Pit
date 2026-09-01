@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { createSubmission } from '@/lib/submissions/create'
 import { getIpHash } from '@/lib/utils/ip'
 import { checkSubmissionRateLimit } from '@/lib/submissions/rate-limit'
+import { getCurrentUser } from '@/lib/auth/session'
 
 export async function POST(req: NextRequest) {
   try {
@@ -44,7 +45,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const result = await createSubmission({ url, note, submitterIpHash: ipHash })
+    // Sign-in is OPTIONAL on this route and must never turn into a 401. A
+    // signed-out submission still goes through on the IP hash alone; an account
+    // only buys attribution and an email when a moderator gets to it.
+    const user = await getCurrentUser()
+
+    const result = await createSubmission({
+      url,
+      note,
+      submitterIpHash: ipHash,
+      submittedByUserId: user?.id ?? undefined,
+    })
     return NextResponse.json(result)
   } catch (err) {
     console.error('[submit] error', err)

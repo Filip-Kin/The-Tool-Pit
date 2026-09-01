@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import { readPhotoFiles } from '@/lib/fields/form-parse'
+import { notifyFieldPublished } from '@/lib/notify/approvals'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -34,6 +35,10 @@ export async function approveField(id: string): Promise<{ error?: string }> {
     .update(practiceFields)
     .set({ status: 'published', publishedAt: new Date(), rejectionReason: null, updatedAt: new Date() })
     .where(eq(practiceFields.id, id))
+  // After the publish, never before, and never in a way that can fail it. A
+  // second click on Approve re-runs this and the outbox dedupe key collapses it
+  // to the one email that already went.
+  await notifyFieldPublished(id)
   revalidateAll()
   return {}
 }

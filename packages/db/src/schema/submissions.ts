@@ -1,6 +1,7 @@
 import { pgTable, uuid, text, real, timestamp, jsonb, integer, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { tools } from './tools'
+import { users } from './accounts'
 import type { FieldProgram } from '../field-enums'
 import type { ArtifactKind } from '../robot-code-enums'
 
@@ -48,11 +49,21 @@ export const submissions = pgTable(
     artifactKind: text('artifact_kind').$type<ArtifactKind>(),
     // #endregion
 
+    /**
+     * The signed-in user who submitted this, when there was one. Sign-in is
+     * OPTIONAL here on purpose: an anonymous submission still goes through, so
+     * a mentor without an account is never turned away. Signing in buys
+     * attribution and, since approval emails, an answer when it is reviewed.
+     * NULL therefore means "nobody to tell", and that is the whole check.
+     */
+    submittedByUserId: uuid('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index('submissions_status_idx').on(table.status),
+    index('submissions_submitted_by_idx').on(table.submittedByUserId),
     index('submissions_created_at_idx').on(table.createdAt),
   ],
 )
