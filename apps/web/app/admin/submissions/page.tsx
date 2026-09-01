@@ -175,7 +175,7 @@ export default async function AdminSubmissionsPage({
                       {resolvedTool && (
                         <Link
                           href={`/admin/tools/${resolvedTool.id}`}
-                          className="mt-1 block text-[10px] text-green-400 hover:underline"
+                          className="mt-1 block text-[10px] text-rookie hover:underline"
                         >
                           → {resolvedTool.name}
                         </Link>
@@ -199,7 +199,7 @@ export default async function AdminSubmissionsPage({
                       )}
                     </td>
 
-                    {/* Pipeline log — show last entry */}
+                    {/* Pipeline log, last entry only */}
                     <td className="px-4 py-3">
                       {lastLog ? (
                         <div>
@@ -247,10 +247,16 @@ export default async function AdminSubmissionsPage({
 
 function LogDot({ logStatus }: { logStatus: 'ok' | 'warn' | 'error' | 'skip' }) {
   const colors = {
-    ok: 'bg-green-500',
-    warn: 'bg-yellow-500',
-    error: 'bg-red-500',
+    ok: 'bg-rookie',
+    warn: 'bg-official',
+    error: 'bg-frc',
     skip: 'bg-muted-2',
   }
-  return <span className={`inline-block h-1.5 w-1.5 rounded-full ${colors[logStatus]}`} />
+  // A 6px dot has no label, so it says what it is out loud for a screen reader
+  // and for anyone who cannot separate the three fills.
+  return (
+    <span className={`inline-block h-1.5 w-1.5 rounded-full ${colors[logStatus]}`}>
+      <span className="sr-only">{logStatus}</span>
+    </span>
+  )
 }

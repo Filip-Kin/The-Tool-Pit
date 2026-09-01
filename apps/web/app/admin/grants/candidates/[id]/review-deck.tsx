@@ -234,7 +234,7 @@ export function ReviewDeck(props: ReviewDeckProps) {
             <button
               type="submit"
               disabled={pending}
-              className="rounded-md bg-rookie px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:opacity-90 disabled:opacity-40"
+              className="rounded-md bg-rookie px-5 py-2.5 text-sm font-semibold text-background transition-colors hover:opacity-90 disabled:opacity-40"
             >
               Approve <span className="opacity-60">(a)</span>
             </button>
@@ -311,7 +311,7 @@ export function ReviewDeck(props: ReviewDeckProps) {
               type="button"
               disabled={pending || !reason.trim()}
               onClick={() => run(() => suppressGrantCandidate(props.candidateId, reason, kind))}
-              className="rounded-md bg-frc px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              className="rounded-md bg-frc px-4 py-2 text-sm font-semibold text-background disabled:opacity-40"
             >
               {pending ? '…' : 'Suppress and go on'}
             </button>
@@ -333,7 +333,7 @@ export function ReviewDeck(props: ReviewDeckProps) {
               type="button"
               disabled={pending || !note.trim()}
               onClick={() => run(() => flagGrantCandidate(props.candidateId, note))}
-              className="rounded-md bg-official px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              className="rounded-md bg-official px-4 py-2 text-sm font-semibold text-background disabled:opacity-40"
             >
               {pending ? '…' : 'Flag and go on'}
             </button>

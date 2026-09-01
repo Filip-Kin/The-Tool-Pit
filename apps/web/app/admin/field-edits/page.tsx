@@ -175,14 +175,14 @@ export default async function FieldEditsAdminPage() {
                         <div key={id} className="relative">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={`/api/fields/photo/${id}`} alt="" className="h-20 w-24 rounded-md border border-border object-cover opacity-40 grayscale" />
-                          <span className="absolute inset-x-1 bottom-1 rounded bg-frc/80 py-0.5 text-center text-[10px] font-medium text-white">Removing</span>
+                          <span className="absolute inset-x-1 bottom-1 rounded bg-frc py-0.5 text-center text-[10px] font-medium text-background">Removing</span>
                         </div>
                       ))}
                     {addIds.map((id) => (
                       <div key={id} className="relative">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={`/api/fields/proposal-photo/${id}`} alt="" className="h-20 w-24 rounded-md border border-rookie/60 object-cover" />
-                        <span className="absolute inset-x-1 bottom-1 rounded bg-rookie/80 py-0.5 text-center text-[10px] font-medium text-white">Adding</span>
+                        <span className="absolute inset-x-1 bottom-1 rounded bg-rookie py-0.5 text-center text-[10px] font-medium text-background">Adding</span>
                       </div>
                     ))}
                   </div>

@@ -2,6 +2,7 @@
 
 import { useTransition } from 'react'
 import { approveCandidate, suppressCandidate } from './actions'
+import { buttonClass } from '@/components/ui/button'
 import { ReasonButton } from '@/components/admin/reason-button'
 
 export function CandidateActions({ candidateId, status }: { candidateId: string; status: string }) {
@@ -16,7 +17,10 @@ export function CandidateActions({ candidateId, status }: { candidateId: string;
       <button
         disabled={approvePending}
         onClick={() => startApprove(() => { void approveCandidate(candidateId) })}
-        className="rounded bg-green-700/20 px-2.5 py-1 text-xs font-medium text-green-400 hover:bg-green-700/40 transition-colors disabled:opacity-40"
+        // Filled, not a tint. `bg-rookie/20 text-rookie` is 4.51:1 in light
+        // and drops under AA the moment it is hovered; a solid fill with the
+        // page colour on it is 7.80:1 dark and 5.74:1 light, and it stays put.
+        className={buttonClass({ variant: 'none', size: 'sm', className: 'bg-rookie text-background hover:opacity-90' })}
       >
         {approvePending ? '…' : 'Approve'}
       </button>

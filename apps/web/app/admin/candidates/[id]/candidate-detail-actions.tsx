@@ -2,6 +2,7 @@
 
 import { useTransition, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { buttonClass } from '@/components/ui/button'
 import { approveCandidate, suppressCandidate } from '../actions'
 
 export function CandidateDetailActions({
@@ -24,7 +25,7 @@ export function CandidateDetailActions({
   return (
     <div className="flex flex-col gap-4">
       {error && (
-        <p className="text-sm text-red-400 rounded bg-red-500/10 px-3 py-2">{error}</p>
+        <p className="text-sm text-frc rounded bg-frc/10 px-3 py-2">{error}</p>
       )}
 
       {/* Approval */}
@@ -42,7 +43,9 @@ export function CandidateDetailActions({
               }
             })
           }
-          className="self-start rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors disabled:opacity-50"
+          // text-background, not text-white: white on this green is 2.54:1
+          // under the dark theme, which is the theme this screen was built in.
+          className={buttonClass({ variant: 'none', className: 'self-start bg-rookie text-background hover:opacity-90' })}
         >
           {approvePending ? 'Publishing…' : 'Approve & Publish'}
         </button>
@@ -78,7 +81,9 @@ export function CandidateDetailActions({
                 router.refresh()
               })
             }
-            className="self-start rounded-md border border-red-600/40 px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+            // The same outline the ReasonButton uses for its Reject, because
+            // this button sends the same email.
+            className={buttonClass({ variant: 'none', className: 'self-start border border-frc/40 text-frc hover:bg-frc/10' })}
           >
             {suppressPending ? 'Suppressing…' : 'Suppress'}
           </button>

@@ -11,6 +11,7 @@ import {
   uploadAlbumCover,
   deletePublishedAlbum,
 } from './actions'
+import { buttonClass } from '@/components/ui/button'
 import { ReasonButton } from '@/components/admin/reason-button'
 
 export function AlbumCandidateActions({
@@ -129,7 +130,9 @@ async function shrinkImage(file: File): Promise<File> {
               disabled={pending}
               title="Publish this album"
               onClick={() => run(() => approveAlbumCandidate(candidateId))}
-              className="rounded bg-green-700/20 px-2.5 py-1 text-xs font-medium text-green-400 hover:bg-green-700/40 transition-colors disabled:opacity-40"
+              // Same filled green as the tool queue. The two queues are worked
+              // by the same person on the same day and had no reason to differ.
+              className={buttonClass({ variant: 'none', size: 'sm', className: 'bg-rookie text-background hover:opacity-90' })}
             >
               {pending ? '…' : 'Approve'}
             </button>

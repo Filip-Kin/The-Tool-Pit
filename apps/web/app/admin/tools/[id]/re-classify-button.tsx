@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { buttonClass } from '@/components/ui/button'
 
 export function ReClassifyButton({
   action,
@@ -31,15 +32,15 @@ export function ReClassifyButton({
         type="button"
         onClick={handleClick}
         disabled={pending}
-        className="rounded-md border border-blue-600/40 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
+        className={buttonClass({ variant: 'secondary', size: 'sm' })}
       >
         {pending ? 'Queuing…' : 'Re-classify'}
       </button>
       {status === 'queued' && (
-        <span className="text-xs text-green-500">Queued — check candidates</span>
+        <span className="text-xs text-rookie">Queued, check candidates</span>
       )}
       {status === 'error' && (
-        <span className="text-xs text-red-500">{errorMsg}</span>
+        <span className="text-xs text-frc">{errorMsg}</span>
       )}
     </div>
   )

@@ -4,6 +4,8 @@ import { getDb } from '@/lib/db'
 import { crawlCandidates, crawlJobs, tools, submissions } from '@the-tool-pit/db'
 import { eq } from 'drizzle-orm'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
+import { Badge } from '@/components/ui/badge'
+import { StatusChip, confidenceFill } from '@/components/admin/status'
 import { CandidateDetailActions } from './candidate-detail-actions'
 import { assertAdmin } from '@/lib/admin/auth'
 
@@ -67,17 +69,7 @@ export default async function AdminCandidateDetailPage({
         </div>
 
         {/* Status badge */}
-        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium capitalize border ${
-          candidate.status === 'published'
-            ? 'bg-green-500/10 text-green-400 border-green-500/30'
-            : candidate.status === 'suppressed'
-              ? 'bg-red-500/10 text-red-400 border-red-500/30'
-              : candidate.status === 'pending'
-                ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                : 'bg-surface-3 text-muted border-border'
-        }`}>
-          {candidate.status}
-        </span>
+        <StatusChip status={candidate.status} />
       </div>
 
       {/* Confidence */}
@@ -86,7 +78,7 @@ export default async function AdminCandidateDetailPage({
         <div className="flex items-center gap-3">
           <div className="flex-1 h-2 rounded-full bg-surface-3 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${confidence >= 0.7 ? 'bg-green-500' : confidence >= 0.4 ? 'bg-amber-500' : 'bg-red-500'}`}
+              className={`h-full rounded-full transition-all ${confidenceFill(confidence)}`}
               style={{ width: `${Math.round(confidence * 100)}%` }}
             />
           </div>
@@ -100,15 +92,15 @@ export default async function AdminCandidateDetailPage({
         )}
 
         <div className="flex flex-wrap gap-2 mt-1">
-          {cls.toolType && <Tag>{cls.toolType.replace(/_/g, ' ')}</Tag>}
-          {(cls.programs ?? []).map((p) => <Tag key={p} color="program">{p.toUpperCase()}</Tag>)}
-          {cls.isOfficial && <Tag color="official">official</Tag>}
-          {cls.isVendor && <Tag color="vendor">vendor</Tag>}
-          {cls.isRookieFriendly && <Tag color="rookie">rookie</Tag>}
-          {cls.isTeamCode && <Tag>team code</Tag>}
-          {cls.isTeamCad && <Tag>team CAD</Tag>}
-          {cls.teamNumber && <Tag>Team {cls.teamNumber}</Tag>}
-          {cls.seasonYear && <Tag>{cls.seasonYear}</Tag>}
+          {cls.toolType && <Badge>{cls.toolType.replace(/_/g, ' ')}</Badge>}
+          {(cls.programs ?? []).map((p) => <Badge key={p} variant="program">{p.toUpperCase()}</Badge>)}
+          {cls.isOfficial && <Badge variant="official">official</Badge>}
+          {cls.isVendor && <Badge variant="vendor">vendor</Badge>}
+          {cls.isRookieFriendly && <Badge variant="rookie">rookie</Badge>}
+          {cls.isTeamCode && <Badge>team code</Badge>}
+          {cls.isTeamCad && <Badge>team CAD</Badge>}
+          {cls.teamNumber && <Badge>Team {cls.teamNumber}</Badge>}
+          {cls.seasonYear && <Badge>{cls.seasonYear}</Badge>}
         </div>
 
         {cls.summary && (
@@ -185,7 +177,7 @@ export default async function AdminCandidateDetailPage({
 
       {/* Matched tool */}
       {toolRow && (
-        <section className="rounded-lg border border-green-500/30 bg-green-500/5 p-5 flex flex-col gap-2">
+        <section className="rounded-lg border border-rookie/30 bg-rookie/5 p-5 flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-foreground">Published as Tool</h2>
           <div className="flex items-center gap-3">
             <Link
@@ -201,9 +193,9 @@ export default async function AdminCandidateDetailPage({
 
       {/* Rejection reason (if suppressed) */}
       {candidate.rejectionReason && (
-        <section className="rounded-lg border border-red-500/30 bg-red-500/5 p-5">
+        <section className="rounded-lg border border-frc/30 bg-frc/5 p-5">
           <h2 className="mb-2 text-sm font-semibold text-foreground">Rejection Reason</h2>
-          <p className="text-sm text-red-400">{candidate.rejectionReason}</p>
+          <p className="text-sm text-frc">{candidate.rejectionReason}</p>
         </section>
       )}
 
@@ -213,27 +205,5 @@ export default async function AdminCandidateDetailPage({
         <CandidateDetailActions candidateId={candidate.id} status={candidate.status} />
       </section>
     </div>
-  )
-}
-
-function Tag({
-  children,
-  color,
-}: {
-  children: React.ReactNode
-  color?: 'program' | 'official' | 'vendor' | 'rookie'
-}) {
-  const colorMap = {
-    program: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    official: 'bg-green-500/10 text-green-400 border-green-500/20',
-    vendor: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    rookie: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-  }
-  return (
-    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium border ${
-      color ? colorMap[color] : 'bg-surface-3 text-muted border-border-subtle'
-    }`}>
-      {children}
-    </span>
   )
 }

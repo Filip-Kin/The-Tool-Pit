@@ -4,6 +4,7 @@ import { getToolForEdit } from '@/lib/admin/get-tool-for-edit'
 import { saveTool, saveAdminNotes, setToolStatus, reClassifyTool } from './actions'
 import { SaveButton } from './save-button'
 import { ReClassifyButton } from './re-classify-button'
+import { Button, buttonClass } from '@/components/ui/button'
 import { getDb } from '@/lib/db'
 import { toolSources, toolUpdates } from '@the-tool-pit/db'
 import { eq, desc } from 'drizzle-orm'
@@ -96,21 +97,27 @@ export default async function AdminToolEditPage({
         <div className="flex gap-2 shrink-0">
           {tool.status !== 'published' && (
             <form action={publishAction}>
-              <button type="submit" className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 transition-colors">
+              <button
+                type="submit"
+                className={buttonClass({ variant: 'none', size: 'sm', className: 'bg-rookie text-background hover:opacity-90' })}
+              >
                 Publish
               </button>
             </form>
           )}
           {tool.status !== 'draft' && (
             <form action={draftAction}>
-              <button type="submit" className="rounded-md bg-surface-2 px-3 py-1.5 text-xs font-medium text-muted hover:text-foreground border border-border transition-colors">
+              <Button type="submit" variant="secondary" size="sm">
                 Set Draft
-              </button>
+              </Button>
             </form>
           )}
           {tool.status !== 'suppressed' && (
             <form action={suppressAction}>
-              <button type="submit" className="rounded-md border border-red-600/40 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-500/10 transition-colors">
+              <button
+                type="submit"
+                className={buttonClass({ variant: 'none', size: 'sm', className: 'border border-frc/40 text-frc hover:bg-frc/10' })}
+              >
                 Suppress
               </button>
             </form>
@@ -216,7 +223,7 @@ export default async function AdminToolEditPage({
             </label>
           </div>
 
-          {/* Team Info — shown when isTeamCode might be checked */}
+          {/* Team info, shown when isTeamCode might be checked */}
           <div className="grid grid-cols-2 gap-4">
             <Field label="Team Number">
               <input
@@ -287,7 +294,7 @@ export default async function AdminToolEditPage({
                   />
                 </Field>
                 {status?.isBroken && (
-                  <p className="text-xs text-red-500 flex items-center gap-1">
+                  <p className="text-xs text-frc flex items-center gap-1">
                     ⚠ Broken link detected
                     {status.lastCheckedAt && (
                       <span className="text-muted-2">
@@ -310,7 +317,7 @@ export default async function AdminToolEditPage({
               <span className="w-20 shrink-0">{l.linkType}</span>
               <a href={l.url} target="_blank" rel="noopener noreferrer" className="hover:underline truncate">{l.url}</a>
               {l.isBroken ? (
-                <span className="shrink-0 text-red-500">⚠ broken</span>
+                <span className="shrink-0 text-frc">⚠ broken</span>
               ) : (
                 <span className="text-muted-2 shrink-0">(read-only)</span>
               )}
@@ -390,8 +397,8 @@ export default async function AdminToolEditPage({
         </div>
       </form>
 
-      {/* Admin Notes — internal only */}
-      <section className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-5">
+      {/* Admin notes, internal only */}
+      <section className="flex flex-col gap-3 rounded-lg border border-official/30 bg-official/5 p-5">
         <h2 className="text-sm font-semibold text-foreground">Admin Notes <span className="text-xs font-normal text-muted">(internal only)</span></h2>
         <form action={saveAdminNotes}>
           <input type="hidden" name="toolId" value={tool.id} />
@@ -408,7 +415,7 @@ export default async function AdminToolEditPage({
         </form>
       </section>
 
-      {/* Sources — read-only evidence records */}
+      {/* Sources, read-only evidence records */}
       {sources.length > 0 && (
         <section className="flex flex-col gap-3 rounded-lg border border-border p-5">
           <h2 className="text-sm font-semibold text-foreground">Sources</h2>
@@ -430,7 +437,7 @@ export default async function AdminToolEditPage({
         </section>
       )}
 
-      {/* Activity log — signals recorded by freshness / link-checker jobs */}
+      {/* Activity log: signals recorded by the freshness and link-checker jobs */}
       <section className="flex flex-col gap-3 rounded-lg border border-border p-5">
         <h2 className="text-sm font-semibold text-foreground">Activity Log</h2>
         {activityLog.length === 0 ? (
@@ -470,7 +477,7 @@ function Field({
     <label className="flex flex-col gap-1.5">
       <span className="text-xs font-medium text-muted">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-frc">*</span>}
       </span>
       {children}
     </label>

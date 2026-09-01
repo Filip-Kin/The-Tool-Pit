@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { CandidateActions } from './candidate-actions'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
 import { ClickableRow } from '@/components/admin/clickable-row'
+import { Badge } from '@/components/ui/badge'
+import { confidenceFill } from '@/components/admin/status'
 import { assertAdmin } from '@/lib/admin/auth'
 
 const STATUS_TABS = ['pending', 'suppressed', 'duplicate'] as const
@@ -137,14 +139,14 @@ export default async function AdminCandidatesPage({
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         {cls.toolType && (
-                          <Tag>{cls.toolType.replace(/_/g, ' ')}</Tag>
+                          <Badge>{cls.toolType.replace(/_/g, ' ')}</Badge>
                         )}
                         {(cls.programs ?? []).map((p) => (
-                          <Tag key={p} color="program">{p.toUpperCase()}</Tag>
+                          <Badge key={p} variant="program">{p.toUpperCase()}</Badge>
                         ))}
-                        {cls.isOfficial && <Tag color="official">official</Tag>}
-                        {cls.isVendor && <Tag color="vendor">vendor</Tag>}
-                        {cls.isRookieFriendly && <Tag color="rookie">rookie</Tag>}
+                        {cls.isOfficial && <Badge variant="official">official</Badge>}
+                        {cls.isVendor && <Badge variant="vendor">vendor</Badge>}
+                        {cls.isRookieFriendly && <Badge variant="rookie">rookie</Badge>}
                       </div>
                       {cls.reasoning && (
                         <p className="mt-1.5 text-[10px] text-muted-2 line-clamp-2 italic">
@@ -176,34 +178,14 @@ export default async function AdminCandidatesPage({
   )
 }
 
-function Tag({
-  children,
-  color,
-}: {
-  children: React.ReactNode
-  color?: 'program' | 'official' | 'vendor' | 'rookie'
-}) {
-  const base = 'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium border'
-  const variants = {
-    program: 'bg-primary/10 text-primary border-primary/20',
-    official: 'bg-official/10 text-official border-official/20',
-    vendor: 'bg-vendor/10 text-vendor border-vendor/20',
-    rookie: 'bg-rookie/10 text-rookie border-rookie/20',
-    default: 'bg-surface-3 text-muted border-border',
-  }
-  return (
-    <span className={`${base} ${variants[color ?? 'default']}`}>{children}</span>
-  )
-}
-
 function ConfidenceBar({ value }: { value: number }) {
   const pct = Math.round(value * 100)
-  const color = pct >= 70 ? 'bg-green-500' : pct >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+  const fill = confidenceFill(value)
   return (
     <div className="flex flex-col items-end gap-1">
       <span className="text-xs font-mono text-foreground">{pct}%</span>
       <div className="h-1 w-16 rounded-full bg-surface-3">
-        <div className={`h-1 rounded-full ${color}`} style={{ width: `${pct}%` }} />
+        <div className={`h-1 rounded-full ${fill}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   )
