@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Heart } from 'lucide-react'
+import { Bookmark } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { useSession } from './session-provider'
 import { SignInDialog } from './sign-in-dialog'
@@ -131,7 +131,11 @@ export function FavoriteButton({
           className,
         )}
       >
-        <Heart className={cn('h-4 w-4', favorited && 'fill-current')} aria-hidden />
+        {/* A bookmark, not a heart. Next to an upvote arrow a heart reads as a
+            second way of saying "this is good", and the two were competing to
+            mean the same thing. A bookmark says "keep this for me", which is
+            what it does. It is also what the grant save control already uses. */}
+        <Bookmark className={cn('h-4 w-4', favorited && 'fill-current')} aria-hidden />
         {label && <span>{favorited ? 'Saved' : label}</span>}
       </button>
 

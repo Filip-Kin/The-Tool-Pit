@@ -24,7 +24,9 @@ export interface GitHubRepoInfo {
 export function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
   try {
     const u = new URL(url)
-    if (u.hostname !== 'github.com') return null
+    // www.github.com is github.com. The popularity pass skipped a real listing
+    // over the prefix alone, and it is the kind of URL a person pastes.
+    if (u.hostname !== 'github.com' && u.hostname !== 'www.github.com') return null
     const parts = u.pathname.replace(/^\//, '').split('/')
     if (parts.length < 2) return null
     const [owner, repo] = parts
