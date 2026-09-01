@@ -37,12 +37,12 @@ export function UserMenu() {
   const label = user.displayName || user.email || 'Account'
   const initial = label.charAt(0).toUpperCase()
 
+  // modal={false} on purpose. Radix defaults a dropdown to modal, which locks
+  // body scroll and pads the body by the scrollbar width to compensate. A
+  // sticky header is not the body, so it never got that padding, and the whole
+  // page slid sideways by a few pixels while the menu was open. A profile menu
+  // has no reason to trap the page anyway.
   return (
-    {/* modal={false} on purpose. Radix defaults a dropdown to modal, which locks
-        body scroll and pads the body by the scrollbar width to compensate. A
-        sticky header is not the body, so it does not get that padding, and the
-        whole page appeared to jump sideways by a few pixels when the menu
-        opened. A profile menu has no reason to trap the page anyway. */}
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger asChild>
         <button

@@ -422,7 +422,6 @@ export default async function NotificationsPage({
   ])
 
   const emailChannels = channels.filter((c) => c.kind === 'email')
-  const pushChannels = channels.filter((c) => c.kind === 'push')
 
   // The sign-in address is a real delivery target when the identity provider
   // says it is verified, and the drain falls back to it. Say so here, otherwise
@@ -566,58 +565,6 @@ export default async function NotificationsPage({
               There is no confirmed address on this account, so grant alerts have nowhere to go. They
               are held rather than thrown away, and they will be delivered once you confirm one.
             </p>
-          )}
-        </section>
-        {/* #endregion */}
-
-        {/* #region push */}
-        <section>
-          <h2 className="text-lg font-semibold text-foreground">Push</h2>
-          {/* Said plainly rather than shown as a toggle that does nothing.
-              A switch that silently delivers no notifications is worse than
-              no switch. */}
-          <p className="mt-2 max-w-2xl text-sm text-muted">
-            Browser push is not built yet. You can register a device once it is, and any alert queued
-            for push in the meantime is held rather than dropped. Email is the working channel today.
-          </p>
-
-          {pushChannels.length > 0 && (
-            <ul className="mt-4 flex flex-col gap-2">
-              {pushChannels.map((c) => (
-                <li
-                  key={c.id}
-                  className="flex flex-wrap items-center gap-3 rounded-lg border border-border-subtle bg-surface p-4"
-                >
-                  <span className="text-sm text-foreground">
-                    {c.pushKeys?.userAgent ?? 'Registered device'}
-                  </span>
-                  <span className="text-xs text-muted-2">
-                    {c.disabledAt ? 'Paused' : 'On, once push delivery ships'}
-                  </span>
-                  <div className="ml-auto flex items-center gap-2">
-                    <form action={setChannelEnabled}>
-                      <input type="hidden" name="channelId" value={c.id} />
-                      <input type="hidden" name="enable" value={c.disabledAt ? 'true' : 'false'} />
-                      <button
-                        type="submit"
-                        className="rounded-md border border-border-subtle px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
-                      >
-                        {c.disabledAt ? 'Enable' : 'Disable'}
-                      </button>
-                    </form>
-                    <form action={removeChannel}>
-                      <input type="hidden" name="channelId" value={c.id} />
-                      <button
-                        type="submit"
-                        className="rounded-md border border-border-subtle px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:text-foreground"
-                      >
-                        Remove
-                      </button>
-                    </form>
-                  </div>
-                </li>
-              ))}
-            </ul>
           )}
         </section>
         {/* #endregion */}
