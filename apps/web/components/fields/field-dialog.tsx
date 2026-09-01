@@ -1,9 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, ArrowLeft } from 'lucide-react'
+import { X, ArrowLeft, Link2 } from 'lucide-react'
 import type { PublicField } from '@/lib/fields/field-display'
+import type { ListingClaimState } from '@/lib/queries/listing-ownership'
+import { ClaimListingButton } from '@/components/auth/claim-listing-button'
 import { FieldDetail } from './field-card'
 import { FieldSubmitForm } from './field-submit-form'
 
@@ -12,8 +15,23 @@ import { FieldSubmitForm } from './field-submit-form'
  * Opened by clicking a list card or a map pin. "Suggest an edit" swaps the
  * content to a pre-filled edit form that submits a proposal for admin review.
  * Renders above the map's stacking context via a Radix portal.
+ *
+ * It carries the ownership control because /fields/[id] has one and nothing
+ * ever linked there. Every route into a field, a list card and a map pin, ends
+ * in this dialog, so the page with the claim button on it was unreachable and
+ * a team running a field had no way to say so. The permalink below fixes the
+ * other half: the detail page is now something you can get to and share.
  */
-export function FieldDialog({ field, onClose }: { field: PublicField | null; onClose: () => void }) {
+export function FieldDialog({
+  field,
+  claimState,
+  onClose,
+}: {
+  field: PublicField | null
+  /** Resolved on the server for every field on the map, in one query. */
+  claimState: ListingClaimState
+  onClose: () => void
+}) {
   const [editing, setEditing] = useState(false)
 
   // Always start on the detail view when a different field opens.
@@ -52,7 +70,19 @@ export function FieldDialog({ field, onClose }: { field: PublicField | null; onC
                 <FieldSubmitForm edit={{ field }} onSubmitted={() => { /* keep the confirmation visible */ }} />
               </div>
             ) : (
-              <FieldDetail field={field} onSuggestEdit={() => setEditing(true)} />
+              <div className="flex flex-col gap-5">
+                <FieldDetail field={field} onSuggestEdit={() => setEditing(true)} />
+                <div className="flex flex-wrap items-center gap-3 border-t border-border-subtle pt-4">
+                  <ClaimListingButton entityType="field" entityId={field.id} state={claimState} />
+                  <Link
+                    href={`/fields/${field.id}`}
+                    className="inline-flex items-center gap-1.5 text-sm text-muted-2 hover:text-foreground"
+                  >
+                    <Link2 className="h-4 w-4" aria-hidden />
+                    Permalink for this field
+                  </Link>
+                </div>
+              </div>
             ))}
           <Dialog.Close
             aria-label="Close"

@@ -6,6 +6,7 @@ import { Search, SlidersHorizontal, LocateFixed, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import type { PublicField, DistanceUnit } from '@/lib/fields/field-display'
+import type { ListingClaimState } from '@/lib/queries/listing-ownership'
 import {
   COVERAGE_LABEL,
   ELEMENTS_LABEL,
@@ -54,7 +55,18 @@ const EMPTY: Filters = {
 
 type GeoState = 'idle' | 'locating' | 'granted' | 'denied' | 'unsupported'
 
-export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
+export function FieldsExplorer({
+  fields,
+  claimStates,
+}: {
+  fields: PublicField[]
+  /**
+   * One claim state per field id, resolved on the server for the whole map.
+   * A plain object rather than a Map because this crosses the server/client
+   * boundary, and Next only serialises the object.
+   */
+  claimStates: Record<string, ListingClaimState>
+}) {
   const [program, setProgram] = useState<FieldProgram>('frc')
   const [filters, setFilters] = useState<Filters>(EMPTY)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -271,7 +283,11 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
         )}
       </div>
 
-      <FieldDialog field={fields.find((f) => f.id === openId) ?? null} onClose={() => setOpenId(null)} />
+      <FieldDialog
+        field={fields.find((f) => f.id === openId) ?? null}
+        claimState={(openId && claimStates[openId]) || 'signed_out'}
+        onClose={() => setOpenId(null)}
+      />
     </div>
   )
 }

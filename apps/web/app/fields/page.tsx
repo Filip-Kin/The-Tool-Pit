@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getPublishedFields } from '@/lib/queries/fields'
+import { listingClaimStates } from '@/lib/queries/listing-ownership'
 import { FieldsExplorer } from '@/components/fields/fields-explorer'
 
 export const metadata: Metadata = {
@@ -12,6 +13,9 @@ export const dynamic = 'force-dynamic'
 
 export default async function FieldsHomePage() {
   const fields = await getPublishedFields()
+  // One query for the whole map, so the dialog can offer ownership the moment
+  // a pin is clicked without a round trip per field.
+  const claimStates = Object.fromEntries(await listingClaimStates('field', fields.map((f) => f.id)))
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-6">
@@ -34,7 +38,7 @@ export default async function FieldsHomePage() {
           </Link>
         </div>
       ) : (
-        <FieldsExplorer fields={fields} />
+        <FieldsExplorer fields={fields} claimStates={claimStates} />
       )}
     </div>
   )
