@@ -18,6 +18,10 @@
  * That is safe because it never makes a judgement about funding: it only says
  * the fetch returned a bot wall, an error shell or an empty page, and the
  * reason is written to rejectionReason so an admin can see and reverse it.
+ *
+ * The page-shape gate that runs after it is NOT an exception. It writes a
+ * classification and stops there, exactly like the model would have, and the
+ * candidate still reaches a human on 'pending'.
  */
 import { getDb, grantCandidates, eq } from '@the-tool-pit/db'
 import type { RawGrantMetadata } from '@the-tool-pit/db'
@@ -26,6 +30,8 @@ import { stripToMainContent } from './strip.js'
 import {
   classifyGrantCandidate,
   detectGrantJunkPage,
+  detectGrantPageShape,
+  shapeClassification,
   GrantClassifierUnavailable,
 } from './classify.js'
 
@@ -149,7 +155,36 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
     return
   }
 
-  // 2. One model call.
+  // 2. Deterministic page-shape gate. Also free, and it answers the two
+  //    questions the URL already settles: a path ending /grants or /team-grants
+  //    is an index to crawl, and a legislature, a caucus press office or a
+  //    /news-release/ path is not somewhere a team applies. 13 of the first 89
+  //    "applicable grants" were one of those two, and none of them needed a
+  //    paid call to be recognised.
+  //
+  //    Unlike the junk gate this does NOT suppress. It writes the verdict and
+  //    leaves the row pending, so a human still routes the aggregator to
+  //    grant_sources, or publishes it anyway if the shape guard was wrong.
+  const shape = detectGrantPageShape(url)
+  if (shape) {
+    const shaped = shapeClassification(shape)
+    await db
+      .update(grantCandidates)
+      .set({
+        classification: shaped,
+        confidenceScore: 0,
+        status: 'pending',
+        rejectionReason: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(grantCandidates.id, candidateId))
+    console.log(
+      `[grant-enrich] ${candidateId} decided by shape gate (${shape.shape}), no model call: ${url}`,
+    )
+    return
+  }
+
+  // 3. One model call.
   let classification
   try {
     classification = await classifyGrantCandidate(candidate)
@@ -169,7 +204,7 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
     throw err
   }
 
-  // 3. Write the verdict. Status is 'pending' either way: a rejected candidate
+  // 4. Write the verdict. Status is 'pending' either way: a rejected candidate
   //    is still shown to a human, who suppresses it and thereby teaches the
   //    source's rejectCount what a noisy source looks like.
   await db

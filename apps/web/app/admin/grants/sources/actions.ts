@@ -25,6 +25,21 @@ interface GrantDiscoverPayload {
   sourceId?: string
 }
 
+/**
+ * Source kinds a connector actually answers to.
+ *
+ * ALSO SHARED WITH THE WORKER, and for the same reason as the queue name above:
+ * these are the keys of GRANT_DISCOVER_CONNECTORS in
+ * apps/worker/src/grants/discover.ts, which throws "Unknown grant discover
+ * connector" on anything else. GRANT_SOURCE_KINDS is deliberately longer than
+ * this list: 'aggregator' rows exist (the candidate queue creates them, see
+ * ../candidates/actions.ts routeGrantCandidateToSource) but nothing crawls them
+ * yet, and 'submission' and 'admin' are provenance labels rather than crawlers.
+ * Checking here turns a job that fails in a worker log into a sentence on the
+ * screen the admin is already looking at.
+ */
+const RUNNABLE_SOURCE_KINDS = new Set(['seed', 'web_search', 'team_sponsors', 'chief_delphi'])
+
 let _queue: Queue<GrantDiscoverPayload> | undefined
 
 function getDiscoverQueue(): Queue<GrantDiscoverPayload> {
@@ -60,6 +75,11 @@ export async function runGrantSource(sourceId: string): Promise<{ error?: string
     .limit(1)
   if (!source) return { error: 'Source not found.' }
   if (!source.enabled) return { error: `"${source.label}" is switched off. Enable it first if you want it to run.` }
+  if (!RUNNABLE_SOURCE_KINDS.has(source.kind)) {
+    return {
+      error: `No crawler answers to kind "${source.kind}" yet, so "${source.label}" cannot run. The row is a confirmed target waiting for one.`,
+    }
+  }
 
   try {
     await getDiscoverQueue().add('grant-discover', { connector: source.kind, sourceId: source.id })
