@@ -86,7 +86,7 @@ export function FieldCard({
       type="button"
       onClick={() => onSelect(field.id)}
       className={cn(
-        'flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors',
+        'flex w-full cursor-pointer items-start gap-3 rounded-lg border p-3 text-left transition-colors',
         selected ? 'border-primary bg-surface-2' : 'border-border-subtle bg-surface hover:bg-surface-2',
       )}
     >

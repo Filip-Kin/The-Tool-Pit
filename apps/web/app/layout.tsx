@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { SessionProvider } from '@/components/auth/session-provider'
 import { getCurrentUser } from '@/lib/auth/session'
+import { Analytics } from '@/components/layout/analytics'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -46,6 +47,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           {children}
         </SessionProvider>
+        <Analytics />
       </body>
     </html>
   )

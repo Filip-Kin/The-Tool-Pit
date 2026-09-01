@@ -6,9 +6,12 @@
 export function EventLegend() {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted">
+      {/* Not-yet-open leads, because it is the state that comes first in an
+          event's life and it reads as a lighter shade of open. */}
+      <LegendItem color="#a78bfa" size={14} label="Not yet open" />
       <LegendItem color="#7c3aed" size={16} label="Registration open" />
-      <LegendItem color="#f59e0b" size={14} label="Opens later" />
-      <LegendItem color="#ef4444" size={12} label="Closed or waitlist" />
+      <LegendItem color="#f59e0b" size={13} label="Waitlist" />
+      <LegendItem color="#ef4444" size={12} label="Closed" />
       <LegendItem color="#6b7280" size={11} label="Run, cancelled, or unknown" />
     </div>
   )

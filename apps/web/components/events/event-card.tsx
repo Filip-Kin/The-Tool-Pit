@@ -93,14 +93,25 @@ export function EventCard({
   const cost = costLabel(ev)
   const full = fullnessLabel(ev)
   const cancelled = ev.eventStatus === 'cancelled'
+  // Same fallback chain the detail view uses, so the card and the dialog never
+  // point at different places for the same event.
+  const registerHref = ev.registrationUrl ?? ev.website ?? ev.chiefDelphiUrl
+
   return (
+    // The border and background live on this wrapper, not on the button,
+    // because the Register link is a SIBLING of the button. An anchor nested
+    // inside a button is invalid HTML and the two click targets fight over the
+    // same tap.
+    <div
+      className={cn(
+        'rounded-lg border transition-colors',
+        selected ? 'border-primary bg-surface-2' : 'border-border-subtle bg-surface hover:bg-surface-2',
+      )}
+    >
     <button
       type="button"
       onClick={() => onSelect(ev.id)}
-      className={cn(
-        'flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors',
-        selected ? 'border-primary bg-surface-2' : 'border-border-subtle bg-surface hover:bg-surface-2',
-      )}
+      className="flex w-full cursor-pointer items-start gap-3 p-3 text-left"
     >
       <PinDot ev={ev} now={now} />
       <div className="min-w-0 flex-1">
@@ -152,6 +163,21 @@ export function EventCard({
         <FullnessBar ev={ev} />
       </div>
     </button>
+
+    {registerHref && !cancelled && (
+      <div className="px-3 pb-3">
+        <a
+          href={registerHref}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-primary-hover"
+        >
+          {ev.registrationUrl ? 'Register' : 'Event page'}
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      </div>
+    )}
+    </div>
   )
 }
 

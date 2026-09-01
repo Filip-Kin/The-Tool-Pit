@@ -90,8 +90,11 @@ export interface MarkerStyle {
 }
 
 const OPEN = '#7c3aed' // brand accent - taking registrations now
-const SHUT = '#ef4444' // error red - closed, or full and running a waitlist
-const NOT_OPEN_YET = '#f59e0b' // amber - opens later, which is not "you missed it"
+const NOT_OPEN_YET = '#a78bfa' // light accent - same family as open, because it
+                               // WILL open. Not amber and not red: neither
+                               // "something is wrong" nor "you missed it".
+const WAITLIST = '#f59e0b' // amber - full, but you can still get in line
+const CLOSED = '#ef4444' // error red - the door is shut
 const MOOT = '#6b7280' // grey - already run, cancelled, or nobody has told us
 
 export function eventMarkerStyle(ev: PublicEvent, now: Date): MarkerStyle {
@@ -104,8 +107,9 @@ export function eventMarkerStyle(ev: PublicEvent, now: Date): MarkerStyle {
     case 'not_open':
       return { color: NOT_OPEN_YET, size: 17 }
     case 'waitlist':
+      return { color: WAITLIST, size: 15 }
     case 'closed':
-      return { color: SHUT, size: 15 }
+      return { color: CLOSED, size: 14 }
     default:
       return { color: MOOT, size: 13 }
   }
@@ -207,7 +211,7 @@ export const EVENT_STATUS_LABEL: Record<EventStatus, string> = {
 }
 
 export const REGISTRATION_STATUS_LABEL: Record<RegistrationStatus, string> = {
-  not_open: 'Not open yet',
+  not_open: 'Not yet open',
   open: 'Registration open',
   waitlist: 'Waitlist',
   closed: 'Registration closed',
@@ -216,7 +220,7 @@ export const REGISTRATION_STATUS_LABEL: Record<RegistrationStatus, string> = {
 
 /** Short chip form of the registration state (no "Registration" prefix). */
 export const REGISTRATION_STATUS_SHORT: Record<RegistrationStatus, string> = {
-  not_open: 'Not open',
+  not_open: 'Not yet open',
   open: 'Open',
   waitlist: 'Waitlist',
   closed: 'Closed',
