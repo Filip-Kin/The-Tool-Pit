@@ -9,6 +9,7 @@ import type { GrantDiscoverPayload } from './grants/discover.js'
 import type { GrantEnrichPayload } from './grants/enrich.js'
 import type { GrantMonitorPayload } from './grants/monitor.js'
 import type { GrantMatchJobPayload } from './grants/matcher.js'
+import type { ListingDiscoverPayload } from './listings/discover.js'
 
 // One Redis connection for all queues
 const connection = getRedis()
@@ -176,6 +177,30 @@ export const grantDeadlineQueue = new Queue('grant-deadline-sweep', {
 
 // #endregion
 
+// #region off-season events and practice fields
+
+/**
+ * Discovery sweeps for both listing verticals. One queue, because the job is
+ * the same one either side: sweep, read deterministically, file a pending
+ * candidate. The connector name in the payload decides which candidate table
+ * the run writes to.
+ *
+ * Two attempts, the same reasoning as grant-discover: a connector run is a lot
+ * of network for one job, and three attempts against a source that is simply
+ * down triples the traffic we send it for nothing.
+ */
+export const listingDiscoverQueue = new Queue<ListingDiscoverPayload>('listing-discover', {
+  connection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 30000 },
+    removeOnComplete: { count: 100 },
+    removeOnFail: { count: 200 },
+  },
+})
+
+// #endregion
+
 /** Schedule recurring jobs. Call once on worker startup. */
 export async function scheduleRecurringJobs() {
   // Re-crawl fta.tools every 6 hours
@@ -321,6 +346,37 @@ export async function scheduleRecurringJobs() {
   await grantDeadlineQueue.upsertJobScheduler('grant-deadline-sweep', { every: 24 * 60 * 60 * 1000 }, {
     name: 'grant-deadline-sweep',
     data: {},
+  })
+
+  // --- Off-season events and practice fields ---
+  // Cron patterns, not `every`, for the reason spelled out above the grants
+  // block: `every` counts from the upsert, which is worker startup, so several
+  // dailies fire together on each deploy. These three are pinned to their own
+  // hours and slotted between the grant sweeps rather than on top of them.
+
+  // TBA off-season events. One request per season, structured JSON, no model
+  // call, and the tbaKey dedupe means a repeat run inserts nothing. Daily is
+  // what makes an event that was registered yesterday reviewable today.
+  await listingDiscoverQueue.upsertJobScheduler('listing-discover-tba-offseason', { pattern: '40 2 * * *' }, {
+    name: 'listing-discover-tba-offseason',
+    data: { connector: 'tba_offseason_events' },
+  })
+
+  // Chief Delphi off-season event threads. Twice a week, not daily: an
+  // announcement thread sits on the forum for weeks, so daily searching buys
+  // nothing and spends somebody else's bandwidth. Tuesday and Friday because
+  // events get announced on a working week.
+  await listingDiscoverQueue.upsertJobScheduler('listing-discover-cd-events', { pattern: '40 4 * * 2,5' }, {
+    name: 'listing-discover-cd-events',
+    data: { connector: 'cd_offseason_events' },
+  })
+
+  // Chief Delphi practice-field threads. Weekly, on a Sunday when the forum is
+  // quiet, and deliberately an hour clear of the grants Chief Delphi sweep at
+  // 05:10 so the two never queue requests at the same host at the same moment.
+  await listingDiscoverQueue.upsertJobScheduler('listing-discover-cd-fields', { pattern: '40 6 * * 0' }, {
+    name: 'listing-discover-cd-fields',
+    data: { connector: 'cd_practice_fields' },
   })
 
   // Drain queued alerts every 5 minutes. Alerts are written by other jobs and

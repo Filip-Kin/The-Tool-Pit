@@ -29,6 +29,41 @@ export type FieldAvailability = (typeof FIELD_AVAILABILITY)[number]
 export const FIELD_STATUSES = ['pending', 'published', 'suppressed'] as const
 export type FieldStatus = (typeof FIELD_STATUSES)[number]
 
-/** Where the listing came from. */
-export const FIELD_SOURCES = ['submission', 'seed', 'admin'] as const
+/**
+ * Where the listing came from. 'scrape' is a field a human promoted out of a
+ * practice_field_candidates row, so a reviewer can tell at a glance that the
+ * detail on it was read off someone else's post rather than typed by the team
+ * that owns the field.
+ */
+export const FIELD_SOURCES = ['submission', 'seed', 'admin', 'scrape'] as const
 export type FieldSource = (typeof FIELD_SOURCES)[number]
+
+// ---------------------------------------------------------------------------
+// Practice-field DISCOVERY (crawl) enums
+//
+// Separate axis from the tuples above: those describe a field a human already
+// owns, these describe a lead a crawler found that nobody has looked at.
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a practice-field lead came from.
+ *   chief_delphi - a forum thread offering field time.
+ *   seed         - a page a human pointed the crawler at.
+ *   admin        - filed by hand from the admin, for the audit trail.
+ */
+export const FIELD_CRAWL_SOURCE_KINDS = ['chief_delphi', 'seed', 'admin'] as const
+export type FieldCrawlSourceKind = (typeof FIELD_CRAWL_SOURCE_KINDS)[number]
+
+/**
+ * Review state of a discovered field lead. Nothing here is public: 'published'
+ * means a human promoted the lead into a practice_fields row, and that row
+ * carries its own separate moderation status.
+ */
+export const FIELD_CANDIDATE_STATUSES = [
+  'pending',
+  'matched',
+  'published',
+  'suppressed',
+  'duplicate',
+] as const
+export type FieldCandidateStatus = (typeof FIELD_CANDIDATE_STATUSES)[number]

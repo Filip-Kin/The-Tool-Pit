@@ -54,3 +54,35 @@ export type EventListingSource = (typeof EVENT_LISTING_SOURCES)[number]
 /** Review state of a scraped roster snapshot. Only 'approved' shows publicly. */
 export const ROSTER_SNAPSHOT_STATUSES = ['pending', 'approved', 'rejected'] as const
 export type RosterSnapshotStatus = (typeof ROSTER_SNAPSHOT_STATUSES)[number]
+
+// ---------------------------------------------------------------------------
+// Off-season event DISCOVERY (crawl) enums
+//
+// Discovery is a separate axis from the tuples above. Everything above
+// describes a LISTING a human already owns; everything below describes a LEAD
+// a crawler found and nobody has looked at yet.
+// ---------------------------------------------------------------------------
+
+/**
+ * Where an off-season event lead came from.
+ *   tba_offseason - TBA event_type 99 (offseason) / 100 (preseason).
+ *   chief_delphi  - a forum thread announcing an event.
+ *   seed          - a page a human pointed the crawler at.
+ *   admin         - filed by hand from the admin, for the audit trail.
+ */
+export const EVENT_LISTING_SOURCE_KINDS = ['tba_offseason', 'chief_delphi', 'seed', 'admin'] as const
+export type EventListingSourceKind = (typeof EVENT_LISTING_SOURCE_KINDS)[number]
+
+/**
+ * Review state of a discovered event lead. NOTHING in this tuple is public:
+ * 'published' means a human promoted the lead into an event_listings row, and
+ * that row carries its own separate moderation status.
+ */
+export const EVENT_LISTING_CANDIDATE_STATUSES = [
+  'pending',
+  'matched',
+  'published',
+  'suppressed',
+  'duplicate',
+] as const
+export type EventListingCandidateStatus = (typeof EVENT_LISTING_CANDIDATE_STATUSES)[number]

@@ -22,11 +22,13 @@ import { processGrantAlertDrainJob } from './grants/alerts.js'
 import { processNotificationDrainJob } from './notifications/outbox.js'
 import { processGrantDeadlineSweepJob } from './grants/deadline-sweeper.js'
 import { enqueueDueGrantMonitors } from './grants/cadence.js'
+import { processListingDiscoverJob } from './listings/discover.js'
 import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload, AlbumIngestPayload, AlbumEnrichPayload } from '@the-tool-pit/types'
 import type { GrantDiscoverPayload } from './grants/discover.js'
 import type { GrantEnrichPayload } from './grants/enrich.js'
 import type { GrantMonitorPayload } from './grants/monitor.js'
 import type { GrantMatchJobPayload } from './grants/matcher.js'
+import type { ListingDiscoverPayload } from './listings/discover.js'
 
 const connection = getRedis()
 const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY ?? '2', 10)
@@ -212,8 +214,39 @@ const grantDeadlineWorker = new Worker(
 
 // #endregion
 
+// #region off-season events and practice fields
+
+const listingDiscoverWorker = new Worker<ListingDiscoverPayload>(
+  'listing-discover',
+  async (job) => {
+    console.log(`[listing-discover] processing job ${job.id} connector=${job.data.connector}`)
+    const outcome = await processListingDiscoverJob(job.data)
+
+    // Nothing is enqueued from here. Every connector in this vertical is
+    // deterministic, so there is no classification step and no Anthropic
+    // spend: the candidates sit pending until a human opens the admin.
+    if (outcome.stats.limits.length > 0) {
+      console.warn(
+        `[listing-discover] ${outcome.connector} coverage limits: ${outcome.stats.limits.join('; ')}`,
+      )
+    }
+    for (const err of outcome.stats.errors) {
+      console.error(`[listing-discover] ${outcome.connector} error: ${err}`)
+    }
+    console.log(
+      `[listing-discover] ${outcome.connector} filed ${outcome.insertedCandidateIds.length} ${outcome.vertical} candidates for review`,
+    )
+  },
+  // Serial. Both Chief Delphi connectors pace themselves inside the Discourse
+  // client, and two of them running at once would double the request rate at
+  // one volunteer-run forum, which is the pacing the client exists to hold.
+  { connection, concurrency: 1 },
+)
+
+// #endregion
+
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -247,6 +280,7 @@ async function shutdown() {
     grantMatchWorker.close(),
     grantAlertWorker.close(),
     grantDeadlineWorker.close(),
+    listingDiscoverWorker.close(),
   ])
   process.exit(0)
 }
