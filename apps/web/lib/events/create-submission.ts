@@ -20,6 +20,7 @@ import {
   EVENT_STATUS_LABEL,
   REGISTRATION_STATUS_LABEL,
 } from '@/lib/events/event-display'
+import { wrapLongitude } from '@/lib/geo/longitude'
 
 export interface CreateEventSubmissionInput {
   name: string
@@ -100,7 +101,12 @@ export async function createEventSubmission(
   const db = getDb()
 
   const lat = typeof input.latitude === 'number' && Math.abs(input.latitude) <= 90 ? input.latitude : null
-  const lng = typeof input.longitude === 'number' && Math.abs(input.longitude) <= 180 ? input.longitude : null
+  // Folded, not dropped. A longitude arriving outside [-180, 180] is a real
+  // position on a repeated copy of the world, and discarding it filed the
+  // record with NO coordinates at all, so the pin never appeared again and
+  // nothing said why. The client normalises too; this is the backstop, and it
+  // is the one that matters because an API caller never touches the picker.
+  const lng = typeof input.longitude === 'number' ? wrapLongitude(input.longitude) : null
 
   const hostTeamNumber =
     typeof input.hostTeamNumber === 'number' && Number.isInteger(input.hostTeamNumber) && input.hostTeamNumber > 0

@@ -3,6 +3,7 @@ import { getDb } from '@/lib/db'
 import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import type { FieldEditProposalData } from '@the-tool-pit/db'
 import { sendApprovalNotice, reviewFieldEditUrl } from '@the-tool-pit/types'
+import { wrapLongitude } from '@/lib/geo/longitude'
 
 export interface CreateFieldEditInput {
   name?: string
@@ -71,7 +72,12 @@ export async function createFieldEditProposal(
   if (!name) return { status: 'error', message: 'A field name is required.' }
 
   const lat = typeof input.latitude === 'number' && Math.abs(input.latitude) <= 90 ? input.latitude : null
-  const lng = typeof input.longitude === 'number' && Math.abs(input.longitude) <= 180 ? input.longitude : null
+  // Folded, not dropped. A longitude arriving outside [-180, 180] is a real
+  // position on a repeated copy of the world, and discarding it filed the
+  // record with NO coordinates at all, so the pin never appeared again and
+  // nothing said why. The client normalises too; this is the backstop, and it
+  // is the one that matters because an API caller never touches the picker.
+  const lng = typeof input.longitude === 'number' ? wrapLongitude(input.longitude) : null
   const teamNumber =
     typeof input.teamNumber === 'number' && Number.isInteger(input.teamNumber) && input.teamNumber > 0 ? input.teamNumber : null
   const ceiling =
