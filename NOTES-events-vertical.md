@@ -82,6 +82,32 @@ CONCLUSION for Filip: the fullness number will come mostly from TBA, reliably, o
 is coded there. Live pre-registration scraping of arbitrary offseason sites is not tractable
 in general; it works only where the organiser publishes a roster page, and those are gated.
 
+## FINAL STATUS: vertical built end to end, on branch feat/events-vertical. NOT deployed.
+Commits: 97a2e09 schema, 19cfcca read path + registration, daed75b submit flow,
+dfd4732 admin, e427b08 seed, plus the roster-sync script. type-check green, `bun run build`
+= "Compiled successfully" with /events, /events/[id], /events/submit, /admin/event-listings,
+/api/events/submit all present.
+
+### What Filip needs to do to make it live (NOT done this session, by instruction):
+1. Apply migration 0011_abandoned_red_wolf.sql to prod (additive; two new tables). Use the
+   same SSH-tunnel drizzle-kit migrate the other verticals used (see project memory).
+2. Run the seed: `DATABASE_URL=... bun scripts/seed-offseason-events.ts` (inserts 16 pending).
+3. Publish the events in /admin/event-listings (they have coords already, so they map at once).
+4. Run `DATABASE_URL=... TBA_API_KEY=... bun scripts/sync-event-rosters.ts` to fill counts
+   (and cron it, e.g. daily). Optionally set EVENT_SUBMISSION_DISCORD_WEBHOOK on the web app.
+
+### Questions for Filip (genuinely need him):
+- The sheet had "CD Post" as the link for Kettering Kickoff and AllStar (a Chief Delphi thread,
+  no URL captured). Those two have no website/chiefDelphiUrl set. Paste the CD thread URLs in
+  admin if you want them clickable.
+- Grand Rapids Girls had no capacity on the sheet ("?"), left null. Bloomfield "Reg opens 8/1"
+  -> registrationStatus not_open + registrationOpensAt 2026-08-01.
+- Kettering Kickoff is a 2-day event that TBA splits into 2026mifli1 (Day 1) and mifli2 (Day 2);
+  the listing links mifli1. If you'd rather it summed both days' rosters, say so.
+- The other verticals' headers/[id] pages use root-relative `/` and `/submit`, which resolve to
+  the TOOLS host in path mode (a latent bug from the subdomain era). I used /events-prefixed
+  links so /events is correct; I did NOT touch fields/grants (not my files). Worth a look.
+
 ## Build progress
 - [x] schema + migration 0011_abandoned_red_wolf.sql (committed 97a2e09). Additive only.
 - [x] read path: display helpers, query, map/card/dialog/legend/explorer, layout/header,
@@ -91,9 +117,10 @@ in general; it works only where the organiser publishes a roster page, and those
 - [ ] admin moderation page.
 - [ ] seed the 17 Michigan events from the sheet (status pending, source seed, no coords -
       admin drops pins, exactly like fields seed).
-- [ ] worker: TBA roster connector (match listing -> events by tbaKey, pull roster, set
-      registeredTeamCount directly since TBA is authoritative) + opportunistic per-site
-      scraper writing pending roster snapshots for admin review.
+- [x] fullness pipeline: scripts/sync-event-rosters.ts (TBA roster -> approved snapshot ->
+      denormalised registeredTeamCount). Verified live counts. Per-site scraping deliberately
+      NOT built (verified unreliable); it belongs behind an admin-set rosterUrl + review gate
+      as a future extension. BullMQ/scheduler wiring left as follow-up (script is cron-safe).
 
 ## Migration NOT yet applied to prod (do not deploy this session). 0011 needs the same
 ## SSH-tunnel drizzle-kit migrate the other verticals used. Left for Filip / deploy step.
