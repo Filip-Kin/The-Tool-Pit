@@ -48,11 +48,39 @@ Branch feat/events-vertical, worktree .../ttp-worktrees/events. Do NOT merge/dep
   + each vertical's MobileNav list. Header/layout mirror app/grants/. Wordmark -> `/events`,
   submit -> `/events/submit` (NOT root-relative `/` - that would hit the tools host).
 
-### Scrape design + what is actually scrapable
-- Deterministic first (no AI): fetch the event's registration/teams page, parse a team list
-  with node-html-parser + regex for "frc\d+" / a 3-5 digit number next to a team name.
-  Verification of specific sites is the NEXT step (curl each event link, see notes below).
-- "CD Post" events have no roster page -> no scrape, count stays null.
+### Scrape / fullness - VERIFIED 2026-09-01 (this is the corrected design)
+Two sources, TBA is the good one:
+
+1. **TBA roster is the PRIMARY, reliable fullness source.** TBA lists MI offseason events
+   under `state_prov: "MI"` (NOT "Michigan" - my first query mis-filtered). Counts:
+   16 MI offseason events in 2025, 10 already in 2026. Completed events have full rosters
+   (`event/2025marc/teams/keys` = 24 teams, `2025midet1` = 25). event_type 99 offseason,
+   100 preseason. So: match each listing to its TBA event via `tbaKey`, pull the roster,
+   done. Free, deterministic, no fragility. TBA is authoritative (same trust the photos
+   vertical gives it), so a TBA roster count populates `registeredTeamCount` DIRECTLY,
+   unmoderated - it is NOT the junk-scrape path the review gate exists to stop.
+   Of the sheet's 17, ~half are in TBA now (2026marc, mifli1/2, mibr Ferris, mibro1
+   Goonettes, mirr Rainbow, miwrc Wolverine, mibe Mos Eisley, ketwkz1/2). The rest are
+   not-yet-coded, later-season, or cancelled events TBA will never list.
+
+2. **Per-site HTML scraping is UNRELIABLE - verified, do not oversell it.** Curled the
+   upcoming event sites from the sheet:
+   - c3robots.org (200): only 4 "Team NNNN" in HTML, a sponsor/testimonial block, NOT the
+     40-slot roster. The real roster is not in the static HTML.
+   - goonettesinvitational.org (200): only the host team 3604. No roster.
+   - westmifirst.org/wmri, flowcode (FSU Roboday), monroecountymarc.wixsite (MARC): Wix /
+     flowcode, JS-rendered, no teams in raw HTML.
+   - mez.engin.umich.edu/dcc (DCC), girlsrobotics.org: HTTP 403, bot-gated.
+   So a generic team-list scraper across these sites does NOT work. It is the FALLBACK
+   only: an admin sets a per-listing `rosterUrl` for the rare event that publishes a real
+   roster page, we parse it deterministically (node-html-parser + `frc\d+` / "Team NNNN"),
+   write a snapshot, and it goes through the review gate before showing. `playwright-render`
+   connector exists for JS pages but is heavy; not wired by default.
+   - "CD Post" events (Kettering Kickoff etc.) have no site roster at all -> TBA or nothing.
+
+CONCLUSION for Filip: the fullness number will come mostly from TBA, reliably, once an event
+is coded there. Live pre-registration scraping of arbitrary offseason sites is not tractable
+in general; it works only where the organiser publishes a roster page, and those are gated.
 
 ## Next concrete step
 Build `event-enums.ts` + `event_listings`/`event_roster_snapshots` schema, generate migration,

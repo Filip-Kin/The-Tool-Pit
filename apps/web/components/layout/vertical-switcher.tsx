@@ -1,5 +1,5 @@
 import { headers } from 'next/headers'
-import { Wrench, Camera, MapPin, CircleDollarSign, Code2, ChevronLeft } from 'lucide-react'
+import { Wrench, Camera, MapPin, CircleDollarSign, Code2, CalendarDays, ChevronLeft } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
 /**
@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils/cn'
  * see. Buttons under the search bar have room for real labels.
  */
 
-export type VerticalKey = 'tools' | 'photos' | 'fields' | 'grants' | 'code'
+export type VerticalKey = 'tools' | 'photos' | 'fields' | 'grants' | 'code' | 'events'
 
 interface Vertical {
   key: VerticalKey
@@ -36,6 +36,9 @@ const VERTICALS: Vertical[] = [
   // it is browsed by team and season rather than searched by what a tool does,
   // and it has its own submission route.
   { key: 'code', label: 'Robot Code', slug: 'robot-code' },
+  // Off-season events: a map of off-season competitions, with cost, capacity
+  // and registration state, leading with what is coming up next.
+  { key: 'events', label: 'Events', slug: 'events' },
 ]
 
 /** Kept apart from VERTICALS so the footer form, which has no icons, does not carry them. */
@@ -45,6 +48,7 @@ const VERTICAL_ICONS: Record<VerticalKey, typeof Wrench> = {
   fields: MapPin,
   grants: CircleDollarSign,
   code: Code2,
+  events: CalendarDays,
 }
 
 /** Leading host labels the middleware treats as a vertical rather than as part of the base domain. */

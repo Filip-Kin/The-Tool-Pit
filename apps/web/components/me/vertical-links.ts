@@ -12,7 +12,7 @@
  */
 
 export interface VerticalLink {
-  key: 'tools' | 'photos' | 'fields' | 'grants' | 'code'
+  key: 'tools' | 'photos' | 'fields' | 'grants' | 'code' | 'events'
   name: string
   /** One line, written for someone who has never used the site. */
   blurb: string
@@ -31,6 +31,7 @@ export const PHOTOS_ORIGIN = '/photos'
 export const FIELDS_ORIGIN = '/fields'
 export const GRANTS_ORIGIN = '/grants'
 export const CODE_ORIGIN = '/robot-code'
+export const EVENTS_ORIGIN = '/events'
 
 export const VERTICALS: VerticalLink[] = [
   {
@@ -62,6 +63,12 @@ export const VERTICALS: VerticalLink[] = [
     name: 'Robot Code / CAD',
     blurb: 'Open-source robot code and CAD other teams have published, by team number and season.',
     href: CODE_ORIGIN,
+  },
+  {
+    key: 'events',
+    name: 'Off-Season Events',
+    blurb: 'Off-season competitions on a map, with cost, capacity and registration status. Save the ones near you.',
+    href: EVENTS_ORIGIN,
   },
 ]
 
