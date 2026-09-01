@@ -6,6 +6,8 @@ import { getCurrentUser } from '@/lib/auth/session'
 import { getGrantApplyContext, getGrantBySlug, isGrantFavorited, isGrantWatched } from '@/lib/queries/grants'
 import { listProfilesForUser } from '@/app/me/team/profile/queries'
 import { buildPrefillUrl } from '@/lib/grants/prefill'
+import { ButtonLink } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { getVerticalLinks } from '@/components/layout/vertical-switcher'
 import { ApplyPanel } from '@/components/grants/apply-panel'
 import { GrantCycles } from '@/components/grants/grant-cycles'
@@ -136,7 +138,7 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
             one fact that tells a team how much to trust the dates below it, and
             burying it would be the same as not saying it.
           */}
-          <div className="flex items-start gap-2 rounded-lg border border-border-subtle bg-surface p-3 text-sm">
+          <Card pad="sm" className="flex items-start gap-2 text-sm">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-rookie" aria-hidden />
             {verified ? (
               <span className="text-foreground">
@@ -148,9 +150,9 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
                 Not yet confirmed by a person. Check the funder&apos;s page before you rely on anything here.
               </span>
             )}
-          </div>
+          </Card>
 
-          <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
+          <Card className="flex flex-col gap-3">
             <Fact icon={<CalendarClock className="h-4 w-4" />} label="Deadline">
               <span className="text-foreground">{DEADLINE_STATE_LABEL[resolved.state]}</span>
               {deadline && (
@@ -183,17 +185,12 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
                 </span>
               </Fact>
             )}
-          </div>
+          </Card>
 
           <div className="flex flex-col gap-3">
-            <a
-              href={grant.infoUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-2"
-            >
+            <ButtonLink href={grant.infoUrl} external variant="secondary">
               Read the funder&apos;s page <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-            </a>
+            </ButtonLink>
 
             <SaveGrantButton
               grantId={grant.id}

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ShieldCheck } from 'lucide-react'
+import { ButtonLink } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { listGrants } from '@/lib/queries/grants'
 import { GrantsExplorer } from '@/components/grants/grants-explorer'
 
@@ -47,7 +49,7 @@ export default async function GrantsHomePage() {
  */
 function EmptyState() {
   return (
-    <div className="flex flex-col gap-6 rounded-lg border border-border-subtle bg-surface p-8">
+    <Card pad="lg" className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold text-foreground">Nothing published yet</h2>
         <p className="text-sm text-muted">
@@ -68,16 +70,11 @@ function EmptyState() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Link
-          href="/grants/submit"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover"
-        >
-          Submit a grant you know of
-        </Link>
+        <ButtonLink href="/grants/submit">Submit a grant you know of</ButtonLink>
         <span className="text-sm text-muted-2">
           No account needed. Tell us the page and we will do the checking.
         </span>
       </div>
-    </div>
+    </Card>
   )
 }

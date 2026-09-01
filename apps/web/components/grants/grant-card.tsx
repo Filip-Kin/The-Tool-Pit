@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { CalendarClock, Coins, Globe2, Gauge, ShieldCheck } from 'lucide-react'
+import { cardClass } from '@/components/ui/card'
 import { cn } from '@/lib/utils/cn'
 import type { PublicGrant } from '@/lib/grants/grant-display'
 import {
@@ -42,12 +43,12 @@ export function GrantCard({ grant, now }: { grant: PublicGrant; now: Date }) {
   return (
     <Link
       href={`/grants/${grant.slug}`}
-      className={cn(
-        'flex flex-col gap-3 rounded-lg border p-4 transition-colors',
-        closed
-          ? 'border-border-subtle bg-surface/60 hover:border-border hover:bg-surface'
-          : 'border-border-subtle bg-surface hover:border-border hover:bg-surface-2',
-      )}
+      // A closed grant keeps its place in the list at a lower contrast, so the
+      // only thing it changes about the shell is the background.
+      className={cardClass({
+        interactive: true,
+        className: cn('flex flex-col gap-3', closed && 'bg-surface/60'),
+      })}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Bookmark } from 'lucide-react'
+import { buttonClass } from '@/components/ui/button'
 import { cn } from '@/lib/utils/cn'
 import { useSession } from '@/components/auth/session-provider'
 import { SignInDialog } from '@/components/auth/sign-in-dialog'
@@ -122,13 +123,17 @@ export function SaveGrantButton({
         disabled={busy}
         aria-pressed={saved}
         aria-busy={busy || loading}
-        className={cn(
-          'inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60',
-          saved
-            ? 'border-primary bg-primary/15 text-primary'
-            : 'border-border bg-surface text-foreground hover:bg-surface-2',
-          error && 'border-frc/60 text-frc',
-        )}
+        // Saved and unsaved are two tones of one box, and a failed save turns
+        // the border red without moving anything, so it takes the classes
+        // rather than the component.
+        className={buttonClass({
+          variant: 'none',
+          className: cn(
+            'border',
+            saved ? 'border-primary bg-primary/15 text-primary' : 'border-border bg-surface text-foreground hover:bg-surface-2',
+            error && 'border-frc/60 text-frc',
+          ),
+        })}
       >
         <Bookmark className={cn('h-4 w-4', saved && 'fill-current')} aria-hidden />
         {saved ? 'Saved' : 'Save this grant'}

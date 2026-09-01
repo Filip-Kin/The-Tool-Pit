@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import { Check, Copy, ExternalLink, Info, PencilLine, UserPlus } from 'lucide-react'
+import { Button, ButtonLink, buttonClass } from '@/components/ui/button'
+import { cardClass } from '@/components/ui/card'
 import { cn } from '@/lib/utils/cn'
 import { SignInDialog } from '@/components/auth/sign-in-dialog'
 import { useSession } from '@/components/auth/session-provider'
@@ -67,7 +69,7 @@ export function ApplyPanel({
   const signedIn = !!user
 
   return (
-    <section className="rounded-lg border border-border-subtle bg-surface p-4">
+    <section className={cardClass()}>
       <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Apply</h2>
 
       {!signedIn && !loading && (
@@ -123,14 +125,10 @@ function SignedOutState({
     <div className="mt-3">
       <p className="text-sm text-muted">{offerText(mappedFieldCount, prefillableFieldCount)}</p>
       <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={onSignIn}
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
-        >
+        <Button onClick={onSignIn}>
           <UserPlus className="h-4 w-4" />
           Sign in to prepare this
-        </button>
+        </Button>
         <OpenPlainLink url={applicationUrl} />
       </div>
     </div>
@@ -156,13 +154,10 @@ function NoProfileState({
         {offerText(mappedFieldCount, prefillableFieldCount)}
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
-        <a
-          href={profileHref}
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
-        >
+        <ButtonLink href={profileHref}>
           <PencilLine className="h-4 w-4" />
           Set up a team profile
-        </a>
+        </ButtonLink>
         <OpenPlainLink url={applicationUrl} />
       </div>
     </div>
@@ -189,15 +184,10 @@ function ReadyState({
 
       <div className="mt-4 flex flex-wrap gap-2">
         {prefill.url ? (
-          <a
-            href={prefill.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
-          >
+          <ButtonLink href={prefill.url} external>
             <ExternalLink className="h-4 w-4" />
             {filled > 0 ? 'Start application (pre-filled)' : 'Open the application'}
-          </a>
+          </ButtonLink>
         ) : (
           <span className="text-sm text-muted-2">
             We have no application link for {grantName} yet. Check the funder’s page above.
@@ -301,10 +291,12 @@ function CopyButton({ text, label }: { text: string; label: string }) {
     <button
       type="button"
       onClick={() => void copy()}
-      className={cn(
-        'inline-flex shrink-0 items-center gap-1.5 rounded border border-border px-2 py-1 text-xs transition-colors',
-        copied ? 'text-green-400' : 'text-muted hover:text-foreground',
-      )}
+      // sm, not md: two of these sit on one row inside a list of answers.
+      className={buttonClass({
+        variant: 'none',
+        size: 'sm',
+        className: cn('border border-border', copied ? 'text-green-400' : 'text-muted hover:text-foreground'),
+      })}
     >
       {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
       {copied ? 'Copied' : label}
@@ -350,15 +342,10 @@ async function writeClipboard(text: string): Promise<boolean> {
 function OpenPlainLink({ url }: { url: string | null }) {
   if (!url) return null
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted transition-colors hover:text-foreground"
-    >
+    <ButtonLink href={url} external variant="secondary">
       <ExternalLink className="h-4 w-4" />
       Open the application
-    </a>
+    </ButtonLink>
   )
 }
 
