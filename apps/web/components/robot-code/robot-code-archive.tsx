@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils/cn'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import type { RobotCodeProgram, RobotCodeTeam, RobotCodeEntry } from '@/lib/queries/robot-code'
 
 const PROGRAMS: { value: RobotCodeProgram; label: string }[] = [
@@ -55,72 +56,58 @@ export function RobotCodeArchive({ teams, program }: Props) {
         </p>
       </div>
 
-      {/* Program switch + team filter */}
+      {/* One control row: program, team, season, then the call to action. Every
+          box in it is 2.375rem tall (the `.input` height, which the segmented
+          control matches), because the old row mixed pill buttons, a pill input
+          and a third radius and read as three unrelated things. */}
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-full border border-border bg-surface p-0.5">
-          {PROGRAMS.map((p) => (
-            <button
-              key={p.value}
-              onClick={() => router.push(`/robot-code?program=${p.value}`)}
-              className={cn(
-                'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                program === p.value ? 'bg-primary/15 text-primary' : 'text-muted hover:text-foreground',
-              )}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-        <input
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          inputMode="numeric"
-          placeholder="Filter team #"
-          className="w-32 rounded-full border border-border bg-surface px-3 py-1 text-xs text-foreground placeholder:text-muted-2 focus:outline-none focus:border-primary"
+        <SegmentedControl
+          label="Program"
+          options={PROGRAMS}
+          value={program}
+          onChange={(value) => router.push(`/robot-code?program=${value}`)}
         />
+
+        <div className="w-28">
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            inputMode="numeric"
+            placeholder="Team #"
+            aria-label="Filter by team number"
+            className="input"
+          />
+        </div>
+
+        {/* A dropdown, not twenty chips: seasons only grow, and three wrapped
+            rows of them drowned the two controls people actually reach for. */}
+        {years.length > 0 && (
+          <div className="w-32">
+            <select
+              value={year ?? ''}
+              onChange={(e) => setYear(e.target.value === '' ? null : Number(e.target.value))}
+              aria-label="Season"
+              className="input"
+            >
+              <option value="">All seasons</option>
+              {years.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Submit lives on this page because someone looking for their team's
             code and not finding it is exactly the person who can add it. */}
         <Link
           href="/robot-code/submit"
-          className="ml-auto rounded-full bg-primary px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-primary-hover"
+          className="ml-auto shrink-0 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
         >
           Add your team&apos;s code or CAD
         </Link>
       </div>
-
-      {/* Season filter */}
-      {years.length > 0 && (
-        <div className="mb-6 flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-xs font-medium text-muted-2">Season</span>
-          <button
-            onClick={() => setYear(null)}
-            className={cn(
-              'rounded-md border px-2 py-0.5 text-xs tabular-nums transition-colors',
-              year === null
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border bg-surface text-muted hover:border-primary hover:text-primary',
-            )}
-          >
-            All
-          </button>
-          {years.map((y) => (
-            <button
-              key={y}
-              onClick={() => setYear(y === year ? null : y)}
-              aria-pressed={y === year}
-              className={cn(
-                'rounded-md border px-2 py-0.5 text-xs tabular-nums transition-colors',
-                y === year
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-surface text-muted hover:border-primary hover:text-primary',
-              )}
-            >
-              {y}
-            </button>
-          ))}
-        </div>
-      )}
 
       {filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-12 text-center">

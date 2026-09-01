@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { cn } from '@/lib/utils/cn'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 
 // Cloudflare Turnstile API injected by their script (shared shape with the tools form).
 declare global {
@@ -200,21 +200,15 @@ export function AlbumSubmitForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <Field label="Program">
-        <div className="inline-flex rounded-lg border border-border bg-surface p-0.5">
-          {(['frc', 'ftc'] as Program[]).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => switchProgram(p)}
-              className={cn(
-                'rounded-md px-4 py-1.5 text-sm font-medium uppercase transition-colors',
-                program === p ? 'bg-primary text-white' : 'text-muted hover:text-foreground',
-              )}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Program"
+          options={[
+            { value: 'frc', label: 'FRC' },
+            { value: 'ftc', label: 'FTC' },
+          ]}
+          value={program}
+          onChange={switchProgram}
+        />
       </Field>
 
       <Field label="Album URL" required>

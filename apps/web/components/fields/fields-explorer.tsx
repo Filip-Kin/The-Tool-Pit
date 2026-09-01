@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Search, SlidersHorizontal, LocateFixed, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import type { PublicField, DistanceUnit } from '@/lib/fields/field-display'
 import {
   COVERAGE_LABEL,
@@ -19,10 +20,10 @@ import { FieldLegend } from './field-legend'
 import { FieldDialog } from './field-dialog'
 
 // FRC first and foremost: it's the default program; FTC/FLL are secondary tabs.
-const PROGRAMS: { key: FieldProgram; label: string }[] = [
-  { key: 'frc', label: 'FRC' },
-  { key: 'ftc', label: 'FTC' },
-  { key: 'fll', label: 'FLL' },
+const PROGRAMS: { value: FieldProgram; label: string }[] = [
+  { value: 'frc', label: 'FRC' },
+  { value: 'ftc', label: 'FTC' },
+  { value: 'fll', label: 'FLL' },
 ]
 
 // The map only runs in the browser (Leaflet touches window), so load it client-only.
@@ -155,22 +156,12 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
           above the list on mobile; grid placement restores the two-column
           layout (controls + list on the left, map on the right) on desktop. */}
       <div className="flex min-w-0 flex-col gap-3 lg:col-start-1 lg:row-start-1">
-        <div className="inline-flex max-w-full self-start overflow-x-auto rounded-lg border border-border bg-surface p-0.5">
-          {PROGRAMS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => { setProgram(p.key); setSelectedId(null) }}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                p.key === program ? 'bg-primary text-white' : 'text-muted hover:text-foreground',
-              )}
-            >
-              {p.label}
-              {programCounts[p.key] ? <span className={cn('ml-1.5 text-xs', p.key === program ? 'text-white/70' : 'text-muted-2')}>{programCounts[p.key]}</span> : null}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Program"
+          options={PROGRAMS.map((p) => ({ ...p, count: programCounts[p.value] }))}
+          value={program}
+          onChange={(v) => { setProgram(v); setSelectedId(null) }}
+        />
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-2" />
@@ -274,7 +265,7 @@ export function FieldsExplorer({ fields }: { fields: PublicField[] }) {
         {filtered.length === 0 && (
           <p className="rounded-lg border border-border-subtle bg-surface p-6 text-center text-sm text-muted-2">
             {(programCounts[program] ?? 0) === 0
-              ? `No ${PROGRAMS.find((p) => p.key === program)?.label ?? ''} fields on the map yet.`
+              ? `No ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} fields on the map yet.`
               : 'No fields match these filters yet.'}
           </p>
         )}

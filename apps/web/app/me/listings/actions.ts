@@ -54,6 +54,12 @@ export interface OwnershipActionResult {
   inviteUrl?: string
 }
 
+/**
+ * The shortest claim note an admin can actually act on. A claim with no proof
+ * behind it is a request, and a request with no words in it is unreviewable.
+ */
+const MIN_CLAIM_NOTE = 40
+
 /** The file we ask a repo owner to add, and the branches we look on. */
 const VERIFY_FILENAME = '.frc-tools-verify'
 const VERIFY_BRANCHES = ['main', 'master'] as const
@@ -105,10 +111,15 @@ function parseGithubRepo(url: string): { owner: string; repo: string } | null {
  * Picks the strongest verification path available and either grants ownership
  * on the spot (only when that path is real proof) or records a pending claim.
  * Never grants ownership of an already-owned listing.
+ *
+ * `note` is what the claimant says about themselves. It is REQUIRED on the
+ * review path, which is every claim we cannot check by machine, so nobody can
+ * file a wordless claim on a listing they have nothing to do with.
  */
 export async function startClaim(
   entityTypeRaw: string,
   entityId: string,
+  noteRaw?: string,
 ): Promise<OwnershipActionResult> {
   const user = await getCurrentUser()
   if (!user) return { error: 'Your session expired. Sign in again and retry.' }
@@ -187,20 +198,32 @@ export async function startClaim(
 
   // PATH 3: no automatic proof (album, non-repo tool, someone else's field), OR
   // the listing is already owned (a dispute). Held for an admin. No owner row.
-  const method = 'manual_review'
-  const note = target.alreadyOwned
-    ? 'This listing already has an owner. An admin will review your claim.'
-    : 'We cannot verify this one automatically, so an admin will review your claim.'
+  //
+  // This path asks for words because it has nothing else. The reviewer is a
+  // person deciding between two strangers, and an unexplained claim gives them
+  // nothing to decide on, so we refuse to file one. The note is never treated
+  // as proof: it only ever reaches an admin, and only an admin's approval
+  // writes an ownership row.
+  const note = (noteRaw ?? '').trim().slice(0, 1000)
+  if (note.length < MIN_CLAIM_NOTE) {
+    return {
+      error: `We cannot check this one automatically, so tell us how you run it and an admin will read it. At least ${MIN_CLAIM_NOTE} characters.`,
+    }
+  }
   await db.insert(listingClaims).values({
     entityType,
     entityId,
     userId: user.id,
-    method,
+    method: 'manual_review',
     status: 'pending',
-    evidence: { note: target.alreadyOwned ? 'dispute: listing already owned' : undefined },
+    evidence: { note },
   })
   revalidatePath('/me/listings')
-  return { message: note }
+  return {
+    message: target.alreadyOwned
+      ? 'This listing already has an owner, so an admin will review your claim.'
+      : 'Sent. An admin will review your claim.',
+  }
 }
 
 /**

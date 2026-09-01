@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { cn } from '@/lib/utils/cn'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 // Value tuples come from the zero-dependency enum subpaths (NOT the barrel),
 // so the DB client / postgres never lands in the client bundle. FIELD_PROGRAMS
 // is the shared three-program tuple, same slugs as the `programs` table.
@@ -200,26 +200,16 @@ export function RobotCodeSubmitForm() {
         {/* A group of buttons, not a <select>, because there are only two
             answers and this is the one the reviewer cannot check by opening the
             link: a repo of Onshape exports looks like any other team repo. */}
-        <div className="flex flex-col gap-1.5" role="group" aria-label="Is it code or CAD">
+        <div className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-foreground">
             Is it code or CAD<span className="text-frc"> *</span>
           </span>
-          <div className="inline-flex self-start rounded-full border border-border bg-surface p-0.5">
-            {ARTIFACT_KINDS.map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => set('artifactKind', k)}
-                aria-pressed={form.artifactKind === k}
-                className={cn(
-                  'rounded-full px-4 py-1 text-xs font-medium transition-colors',
-                  form.artifactKind === k ? 'bg-primary/15 text-primary' : 'text-muted hover:text-foreground',
-                )}
-              >
-                {KIND_LABEL[k]}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label="Is it code or CAD"
+            options={ARTIFACT_KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))}
+            value={form.artifactKind}
+            onChange={(v) => set('artifactKind', v)}
+          />
           <span className="text-xs text-muted-2">Both? Send the code link now and the CAD link after.</span>
         </div>
       </Section>

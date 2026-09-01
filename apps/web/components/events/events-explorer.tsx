@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Search, LocateFixed, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import type { PublicEvent, DistanceUnit } from '@/lib/events/event-display'
 import {
   eventTiming,
@@ -18,10 +19,10 @@ import { EventLegend } from './event-legend'
 import { EventDialog } from './event-dialog'
 
 // FRC first and foremost, matching the fields explorer.
-const PROGRAMS: { key: EventProgram; label: string }[] = [
-  { key: 'frc', label: 'FRC' },
-  { key: 'ftc', label: 'FTC' },
-  { key: 'fll', label: 'FLL' },
+const PROGRAMS: { value: EventProgram; label: string }[] = [
+  { value: 'frc', label: 'FRC' },
+  { value: 'ftc', label: 'FTC' },
+  { value: 'fll', label: 'FLL' },
 ]
 
 // The map only runs in the browser (Leaflet touches window), so load it client-only.
@@ -137,24 +138,12 @@ export function EventsExplorer({ events, now }: { events: PublicEvent[]; now: Da
     <div className="grid gap-4 lg:grid-cols-[360px_1fr] lg:items-start">
       {/* Controls */}
       <div className="flex min-w-0 flex-col gap-3 lg:col-start-1 lg:row-start-1">
-        <div className="inline-flex max-w-full self-start overflow-x-auto rounded-lg border border-border bg-surface p-0.5">
-          {PROGRAMS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => { setProgram(p.key); setSelectedId(null) }}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                p.key === program ? 'bg-primary text-white' : 'text-muted hover:text-foreground',
-              )}
-            >
-              {p.label}
-              {programCounts[p.key] ? (
-                <span className={cn('ml-1.5 text-xs', p.key === program ? 'text-white/70' : 'text-muted-2')}>{programCounts[p.key]}</span>
-              ) : null}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Program"
+          options={PROGRAMS.map((p) => ({ ...p, count: programCounts[p.value] }))}
+          value={program}
+          onChange={(v) => { setProgram(v); setSelectedId(null) }}
+        />
 
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
@@ -183,24 +172,28 @@ export function EventsExplorer({ events, now }: { events: PublicEvent[]; now: Da
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Segmented
+          <SegmentedControl
+            label="When"
+            size="sm"
             options={[
-              { key: 'upcoming', label: 'Upcoming' },
-              { key: 'past', label: 'Past' },
-              { key: 'all', label: 'All' },
+              { value: 'upcoming', label: 'Upcoming' },
+              { value: 'past', label: 'Past' },
+              { value: 'all', label: 'All' },
             ]}
             value={when}
-            onChange={(v) => setWhen(v as When)}
+            onChange={setWhen}
           />
           <Chip active={openOnly} onClick={() => setOpenOnly((v) => !v)}>Registration open</Chip>
           {userLoc && (
-            <Segmented
+            <SegmentedControl
+              label="Sort"
+              size="sm"
               options={[
-                { key: 'date', label: 'By date' },
-                { key: 'distance', label: 'Nearest' },
+                { value: 'date', label: 'By date' },
+                { value: 'distance', label: 'Nearest' },
               ]}
               value={sortBy}
-              onChange={(v) => setSortBy(v as SortBy)}
+              onChange={setSortBy}
             />
           )}
         </div>
@@ -235,9 +228,9 @@ export function EventsExplorer({ events, now }: { events: PublicEvent[]; now: Da
         {filtered.length === 0 && (
           <p className="rounded-lg border border-border-subtle bg-surface p-6 text-center text-sm text-muted-2">
             {(programCounts[program] ?? 0) === 0
-              ? `No ${PROGRAMS.find((p) => p.key === program)?.label ?? ''} events on the map yet.`
+              ? `No ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} events on the map yet.`
               : when === 'upcoming'
-                ? `No upcoming ${PROGRAMS.find((p) => p.key === program)?.label ?? ''} events. Try Past or All.`
+                ? `No upcoming ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} events. Try Past or All.`
                 : 'No events match these filters.'}
           </p>
         )}
@@ -253,34 +246,6 @@ export function EventsExplorer({ events, now }: { events: PublicEvent[]; now: Da
 
 function dateKey(iso: string | null): number {
   return iso ? new Date(`${iso}T00:00:00`).getTime() : 0
-}
-
-function Segmented<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { key: T; label: string }[]
-  value: T
-  onChange: (v: T) => void
-}) {
-  return (
-    <div className="inline-flex rounded-lg border border-border bg-surface p-0.5">
-      {options.map((o) => (
-        <button
-          key={o.key}
-          type="button"
-          onClick={() => onChange(o.key)}
-          className={cn(
-            'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-            o.key === value ? 'bg-primary text-white' : 'text-muted hover:text-foreground',
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
 }
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {

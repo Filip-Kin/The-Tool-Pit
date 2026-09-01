@@ -12,6 +12,10 @@ import type { ClaimableListing } from '@/lib/queries/listing-ownership'
  * you submitted, a repo token for a tool with a GitHub repo, a wait for a human
  * otherwise. Honesty here is the point, because a claim that quietly does
  * nothing is how people conclude the feature is broken.
+ *
+ * The review path asks for evidence in writing before it will send anything.
+ * The server enforces that too; this only saves the round trip and tells the
+ * person what a reviewer needs from them.
  */
 export function ClaimStarter({
   target,
@@ -23,19 +27,33 @@ export function ClaimStarter({
   startAction: (
     entityType: string,
     entityId: string,
+    note?: string,
   ) => Promise<{ error?: string; message?: string; verifyToken?: string }>
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
   const [msg, setMsg] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(null)
+  const [note, setNote] = useState('')
   const [err, setErr] = useState<string | null>(null)
+
+  // Which of the three paths this listing takes, worked out the same way the
+  // server does it, so the page never promises a path the action will not use.
+  // An existing owner outranks both automatic proofs: it makes the claim a
+  // dispute, and a dispute is always a person's decision.
+  const path = target.alreadyOwned
+    ? 'review'
+    : target.isSelfSubmitted
+      ? 'self'
+      : target.repoUrl
+        ? 'repo'
+        : 'review'
 
   function onStart() {
     setMsg(null)
     setErr(null)
     start(async () => {
-      const res = await startAction(target.entityType, target.entityId)
+      const res = await startAction(target.entityType, target.entityId, note.trim() || undefined)
       if (res.error) {
         setErr(res.error)
         return
@@ -48,13 +66,14 @@ export function ClaimStarter({
     })
   }
 
-  const how = target.isSelfSubmitted
-    ? 'You submitted this field, so claiming it makes you its owner right away.'
-    : target.repoUrl
-      ? 'This tool has a GitHub repo, so you can prove ownership by committing a token to it.'
-      : target.alreadyOwned
-        ? 'Someone already manages this listing, so your claim goes to a person to review.'
-        : 'We cannot verify this one automatically, so your claim goes to a person to review.'
+  const how =
+    path === 'self'
+      ? 'You submitted this field, so claiming it makes you its owner right away.'
+      : path === 'repo'
+        ? 'This tool has a GitHub repo, so you can prove ownership by committing a token to it.'
+        : target.alreadyOwned
+          ? 'Someone already manages this listing, so your claim goes to a person to review.'
+          : 'We cannot verify this one automatically, so your claim goes to a person to review.'
 
   return (
     <div className="rounded-lg border border-border-subtle bg-surface p-5">
@@ -63,6 +82,26 @@ export function ClaimStarter({
       {target.facts.subtitle && <p className="mt-1 text-sm text-muted">{target.facts.subtitle}</p>}
 
       <p className="mt-4 text-sm text-muted">{how}</p>
+
+      {path === 'review' && !token && (
+        <label className="mt-4 flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-foreground">
+            How you run it<span className="text-frc"> *</span>
+          </span>
+          <span className="text-xs text-muted-2">
+            Say who you are and what your connection to it is. A reviewer is deciding between you and
+            whoever else asks, and they can only go on what you tell them.
+          </span>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={4}
+            maxLength={1000}
+            placeholder="I am the lead mentor for team 5577 and I set this up. Our website lists me as the contact."
+            className="input"
+          />
+        </label>
+      )}
 
       {!token && (
         <button
