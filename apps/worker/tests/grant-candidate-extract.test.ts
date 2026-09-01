@@ -424,3 +424,33 @@ describe('shouldExtractCandidate', () => {
     expect(shouldExtractCandidate({ classification: { isGrant: true, isAnnouncement: true } })).toBe(false)
   })
 })
+
+describe('verifyQuote, typographic punctuation', () => {
+  // Real pages are full of curly apostrophes, en dashes and non-breaking
+  // spaces. The model writes the plain ascii versions back, and the check used
+  // to drop the field over the difference alone. 51 fields in the first 29
+  // production records went that way, deadlines among them.
+  const page = (body: string) => evidence(body)
+
+  it('matches a curly apostrophe against a straight one', () => {
+    expect(
+      verifyQuote("the end of FIRST's fiscal year", page('by June 30, the end of FIRST\u2019s fiscal year')),
+    ).toBe('funder_page')
+  })
+
+  it('matches an ascii hyphen against an en dash', () => {
+    expect(verifyQuote('October 1 - 31', page('Request periods: October 1 \u2013 31'))).toBe('funder_page')
+  })
+
+  it('matches across a non-breaking space', () => {
+    expect(verifyQuote('June 30, 2026', page('submitted by June\u00a030, 2026'))).toBe('funder_page')
+  })
+
+  it('still refuses a paraphrase', () => {
+    expect(verifyQuote('applications close at the end of June', page('Requests must be in by June 30'))).toBeNull()
+  })
+
+  it('still refuses a quote that is simply absent', () => {
+    expect(verifyQuote('awards up to $5,000', page('This programme supports robotics teams.'))).toBeNull()
+  })
+})

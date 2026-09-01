@@ -90,7 +90,30 @@ export interface GrantEvidence {
  * let a paraphrase pass as a quote, which is the one thing the check is for.
  */
 function normaliseForQuoteMatch(text: string): string {
-  return text.replace(/\s+/g, ' ').trim().toLowerCase()
+  return (
+    text
+      // Typographic characters, folded to their ascii twin on BOTH sides of the
+      // comparison. Real pages are full of curly apostrophes, en dashes and
+      // non-breaking spaces; the model writes the plain versions back. The
+      // check was losing correct data to that alone: 51 fields across the first
+      // 29 records were dropped as "quote is in neither text", including
+      // deadlines, which are the fields most worth having.
+      //
+      // This does not soften the check. A paraphrase still fails, because every
+      // word still has to be there in order. It only stops a quotation mark
+      // deciding whether a grant has a deadline.
+      .replace(/[\u2018\u2019\u201a\u201b\u2032]/g, "'")
+      .replace(/[\u201c\u201d\u201e\u201f\u2033]/g, '"')
+      .replace(/[\u2010-\u2015\u2212]/g, '-')
+      .replace(/\u2026/g, '...')
+      // Zero width joiners and marks carry no meaning and are invisible in the
+      // model's copy of the text.
+      .replace(/[\u200b-\u200d\ufeff]/g, '')
+      // Every kind of space, including nbsp and the thin spaces, collapses.
+      .replace(/[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+/g, ' ')
+      .trim()
+      .toLowerCase()
+  )
 }
 
 /**
