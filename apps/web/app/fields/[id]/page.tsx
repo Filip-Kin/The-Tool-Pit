@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { getPublishedFieldById } from '@/lib/queries/fields'
 import { FieldDetail } from '@/components/fields/field-card'
 import { ClaimListingButton } from '@/components/auth/claim-listing-button'
+import { listingClaimState } from '@/lib/queries/listing-ownership'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,8 @@ export default async function FieldDetailPage({ params }: { params: Promise<{ id
   const field = await getPublishedFieldById(id)
   if (!field) notFound()
 
+  const claimState = await listingClaimState('field', field.id)
+
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
       <Link href="/" className="text-sm text-muted hover:text-foreground">← Back to the map</Link>
@@ -29,7 +32,7 @@ export default async function FieldDetailPage({ params }: { params: Promise<{ id
       {/* Additive: anyone can still suggest an edit without an account. This is
           only a shortcut for the person who actually runs the field. */}
       <div className="mt-6">
-        <ClaimListingButton entityType="field" entityId={field.id} />
+        <ClaimListingButton entityType="field" entityId={field.id} state={claimState} />
       </div>
     </div>
   )

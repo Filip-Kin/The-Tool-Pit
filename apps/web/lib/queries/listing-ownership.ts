@@ -31,6 +31,7 @@ import {
   type OwnerLinkType,
 } from '@/components/me/listing-fields'
 import { displayEventName } from './albums'
+import { getCurrentUser } from '@/lib/auth/session'
 
 /**
  * Listing ownership reads.
@@ -320,6 +321,60 @@ export async function canEditListing(
 ): Promise<boolean> {
   const role = await getOwnerRole(userId, entityType, entityId)
   return role !== null && LISTING_WRITE_ROLES.includes(role)
+}
+
+/**
+ * What a public detail page should offer the visitor about ownership.
+ *
+ * The button used to render "Claim this listing" to anyone signed in, on every
+ * listing, including ones they already owned. So the site invited a person to
+ * claim a thing that was already theirs, which reads as broken however the
+ * claim page then behaves.
+ *
+ * Resolved on the server because all three inputs are server state: who is
+ * signed in, who owns the row, and whether this person has a claim in flight.
+ * A client component cannot know any of them without a round trip.
+ */
+export type ListingClaimState =
+  /** Nobody is signed in. Claiming needs an account, so offer nothing. */
+  | 'signed_out'
+  /** This visitor owns it. Offer the edit page instead. */
+  | 'owner'
+  /** This visitor has already asked. Say so rather than asking again. */
+  | 'claim_pending'
+  /** Someone else owns it. Not claimable, and not the visitor's business. */
+  | 'owned_by_other'
+  /** Nobody owns it and nothing is pending. This is the only claimable case. */
+  | 'claimable'
+
+export async function listingClaimState(
+  entityType: ListingEntityType,
+  entityId: string,
+): Promise<ListingClaimState> {
+  const user = await getCurrentUser()
+  if (!user) return 'signed_out'
+
+  const [role, owners, pending] = await Promise.all([
+    getOwnerRole(user.id, entityType, entityId),
+    countOwners(entityType, entityId),
+    getDb()
+      .select({ id: listingClaims.id })
+      .from(listingClaims)
+      .where(
+        and(
+          eq(listingClaims.userId, user.id),
+          eq(listingClaims.entityType, entityType),
+          eq(listingClaims.entityId, entityId),
+          eq(listingClaims.status, 'pending'),
+        ),
+      )
+      .limit(1),
+  ])
+
+  if (role !== null) return 'owner'
+  if (pending.length > 0) return 'claim_pending'
+  if (owners > 0) return 'owned_by_other'
+  return 'claimable'
 }
 
 /**
