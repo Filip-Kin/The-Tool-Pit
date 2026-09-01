@@ -48,14 +48,38 @@ export interface SearchResponse {
 /**
  * Full-text + trigram search with program-aware ranking boost.
  *
- * This runs entirely in Postgres. The ranking formula:
- *   score = ts_rank * 1.0
- *         + exact_title_boost * 0.5
- *         + program_boost * 0.4 (if program filter active)
- *         + popularity * 0.3
- *         + freshness_decay * 0.2
- *         + official_boost * 0.3
- *         + type_weight * 0.15
+ * This runs entirely in Postgres. The ranking formula, and every term in it is
+ * defined in full further down this file:
+ *
+ *   score = ts_rank_cd                                    (relevance, unweighted)
+ *         + exact_title_boost      0.5 on an exact name match
+ *         + program_boost          0.4 when a program filter is active
+ *         + freshness_score        active 0.25, stale 0.05, unknown 0.1,
+ *                                  archived -0.1, inactive -0.35
+ *         + official_boost         0.3
+ *         + popularity_norm        up to 0.35, log scaled
+ *         + type_weight            up to 0.15
+ *         + team_artifact_penalty  -0.25 unless a team filter is active
+ *
+ * POPULARITY IS NOT DECAYED HERE, and that is deliberate rather than an
+ * oversight. The Popular row multiplies a listing's score by a seasonal decay
+ * (see lib/ranking/seasonal-decay.ts). Search does not, for two reasons. Age is
+ * already represented in this formula, additively, by freshness_score, so
+ * multiplying popularity by decay as well would count it twice and quietly
+ * demote WPILib on a search for "wpilib". And it would not be felt anyway: the
+ * popularity term is log scaled over ln(1300), so halving a listing's score
+ * moves it by ln(2)/7.2 * 0.35, which is 0.034 points against relevance scores
+ * that range over half a point.
+ *
+ * The popularity weight stays at 0.35 for the same reason. Measured against
+ * production on "scouting", "swerve", "vision", "path planning" and
+ * "dashboard", relevance leads every one of them today, and raising the weight
+ * to 0.5 changes at most two adjacent places on any of those queries. What
+ * limits popularity's usefulness in search is not its weight, it is that the
+ * input was wrong: four of the fifty results across those queries scored zero
+ * because nobody had ever counted their stars or their forum likes. That is
+ * what the daily popularity refresh fixes, and it improves search without
+ * anyone touching a coefficient.
  */
 export async function searchTools(params: SearchParams): Promise<SearchResponse> {
   const db = getDb()

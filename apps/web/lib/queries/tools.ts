@@ -3,6 +3,7 @@ import { getDb } from '@/lib/db'
 import { currentVoterFingerprint } from '@/lib/voting/fingerprint'
 import { getCurrentUser } from '@/lib/auth/session'
 import { favorites, tools, toolPrograms, toolLinks, toolVotes, programs, audiencePrimaryRoles, audienceFunctions, toolAudiencePrimaryRoles, toolAudienceFunctions } from '@the-tool-pit/db'
+import { seasonalDecaySql } from '@/lib/ranking/seasonal-decay'
 import type { SearchResultRow } from '@/lib/search/search'
 
 // ---------------------------------------------------------------------------
@@ -76,11 +77,25 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
  * maintained one is exactly the junk-directory feel the tools vertical already
  * got burned by.
  *
- * So freshness multiplies the score instead of merely tie-breaking it, and
- * anything abandoned or archived is excluded outright. A stale tool can still
- * appear when it is genuinely much more popular, but it has to earn the slot
- * against a 0.35x handicap rather than winning on a star count it collected
- * years ago.
+ * TWO SEPARATE MECHANISMS, and they are not substitutes for each other.
+ *
+ * The exclusion below removes. Anything inactive or archived is off the row
+ * outright, and it has to be, because no multiplier is small enough to do that
+ * job: WPILib silent for two seasons still scores 1301 times any sane decay and
+ * would lead the page over everything maintained.
+ *
+ * The decay multiplier reorders what is left. It replaces the three step
+ * freshness multiplier that used to sit here, which read 1.0 for active, 0.35
+ * for stale and 0.7 for unknown. Those steps landed on 365 and 730 elapsed
+ * days, so a listing pushed 364 days ago outscored one pushed 366 days ago by
+ * nearly three times, and inside a band a repo touched last week and one
+ * touched eleven months ago ranked the same. The replacement is continuous, it
+ * has no cliff, and its clock skips May to August because a quiet FIRST summer
+ * is not evidence of anything. See lib/ranking/seasonal-decay.ts.
+ *
+ * Unknown activity keeps its 0.7 unchanged, and that is 478 of the 1094
+ * published listings. It means there is no repo to read a commit date from, not
+ * that nothing is happening.
  */
 export async function getTrendingTools(limit = 6): Promise<SearchResultRow[]> {
   const db = getDb()
@@ -95,15 +110,7 @@ export async function getTrendingTools(limit = 6): Promise<SearchResultRow[]> {
         sql`coalesce(${tools.freshnessState}, 'unknown') not in ('inactive', 'archived')`,
       ),
     )
-    .orderBy(
-      desc(sql`
-        case coalesce(${tools.freshnessState}, 'unknown')
-          when 'stale' then 0.35
-          when 'unknown' then 0.7
-          else 1.0
-        end * coalesce(${tools.popularityScore}, 0)
-      `),
-    )
+    .orderBy(desc(sql`${seasonalDecaySql} * coalesce(${tools.popularityScore}, 0)`))
     .limit(limit)
   return enrichTools(rows)
 }
