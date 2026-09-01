@@ -44,6 +44,11 @@
 
   html {
     color-scheme: dark;
+    /* Always reserve the scrollbar gutter. Anything that locks body scroll (a
+       Radix dialog, a mobile menu) otherwise removes the scrollbar, the page
+       gets wider by its width, and everything shifts sideways for as long as
+       the overlay is open. Reserving it means the width never changes. */
+    scrollbar-gutter: stable;
   }
 
   body {
