@@ -55,7 +55,7 @@ export interface SearchResult {
   seasonYear: number | null
   programs: string[] // program slugs
   githubUrl: string | null
-  publicFreshnessLabel: 'Current' | 'Stale' | 'Abandoned' | null
+  publicFreshnessLabel: 'Current' | 'Stale' | 'Deprecated' | 'Inactive' | null
   lastActivityAt: string | null
   popularityScore: number
   voteCount: number

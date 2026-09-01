@@ -93,7 +93,7 @@ export const tools = pgTable(
     chiefDelphiLikes: integer('chief_delphi_likes').notNull().default(0),
 
     /**
-     * Internal freshness state (collapsed to Current/Stale/Abandoned for UI).
+     * Internal freshness state (collapsed to Current/Stale/Deprecated/Inactive for UI).
      * active | stale | inactive | evergreen | seasonal | archived | unknown
      */
     freshnessState: text('freshness_state').default('unknown'),
@@ -295,7 +295,7 @@ export const FRESHNESS_STATES = [
 export type FreshnessState = (typeof FRESHNESS_STATES)[number]
 
 /** Maps internal freshness state to user-facing label. Never shows "Unknown". */
-export function toPublicFreshnessLabel(state: FreshnessState | null | undefined): 'Current' | 'Stale' | 'Abandoned' | null {
+export function toPublicFreshnessLabel(state: FreshnessState | null | undefined): 'Current' | 'Stale' | 'Deprecated' | 'Inactive' | null {
   switch (state) {
     case 'active':
     case 'evergreen':
@@ -303,9 +303,15 @@ export function toPublicFreshnessLabel(state: FreshnessState | null | undefined)
       return 'Current'
     case 'stale':
       return 'Stale'
-    case 'inactive':
+    // Archived is a maintainer deliberately closing a repo, which in FRC
+    // usually means superseded or folded into something else. Inactive is the
+    // plain fact of nothing happening. Neither is "Abandoned", which claimed
+    // somebody gave up and was wrong about PathWeaver, an official WPILib tool
+    // that still ships.
     case 'archived':
-      return 'Abandoned'
+      return 'Deprecated'
+    case 'inactive':
+      return 'Inactive'
     case 'unknown':
     default:
       return null // don't show anything if we genuinely don't know

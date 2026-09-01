@@ -118,7 +118,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
       ) then 0.4 else 0 end`
     : sql<number>`0`
 
-  // Freshness. Abandoned is PENALISED, not merely unrewarded, which is the
+  // Freshness. An inactive listing is PENALISED, not merely unrewarded, which is the
   // difference between "does not get a bonus" and "does not lead the page".
   // Searching "scouting" put a tool nobody had touched in three years first,
   // ahead of maintained ones with twice the upvotes, because an exact title

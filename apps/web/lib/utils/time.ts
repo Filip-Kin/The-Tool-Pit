@@ -10,7 +10,7 @@ export function formatRelativeTime(date: Date | string | null | undefined): stri
 export function getFreshnessLabel(
   freshnessState: string | null | undefined,
   lastActivityAt: Date | string | null | undefined,
-): 'Current' | 'Stale' | 'Archived' | 'Abandoned' | null {
+): 'Current' | 'Stale' | 'Deprecated' | 'Inactive' | null {
   // Use DB-stored state as primary signal
   switch (freshnessState) {
     case 'active':
@@ -19,16 +19,22 @@ export function getFreshnessLabel(
       return 'Current'
     case 'stale':
       return 'Stale'
-    // Archived is not abandoned, and conflating them libels good software.
-    // wpilibsuite/PathWeaver reports archived: true on GitHub because WPILib
-    // stopped developing it there, and the app still ships and is still used.
-    // Calling that "Abandoned" tells a rookie to avoid an official tool.
-    // Archiving is a deliberate act by a maintainer and usually means finished
-    // or moved, so the chip says what happened and lets the reader judge.
+    // Two facts, two words, and neither is a verdict.
+    //
+    // "Abandoned" carried a connotation we cannot support. It says someone gave
+    // up, when all we know is that a repo stopped moving. wpilibsuite/PathWeaver
+    // reports archived: true on GitHub, and it still ships with WPILib and is
+    // still used, so calling it abandoned told rookies to avoid an official
+    // tool.
+    //
+    // Deprecated is what an archived repo usually means in FRC: superseded, or
+    // finished and folded into something else. Inactive is the plain fact for
+    // the rest: nothing has happened in a long time, which is worth knowing and
+    // is not an accusation.
     case 'archived':
-      return 'Archived'
+      return 'Deprecated'
     case 'inactive':
-      return 'Abandoned'
+      return 'Inactive'
   }
 
   // Fall back to date-based heuristic
@@ -40,7 +46,7 @@ export function getFreshnessLabel(
     const days = differenceInDays(new Date(), d)
     if (days <= 365) return 'Current'
     if (days <= 730) return 'Stale'
-    return 'Abandoned'
+    return 'Inactive'
   }
 
   return null // Don't show "Unknown" on frontend

@@ -1,7 +1,7 @@
 /**
  * Freshness check job.
  * Re-fetches GitHub metadata for a tool and updates its internal freshness state.
- * The freshness state is then collapsed to Current/Stale/Abandoned on the frontend.
+ * The freshness state is then collapsed to Current/Stale/Deprecated/Inactive on the frontend.
  */
 import { eq, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
