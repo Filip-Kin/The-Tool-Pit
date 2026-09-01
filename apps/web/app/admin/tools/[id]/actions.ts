@@ -43,6 +43,32 @@ async function assertAdmin() {
  * opened the page to fix an unrelated typo, and the point of the crawl is that
  * it keeps improving whatever nobody has spoken for.
  */
+/**
+ * Admin notes, on their own action, because they are on their own form.
+ *
+ * That form posts toolId and adminNotes and nothing else. It used to post to
+ * saveTool, which begins `if (!name) return`, so pressing Save Notes silently
+ * did nothing and had done nothing for as long as the form existed. Removing
+ * that guard would have been worse: saveTool builds its update from every field
+ * on the main form, so a notes-only post would have blanked the lot.
+ *
+ * Notes are a moderator's private record and no crawl writes them, so there is
+ * nothing here about human_edited_fields.
+ */
+export async function saveAdminNotes(formData: FormData) {
+  await assertAdmin()
+
+  const toolId = formData.get('toolId') as string
+  if (!toolId) return
+
+  const notes = (formData.get('adminNotes') as string)?.trim() || null
+
+  const db = getDb()
+  await db.update(tools).set({ adminNotes: notes, updatedAt: new Date() }).where(eq(tools.id, toolId))
+
+  revalidatePath(`/admin/tools/${toolId}`)
+}
+
 export async function saveTool(formData: FormData) {
   await assertAdmin()
 

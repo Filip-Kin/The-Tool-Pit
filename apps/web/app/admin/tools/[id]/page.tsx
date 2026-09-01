@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getToolForEdit } from '@/lib/admin/get-tool-for-edit'
-import { saveTool, setToolStatus, reClassifyTool } from './actions'
+import { saveTool, saveAdminNotes, setToolStatus, reClassifyTool } from './actions'
 import { SaveButton } from './save-button'
 import { ReClassifyButton } from './re-classify-button'
 import { getDb } from '@/lib/db'
@@ -393,7 +393,7 @@ export default async function AdminToolEditPage({
       {/* Admin Notes — internal only */}
       <section className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-5">
         <h2 className="text-sm font-semibold text-foreground">Admin Notes <span className="text-xs font-normal text-muted">(internal only)</span></h2>
-        <form action={saveTool}>
+        <form action={saveAdminNotes}>
           <input type="hidden" name="toolId" value={tool.id} />
           <textarea
             name="adminNotes"
