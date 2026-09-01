@@ -1,12 +1,36 @@
 @import "tailwindcss";
 
-@theme {
+/*
+ * TWO THEMES, ONE SET OF NAMES.
+ *
+ * Everything in the app reads a token, never a colour. This block holds the
+ * dark values, which are the default and what the server renders. The light
+ * values are the `html[data-theme='light']` block below it, and they are the
+ * only other place a colour is allowed to appear.
+ *
+ * The resolved theme is written to `data-theme` on <html> by the inline script
+ * in app/layout.tsx, before the first paint. lib/theme/theme.ts owns the rule
+ * it follows.
+ *
+ * `static` because half of these are read as var() from a string rather than
+ * through a Tailwind class: a Leaflet divIcon is HTML built in JS and cannot
+ * carry a class, so it writes `background:var(--color-reg-open)` inline. Tailwind
+ * only emits the theme variables it can see a class for, so without `static`
+ * every map pin would resolve to nothing.
+ */
+@theme static {
   --color-background: #0a0a0b;
   --color-surface: #111113;
   --color-surface-2: #1a1a1e;
   --color-surface-3: #242428;
   --color-border: #2e2e34;
   --color-border-subtle: #1e1e22;
+  /* The outline of a control that has nothing else to mark its edge: an input,
+     a secondary button. Dark keeps it identical to --color-border, so nothing
+     in the dark theme moves; light needs a heavier line than a hairline to
+     reach the 3:1 WCAG asks of a boundary that carries meaning, because it is
+     drawn on white rather than on near-black. */
+  --color-border-strong: #2e2e34;
 
   --color-foreground: #f0f0f2;
   --color-muted: #8b8b96;
@@ -20,13 +44,32 @@
   --color-ftc: #2563eb;           /* FTC blue */
   --color-fll: #16a34a;           /* FLL green */
 
-  --color-official: #f59e0b;      /* amber — official badge */
-  --color-vendor: #8b5cf6;        /* violet — vendor badge */
-  --color-rookie: #10b981;        /* emerald — rookie friendly */
+  --color-official: #f59e0b;      /* amber - official badge */
+  --color-vendor: #8b5cf6;        /* violet - vendor badge */
+  --color-rookie: #10b981;        /* emerald - rookie friendly */
 
   --color-current: #22c55e;       /* freshness: current */
   --color-stale: #f59e0b;         /* freshness: stale */
   --color-abandoned: #6b7280;     /* freshness: abandoned */
+
+  /* Event map pins: hue = registration state. See lib/events/event-display.ts
+     for what each one means and why the scheme is keyed on registration. */
+  --color-reg-open: #7c3aed;
+  --color-reg-soon: #a78bfa;
+  --color-reg-waitlist: #f59e0b;
+  --color-reg-closed: #ef4444;
+  --color-reg-moot: #6b7280;
+
+  /* Practice field pins: hue = element type, depth = coverage. */
+  --color-field-official: #3b6fe0;
+  --color-field-official-half: #a8c6f6;
+  --color-field-wood: #e5484d;
+  --color-field-wood-half: #f2a6a8;
+
+  /* Pin chrome. The ring is what separates a pin from the basemap under it, so
+     it is a colour in its own right rather than a hardcoded white. */
+  --color-pin-ring: rgba(255, 255, 255, 0.9);
+  --color-pin-shadow: rgba(0, 0, 0, 0.6);
 
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -36,6 +79,80 @@
   --radius-lg: 0.75rem;
 }
 
+/*
+ * The light theme.
+ *
+ * Not an inversion of the dark ramp. Dark stacks surfaces UP from the page
+ * (#0a0a0b page, lighter cards); light stacks them DOWN (white cards on a
+ * faintly grey page), which is the same relationship read the other way and
+ * the reason a straight inversion looks wrong.
+ *
+ * The accents are all a step or two darker than their dark-theme values. A
+ * colour that reads on near-black is almost never readable on white: the amber
+ * at #f59e0b is 2.15:1 on white, which is not a colour, it is a highlighter.
+ * Every value here was picked against a measured contrast ratio, not by eye.
+ * Body text pairs clear 4.5:1 and pin fills clear 3:1 against both the page and
+ * the light basemap.
+ *
+ * Unlayered on purpose. @theme emits into Tailwind's `theme` layer, and an
+ * unlayered rule beats any layered one whatever the specificity, so these
+ * cannot be undone by the order Next.js happens to concatenate stylesheets in.
+ */
+html[data-theme='light'] {
+  color-scheme: light;
+
+  --color-background: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f3f6;
+  --color-surface-3: #e7eaef;
+  --color-border: #d7dce3;
+  --color-border-subtle: #e9ecf1;
+  --color-border-strong: #6f7885;
+
+  --color-foreground: #16181d;
+  --color-muted: #4b5563;
+  --color-muted-2: #616878;
+
+  /* One value serves both jobs: white on it is 6.29:1 for a filled button, and
+     it is 6.29:1 on white for `text-primary`. Below indigo-600 you have to
+     split the token in two to keep both. */
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-subtle: #e6e7fb;
+
+  --color-frc: #c02626;
+  --color-ftc: #1d4ed8;
+  --color-fll: #15803d;
+
+  --color-official: #a8520a;
+  --color-vendor: #7c3aed;
+  --color-rookie: #047051;
+
+  --color-current: #15803d;
+  --color-stale: #a8520a;
+  --color-abandoned: #5b6472;
+
+  /* The light basemap is a pale grey, so the pins step darker to keep 3:1
+     against it. The ORDER is what carries the meaning and it survives: open is
+     still darker than not-yet-open, a full field still deeper than a half. */
+  --color-reg-open: #6d28d9;
+  --color-reg-soon: #8f5cf3;
+  --color-reg-waitlist: #b8690a;
+  --color-reg-closed: #dc2626;
+  --color-reg-moot: #5b6472;
+
+  --color-field-official: #1d4ed8;
+  --color-field-official-half: #5286ec;
+  --color-field-wood: #b52a2e;
+  --color-field-wood-half: #d85a5e;
+
+  /* The ring stays white, because a white outline plus a shadow is what makes a
+     pin read as a sticker sitting ON the map rather than a stain in it. The
+     shadow does the separating on light, so it is tighter and darker-toned. */
+  --color-pin-ring: #ffffff;
+  --color-pin-shadow: rgba(15, 23, 42, 0.35);
+}
+
 @layer base {
   *, *::before, *::after {
     box-sizing: border-box;
@@ -43,6 +160,9 @@
   }
 
   html {
+    /* The dark default. `html[data-theme='light']` above flips it, which is what
+       makes the caret, the native select popup, the date picker and the default
+       scrollbar follow the theme instead of staying dark on a white page. */
     color-scheme: dark;
     /* Always reserve the scrollbar gutter. Anything that locks body scroll (a
        Radix dialog, a mobile menu) otherwise removes the scrollbar, the page
@@ -72,7 +192,10 @@
     background: var(--color-surface);
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--color-border);
+    /* A 6px thumb is the whole control, so it gets the stronger line. On dark
+       that is the same value it always had; on white a hairline would be a
+       smudge you cannot aim at. */
+    background: var(--color-border-strong);
     border-radius: 3px;
   }
 }
@@ -97,7 +220,8 @@
   .input {
     width: 100%;
     border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
+    /* The border IS the field: nothing else tells you where it starts. */
+    border: 1px solid var(--color-border-strong);
     background-color: var(--color-surface-2);
     color: var(--color-foreground);
     padding: 0.375rem 0.625rem;
@@ -142,4 +266,79 @@
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid var(--color-border-subtle);
   }
+}
+
+/*
+ * The theme toggle renders BOTH glyphs and lets CSS pick which one is on
+ * screen. The alternative is to pick in JS, which cannot be done during the
+ * server render (the server has no idea what the visitor's OS prefers) and so
+ * costs either a hydration mismatch or a visible icon swap on every load.
+ * Dark is the default here, matching the token block, so an <html> with no
+ * data-theme yet still shows the right glyph.
+ */
+.theme-glyph-light {
+  display: none;
+}
+html[data-theme='light'] .theme-glyph-light {
+  display: block;
+}
+html[data-theme='light'] .theme-glyph-dark {
+  display: none;
+}
+
+/*
+ * Leaflet ships its own colours and they are all light-theme colours: a white
+ * tooltip, white zoom buttons, a #ddd container. Under the dark theme that was
+ * a white card floating over a dark map, and under the light theme the two
+ * whites would not match. Both now read tokens.
+ *
+ * Every selector is prefixed with `html` for one reason: leaflet.css is
+ * imported by the map components rather than from here, so which stylesheet
+ * lands last in the bundle is not ours to decide. The extra element bumps
+ * specificity past Leaflet's own rules so source order stops mattering.
+ */
+html .leaflet-container {
+  background: var(--color-surface-2);
+  font-family: var(--font-sans);
+}
+
+html .leaflet-tooltip {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-foreground);
+  box-shadow: 0 2px 8px var(--color-pin-shadow);
+}
+html .leaflet-tooltip-top::before {
+  border-top-color: var(--color-border);
+}
+html .leaflet-tooltip-bottom::before {
+  border-bottom-color: var(--color-border);
+}
+html .leaflet-tooltip-left::before {
+  border-left-color: var(--color-border);
+}
+html .leaflet-tooltip-right::before {
+  border-right-color: var(--color-border);
+}
+
+html .leaflet-bar a,
+html .leaflet-bar a:hover {
+  background-color: var(--color-surface);
+  color: var(--color-foreground);
+  border-bottom-color: var(--color-border);
+}
+html .leaflet-bar a:hover {
+  background-color: var(--color-surface-2);
+}
+html .leaflet-bar a.leaflet-disabled {
+  background-color: var(--color-surface-2);
+  color: var(--color-muted-2);
+}
+
+html .leaflet-control-attribution {
+  background: color-mix(in srgb, var(--color-surface) 85%, transparent);
+  color: var(--color-muted);
+}
+html .leaflet-control-attribution a {
+  color: var(--color-primary);
 }

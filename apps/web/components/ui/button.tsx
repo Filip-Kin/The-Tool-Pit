@@ -31,7 +31,11 @@ type Size = 'sm' | 'md'
 
 const VARIANT: Record<Variant, string> = {
   primary: 'bg-primary text-white hover:bg-primary-hover',
-  secondary: 'border border-border text-foreground hover:bg-surface-2',
+  // border-strong, not border: an outlined button has nothing but its outline
+  // to say where it is, and a hairline that reads on near-black is a smudge on
+  // white. The token is the same value as --color-border under the dark theme,
+  // so nothing here moves; it only diverges in light.
+  secondary: 'border border-border-strong text-foreground hover:bg-surface-2',
   ghost: 'text-muted hover:bg-surface-2 hover:text-foreground',
   none: '',
 }
