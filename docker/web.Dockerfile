@@ -4,6 +4,18 @@ FROM oven/bun:1.3-alpine AS base
 FROM base AS deps
 WORKDIR /app
 
+# Package registry. Defaults to public npmjs, so a clone of this repo and any
+# build off the NAS behaves exactly as before. Coolify supplies the LAN
+# Verdaccio pull-through cache as a build variable on the nas-builder, which
+# serves tarballs from local disk and keeps building when npmjs is flaky.
+#
+# This exists because `Fail extracting tarball for "next"` has killed this build
+# three times. The retry-with-cleared-cache guard below caught the first two and
+# failed on the third, because retrying the same flaky download is not a fix.
+# bun.lock is registry-relative, so --frozen-lockfile works unchanged.
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+ENV BUN_CONFIG_REGISTRY=${NPM_REGISTRY}
+
 # Copy workspace manifests only — avoids cache busting on source changes
 COPY package.json bun.lock ./
 COPY packages/db/package.json ./packages/db/
