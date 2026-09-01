@@ -6,7 +6,7 @@ import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkChec
 // package. Type-only imports, so nothing from the job modules is pulled into a
 // process that only produces jobs.
 import type { GrantDiscoverPayload } from './grants/discover.js'
-import type { GrantEnrichPayload } from './grants/enrich.js'
+import type { GrantEnrichPayload, GrantExtractPayload } from './grants/enrich.js'
 import type { GrantMonitorPayload } from './grants/monitor.js'
 import type { GrantMatchJobPayload } from './grants/matcher.js'
 import type { ListingDiscoverPayload } from './listings/discover.js'
@@ -125,6 +125,26 @@ export const grantEnrichQueue = new Queue<GrantEnrichPayload>('grant-enrich', {
   defaultJobOptions: {
     attempts: 2,
     backoff: { type: 'fixed', delay: 3000 },
+    removeOnComplete: { count: 200 },
+    removeOnFail: { count: 500 },
+  },
+})
+
+/**
+ * The second pass over a candidate the classifier accepted: read the page and
+ * fill in the record.
+ *
+ * Its own queue rather than more work inside grant-enrich, because the two
+ * differ in what they cost and in when they run. Enrich is one cheap call per
+ * crawled URL; extract is a bigger call per REAL grant, and a moderator
+ * flagging a listing re-runs this one alone. Concurrency is held down in
+ * index.ts for the same reason enrich's is.
+ */
+export const grantExtractQueue = new Queue<GrantExtractPayload>('grant-extract', {
+  connection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'fixed', delay: 5000 },
     removeOnComplete: { count: 200 },
     removeOnFail: { count: 500 },
   },

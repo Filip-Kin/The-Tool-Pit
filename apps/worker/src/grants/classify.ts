@@ -27,6 +27,8 @@
  */
 import Anthropic from '@anthropic-ai/sdk'
 import { anthropic } from '../anthropic.js'
+import type { SuppressionExample } from './suppression-feedback.js'
+import { formatSuppressionExamples } from './suppression-feedback.js'
 import {
   GRANT_PROGRAMS,
   GRANT_GEO_SCOPES,
@@ -357,7 +359,10 @@ Never infer a figure, a country or an eligibility rule that the page does not st
 
 Return ONLY the JSON object. No markdown fences, no prose before or after.`
 
-function buildUserContent(candidate: ClassifiableGrantCandidate): string {
+function buildUserContent(
+  candidate: ClassifiableGrantCandidate,
+  negatives: readonly SuppressionExample[] = [],
+): string {
   const meta: RawGrantMetadata = candidate.rawMetadata ?? {}
   const url = candidate.canonicalUrl ?? candidate.sourceUrl
   const lines: string[] = [`URL: ${url}`]
@@ -372,6 +377,12 @@ function buildUserContent(candidate: ClassifiableGrantCandidate): string {
   // The discovery angle is real evidence: a search for "grant recipients" and a
   // Chief Delphi thread both push hard towards the announcement rejection.
   if (meta.discoveredVia) lines.push(`Discovered via: ${meta.discoveredVia}`)
+
+  // What a human rejected recently, ranked against this page. A suppression
+  // that only lives as free text teaches nothing, and the same list pages kept
+  // coming back through the queue to be rejected by hand again.
+  const rejected = formatSuppressionExamples(negatives)
+  if (rejected) lines.push('', rejected)
 
   const body = meta.contentText ?? ''
   if (body.length > MAX_CONTENT_CHARS) {
@@ -516,9 +527,14 @@ function parseClassification(text: string): GrantClassification {
  * Throws GrantClassifierUnavailable when no verdict could be produced at all
  * (no key, spent account, unparseable reply). The caller leaves the candidate
  * unclassified for a later pass rather than storing a fake verdict.
+ *
+ * `negatives` are recent human suppressions, already ranked against this page
+ * by ./suppression-feedback.ts. They go in the user message rather than the
+ * system prompt because they are about THIS candidate, not about the job.
  */
 export async function classifyGrantCandidate(
   candidate: ClassifiableGrantCandidate,
+  negatives: readonly SuppressionExample[] = [],
 ): Promise<GrantClassification> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new GrantClassifierUnavailable('no_api_key', 'ANTHROPIC_API_KEY is not set')
@@ -532,7 +548,7 @@ export async function classifyGrantCandidate(
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: buildUserContent(candidate) }],
+      messages: [{ role: 'user', content: buildUserContent(candidate, negatives) }],
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

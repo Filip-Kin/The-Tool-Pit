@@ -1,8 +1,15 @@
 /**
- * Grant candidate enrich job.
+ * Grant candidate jobs. Two of them, and they answer different questions.
  *
- * Load one candidate, run the free junk gate, run the classifier, write the
- * verdict back. That is the whole job.
+ * processGrantEnrichJob   - load one candidate, run the free junk gate, run
+ *                           the classifier, write the verdict back. Is this a
+ *                           grant.
+ * processGrantExtractJob  - run the second pass over a candidate the
+ *                           classifier already accepted, and fill in the
+ *                           record. What does the page say.
+ *
+ * They are separate calls on purpose. A classifier that also extracts is a
+ * classifier that invents a deadline to fill a field. See ./candidate-extract.ts.
  *
  * The asymmetry with the tools pipeline is deliberate, so it is worth stating
  * plainly: ../jobs/enrich.ts publishes a tool by itself once confidence clears
@@ -24,7 +31,7 @@
  * candidate still reaches a human on 'pending'.
  */
 import { getDb, grantCandidates, eq } from '@the-tool-pit/db'
-import type { RawGrantMetadata } from '@the-tool-pit/db'
+import type { GrantCandidate, RawGrantMetadata } from '@the-tool-pit/db'
 import { politeFetch } from '../connectors/base.js'
 import { stripToMainContent } from './strip.js'
 import {
@@ -34,6 +41,18 @@ import {
   shapeClassification,
   GrantClassifierUnavailable,
 } from './classify.js'
+import {
+  extractGrantCandidate,
+  shouldExtractCandidate,
+  GrantExtractorUnavailable,
+  type GrantEvidence,
+} from './candidate-extract.js'
+import { braveSearch, BraveBudgetExhausted } from './brave.js'
+import {
+  loadSuppressionExamples,
+  pickSuppressionExamples,
+  type SuppressionExample,
+} from './suppression-feedback.js'
 
 /**
  * Payload for the grant-enrich queue. Kept here rather than in
@@ -95,7 +114,17 @@ async function fetchCandidateText(url: string): Promise<string | null> {
   }
 }
 
-export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promise<void> {
+/**
+ * What the caller does next. The classification decides whether reading the
+ * page in full is worth paying for, and the queue handles live in index.ts, so
+ * the verdict is returned rather than acted on here.
+ */
+export interface GrantEnrichOutcome {
+  /** True when this candidate is an applicable grant worth extracting. */
+  extract: boolean
+}
+
+export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promise<GrantEnrichOutcome> {
   const db = getDb()
   const { candidateId } = payload
 
@@ -107,7 +136,7 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
 
   if (!candidate) {
     console.warn(`[grant-enrich] candidate ${candidateId} not found`)
-    return
+    return { extract: false }
   }
 
   const url = candidate.canonicalUrl ?? candidate.sourceUrl
@@ -152,7 +181,7 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
       })
       .where(eq(grantCandidates.id, candidateId))
     console.log(`[grant-enrich] ${candidateId} suppressed by junk gate: ${junkReason} (${url})`)
-    return
+    return { extract: false }
   }
 
   // 2. Deterministic page-shape gate. Also free, and it answers the two
@@ -181,13 +210,29 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
     console.log(
       `[grant-enrich] ${candidateId} decided by shape gate (${shape.shape}), no model call: ${url}`,
     )
-    return
+    return { extract: false }
   }
 
-  // 3. One model call.
+  // 3. One model call, carrying what a human rejected recently.
+  //
+  //    Ranked against this page, so a candidate on a site whose last four
+  //    pages were press releases is told that. A suppression that only exists
+  //    as free text on a row teaches nothing, and the queue kept serving the
+  //    same shapes back for a hand rejection. Failing to load them is not
+  //    worth failing the job over: the classifier works without them.
+  let negatives: SuppressionExample[] = []
+  try {
+    negatives = pickSuppressionExamples(await loadSuppressionExamples(), {
+      url,
+      discoveredVia: meta.discoveredVia,
+    })
+  } catch (err) {
+    console.warn(`[grant-enrich] could not load suppression examples: ${String(err)}`)
+  }
+
   let classification
   try {
-    classification = await classifyGrantCandidate(candidate)
+    classification = await classifyGrantCandidate(candidate, negatives)
   } catch (err) {
     if (err instanceof GrantClassifierUnavailable) {
       // No verdict is a state, not a failure. The row keeps classification=null
@@ -198,7 +243,7 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
       console.error(
         `[grant-enrich] ${candidateId} left unclassified (${err.kind}): ${err.message}`,
       )
-      return
+      return { extract: false }
     }
     // Transient API and network faults fall through to BullMQ's retry.
     throw err
@@ -233,4 +278,220 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
       `confidence=${(classification.confidence ?? 0).toFixed(2)}` +
       `${fetched ? ' [page fetched]' : readThePage ? '' : ' [page NOT read]'} (${url})`,
   )
+
+  return { extract: shouldExtractCandidate({ classification }) }
 }
+
+// #region extraction job
+
+/**
+ * Payload for the grant-extract queue.
+ *
+ * `deep` is what the review deck's "flag for more or bad information" button
+ * sends. A shallow pass re-reads the text we already have; a deep pass refetches
+ * the funder's page, follows the application link, and looks at other surfaces
+ * for the same grant. Re-reading the one page that already failed is not a
+ * second look.
+ */
+export interface GrantExtractPayload {
+  candidateId: string
+  deep?: boolean
+  /** What the moderator said was wrong, passed through to the model. */
+  reviewNote?: string | null
+}
+
+/** Third-party surfaces to consult in a deep pass. One paid query, no more. */
+const DEEP_SEARCH_RESULTS = 4
+
+/**
+ * Text read off a page in a deep pass, and which evidence bucket it belongs in.
+ *
+ * A page on the funder's own host, or the form it sends applicants to, is
+ * funder_page evidence: it is the funder speaking. Anything else is somebody's
+ * summary, which is what the aggregator bucket means.
+ */
+interface GatheredEvidence {
+  evidence: GrantEvidence
+  urls: string[]
+  notes: string[]
+}
+
+function sameSite(a: string, b: string): boolean {
+  try {
+    const hostA = new URL(a).hostname.replace(/^www\./, '').toLowerCase()
+    const hostB = new URL(b).hostname.replace(/^www\./, '').toLowerCase()
+    return hostA === hostB || hostA.endsWith(`.${hostB}`) || hostB.endsWith(`.${hostA}`)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Collect what the extractor gets to read.
+ *
+ * The blurb bucket is the reason this is not just `meta.contentText`. Pages
+ * like grantexec and instrumentl employ people to write a paragraph about a
+ * grant, and that paragraph is often a clearer read on eligibility than the
+ * funder's own prose. It arrives on raw_metadata.description for every
+ * candidate we have. It goes in as a SEPARATE labelled text, never concatenated
+ * into the page, so the model can say which one it quoted and a moderator can
+ * see whether a deadline is first hand.
+ */
+async function gatherEvidence(
+  candidate: GrantCandidate,
+  meta: RawGrantMetadata,
+  deep: boolean,
+): Promise<GatheredEvidence> {
+  const url = candidate.canonicalUrl ?? candidate.sourceUrl
+  const notes: string[] = []
+  const urls: string[] = []
+
+  let funderPage = meta.contentText ?? ''
+  if (deep || !funderPage.trim()) {
+    const fresh = await fetchCandidateText(url)
+    if (fresh) {
+      funderPage = fresh
+      urls.push(url)
+    } else {
+      notes.push(`could not refetch ${url}, using the text already on the candidate`)
+    }
+  } else {
+    urls.push(url)
+  }
+
+  // The blurb someone else wrote. Both descriptions, because og:description is
+  // sometimes the fuller one and they are rarely the same sentence.
+  const blurbs = [meta.description, meta.ogDescription]
+    .filter((s): s is string => Boolean(s && s.trim()))
+    .filter((s, i, all) => all.indexOf(s) === i)
+  let aggregator = blurbs.join('\n\n')
+
+  if (deep) {
+    // 1. The application link, when the page names one. A funder's own form is
+    //    where the deadline and the eligibility usually live in full.
+    const applicationUrl = meta.applicationUrl ?? candidate.extraction?.fields.applicationUrl.value ?? null
+    if (applicationUrl && applicationUrl !== url) {
+      const applicationText = await fetchCandidateText(applicationUrl)
+      if (applicationText) {
+        // First-hand either way. An off-site portal (a Google Form, Submittable)
+        // is still where the funder sends applicants, so it joins the page text
+        // rather than the bucket for other people's summaries.
+        urls.push(applicationUrl)
+        funderPage = `${funderPage}\n\n${applicationText}`
+      } else {
+        notes.push(`application link ${applicationUrl} could not be read`)
+      }
+    }
+
+    // 2. Other surfaces. One paid Brave query, and only the descriptions:
+    //    fetching four more pages to read them is a lot of somebody else's
+    //    bandwidth for a paragraph each. The budget guard is brave.ts's.
+    const name = candidate.classification?.name ?? meta.title ?? ''
+    const funder = candidate.classification?.funderName ?? meta.funderName ?? ''
+    if (name) {
+      try {
+        const results = await braveSearch(`${name} ${funder} grant application deadline eligibility`.trim(), {
+          count: 10,
+        })
+        const extra = results
+          .filter((r) => !sameSite(r.url, url))
+          .slice(0, DEEP_SEARCH_RESULTS)
+          .filter((r) => r.description.trim())
+        for (const result of extra) {
+          urls.push(result.url)
+          aggregator = `${aggregator}\n\n${result.description.trim()}`
+        }
+        if (extra.length === 0) notes.push('deep search found no other surface describing this grant')
+      } catch (err) {
+        if (err instanceof BraveBudgetExhausted) {
+          notes.push('Brave monthly budget exhausted, other surfaces not searched')
+        } else {
+          notes.push(`deep search failed: ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+    } else {
+      notes.push('no grant name to search other surfaces with')
+    }
+  }
+
+  return { evidence: { funderPage, aggregator }, urls, notes }
+}
+
+/**
+ * Fill in one candidate's record.
+ *
+ * Runs only on candidates the classifier accepted. Writes the extraction to the
+ * candidate and NOTHING else: no grant, no cycle, no requirement, no status
+ * change. The human gate on grants is unchanged, and this pass exists to make
+ * that gate cheap to pass through, not to bypass it.
+ */
+export async function processGrantExtractJob(payload: GrantExtractPayload): Promise<void> {
+  const db = getDb()
+  const { candidateId, deep = false } = payload
+
+  const [candidate] = await db
+    .select()
+    .from(grantCandidates)
+    .where(eq(grantCandidates.id, candidateId))
+    .limit(1)
+
+  if (!candidate) {
+    console.warn(`[grant-extract] candidate ${candidateId} not found`)
+    return
+  }
+  if (!shouldExtractCandidate(candidate)) {
+    // Not a refusal to work, a refusal to spend: an aggregator is a source to
+    // crawl and an announcement is a page about a grant. Neither becomes a
+    // listing, so neither is worth a call.
+    console.log(`[grant-extract] ${candidateId} skipped, the classifier did not accept it as a grant`)
+    return
+  }
+
+  const meta = (candidate.rawMetadata ?? {}) as RawGrantMetadata
+  const url = candidate.canonicalUrl ?? candidate.sourceUrl
+  const gathered = await gatherEvidence(candidate, meta, deep)
+
+  if (!gathered.evidence.funderPage.trim() && !gathered.evidence.aggregator.trim()) {
+    // Nothing to read is not the same as nothing to say. Leave extraction null
+    // so the row is findable by a later pass instead of storing an empty record
+    // that reads like a page with nothing on it.
+    console.warn(`[grant-extract] ${candidateId} has no text to read (${url}), left unextracted`)
+    return
+  }
+
+  let extraction
+  try {
+    extraction = await extractGrantCandidate({
+      url,
+      classification: candidate.classification,
+      evidence: gathered.evidence,
+      evidenceUrls: gathered.urls,
+      depth: deep ? 'deep' : 'shallow',
+      reviewNote: payload.reviewNote ?? candidate.reviewNote,
+    })
+  } catch (err) {
+    if (err instanceof GrantExtractorUnavailable) {
+      // Same rule as the classifier: no extraction is a state, not a fake one.
+      console.error(`[grant-extract] ${candidateId} left unextracted (${err.kind}): ${err.message}`)
+      return
+    }
+    throw err
+  }
+
+  extraction.notes = [...gathered.notes, ...extraction.notes]
+
+  await db
+    .update(grantCandidates)
+    .set({ extraction, extractedAt: new Date(), updatedAt: new Date() })
+    .where(eq(grantCandidates.id, candidateId))
+
+  const filled = Object.values(extraction.fields).filter(
+    (field) => field.value !== null && field.value !== 'unknown',
+  ).length
+  console.log(
+    `[grant-extract] ${candidateId} extracted ${filled}/${Object.keys(extraction.fields).length} fields ` +
+      `(${extraction.depth}, ${gathered.urls.length} page${gathered.urls.length === 1 ? '' : 's'} read): ${url}`,
+  )
+}
+
+// #endregion

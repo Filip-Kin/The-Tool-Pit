@@ -5,7 +5,7 @@
  */
 import { Worker } from 'bullmq'
 import { getRedis } from './redis.js'
-import { scheduleRecurringJobs, grantEnrichQueue, grantMonitorQueue } from './queues.js'
+import { scheduleRecurringJobs, grantEnrichQueue, grantExtractQueue, grantMonitorQueue } from './queues.js'
 import { processCrawlJob } from './jobs/crawl.js'
 import { processEnrichJob } from './jobs/enrich.js'
 import { processFreshnessJob } from './jobs/freshness.js'
@@ -15,7 +15,7 @@ import { processSubmissionJob } from './jobs/submission.js'
 import { processAlbumIngestJob } from './jobs/album-ingest.js'
 import { processAlbumEnrichJob } from './jobs/album-enrich.js'
 import { processGrantDiscoverJob } from './grants/discover.js'
-import { processGrantEnrichJob } from './grants/enrich.js'
+import { processGrantEnrichJob, processGrantExtractJob } from './grants/enrich.js'
 import { processGrantMonitorJob } from './grants/monitor.js'
 import { processGrantMatchJob } from './grants/matcher.js'
 import { processGrantAlertDrainJob } from './grants/alerts.js'
@@ -27,7 +27,7 @@ import { processListingDiscoverJob } from './listings/discover.js'
 import { processSeasonRenewalJob } from './listings/season-renewal.js'
 import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload, AlbumIngestPayload, AlbumEnrichPayload } from '@the-tool-pit/types'
 import type { GrantDiscoverPayload } from './grants/discover.js'
-import type { GrantEnrichPayload } from './grants/enrich.js'
+import type { GrantEnrichPayload, GrantExtractPayload } from './grants/enrich.js'
 import type { GrantMonitorPayload } from './grants/monitor.js'
 import type { GrantMatchJobPayload } from './grants/matcher.js'
 import type { ListingDiscoverPayload } from './listings/discover.js'
@@ -161,10 +161,31 @@ const grantEnrichWorker = new Worker<GrantEnrichPayload>(
   'grant-enrich',
   async (job) => {
     console.log(`[grant-enrich] processing candidate ${job.data.candidateId}`)
-    await processGrantEnrichJob(job.data)
+    const outcome = await processGrantEnrichJob(job.data)
+
+    // Classification decides whether reading the page in full is worth paying
+    // for, and the chain is closed here where the queue handles live, the same
+    // way discovery hands over to enrich above. An aggregator or a press
+    // release stops at the classifier.
+    if (outcome.extract) {
+      await grantExtractQueue.add('grant-extract', { candidateId: job.data.candidateId })
+    }
   },
   // One Haiku call per job. Low concurrency keeps a discovery run that inserted
   // a few hundred candidates from emptying a pay-as-you-go balance in a minute.
+  { connection, concurrency: 2 },
+)
+
+const grantExtractWorker = new Worker<GrantExtractPayload>(
+  'grant-extract',
+  async (job) => {
+    console.log(
+      `[grant-extract] processing candidate ${job.data.candidateId}${job.data.deep ? ' (deep re-read)' : ''}`,
+    )
+    await processGrantExtractJob(job.data)
+  },
+  // A deep pass fetches other people's web servers as well as calling the
+  // model, so it stays at the same low concurrency as enrich.
   { connection, concurrency: 2 },
 )
 
@@ -303,7 +324,7 @@ const seasonRenewalWorker = new Worker(
 // #endregion
 
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, seasonRenewalWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, seasonRenewalWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -333,6 +354,7 @@ async function shutdown() {
     albumEnrichWorker.close(),
     grantDiscoverWorker.close(),
     grantEnrichWorker.close(),
+    grantExtractWorker.close(),
     grantMonitorWorker.close(),
     grantMatchWorker.close(),
     grantAlertWorker.close(),

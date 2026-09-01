@@ -188,7 +188,8 @@ export type GrantApplyMethod = (typeof GRANT_APPLY_METHODS)[number]
 /**
  * Which text an extracted field's supporting quote was found in.
  *
- * - funder_page: the text fetched from the candidate's own URL. Highest trust.
+ * - funder_page: text fetched from the funder's own page, or from a page it
+ *                links to as the place to apply. Highest trust.
  * - aggregator:  the blurb a third party wrote about the grant (grantexec,
  *                instrumentl, a state association's round-up). Often a better
  *                summary of eligibility than the raw page, written by a person,
