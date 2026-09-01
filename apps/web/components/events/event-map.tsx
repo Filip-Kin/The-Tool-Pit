@@ -12,7 +12,7 @@ import {
   timingPhrase,
 } from '@/lib/events/event-display'
 import { markerHtml } from './marker-html'
-import { addDarkBasemap } from './dark-basemap'
+import { attachBasemap } from '@/lib/map/basemap'
 
 interface EventMapProps {
   events: PublicEvent[]
@@ -27,7 +27,7 @@ const DEFAULT_CENTER: [number, number] = [39.5, -98.35]
 const USER_ZOOM = 8
 
 function userMarkerHtml(): string {
-  return `<div style="width:14px;height:14px;background:#7c3aed;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(124,58,237,0.25),0 1px 4px rgba(0,0,0,0.6)"></div>`
+  return `<div style="width:14px;height:14px;background:var(--color-reg-open);border:2px solid var(--color-pin-ring);border-radius:50%;box-shadow:0 0 0 6px color-mix(in srgb, var(--color-reg-open) 25%, transparent),0 1px 4px var(--color-pin-shadow)"></div>`
 }
 
 function tooltipHtml(ev: PublicEvent, now: Date): string {
@@ -38,13 +38,16 @@ function tooltipHtml(ev: PublicEvent, now: Date): string {
   // us the registration state, so where the event sits in its life has to be
   // written down. Cancelled reads red, because it is the one that wastes a trip.
   const phrase = timingPhrase(ev, now)
-  const phraseColor = ev.eventStatus === 'cancelled' ? '#ef4444' : '#0a0a0b'
-  return `<div style="font-family:Inter,sans-serif;min-width:130px">
-    <div style="font-weight:600;color:#0a0a0b">${esc(ev.name)}</div>
+  // Tokens, not hexes. The tooltip used to be a white card with near-black text
+  // whatever the theme, which under dark was a headlight over the map. It reads
+  // --color-surface now like every other floating panel here.
+  const phraseColor = ev.eventStatus === 'cancelled' ? 'var(--color-reg-closed)' : 'var(--color-foreground)'
+  return `<div style="min-width:130px">
+    <div style="font-weight:600;color:var(--color-foreground)">${esc(ev.name)}</div>
     <div style="font-size:12px;font-weight:600;color:${phraseColor};margin-top:1px">${esc(phrase)}</div>
-    ${date ? `<div style="font-size:12px;color:#555;margin-top:1px">${esc(date)}</div>` : ''}
-    <div style="font-size:12px;color:#777;margin-top:2px">${esc(eventLocation(ev))}</div>
-    ${full ? `<div style="font-size:12px;color:#7c3aed;margin-top:2px">${esc(full)}</div>` : ''}
+    ${date ? `<div style="font-size:12px;color:var(--color-muted);margin-top:1px">${esc(date)}</div>` : ''}
+    <div style="font-size:12px;color:var(--color-muted);margin-top:2px">${esc(eventLocation(ev))}</div>
+    ${full ? `<div style="font-size:12px;font-weight:600;color:var(--color-foreground);margin-top:2px">${esc(full)}</div>` : ''}
   </div>`
 }
 
@@ -61,6 +64,9 @@ export function EventMap({ events, now, selectedId, onSelect, userLoc, height = 
   const markersRef = useRef<Map<string, LeafletMarker>>(new Map())
   const iconsRef = useRef<Map<string, { base: DivIcon; selected: DivIcon }>>(new Map())
   const userMarkerRef = useRef<LeafletMarker | null>(null)
+  // Detaches the basemap's theme watcher. Held so the observer cannot outlive
+  // the map it is watching for.
+  const detachBasemapRef = useRef<(() => void) | null>(null)
   const framedForUserRef = useRef(false)
   const selectedFromMapRef = useRef(false)
   const onSelectRef = useRef(onSelect)
@@ -83,7 +89,7 @@ export function EventMap({ events, now, selectedId, onSelect, userLoc, height = 
           zoomControl: true,
           worldCopyJump: true,
         })
-        await addDarkBasemap(map)
+        detachBasemapRef.current = await attachBasemap(map)
         mapRef.current = map
       }
       const map = mapRef.current
@@ -148,6 +154,8 @@ export function EventMap({ events, now, selectedId, onSelect, userLoc, height = 
 
   useEffect(() => {
     return () => {
+      detachBasemapRef.current?.()
+      detachBasemapRef.current = null
       mapRef.current?.remove()
       mapRef.current = null
       markersRef.current.clear()

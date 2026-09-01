@@ -50,18 +50,25 @@ export interface PublicField {
 // ---------------------------------------------------------------------------
 
 export interface MarkerStyle {
-  /** Fill colour of the marker. */
+  /** Fill colour of the marker. A var(), because each has a light value too. */
   color: string
   /** Diameter in px. */
   size: number
 }
 
 // FRC colours: official elements = blue, wood elements = red; the half-field
-// variant is lightened toward white. (FMS is not shown on the map.)
-const WOOD_FULL = '#e5484d' // FRC red
-const WOOD_HALF = '#f2a6a8' // light red
-const OFFICIAL_FULL = '#3b6fe0' // FRC blue
-const OFFICIAL_HALF = '#a8c6f6' // light blue
+// variant is a step away from the full one. (FMS is not shown on the map.)
+//
+// Tokens rather than hexes, because the light theme needs its own four. Under
+// dark the halves are lightened toward white, which on a pale basemap would
+// leave them invisible, so light shifts the whole ramp a step darker instead.
+// The ORDER is what carries the meaning and it survives either way. Defined in
+// app/globals.css; kept as var() strings so a pin repaints on a theme change
+// without the map being told.
+const WOOD_FULL = 'var(--color-field-wood)'
+const WOOD_HALF = 'var(--color-field-wood-half)'
+const OFFICIAL_FULL = 'var(--color-field-official)'
+const OFFICIAL_HALF = 'var(--color-field-official-half)'
 
 export function fieldMarkerStyle(coverage: FieldCoverage, elements: FieldElements): MarkerStyle {
   const full = coverage === 'full'

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Map as LeafletMap, Marker as LeafletMarker } from 'leaflet'
 import type { GeocodeResult, AddressParts } from '@/app/api/fields/geocode/route'
 import { wrapLongitude, longitudeNearestTo } from '@/lib/geo/longitude'
-import { addDarkBasemap } from './dark-basemap'
+import { attachBasemap } from '@/lib/map/basemap'
 
 interface Coords {
   lat: number
@@ -21,8 +21,11 @@ interface PinMapProps {
 }
 
 const DEFAULT_CENTER: [number, number] = [39.5, -98.35] // continental US
+// Tokens, not hexes: this teardrop is dropped into the document as a string, so
+// it cannot carry a Tailwind class, but it inherits the custom properties from
+// <html> and follows the theme on its own.
 const PIN_HTML =
-  '<div style="width:22px;height:22px;background:#6366f1;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,0.6)"></div>'
+  '<div style="width:22px;height:22px;background:var(--color-primary);border:3px solid var(--color-pin-ring);border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 6px var(--color-pin-shadow)"></div>'
 
 /**
  * A draggable-pin map for setting a field's coordinates, with an address search
@@ -33,6 +36,8 @@ export function PinMap({ value, onChange, onResolveAddress, height = 320 }: PinM
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<LeafletMap | null>(null)
   const markerRef = useRef<LeafletMarker | null>(null)
+  // Detaches the basemap's theme watcher, in the same teardown as the map.
+  const detachBasemapRef = useRef<(() => void) | null>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const onResolveAddressRef = useRef(onResolveAddress)
@@ -75,7 +80,7 @@ export function PinMap({ value, onChange, onResolveAddress, height = 320 }: PinM
         zoomControl: true,
         worldCopyJump: true,
       })
-      await addDarkBasemap(map)
+      detachBasemapRef.current = await attachBasemap(map)
 
       const icon = L.divIcon({ html: PIN_HTML, className: '', iconSize: [22, 22], iconAnchor: [11, 22] })
 
@@ -128,6 +133,8 @@ export function PinMap({ value, onChange, onResolveAddress, height = 320 }: PinM
 
     return () => {
       cancelled = true
+      detachBasemapRef.current?.()
+      detachBasemapRef.current = null
       mapRef.current?.remove()
       mapRef.current = null
       markerRef.current = null

@@ -35,7 +35,7 @@ function LegendGroup({ label, elements }: { label: string; elements: FieldElemen
 function Swatch({ color, size }: { color: string; size: number }) {
   return (
     <span
-      className="inline-block rounded-full border border-white/50"
+      className="inline-block rounded-full border border-pin-ring"
       style={{ width: size, height: size, background: color }}
     />
   )

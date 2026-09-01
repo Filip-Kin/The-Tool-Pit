@@ -188,17 +188,24 @@ export function timingPhrase(ev: PublicEvent, now: Date): string {
 // ---------------------------------------------------------------------------
 
 export interface MarkerStyle {
+  /** A CSS colour. A var(), because each of these has a light value too. */
   color: string
   size: number
 }
 
-const OPEN = '#7c3aed' // brand accent - taking registrations now
-const NOT_OPEN_YET = '#a78bfa' // light accent - same family as open, because it
+// Each colour is a token rather than a hex, because the light theme needs its
+// own value for every one of them: on a pale basemap the amber and the grey
+// both drop under the 3:1 a pin has to hold against what is behind it. The
+// tokens are defined in app/globals.css, once per theme. Kept as var() strings
+// rather than resolved here so a pin repaints when the theme changes without
+// the map being told anything.
+const OPEN = 'var(--color-reg-open)' // brand accent - taking registrations now
+const NOT_OPEN_YET = 'var(--color-reg-soon)' // same family as open, because it
                                // WILL open. Not amber and not red: neither
                                // "something is wrong" nor "you missed it".
-const WAITLIST = '#f59e0b' // amber - full, but you can still get in line
-const CLOSED = '#ef4444' // error red - the door is shut
-const MOOT = '#6b7280' // grey - already run, cancelled, or nobody has told us
+const WAITLIST = 'var(--color-reg-waitlist)' // amber - full, but you can still get in line
+const CLOSED = 'var(--color-reg-closed)' // error red - the door is shut
+const MOOT = 'var(--color-reg-moot)' // grey - already run, cancelled, or nobody has told us
 
 export function eventMarkerStyle(ev: PublicEvent, now: Date): MarkerStyle {
   // Once an event is off the table there is nothing to register for, so a

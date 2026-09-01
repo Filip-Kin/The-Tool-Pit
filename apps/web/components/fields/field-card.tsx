@@ -30,7 +30,7 @@ function PinDot({ f }: { f: PublicField }) {
   const s = fieldMarkerStyle(f.coverage, f.elements)
   return (
     <span
-      className="mt-1 inline-block shrink-0 rounded-full border border-white/60"
+      className="mt-1 inline-block shrink-0 rounded-full border border-pin-ring"
       style={{ width: 14, height: 14, background: s.color }}
     />
   )

@@ -6,7 +6,7 @@ import type { Map as LeafletMap, Marker as LeafletMarker, DivIcon } from 'leafle
 import type { PublicField } from '@/lib/fields/field-display'
 import { fieldMarkerStyle, fieldSpecSummary } from '@/lib/fields/field-display'
 import { markerHtml } from './marker-html'
-import { addDarkBasemap } from './dark-basemap'
+import { attachBasemap } from '@/lib/map/basemap'
 
 interface FieldMapProps {
   fields: PublicField[]
@@ -23,19 +23,23 @@ const DEFAULT_CENTER: [number, number] = [39.5, -98.35]
 const USER_ZOOM = 9
 
 // A "you are here" pin: brand-purple device dot with a soft halo, distinct from
-// the red/blue field pins so it never reads as a field.
+// the red/blue field pins so it never reads as a field. It borrows the events
+// map's open-registration purple rather than owning a colour of its own, which
+// is safe here because no field pin is ever purple.
 function userMarkerHtml(): string {
-  return `<div style="width:14px;height:14px;background:#7c3aed;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(124,58,237,0.25),0 1px 4px rgba(0,0,0,0.6)"></div>`
+  return `<div style="width:14px;height:14px;background:var(--color-reg-open);border:2px solid var(--color-pin-ring);border-radius:50%;box-shadow:0 0 0 6px color-mix(in srgb, var(--color-reg-open) 25%, transparent),0 1px 4px var(--color-pin-shadow)"></div>`
 }
 
 function tooltipHtml(f: PublicField): string {
   const team =
     f.teamNumber && f.teamName ? `${f.teamNumber} · ${f.teamName}` : f.teamNumber ? `Team ${f.teamNumber}` : f.teamName ?? ''
   const esc = (s: string) => s.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  return `<div style="font-family:Inter,sans-serif;min-width:120px">
-    <div style="font-weight:600;color:#0a0a0b">${esc(f.name)}</div>
-    ${team ? `<div style="font-size:12px;color:#555;margin-top:1px">${esc(team)}</div>` : ''}
-    <div style="font-size:12px;color:#777;margin-top:2px">${esc(fieldSpecSummary(f, { fms: false }))}</div>
+  // Tokens, not hexes. The tooltip used to be a white card with near-black text
+  // whatever the theme, which under dark was a headlight over the map.
+  return `<div style="min-width:120px">
+    <div style="font-weight:600;color:var(--color-foreground)">${esc(f.name)}</div>
+    ${team ? `<div style="font-size:12px;color:var(--color-muted);margin-top:1px">${esc(team)}</div>` : ''}
+    <div style="font-size:12px;color:var(--color-muted);margin-top:2px">${esc(fieldSpecSummary(f, { fms: false }))}</div>
   </div>`
 }
 
@@ -51,6 +55,9 @@ export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }
   const markersRef = useRef<Map<string, LeafletMarker>>(new Map())
   const iconsRef = useRef<Map<string, { base: DivIcon; selected: DivIcon }>>(new Map())
   const userMarkerRef = useRef<LeafletMarker | null>(null)
+  // Detaches the basemap's theme watcher. Held so the observer cannot outlive
+  // the map it is watching for.
+  const detachBasemapRef = useRef<(() => void) | null>(null)
   const framedForUserRef = useRef(false)
   // True when the current selection came from clicking a pin on the map itself,
   // so the highlight effect leaves the view untouched (clicking a pin should
@@ -77,7 +84,7 @@ export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }
           zoomControl: true,
           worldCopyJump: true,
         })
-        await addDarkBasemap(map)
+        detachBasemapRef.current = await attachBasemap(map)
         mapRef.current = map
       }
       const map = mapRef.current
@@ -148,6 +155,8 @@ export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }
   // Tear the map down on unmount.
   useEffect(() => {
     return () => {
+      detachBasemapRef.current?.()
+      detachBasemapRef.current = null
       mapRef.current?.remove()
       mapRef.current = null
       markersRef.current.clear()
