@@ -14,16 +14,21 @@ import {
 } from '@/lib/queries/tools'
 
 /**
- * Not frozen at build time.
+ * Rendered per visitor, every time.
  *
- * Without this the page is statically rendered once during the build and
- * served with a year-long cache, so it shows whatever the database said at
- * build time forever. That is how a tool kept showing "Stale" on the home page
- * after the freshness thresholds were widened and the rows had already been
- * recomputed, and how a suppressed listing can keep appearing until the next
- * unrelated deploy. Sixty seconds is far fresher than a deploy and still cheap.
+ * This page used to be `revalidate = 60`, which was right when it was the same
+ * page for everybody. It is not any more: the grids show which tools YOU have
+ * bookmarked and upvoted, and Favorite tools is your own list. A shared cache
+ * of that is wrong twice over. It made signing in look broken, because the
+ * refresh after sign-in could be answered from the cache and hand you back the
+ * signed-out page. And it could serve one visitor's bookmark highlights to
+ * another, which is somebody else's business showing up on your screen.
+ *
+ * The original reason for not being static still stands and is stronger here:
+ * a statically rendered page keeps a suppressed listing, or a stale freshness
+ * label, until an unrelated deploy.
  */
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
   const [favorites, featured, trending, recent, rookie, official] = await Promise.all([
