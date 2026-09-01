@@ -77,11 +77,6 @@ export async function loadSuppressionExamples(): Promise<SuppressionExample[]> {
   return examples
 }
 
-/** Drop the cache. Called after a suppression so the next job sees it. */
-export function clearSuppressionPool(): void {
-  pool = null
-}
-
 export interface RankingSubject {
   url: string
   discoveredVia?: string | null
