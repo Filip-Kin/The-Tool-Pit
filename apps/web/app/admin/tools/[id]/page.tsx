@@ -7,6 +7,7 @@ import { ReClassifyButton } from './re-classify-button'
 import { getDb } from '@/lib/db'
 import { toolSources, toolUpdates } from '@the-tool-pit/db'
 import { eq, desc } from 'drizzle-orm'
+import { assertAdmin } from '@/lib/admin/auth'
 
 const TOOL_TYPES = [
   'web_app', 'desktop_app', 'mobile_app', 'calculator', 'spreadsheet',
@@ -50,6 +51,7 @@ export default async function AdminToolEditPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await assertAdmin()
   const { id } = await params
   const tool = await getToolForEdit(id)
   if (!tool) notFound()

@@ -1,6 +1,7 @@
 import { getDb } from '@/lib/db'
 import { searchEvents, toolClickEvents, tools } from '@the-tool-pit/db'
 import { sql, gte, eq, and } from 'drizzle-orm'
+import { assertAdmin } from '@/lib/admin/auth'
 
 async function getAnalytics() {
   const db = getDb()
@@ -73,6 +74,7 @@ async function getAnalytics() {
 }
 
 export default async function AdminAnalyticsPage() {
+  await assertAdmin()
   const data = await getAnalytics()
 
   return (

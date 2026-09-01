@@ -4,6 +4,7 @@ import { eq, desc, sql, inArray } from 'drizzle-orm'
 import Link from 'next/link'
 import { SubmissionActions } from './submission-actions'
 import type { PipelineLogEntry } from '@the-tool-pit/db'
+import { assertAdmin } from '@/lib/admin/auth'
 
 const STATUS_TABS = ['pending', 'processing', 'needs_review', 'published', 'duplicate', 'rejected'] as const
 type TabStatus = (typeof STATUS_TABS)[number]
@@ -24,6 +25,7 @@ export default async function AdminSubmissionsPage({
 }: {
   searchParams: Promise<{ status?: string; page?: string }>
 }) {
+  await assertAdmin()
   const params = await searchParams
   const status = (STATUS_TABS.includes(params.status as TabStatus)
     ? params.status

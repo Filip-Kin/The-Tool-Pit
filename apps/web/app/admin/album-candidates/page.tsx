@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db'
 import { albumCandidates, albums, events } from '@the-tool-pit/db'
 import type { AlbumCandidateMetadata, AlbumEventMatch } from '@the-tool-pit/db'
 import { AlbumCandidateActions } from './candidate-actions'
+import { assertAdmin } from '@/lib/admin/auth'
 
 // Real candidate statuses plus two views: "submitted" = candidates from public
 // submissions (any status), and "no_cover" = published albums missing a cover
@@ -26,6 +27,7 @@ export default async function AdminAlbumCandidatesPage({
 }: {
   searchParams: Promise<{ status?: string; page?: string; q?: string }>
 }) {
+  await assertAdmin()
   const params = await searchParams
   const status = (STATUS_TABS.includes(params.status as TabStatus) ? params.status : 'pending') as TabStatus
   const page = Math.max(1, parseInt(params.page ?? '1', 10))

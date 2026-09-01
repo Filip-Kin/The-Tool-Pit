@@ -2,6 +2,7 @@ import { getDb } from '@/lib/db'
 import { toolVotes, tools } from '@the-tool-pit/db'
 import { eq, desc, sql } from 'drizzle-orm'
 import Link from 'next/link'
+import { assertAdmin } from '@/lib/admin/auth'
 
 async function getVotes() {
   const db = getDb()
@@ -26,6 +27,7 @@ async function getVotes() {
 }
 
 export default async function AdminVotesPage() {
+  await assertAdmin()
   const { total, recent } = await getVotes()
 
   return (

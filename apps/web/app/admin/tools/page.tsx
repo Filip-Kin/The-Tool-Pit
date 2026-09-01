@@ -5,12 +5,14 @@ import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { FreshnessChip } from '@/components/ui/freshness-chip'
 import { ClickableRow } from '@/components/admin/clickable-row'
+import { assertAdmin } from '@/lib/admin/auth'
 
 export default async function AdminToolsPage({
   searchParams,
 }: {
   searchParams: Promise<{ status?: string; page?: string; q?: string }>
 }) {
+  await assertAdmin()
   const params = await searchParams
   const status = params.status ?? 'published'
   const page = Math.max(1, parseInt(params.page ?? '1', 10))

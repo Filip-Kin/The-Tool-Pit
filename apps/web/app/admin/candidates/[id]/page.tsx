@@ -5,12 +5,14 @@ import { crawlCandidates, crawlJobs, tools, submissions } from '@the-tool-pit/db
 import { eq } from 'drizzle-orm'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
 import { CandidateDetailActions } from './candidate-detail-actions'
+import { assertAdmin } from '@/lib/admin/auth'
 
 export default async function AdminCandidateDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
+  await assertAdmin()
   const { id } = await params
   const db = getDb()
 

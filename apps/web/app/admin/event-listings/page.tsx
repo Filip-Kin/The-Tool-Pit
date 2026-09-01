@@ -8,7 +8,13 @@ import { EventAdminRow } from './event-admin-row'
 
 export const dynamic = 'force-dynamic'
 
-const TABS: EventListingStatus[] = ['pending', 'published', 'suppressed']
+/**
+ * 'all' is not a status, it is the absence of a filter. It is here because the
+ * sidebar needs one link per vertical that means "everything we hold", and
+ * three status tabs cannot answer "is this event already listed".
+ */
+const TABS = [...EVENT_LISTING_STATUSES, 'all'] as const
+type Tab = EventListingStatus | 'all'
 
 export default async function EventListingsAdminPage({
   searchParams,
@@ -17,9 +23,7 @@ export default async function EventListingsAdminPage({
 }) {
   await assertAdmin()
   const { status } = await searchParams
-  const active: EventListingStatus = (EVENT_LISTING_STATUSES as readonly string[]).includes(status ?? '')
-    ? (status as EventListingStatus)
-    : 'pending'
+  const active: Tab = (TABS as readonly string[]).includes(status ?? '') ? (status as Tab) : 'pending'
 
   const db = getDb()
   // Left join the account: sign-in is optional on the public form, so most rows
@@ -33,7 +37,7 @@ export default async function EventListingsAdminPage({
     })
     .from(eventListings)
     .leftJoin(users, eq(eventListings.submittedByUserId, users.id))
-    .where(eq(eventListings.status, active))
+    .where(active === 'all' ? undefined : eq(eventListings.status, active))
     .orderBy(desc(eventListings.createdAt))
 
   const all = await db.select({ status: eventListings.status }).from(eventListings)
@@ -55,7 +59,12 @@ export default async function EventListingsAdminPage({
               (t === active ? 'border-b-2 border-primary font-medium text-foreground' : 'text-muted hover:text-foreground')
             }
           >
-            {t} {counts[t] ? <span className="text-muted-2">({counts[t]})</span> : null}
+            {t}{' '}
+            {t === 'all' ? (
+              <span className="text-muted-2">({all.length})</span>
+            ) : counts[t] ? (
+              <span className="text-muted-2">({counts[t]})</span>
+            ) : null}
           </Link>
         ))}
       </div>

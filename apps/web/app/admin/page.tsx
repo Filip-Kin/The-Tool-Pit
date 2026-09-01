@@ -1,8 +1,17 @@
 import { getDb } from '@/lib/db'
-import { tools, submissions, crawlJobs, toolVotes, searchEvents } from '@the-tool-pit/db'
+import {
+  tools,
+  submissions,
+  crawlJobs,
+  toolVotes,
+  searchEvents,
+  eventListingCandidates,
+  practiceFieldCandidates,
+} from '@the-tool-pit/db'
 import { eq, sql, desc, gte } from 'drizzle-orm'
 import Link from 'next/link'
 import { ClickableRow } from '@/components/admin/clickable-row'
+import { assertAdmin } from '@/lib/admin/auth'
 
 async function getStats() {
   const db = getDb()
@@ -15,6 +24,8 @@ async function getStats() {
     [recentCrawls],
     [totalVotes],
     [searchesToday],
+    [pendingEventCandidates],
+    [pendingFieldCandidates],
   ] = await Promise.all([
     db.select({ count: sql<number>`count(*)::int` }).from(tools).where(eq(tools.status, 'published')),
     db.select({ count: sql<number>`count(*)::int` }).from(tools).where(eq(tools.status, 'draft')),
@@ -22,6 +33,16 @@ async function getStats() {
     db.select({ count: sql<number>`count(*)::int` }).from(crawlJobs).where(gte(crawlJobs.createdAt, oneDayAgo)),
     db.select({ count: sql<number>`count(*)::int` }).from(toolVotes),
     db.select({ count: sql<number>`count(*)::int` }).from(searchEvents).where(gte(searchEvents.createdAt, oneDayAgo)),
+    // The two newest discovery queues. They file overnight and nothing else on
+    // this page would show that they had, so an unattended pile stays visible.
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(eventListingCandidates)
+      .where(eq(eventListingCandidates.status, 'pending')),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(practiceFieldCandidates)
+      .where(eq(practiceFieldCandidates.status, 'pending')),
   ])
 
   const recentJobs = await db
@@ -37,11 +58,14 @@ async function getStats() {
     recentCrawls: recentCrawls.count,
     totalVotes: totalVotes.count,
     searchesToday: searchesToday.count,
+    pendingEventCandidates: pendingEventCandidates.count,
+    pendingFieldCandidates: pendingFieldCandidates.count,
     recentJobs,
   }
 }
 
 export default async function AdminOverviewPage() {
+  await assertAdmin()
   const stats = await getStats()
 
   return (
@@ -56,6 +80,18 @@ export default async function AdminOverviewPage() {
         <StatCard label="Total Votes" value={stats.totalVotes} href="/admin/votes" />
         <StatCard label="Searches Today" value={stats.searchesToday} href="/admin/analytics" />
         <StatCard label="Crawls (24h)" value={stats.recentCrawls} href="/admin/crawls" />
+        <StatCard
+          label="Event candidates"
+          value={stats.pendingEventCandidates}
+          href="/admin/event-listings/candidates"
+          highlight={stats.pendingEventCandidates > 0}
+        />
+        <StatCard
+          label="Field candidates"
+          value={stats.pendingFieldCandidates}
+          href="/admin/practice-fields/candidates"
+          highlight={stats.pendingFieldCandidates > 0}
+        />
       </div>
 
       {/* Recent crawl jobs */}

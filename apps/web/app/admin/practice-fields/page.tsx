@@ -9,7 +9,13 @@ import { FieldAdminRow } from './field-admin-row'
 
 export const dynamic = 'force-dynamic'
 
-const TABS: FieldStatus[] = ['pending', 'published', 'suppressed']
+/**
+ * 'all' is not a status, it is the absence of a filter. The sidebar needs one
+ * link per vertical that means "everything we hold", and the three status tabs
+ * cannot answer "do we already list this team's field".
+ */
+const TABS = [...FIELD_STATUSES, 'all'] as const
+type Tab = FieldStatus | 'all'
 
 export default async function PracticeFieldsAdminPage({
   searchParams,
@@ -18,9 +24,7 @@ export default async function PracticeFieldsAdminPage({
 }) {
   await assertAdmin()
   const { status } = await searchParams
-  const active: FieldStatus = (FIELD_STATUSES as readonly string[]).includes(status ?? '')
-    ? (status as FieldStatus)
-    : 'pending'
+  const active: Tab = (TABS as readonly string[]).includes(status ?? '') ? (status as Tab) : 'pending'
 
   const db = getDb()
   // Left join the account, because sign-in is optional on the public form: most
@@ -35,7 +39,7 @@ export default async function PracticeFieldsAdminPage({
     })
     .from(practiceFields)
     .leftJoin(users, eq(practiceFields.submittedByUserId, users.id))
-    .where(eq(practiceFields.status, active))
+    .where(active === 'all' ? undefined : eq(practiceFields.status, active))
     .orderBy(desc(practiceFields.createdAt))
 
   // Gallery photos for the visible fields, grouped by field id (ordered).
@@ -71,7 +75,12 @@ export default async function PracticeFieldsAdminPage({
               (t === active ? 'border-b-2 border-primary font-medium text-foreground' : 'text-muted hover:text-foreground')
             }
           >
-            {t} {counts[t] ? <span className="text-muted-2">({counts[t]})</span> : null}
+            {t}{' '}
+            {t === 'all' ? (
+              <span className="text-muted-2">({all.length})</span>
+            ) : counts[t] ? (
+              <span className="text-muted-2">({counts[t]})</span>
+            ) : null}
           </Link>
         ))}
       </div>

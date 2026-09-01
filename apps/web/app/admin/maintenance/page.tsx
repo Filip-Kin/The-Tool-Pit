@@ -4,6 +4,7 @@ import { QueueStats } from './queue-stats'
 import { QueuePoller } from './queue-poller'
 import { DedupPanel } from './dedup-panel'
 import { AdminJobTriggers } from '../crawls/job-triggers'
+import { assertAdmin } from '@/lib/admin/auth'
 
 /** Check whether any queue currently has active jobs (for enabling the poller). */
 async function hasActiveJobs(): Promise<boolean> {
@@ -23,6 +24,7 @@ async function hasActiveJobs(): Promise<boolean> {
 }
 
 export default async function MaintenancePage() {
+  await assertAdmin()
   const active = await hasActiveJobs()
 
   return (

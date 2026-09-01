@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { desc, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { albumSubmissions } from '@the-tool-pit/db'
+import { assertAdmin } from '@/lib/admin/auth'
 
 const PAGE_SIZE = 40
 
@@ -10,6 +11,7 @@ export default async function AdminAlbumSubmissionsPage({
 }: {
   searchParams: Promise<{ page?: string }>
 }) {
+  await assertAdmin()
   const params = await searchParams
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
   const offset = (page - 1) * PAGE_SIZE

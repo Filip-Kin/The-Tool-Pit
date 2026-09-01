@@ -3,6 +3,7 @@ import { getDb } from '@/lib/db'
 import { events, albums, albumCandidates, albumCrawlJobs } from '@the-tool-pit/db'
 import type { AlbumCrawlStats } from '@the-tool-pit/db'
 import { AlbumSourceTrigger } from './album-source-triggers'
+import { assertAdmin } from '@/lib/admin/auth'
 
 const CONNECTORS = [
   { connector: 'tba_events', label: 'Sync TBA events (FRC)' },
@@ -15,6 +16,7 @@ const CONNECTORS = [
 ]
 
 export default async function AdminAlbumSourcesPage() {
+  await assertAdmin()
   const db = getDb()
   const [[{ eventCount }], [{ albumCount }], [{ pendingCount }], jobs] = await Promise.all([
     db.select({ eventCount: sql<number>`count(*)::int` }).from(events),

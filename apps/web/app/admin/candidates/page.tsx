@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { CandidateActions } from './candidate-actions'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
 import { ClickableRow } from '@/components/admin/clickable-row'
+import { assertAdmin } from '@/lib/admin/auth'
 
 const STATUS_TABS = ['pending', 'suppressed', 'duplicate'] as const
 type TabStatus = (typeof STATUS_TABS)[number]
@@ -16,6 +17,7 @@ export default async function AdminCandidatesPage({
 }: {
   searchParams: Promise<{ status?: string; page?: string }>
 }) {
+  await assertAdmin()
   const params = await searchParams
   const status = (STATUS_TABS.includes(params.status as TabStatus) ? params.status : 'pending') as TabStatus
   const page = Math.max(1, parseInt(params.page ?? '1', 10))

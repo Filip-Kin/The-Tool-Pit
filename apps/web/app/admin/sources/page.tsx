@@ -3,6 +3,7 @@ import { toolSources, tools } from '@the-tool-pit/db'
 import { eq, desc, sql } from 'drizzle-orm'
 import Link from 'next/link'
 import { SourceTriggerButton } from './source-triggers'
+import { assertAdmin } from '@/lib/admin/auth'
 
 const SOURCE_DEFS = [
   {
@@ -90,6 +91,7 @@ async function getSourceStats() {
 }
 
 export default async function SourcesPage() {
+  await assertAdmin()
   const { countMap, recent } = await getSourceStats()
 
   return (

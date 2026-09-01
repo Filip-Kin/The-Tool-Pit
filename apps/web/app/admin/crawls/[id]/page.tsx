@@ -5,6 +5,7 @@ import { crawlJobs, crawlCandidates } from '@the-tool-pit/db'
 import { eq, desc, and, sql } from 'drizzle-orm'
 import type { CrawlJobStats } from '@the-tool-pit/types'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
+import { assertAdmin } from '@/lib/admin/auth'
 
 const CANDIDATE_STATUSES = ['all', 'pending', 'matched', 'merged', 'published', 'suppressed', 'duplicate'] as const
 type CandidateStatus = (typeof CANDIDATE_STATUSES)[number]
@@ -17,6 +18,7 @@ export default async function CrawlJobDetailPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ status?: string; page?: string }>
 }) {
+  await assertAdmin()
   const { id } = await params
   const sp = await searchParams
   const status = (CANDIDATE_STATUSES.includes(sp.status as CandidateStatus) ? sp.status : 'all') as CandidateStatus
