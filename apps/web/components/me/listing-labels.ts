@@ -35,6 +35,8 @@ export function methodLabel(method: string): string {
       return 'Your own submission'
     case 'repo_file':
       return 'Repository file check'
+    case 'github_account':
+      return 'Linked GitHub account'
     case 'domain_email':
       return 'Email domain'
     case 'invite':

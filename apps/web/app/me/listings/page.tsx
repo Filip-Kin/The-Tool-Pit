@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth/session'
 import { MeShell } from '@/components/me/me-shell'
 import { OwnedListings } from '@/components/me/owned-listings'
 import { PendingClaims } from '@/components/me/pending-claims'
+import { GithubLinkCard } from '@/components/me/github-link-card'
 import {
   listOwnedListings,
   listClaimsForUser,
@@ -37,6 +38,10 @@ export default async function ListingsPage() {
       active="listings"
     >
       <div className="flex flex-col gap-12">
+        {/* Above the list on purpose. For a repo-backed listing this is the
+            one-click route to ownership, and the claim flow below it is the
+            slow path somebody falls back to. */}
+        <GithubLinkCard showWhenLinked />
         <OwnedListings listings={owned} leaveAction={removeOwner} />
         <PendingClaims claims={openClaims} verifyFilename={VERIFY_FILENAME} verifyAction={verifyRepoClaim} />
 

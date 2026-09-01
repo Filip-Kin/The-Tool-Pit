@@ -2,7 +2,14 @@
 
 import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { signInWithGoogle, signInWithEmail, registerWithEmail, resetPassword } from '@/lib/auth/client'
+import { Github } from 'lucide-react'
+import {
+  signInWithGoogle,
+  signInWithGithub,
+  signInWithEmail,
+  registerWithEmail,
+  resetPassword,
+} from '@/lib/auth/client'
 import { useSession } from './session-provider'
 
 type Mode = 'signin' | 'register' | 'reset'
@@ -11,6 +18,10 @@ type Mode = 'signin' | 'register' | 'reset'
  * One sign-in dialog for every vertical. Google first because almost everyone
  * in FIRST already has a school or personal Google account; email and password
  * is the fallback for anyone who does not, or who does not want to link one.
+ *
+ * GitHub sits beside Google because for this site it is not just another
+ * sign-in: 623 of the listings are built from a GitHub repository, and signing
+ * in with GitHub is what hands those to the people who wrote them.
  */
 export function SignInDialog({
   open,
@@ -30,7 +41,7 @@ export function SignInDialog({
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
-  async function run(fn: () => Promise<void>, after?: () => void) {
+  async function run(fn: () => Promise<unknown>, after?: () => void) {
     setBusy(true)
     setError(null)
     setNotice(null)
@@ -80,6 +91,19 @@ export function SignInDialog({
               >
                 Continue with Google
               </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => run(signInWithGithub, finish)}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-border-subtle px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface disabled:opacity-50"
+              >
+                <Github className="h-4 w-4" aria-hidden />
+                Continue with GitHub
+              </button>
+              <p className="mt-2 text-xs text-muted-2">
+                Signing in with GitHub also gives you any listing built from your repositories. We only
+                ask to read your profile and the organisations you belong to.
+              </p>
               <div className="my-4 flex items-center gap-3 text-xs text-muted">
                 <span className="h-px flex-1 bg-border-subtle" />
                 or
@@ -179,6 +203,17 @@ function friendlyAuthError(code: string, fallback: string): string {
       return 'Too many attempts. Wait a few minutes and try again.'
     case 'auth/network-request-failed':
       return 'Could not reach the sign-in service. Check your connection.'
+    case 'auth/account-exists-with-different-credential':
+      // The one people actually hit: they signed up with Google months ago and
+      // GitHub carries the same email. Firebase's own text for this names no
+      // account and offers no next step, so it gets replaced outright.
+      return 'You already have an account with that email address. Sign in the way you did before, then link GitHub from Your listings.'
+    case 'auth/credential-already-in-use':
+      return 'That GitHub account is already attached to a different account here. Sign in with that one instead.'
+    case 'auth/provider-already-linked':
+      return 'Your GitHub account is already linked.'
+    case 'auth/user-mismatch':
+      return 'That is a different GitHub account from the one linked here.'
     default:
       return fallback
   }

@@ -1,6 +1,23 @@
 import { NextResponse } from 'next/server'
+import type { User } from '@the-tool-pit/db'
 import { verifyFirebaseIdToken } from '@/lib/auth/verify-token'
 import { createSession, destroySession, getCurrentUser } from '@/lib/auth/session'
+
+/**
+ * The thin user the browser is allowed to see. githubLogin is here so the
+ * link-GitHub card knows whether to offer the link or the re-check without a
+ * second round trip; it is a public display name on GitHub either way, and
+ * nothing on the client is trusted with it.
+ */
+function publicUser(user: User) {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    photoUrl: user.photoUrl,
+    githubLogin: user.githubLogin,
+  }
+}
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -28,28 +45,14 @@ export async function POST(req: Request) {
   }
 
   const user = await createSession(identity)
-  return NextResponse.json({
-    user: {
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-      photoUrl: user.photoUrl,
-    },
-  })
+  return NextResponse.json({ user: publicUser(user) })
 }
 
 /** GET - who am I? Used by the client to hydrate after a hard load. */
 export async function GET() {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ user: null })
-  return NextResponse.json({
-    user: {
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-      photoUrl: user.photoUrl,
-    },
-  })
+  return NextResponse.json({ user: publicUser(user) })
 }
 
 /** DELETE - sign out. Clears our cookie; the client also signs out of Firebase. */

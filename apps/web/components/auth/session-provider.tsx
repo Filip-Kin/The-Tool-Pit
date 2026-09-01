@@ -12,6 +12,8 @@ export interface SessionUser {
   email: string | null
   displayName: string | null
   photoUrl: string | null
+  /** The linked GitHub login, or null. Drives the link-GitHub card. */
+  githubLogin: string | null
 }
 
 interface SessionContextValue {

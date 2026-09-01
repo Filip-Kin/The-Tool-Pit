@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { RobotCodeSubmitForm } from '@/components/robot-code/robot-code-submit-form'
+import { GithubLinkCard } from '@/components/me/github-link-card'
 
 export const metadata: Metadata = {
   title: 'Add your team',
@@ -21,6 +22,11 @@ export default function SubmitRobotCodePage() {
           rather than whatever a crawler guesses from the repo name. Someone checks the link before it goes on
           the list, so it will not appear straight away. No account needed.
         </p>
+      </div>
+      {/* Every listing on this page is a repository, so this is the vertical
+          where linking pays back hardest. */}
+      <div className="mb-6">
+        <GithubLinkCard />
       </div>
       <RobotCodeSubmitForm />
     </div>

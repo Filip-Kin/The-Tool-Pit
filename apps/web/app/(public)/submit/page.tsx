@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { SubmitForm } from '@/components/submit/submit-form'
+import { GithubLinkCard } from '@/components/me/github-link-card'
 
 export const metadata: Metadata = {
   title: 'Submit a Tool',
@@ -15,6 +16,12 @@ export default function SubmitPage() {
           Know something useful that should be here? Paste the URL and we&apos;ll take care of the
           rest. No account required.
         </p>
+      </div>
+      {/* Renders nothing for a signed-out visitor, and nothing for somebody
+          already linked. Here because a person submitting a tool is usually
+          holding the repo it is built from. */}
+      <div className="mb-8">
+        <GithubLinkCard />
       </div>
       <SubmitForm />
     </div>

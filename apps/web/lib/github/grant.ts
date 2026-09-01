@@ -9,10 +9,11 @@ import {
   type ClaimEvidence,
   type User,
 } from '@the-tool-pit/db'
-import { listingFacts, type ListingFacts } from '@/lib/queries/listing-ownership'
+import { listingFacts } from '@/lib/queries/listing-ownership'
 import { sendApprovalNotice, reviewClaimUrl } from '@the-tool-pit/types'
 import { GithubLinkError, type GithubIdentity } from './identity'
 import { matchNamespace, planGithubGrants, type RepoLink } from './namespaces'
+import type { GithubGrantSummary } from './summary'
 
 /**
  * Turning a verified GitHub identity into listing ownership.
@@ -30,25 +31,6 @@ import { matchNamespace, planGithubGrants, type RepoLink } from './namespaces'
  * Safe to run again and again, which is what the re-check button leans on:
  * listings the user already holds produce no writes at all.
  */
-
-/** One listing the link handed over, named so the user can see what they got. */
-export interface GrantedListing {
-  entityId: string
-  title: string
-  href: string
-}
-
-export interface GithubGrantSummary {
-  login: string
-  /** Listings this run granted. Empty is a normal outcome, not a failure. */
-  granted: GrantedListing[]
-  /** Matched, but somebody else owns them, so an admin was asked instead. */
-  disputed: GrantedListing[]
-  /** Matched and already yours. Only ever non-zero on a re-check. */
-  alreadyYours: number
-  /** False when the token had no read:org, so private memberships were invisible. */
-  sawPrivateOrgs: boolean
-}
 
 /**
  * Write the GitHub identity onto the user row.
@@ -241,5 +223,3 @@ export async function applyGithubGrants(
 
   return summary
 }
-
-export type { ListingFacts }
