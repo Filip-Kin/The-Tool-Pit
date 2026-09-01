@@ -58,10 +58,61 @@ interface RawSearchResponse {
   posts?: Array<{ blurb?: string; topic_id: number }>
 }
 
+interface RawPostAction {
+  /** Discourse post-action ids. 2 is "like". The rest are flags and bookmarks. */
+  id?: number
+  count?: number
+}
+
+interface RawPost {
+  cooked?: string
+  raw?: string
+  actions_summary?: RawPostAction[]
+}
+
 interface RawTopicDetail {
   created_at?: string
   category_id?: number
-  post_stream?: { posts?: Array<{ cooked?: string; raw?: string }> }
+  like_count?: number
+  posts_count?: number
+  post_stream?: { posts?: RawPost[] }
+}
+
+/** Discourse's post-action id for a like. Everything else in the array is a flag. */
+const LIKE_ACTION_ID = 2
+
+/**
+ * Likes on the OPENING post of a thread.
+ *
+ * The opening post only, and this is the whole of the Chief Delphi popularity
+ * signal. See the note above fetchChiefDelphiTopic for why the topic's own
+ * like_count is not usable and why summing the thread is worse.
+ *
+ * Pure and exported so the rule can be tested against a captured payload
+ * without going near the forum.
+ */
+export function openingPostLikes(detail: { post_stream?: { posts?: RawPost[] } }): number {
+  const first = detail.post_stream?.posts?.[0]
+  if (!first) return 0
+  for (const action of first.actions_summary ?? []) {
+    if (action.id === LIKE_ACTION_ID) return action.count ?? 0
+  }
+  return 0
+}
+
+/**
+ * Topic id out of a Chief Delphi thread URL.
+ *
+ * Discourse thread URLs are /t/<slug>/<id> and sometimes /t/<slug>/<id>/<post>,
+ * so the id is the first numeric segment after the slug, not the last one.
+ * Returns null for anything that is not a thread, which includes the category
+ * and user pages that end up in tool_links.
+ */
+export function parseChiefDelphiTopicId(url: string): number | null {
+  const match = url.match(/chiefdelphi\.com\/t\/[^/]+\/(\d+)/)
+  if (!match) return null
+  const id = Number(match[1])
+  return Number.isInteger(id) && id > 0 ? id : null
 }
 
 /** One Discourse search. Never throws: a dead query must not kill a sweep. */
@@ -112,6 +163,29 @@ export interface DiscourseTopicDetail {
   /** Plain markdown of the opening post, when Discourse returned it. */
   raw: string
   createdAt: string | null
+  /**
+   * Likes on the opening post. This is the Chief Delphi half of a tool's
+   * popularity score.
+   *
+   * NOT the topic's like_count, which is the sum over every post and therefore
+   * measures how long the thread got rather than how good the tool is. Measured
+   * on production threads: the Statbotics 2023 thread carries 2186 likes across
+   * 424 posts for a project with 102 GitHub stars, and YAGSL carries 662 across
+   * 1425 posts, while the AdvantageScope 2026 announcement carries 159 across
+   * 45. Ranking on that number puts a busy support thread above WPILib.
+   *
+   * Summing the thread by hand is worse again, and not only because it measures
+   * the same wrong thing: /t/<id>.json returns the first 20 posts, so a full
+   * sum of a 1425-post thread is seventy requests to a volunteer-run forum for
+   * one listing.
+   *
+   * The opening post is in the first response and is the one people like
+   * because of the tool. Across 20 sampled threads it runs 1 to 69 and
+   * separates cleanly: "Feedback on RidgeScout" 1, "Universal Parts Library" 6,
+   * "Introducing BumbleBoard" 26, "Maneuver" 46, "Yet Another Software Suite"
+   * 60.
+   */
+  openingPostLikes: number
 }
 
 /**
@@ -132,6 +206,7 @@ export async function fetchChiefDelphiTopic(topicId: number): Promise<DiscourseT
       html: first?.cooked ?? '',
       raw: first?.raw ?? '',
       createdAt: detail.created_at ?? null,
+      openingPostLikes: openingPostLikes(detail),
     }
   } catch {
     await delay(TOPIC_DELAY_MS)

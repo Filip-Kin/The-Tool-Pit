@@ -68,7 +68,7 @@ const popularityWorker = new Worker<PopularityRefreshPayload>(
   'popularity',
   async (job) => {
     console.log(`[popularity] starting refresh pass ${job.id}`)
-    await processPopularityRefreshJob()
+    await processPopularityRefreshJob(job.data)
   },
   // Concurrency MUST stay 1. The pass holds the GitHub rate-limit budget in its
   // own loop and stops when it runs low, and a second copy running beside it

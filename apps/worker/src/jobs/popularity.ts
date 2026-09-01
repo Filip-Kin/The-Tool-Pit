@@ -23,10 +23,17 @@ import { and, eq, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import { tools, toolLinks } from '@the-tool-pit/db'
 import { fetchGitHubRepoOutcome } from '../connectors/github.js'
+import { fetchChiefDelphiTopic, parseChiefDelphiTopicId } from '../connectors/discourse.js'
 import { delay } from '../connectors/base.js'
 
-/** Nothing to vary yet. The pass always covers every published listing. */
-export type PopularityRefreshPayload = Record<string, never>
+export interface PopularityRefreshPayload {
+  /**
+   * Skip the Chief Delphi half. The forum moves far slower than GitHub and it
+   * is somebody else's server, so an operator re-running the pass by hand to
+   * pick up stars should not make 165 more requests to it.
+   */
+  skipChiefDelphi?: boolean
+}
 
 export interface PopularityRefreshStats {
   githubConsidered: number
@@ -34,6 +41,9 @@ export interface PopularityRefreshStats {
   /** 404s. The last known star count is kept, deliberately. */
   githubGone: number
   githubFailed: number
+  chiefDelphiConsidered: number
+  chiefDelphiRefreshed: number
+  chiefDelphiFailed: number
   /** True when a rate limit cut the pass short. Tomorrow's pass finishes it. */
   stoppedEarly: boolean
   scoresRewritten: number
@@ -60,13 +70,18 @@ const GITHUB_DELAY_MS = 250
  */
 const RATE_LIMIT_FLOOR = 100
 
-export async function processPopularityRefreshJob(): Promise<PopularityRefreshStats> {
+export async function processPopularityRefreshJob(
+  payload: PopularityRefreshPayload = {},
+): Promise<PopularityRefreshStats> {
   const db = getDb()
   const stats: PopularityRefreshStats = {
     githubConsidered: 0,
     githubRefreshed: 0,
     githubGone: 0,
     githubFailed: 0,
+    chiefDelphiConsidered: 0,
+    chiefDelphiRefreshed: 0,
+    chiefDelphiFailed: 0,
     stoppedEarly: false,
     scoresRewritten: 0,
   }
@@ -131,6 +146,55 @@ export async function processPopularityRefreshJob(): Promise<PopularityRefreshSt
 
   // #endregion
 
+  // #region Chief Delphi likes
+  //
+  // Half the popularity formula had never done anything: chief_delphi_likes was
+  // read by publish.ts and by the ranking, and was zero on all 1094 published
+  // listings because nothing ever wrote it.
+  //
+  // It is worth having, and the reason is the 99 listings that carry a Chief
+  // Delphi thread and no GitHub stars at all. Those score zero today and are
+  // invisible, and a forum thread is the only popularity evidence that exists
+  // for a calculator or a hosted web app with no repo.
+  //
+  // Left at parity with a star, which is what the existing formula already
+  // assumed. On the fifteen listings sampled that carry both, a star count runs
+  // roughly one to nine times the like count with a median near three, so a
+  // weight of about 3 would put the two on equal footing. That is a tuning
+  // decision on fifteen points and it is not made here: parity is the
+  // conservative reading, and the ratio is written down so it can be revisited
+  // against the full corpus once this job has actually populated the column.
+
+  if (!payload.skipChiefDelphi) {
+    const cdTargets = await db
+      .select({ id: tools.id, slug: tools.slug, url: toolLinks.url })
+      .from(tools)
+      .innerJoin(toolLinks, eq(toolLinks.toolId, tools.id))
+      .where(and(eq(tools.status, 'published'), sql`${toolLinks.url} like '%chiefdelphi.com/t/%'`))
+
+    for (const target of cdTargets) {
+      const topicId = parseChiefDelphiTopicId(target.url)
+      if (topicId === null) continue
+      stats.chiefDelphiConsidered++
+
+      // The Discourse client paces itself, so there is no delay call here.
+      const detail = await fetchChiefDelphiTopic(topicId)
+      if (!detail) {
+        stats.chiefDelphiFailed++
+        console.warn(`[popularity] ${target.slug}: chief delphi topic ${topicId} did not answer`)
+        continue
+      }
+
+      await db
+        .update(tools)
+        .set({ chiefDelphiLikes: detail.openingPostLikes, updatedAt: new Date() })
+        .where(eq(tools.id, target.id))
+      stats.chiefDelphiRefreshed++
+    }
+  }
+
+  // #endregion
+
   // #region recompute
   //
   // One statement over every published row, not one per tool we touched. A
@@ -156,7 +220,8 @@ export async function processPopularityRefreshJob(): Promise<PopularityRefreshSt
   console.log(
     `[popularity] github ${stats.githubRefreshed}/${stats.githubConsidered} refreshed, ` +
       `${stats.githubGone} gone, ${stats.githubFailed} failed; ` +
-      `${stats.scoresRewritten} scores rewritten` +
+      `chief delphi ${stats.chiefDelphiRefreshed}/${stats.chiefDelphiConsidered} refreshed, ` +
+      `${stats.chiefDelphiFailed} failed; ${stats.scoresRewritten} scores rewritten` +
       (stats.stoppedEarly ? ' (STOPPED EARLY on rate limit)' : ''),
   )
 
