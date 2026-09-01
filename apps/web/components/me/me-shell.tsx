@@ -17,8 +17,9 @@ export function MeShell({
   children,
 }: {
   title: string
-  intro: string
-  active: 'saved' | 'listings' | 'team' | 'profile' | 'notifications'
+  /** Optional: a page whose heading and tab already say what it is skips it. */
+  intro?: string
+  active: 'saved' | 'listings' | 'team' | 'notifications'
   children: React.ReactNode
 }) {
   return (
@@ -28,12 +29,11 @@ export function MeShell({
         <div className="container mx-auto max-w-5xl px-4 py-10 sm:py-14">
           <header className="mb-10">
             <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{title}</h1>
-            <p className="mt-2 max-w-2xl text-sm text-muted">{intro}</p>
+            {intro && <p className="mt-2 max-w-2xl text-sm text-muted">{intro}</p>}
             <nav className="mt-6 flex items-center gap-1 overflow-x-auto border-b border-border-subtle">
               <Tab href="/me" label="Saved" active={active === 'saved'} />
               <Tab href="/me/listings" label="Your listings" active={active === 'listings'} />
               <Tab href="/me/team" label="My teams" active={active === 'team'} />
-              <Tab href="/me/team/profile" label="Team profile" active={active === 'profile'} />
               <Tab href="/me/notifications" label="Notifications" active={active === 'notifications'} />
             </nav>
           </header>

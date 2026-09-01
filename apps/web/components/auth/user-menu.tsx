@@ -64,7 +64,7 @@ export function UserMenu() {
           <div className="px-3 py-2 text-xs text-muted">{user.email ?? label}</div>
           <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
           <MenuLink href="/me">Saved items</MenuLink>
-          <MenuLink href="/me/team">My team</MenuLink>
+          <MenuLink href="/me/team">My teams</MenuLink>
           <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
           <DropdownMenu.Item
             onSelect={() => {

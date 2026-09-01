@@ -237,17 +237,17 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
 }
 
 /**
- * Absolute link to the team profile editor.
+ * Absolute link to the team screen, which is where the profile editor lives.
  *
  * /me lives on the tools host, and this page is served from grants.*, so a
- * relative "/me/team/profile" would be rewritten into the grants route tree and
- * 404. getVerticalLinks() already works the hosts out from the request, which
- * also keeps this correct on frc.tools and on a dev box with no subdomains.
+ * relative "/me/team" would be rewritten into the grants route tree and 404.
+ * getVerticalLinks() already works the hosts out from the request, which also
+ * keeps this correct on frc.tools and on a dev box with no subdomains.
  */
 async function teamProfileHref(): Promise<string> {
   const links = await getVerticalLinks('grants')
   const tools = links.find((l) => l.key === 'tools')?.href ?? '/'
-  return `${tools.replace(/\/$/, '')}/me/team/profile`
+  return `${tools.replace(/\/$/, '')}/me/team`
 }
 
 function Fact({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {

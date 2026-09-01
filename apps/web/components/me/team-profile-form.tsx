@@ -1,7 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Lock } from 'lucide-react'
 import {
   PROFILE_GROUPS,
@@ -30,7 +29,7 @@ import {
  * change one box, and hiding the other twenty behind Next buttons makes that a
  * chore.
  *
- * Two things are deliberate and easy to get wrong later:
+ * Three things are deliberate and easy to get wrong later:
  *
  *  1. Every field is rendered even when it does not apply to this team's
  *     organisation type. A hidden input is absent from the FormData, and the
@@ -39,9 +38,14 @@ import {
  *     already entered. Fields that do not apply are marked, not removed, and
  *     the completeness maths skips them.
  *  2. Inputs are controlled AND named. Controlled so the completeness figure
- *     moves as you type, named so the submit path is a plain
+ *     moves as you type, named so the save path is a plain
  *     `new FormData(form)` with no hand-written serialisation to drift from
  *     what the action expects.
+ *  3. There is no Save button. It saved fine and behaved badly: a sticky bar at
+ *     the bottom of a long form flickers in and out on a phone every time the
+ *     keyboard resizes the visual viewport. The status line replacing it is
+ *     sticky at the TOP, which the keyboard does not move, and it always
+ *     occupies its height so nothing under it shifts.
  */
 
 // #region state
@@ -166,6 +170,35 @@ function toFieldValues(state: FormState): ProfileFieldValues {
   }
 }
 
+/**
+ * A comparable snapshot of the form.
+ *
+ * Autosave has to be able to answer "has anything actually changed since the
+ * server last accepted this?" without keeping a second copy of every field.
+ * Boilerplate keys are sorted because setBoilerplate appends a key the first
+ * time it is typed into, and insertion order must not read as a change.
+ */
+function serialiseState(state: FormState): string {
+  const boilerplate = Object.keys(state.boilerplate)
+    .sort()
+    .map((key) => [key, state.boilerplate[key]] as const)
+  return JSON.stringify({ ...state, boilerplate })
+}
+
+// #endregion
+
+// #region autosave
+
+/** Quiet period after the last keystroke. Long enough to not save mid-word. */
+const AUTOSAVE_DEBOUNCE_MS = 800
+
+type SaveStatus =
+  /** Loaded and untouched, or edited and waiting for the debounce. */
+  | { kind: 'idle'; dirty: boolean }
+  | { kind: 'saving' }
+  | { kind: 'saved' }
+  | { kind: 'failed'; message: string }
+
 // #endregion
 
 export function TeamProfileForm({
@@ -180,42 +213,137 @@ export function TeamProfileForm({
   costByField: Record<string, number>
   saveAction: (formData: FormData) => Promise<{ error?: string; completeness?: number }>
 }) {
-  const router = useRouter()
   const [state, setState] = useState<FormState>(() => toState(profile))
-  const [pending, start] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
+  const [status, setStatus] = useState<SaveStatus>({ kind: 'idle', dirty: false })
 
   const values = useMemo(() => toFieldValues(state), [state])
   const completeness = useMemo(() => computeCompleteness(values), [values])
 
+  const formRef = useRef<HTMLFormElement>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Mirrors state, so the debounced callback reads the newest values, not a closed-over old render. */
+  const stateRef = useRef(state)
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
+  /**
+   * The snapshot the server last accepted, seeded with what was loaded so an
+   * untouched form never saves. A failed save must NOT update it: that is what
+   * stops a rejected value being treated as stored.
+   */
+  const [loadedSnapshot] = useState(() => serialiseState(toState(profile)))
+  const savedRef = useRef(loadedSnapshot)
+  const savingRef = useRef(false)
+  /** An edit arrived while a save was in flight; run once more when it lands. */
+  const queuedRef = useRef(false)
+
+  /**
+   * Send the whole form.
+   *
+   * Whole-form and not per-field, because saveTeamProfile reads an absent
+   * FormData key as an empty value: posting one field would blank the other
+   * twenty. FormData still comes off the DOM rather than from state, so there
+   * is one serialisation and it cannot drift from what the action parses.
+   *
+   * Validation stays entirely on the server. Duplicating the integer ranges
+   * here would give two sets of rules to keep in step, and the action already
+   * returns a message we can show. What the user must never get is a value the
+   * server rejected sitting in a field that looks saved, so a failure keeps
+   * their text, keeps the stale snapshot, and says so.
+   */
+  const save = useCallback(async () => {
+    if (!canEdit) return
+    const form = formRef.current
+    if (!form) return
+
+    const snapshot = serialiseState(stateRef.current)
+    if (snapshot === savedRef.current) return
+    if (savingRef.current) {
+      queuedRef.current = true
+      return
+    }
+
+    savingRef.current = true
+    setStatus({ kind: 'saving' })
+    const res = await saveAction(new FormData(form))
+    savingRef.current = false
+    const queued = queuedRef.current
+    queuedRef.current = false
+
+    if (res.error) {
+      // The snapshot stays stale on purpose, so the next blur or keystroke
+      // retries rather than believing the rejected value is stored.
+      setStatus({ kind: 'failed', message: res.error })
+      return
+    }
+    savedRef.current = snapshot
+    setStatus({ kind: 'saved' })
+
+    // Whatever was typed during the round trip has not been sent yet. The
+    // snapshot check at the top of the next pass makes this a no-op if it has.
+    if (queued) void save()
+  }, [canEdit, saveAction])
+
+  /** Cancel the pending debounce and go now. Used by blur, tab-away and Retry. */
+  const saveNow = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = null
+    void save()
+  }, [save])
+
+  function scheduleSave() {
+    if (!canEdit) return
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null
+      void save()
+    }, AUTOSAVE_DEBOUNCE_MS)
+  }
+
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setSaved(false)
     setState((prev) => ({ ...prev, [key]: value }))
+    setStatus({ kind: 'idle', dirty: true })
+    scheduleSave()
   }
 
   function setBoilerplate(key: string, value: string) {
-    setSaved(false)
     setState((prev) => ({ ...prev, boilerplate: { ...prev.boilerplate, [key]: value } }))
+    setStatus({ kind: 'idle', dirty: true })
+    scheduleSave()
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const data = new FormData(e.currentTarget)
-    setError(null)
-    start(async () => {
-      const res = await saveAction(data)
-      if (res.error) {
-        setError(res.error)
-        return
-      }
-      setSaved(true)
-      // Refresh so the "what this is costing you" panel above the form reflects
-      // the save. The match counts themselves only change once the worker has
-      // rerun, which the panel says for itself.
-      router.refresh()
-    })
+  /**
+   * Leaving the field commits it. onBlur on the form catches every input
+   * because React's onBlur is focusout, which bubbles, so tabbing between two
+   * boxes saves without waiting out the debounce.
+   */
+  function onBlur() {
+    saveNow()
   }
+
+  useEffect(() => {
+    /**
+     * Switching apps on a phone is how a half-typed answer gets lost: the tab
+     * can be discarded while the debounce is still counting. visibilitychange
+     * fires before that, beforeunload covers closing the tab on a desktop.
+     */
+    function onHide() {
+      if (document.visibilityState === 'hidden') saveNow()
+    }
+    function onUnload(e: BeforeUnloadEvent) {
+      if (serialiseState(stateRef.current) === savedRef.current) return
+      e.preventDefault()
+      // Older engines ignore preventDefault here and want a set returnValue.
+      e.returnValue = ''
+    }
+    document.addEventListener('visibilitychange', onHide)
+    window.addEventListener('beforeunload', onUnload)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      window.removeEventListener('beforeunload', onUnload)
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [saveNow])
 
   /** Shared props for every field wrapper, so the cost chips stay consistent. */
   const fieldProps = (key: ProfileFieldKey) => ({
@@ -225,18 +353,35 @@ export function TeamProfileForm({
   })
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-8">
+    <form
+      ref={formRef}
+      onSubmit={(e) => {
+        // Enter in a text box still implicit-submits a form with no submit
+        // button. Commit rather than reload the page.
+        e.preventDefault()
+        saveNow()
+      }}
+      onBlur={onBlur}
+      className="flex flex-col gap-8"
+    >
       <input type="hidden" name="profileId" value={profile.id} />
 
-      <CompletenessBar percent={completeness} stored={profile.completeness} />
+      {canEdit && <SaveStatus status={status} onRetry={saveNow} />}
+
+      <CompletenessBar percent={completeness} />
 
       {!canEdit && (
         <p role="status" className="rounded-lg border border-border-subtle bg-surface p-4 text-sm text-muted">
-          You have view access to this profile. Ask an owner for edit access to change anything.
+          View only. Ask an owner for edit access.
         </p>
       )}
 
-      <fieldset disabled={!canEdit || pending} className="flex flex-col gap-8">
+      {/*
+        Disabled on canEdit alone. Disabling it while a save is in flight would
+        blur whatever the user is typing in every 800ms, which is the failure
+        the old Save button never had.
+      */}
+      <fieldset disabled={!canEdit} className="flex flex-col gap-8">
         <Group groupKey="entity">
           <Field {...fieldProps('teamName')} label="Team name">
             <input
@@ -282,7 +427,6 @@ export function TeamProfileForm({
               name="fiscalSponsorName"
               value={state.fiscalSponsorName}
               onChange={(e) => set('fiscalSponsorName', e.target.value)}
-              placeholder="The 501(c)(3) that receives the money for you"
               className="input"
             />
           </Field>
@@ -337,7 +481,7 @@ export function TeamProfileForm({
               placeholder="US"
               className="input"
             />
-            <p className="mt-1 text-xs text-muted-2">Two-letter code, for example US, CA, MX, IL, TR.</p>
+            <p className="mt-1 text-xs text-muted-2">Two-letter code.</p>
           </Field>
 
           <Field {...fieldProps('region')} label="State or province">
@@ -465,7 +609,6 @@ export function TeamProfileForm({
               value={state.missionStatement}
               onChange={(e) => set('missionStatement', e.target.value)}
               rows={4}
-              placeholder="One or two sentences on what the team is for."
               className="input"
             />
           </Field>
@@ -491,9 +634,7 @@ export function TeamProfileForm({
             {customBoilerplateKeys(profile.boilerplate).map((key) => (
               <label key={key} className="flex flex-col gap-1.5">
                 <span className="text-sm font-medium text-foreground">{key}</span>
-                <span className="text-xs text-muted-2">
-                  A custom answer already on your profile. Kept because an application form may point at it.
-                </span>
+                <span className="text-xs text-muted-2">Custom key. An application form may point at it.</span>
                 <textarea
                   name={`boilerplate.${key}`}
                   value={state.boilerplate[key] ?? ''}
@@ -507,34 +648,71 @@ export function TeamProfileForm({
         </Group>
       </fieldset>
 
-      {canEdit && (
-        <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-4 border-t border-border-subtle bg-surface/95 px-4 py-3 backdrop-blur">
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-40"
-          >
-            {pending ? 'Saving…' : 'Save profile'}
-          </button>
-          {saved && !pending && (
-            <span role="status" className="text-sm text-rookie">
-              Saved. Your matches will be recalculated shortly.
-            </span>
-          )}
-          {/* role=alert so a screen reader hears a rejected value, since the
-              only other signal is the number not changing. */}
-          {error && (
-            <span role="alert" className="text-sm text-frc">
-              {error}
-            </span>
-          )}
-        </div>
-      )}
+      {canEdit && <SaveStatus status={status} onRetry={saveNow} failuresOnly />}
     </form>
   )
 }
 
 // #region layout pieces
+
+/**
+ * The only thing left where a Save button was.
+ *
+ * Nothing here is pinned. A sticky bar is what made the old Save button
+ * unusable: an on-screen keyboard shrinks the visual viewport, so a
+ * bottom-pinned element pops in and out on every scroll. Pinning it to the top
+ * instead would put it under the site header, which is already sticky at z-50.
+ * So it sits in the flow, at a fixed height so a status change never moves the
+ * field under the cursor, and it is rendered twice: once above the fields and,
+ * when a save has failed, once below them. A failure is the one state where the
+ * user has text that is not stored, so it is the one worth saying twice.
+ */
+function SaveStatus({
+  status,
+  onRetry,
+  failuresOnly,
+}: {
+  status: SaveStatus
+  onRetry: () => void
+  /** The copy below the fields, which stays out of the way unless something broke. */
+  failuresOnly?: boolean
+}) {
+  if (status.kind === 'failed') {
+    return (
+      <div className="flex flex-wrap items-center gap-3 rounded-md border border-frc/30 bg-frc/10 px-3 py-2">
+        {/* role=alert, not status: this is the message that costs the user
+            something, so a screen reader should interrupt for it. Only the
+            first copy announces, or it is read out twice. */}
+        <span role={failuresOnly ? undefined : 'alert'} className="text-sm text-frc">
+          Not saved. {status.message}
+        </span>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="rounded-md border border-frc/40 px-2.5 py-1 text-sm font-medium text-frc transition-colors hover:bg-frc/10"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  if (failuresOnly) return null
+
+  return (
+    <div className="flex min-h-9 items-center">
+      <span role="status" className="text-sm text-muted-2">
+        {status.kind === 'saving'
+          ? 'Saving…'
+          : status.kind === 'saved'
+            ? 'Saved'
+            : status.dirty
+              ? 'Not saved yet'
+              : 'Saves as you type'}
+      </span>
+    </div>
+  )
+}
 
 function Group({ groupKey, children }: { groupKey: ProfileGroupKey; children: React.ReactNode }) {
   const group = PROFILE_GROUPS.find((g) => g.key === groupKey)
@@ -542,7 +720,7 @@ function Group({ groupKey, children }: { groupKey: ProfileGroupKey; children: Re
   return (
     <section>
       <h2 className="text-lg font-semibold text-foreground">{group.title}</h2>
-      <p className="mt-1 max-w-2xl text-sm text-muted">{group.blurb}</p>
+      {group.blurb && <p className="mt-1 max-w-2xl text-sm text-muted">{group.blurb}</p>}
       <div className="mt-4 grid gap-5 sm:grid-cols-2">{children}</div>
     </section>
   )
@@ -597,8 +775,12 @@ function Field({
   )
 }
 
-function CompletenessBar({ percent, stored }: { percent: number; stored: number }) {
-  const unsaved = percent !== stored
+/**
+ * Live percentage only. It used to also report the stored value when the two
+ * disagreed, which was there to tell you that you had unsaved work. Autosave
+ * and the status bar answer that now.
+ */
+function CompletenessBar({ percent }: { percent: number }) {
   return (
     <div className="rounded-lg border border-border-subtle bg-surface p-4">
       <div className="flex items-baseline justify-between gap-3">
@@ -615,11 +797,6 @@ function CompletenessBar({ percent, stored }: { percent: number; stored: number 
       >
         <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${percent}%` }} />
       </div>
-      <p className="mt-2 text-xs text-muted-2">
-        {unsaved
-          ? `Not saved yet. Stored value is ${stored}%.`
-          : 'Weighted, so the fields grants are actually tested against count for more than a phone number.'}
-      </p>
     </div>
   )
 }

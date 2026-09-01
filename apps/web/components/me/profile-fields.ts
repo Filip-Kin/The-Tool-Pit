@@ -18,33 +18,27 @@ import { profilePathLabel } from '@/lib/grants/prefill'
 
 export type ProfileGroupKey = 'entity' | 'place' | 'size' | 'contact' | 'prose'
 
-export const PROFILE_GROUPS: { key: ProfileGroupKey; title: string; blurb: string }[] = [
+export const PROFILE_GROUPS: { key: ProfileGroupKey; title: string; blurb?: string }[] = [
   {
     key: 'entity',
     title: 'Legal entity',
-    blurb:
-      'Who signs the application. Most funders gate on this before they read anything else, so it is the highest-value part of the form.',
+    blurb: 'Who signs the application, and the most common thing a funder gates on.',
   },
   {
     key: 'place',
     title: 'Place',
-    blurb: 'Plenty of funding is state-only or county-only. Without a state we cannot rule those grants in or out.',
+    blurb: 'A lot of funding is scoped to one state or county.',
   },
-  {
-    key: 'size',
-    title: 'Size and history',
-    blurb: 'Rookie-only and small-team grants exist. So do grants with a minimum roster.',
-  },
+  { key: 'size', title: 'Size and history' },
   {
     key: 'contact',
     title: 'Contact',
-    blurb: 'Used to pre-fill applications. Never shown publicly and never sent anywhere on its own.',
+    blurb: 'Never shown publicly.',
   },
   {
     key: 'prose',
     title: 'Reusable answers',
-    blurb:
-      'The paragraphs every application asks for. Write them once here and they are ready to paste, or pre-filled where the funder’s form accepts it.',
+    blurb: 'Written once, ready to paste or pre-fill.',
   },
 ]
 
@@ -86,8 +80,12 @@ export interface ProfileFieldSpec {
   group: ProfileGroupKey
   /** 3 = the matcher tests it, 2 = an application will ask for it, 1 = useful. */
   weight: 1 | 2 | 3
-  /** One line telling the team what filling it in actually buys them. */
-  why: string
+  /**
+   * One line, only where the answer changes something a robotics mentor cannot
+   * already see: a matching gate or a privacy fact. A label that repeats itself
+   * in a sentence gets no `why`.
+   */
+  why?: string
   /** True when a grant_requirements row can be tested against this field. */
   matched: boolean
   /** Private to the team's own members. Never rendered on a public page. */
@@ -116,7 +114,6 @@ export const PROFILE_FIELDS: ProfileFieldSpec[] = [
     label: 'Team name',
     group: 'entity',
     weight: 2,
-    why: 'Applications ask for the name, not just the number.',
     matched: false,
   },
   {
@@ -124,7 +121,7 @@ export const PROFILE_FIELDS: ProfileFieldSpec[] = [
     label: 'Organisation type',
     group: 'entity',
     weight: 3,
-    why: 'The single most common gate. Many grants only fund a 501(c)(3), and many only fund a school.',
+    why: 'The most common eligibility gate.',
     matched: true,
   },
   {
@@ -132,7 +129,6 @@ export const PROFILE_FIELDS: ProfileFieldSpec[] = [
     label: 'EIN',
     group: 'entity',
     weight: 1,
-    why: 'Every US nonprofit application asks for it. Filling it in here saves looking it up each time.',
     matched: false,
     private: true,
     appliesTo: (p) => p.orgType === '501c3' || p.orgType === 'other_nonprofit',
@@ -142,7 +138,7 @@ export const PROFILE_FIELDS: ProfileFieldSpec[] = [
     label: 'Fiscal sponsor',
     group: 'entity',
     weight: 1,
-    why: 'Some funders will only pay a 501(c)(3), and a named sponsor is what makes you eligible for those.',
+    why: 'Funders that only pay a 501(c)(3) will accept a named sponsor.',
     matched: true,
     appliesTo: (p) => p.orgType === 'fiscal_sponsor',
   },
@@ -151,7 +147,6 @@ export const PROFILE_FIELDS: ProfileFieldSpec[] = [
     label: 'School type',
     group: 'entity',
     weight: 3,
-    why: 'Public-school-only funding is common, and so is private-school-only.',
     matched: true,
     appliesTo: isSchoolish,
   },
@@ -160,7 +155,6 @@ export const PROFILE_FIELDS: ProfileFieldSpec[] = [
     label: 'School name',
     group: 'entity',
     weight: 1,
-    why: 'Named on the application, and on the cheque.',
     matched: false,
     appliesTo: isSchoolish,
   },
@@ -169,7 +163,7 @@ export const PROFILE_FIELDS: ProfileFieldSpec[] = [
     label: 'Title I school',
     group: 'entity',
     weight: 3,
-    why: 'A hard gate on several equity-focused grants, and worth real money on others.',
+    why: 'A hard gate on several equity-focused grants.',
     matched: true,
     appliesTo: isSchoolish,
   },
@@ -179,7 +173,6 @@ export const PROFILE_FIELDS: ProfileFieldSpec[] = [
     label: 'Country',
     group: 'place',
     weight: 3,
-    why: 'Most listings are one country only.',
     matched: true,
   },
   {
@@ -187,17 +180,16 @@ export const PROFILE_FIELDS: ProfileFieldSpec[] = [
     label: 'State or province',
     group: 'place',
     weight: 3,
-    why: 'State and county funding is some of the easiest money to win, and we cannot match it without this.',
+    why: 'State and county funding cannot be matched without it.',
     matched: true,
   },
-  { key: 'city', label: 'City', group: 'place', weight: 2, why: 'Needed for local and community foundation grants.', matched: false },
-  { key: 'postalCode', label: 'Postal code', group: 'place', weight: 1, why: 'Several funders scope by ZIP.', matched: false },
+  { key: 'city', label: 'City', group: 'place', weight: 2, why: 'Local and community foundation grants scope to it.', matched: false },
+  { key: 'postalCode', label: 'Postal code', group: 'place', weight: 1, matched: false },
   {
     key: 'mailingAddress',
     label: 'Mailing address',
     group: 'place',
     weight: 2,
-    why: 'Where the cheque goes. Asked for on nearly every form.',
     matched: false,
     private: true,
   },
@@ -207,7 +199,7 @@ export const PROFILE_FIELDS: ProfileFieldSpec[] = [
     label: 'Rookie year',
     group: 'size',
     weight: 3,
-    why: 'Rookie-only and early-years grants are tested against this.',
+    why: 'Rookie-only and early-years grants are tested against it.',
     matched: true,
   },
   {
@@ -218,18 +210,18 @@ export const PROFILE_FIELDS: ProfileFieldSpec[] = [
     why: 'Some grants set a minimum roster, some fund per student.',
     matched: true,
   },
-  { key: 'mentorCount', label: 'Mentors', group: 'size', weight: 1, why: 'Asked for on longer applications.', matched: false },
+  { key: 'mentorCount', label: 'Mentors', group: 'size', weight: 1, matched: false },
   {
     key: 'annualBudget',
     label: 'Annual budget',
     group: 'size',
     weight: 1,
-    why: 'Funders use it to judge whether their award is meaningful to you.',
+    why: 'Funders weigh their award against it.',
     matched: false,
   },
 
-  { key: 'contactName', label: 'Contact name', group: 'contact', weight: 2, why: 'The person the funder writes back to.', matched: false, private: true },
-  { key: 'contactEmail', label: 'Contact email', group: 'contact', weight: 2, why: 'The person the funder writes back to.', matched: false, private: true },
+  { key: 'contactName', label: 'Contact name', group: 'contact', weight: 2, why: 'Who the funder writes back to.', matched: false, private: true },
+  { key: 'contactEmail', label: 'Contact email', group: 'contact', weight: 2, matched: false, private: true },
   { key: 'contactPhone', label: 'Contact phone', group: 'contact', weight: 1, why: 'Some forms will not submit without one.', matched: false, private: true },
   { key: 'website', label: 'Team website', group: 'contact', weight: 1, why: 'Funders look you up before they decide.', matched: false },
 
@@ -238,7 +230,6 @@ export const PROFILE_FIELDS: ProfileFieldSpec[] = [
     label: 'Mission statement',
     group: 'prose',
     weight: 2,
-    why: 'The first paragraph of almost every application.',
     matched: false,
   },
   {
@@ -246,7 +237,6 @@ export const PROFILE_FIELDS: ProfileFieldSpec[] = [
     label: 'Reusable answers',
     group: 'prose',
     weight: 2,
-    why: 'Outreach, impact and use of funds get asked again and again. Write them once.',
     matched: false,
   },
 ]

@@ -40,8 +40,7 @@ export function ProfileMatchCost({
     return (
       <Panel icon={<Clock className="h-4 w-4 text-muted-2" />} title="No matches worked out yet">
         <p className="text-sm text-muted">
-          Grants are matched against your profile on a schedule, so a profile saved in the last few
-          minutes will not have results yet. Fill in what you can and check back.
+          Matching runs on a schedule, so a profile saved in the last few minutes has no results yet.
         </p>
       </Panel>
     )
@@ -52,8 +51,8 @@ export function ProfileMatchCost({
       <Panel icon={<CheckCircle2 className="h-4 w-4 text-rookie" />} title="Nothing is blocked on your profile">
         <p className="text-sm text-muted">
           {actionableCount === 0
-            ? 'No published grant is currently waiting on a field you have left empty. There are no live matches for your team either, which usually means the catalogue has nothing open in your area yet.'
-            : `Every one of your ${actionableCount} live match${actionableCount === 1 ? '' : 'es'} could be worked out from what you have filled in. Filling in more still helps: it pre-fills applications.`}
+            ? 'No live matches for your team either, which usually means nothing in the catalogue is open in your area yet.'
+            : `All ${actionableCount} of your live match${actionableCount === 1 ? '' : 'es'} could be worked out from what you have filled in.`}
         </p>
       </Panel>
     )
@@ -68,8 +67,7 @@ export function ProfileMatchCost({
       title={`${missingInfoCount} grant${missingInfoCount === 1 ? '' : 's'} need${missingInfoCount === 1 ? 's' : ''} something you have not filled in`}
     >
       <p className="text-sm text-muted">
-        These are published grants we cannot rule in or out for your team yet. They are not gone, they
-        are waiting. One field often unlocks several at once.
+        Published grants we cannot rule in or out for your team yet. One field often unblocks several.
       </p>
 
       <ul className="mt-4 flex flex-col gap-2">
@@ -101,7 +99,7 @@ export function ProfileMatchCost({
 
       <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-2">
         <ArrowDown className="h-3 w-3" />
-        Each of these is marked in the form below.
+        Each is marked in the form below.
       </p>
     </Panel>
   )

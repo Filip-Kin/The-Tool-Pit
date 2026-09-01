@@ -147,7 +147,7 @@ export interface ProfileActionResult {
   profileId?: string
 }
 
-/** Sanity bound on a team number, matching /me/team's own check. */
+/** Sanity bound on a team number, matching the claim action's own check. */
 const MAX_TEAM_NUMBER = 99_999
 
 /** FIRST started in 1992, and a rookie year in the future is a typo. */
@@ -221,8 +221,12 @@ export async function saveTeamProfile(formData: FormData): Promise<ProfileAction
   // failure is logged rather than swallowed.
   await requestRematch(profileId)
 
-  revalidatePath('/me/team/profile')
-  revalidatePath('/me')
+  // Deliberately no revalidatePath. This now runs on every autosave, and a
+  // revalidate would make the router refetch the whole /me/team tree each time,
+  // re-running the profile and match-cost queries while somebody is typing.
+  // There is nothing to invalidate anyway: /me/team is force-dynamic, the
+  // editor already holds the newest values, and the match counts do not move
+  // until the worker has rerun.
   return { completeness }
 }
 
@@ -231,7 +235,7 @@ export async function saveTeamProfile(formData: FormData): Promise<ProfileAction
 // #region create
 
 /**
- * Start a profile for a team the user has already claimed on /me/team.
+ * Start a profile for a team the user has already claimed.
  *
  * Two gates. The claim has to exist, so a profile cannot be conjured for an
  * arbitrary team number, and the team must not already have a profile: if it
@@ -262,7 +266,7 @@ export async function createTeamProfile(formData: FormData): Promise<ProfileActi
       ),
     )
     .limit(1)
-  if (!claim) return { error: 'Add that team on the My teams tab first.' }
+  if (!claim) return { error: 'Claim that team first.' }
 
   const seed: NewTeamProfile = { program, teamNumber }
   // onConflictDoNothing against the (program, teamNumber) unique index, so two
@@ -273,7 +277,7 @@ export async function createTeamProfile(formData: FormData): Promise<ProfileActi
   if (!created) {
     return {
       error:
-        'Someone on that team has already set up its profile. Ask them to add you, since it holds details we will not hand out on a team number alone.',
+        'Someone on that team already set up its profile. Ask them to add you: a team number alone does not open it.',
     }
   }
 
@@ -287,7 +291,9 @@ export async function createTeamProfile(formData: FormData): Promise<ProfileActi
 
   await requestRematch(created.id)
 
-  revalidatePath('/me/team/profile')
+  // Creation does change the shape of the page, and it is a once-per-team
+  // action rather than a per-keystroke one, so this one still revalidates.
+  revalidatePath('/me/team')
   revalidatePath('/me')
   return { profileId: created.id }
 }

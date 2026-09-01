@@ -101,7 +101,7 @@ export async function removeTeam(id: string): Promise<{ error?: string }> {
   return {}
 }
 
-/** Both /me pages read userTeams, so both go stale on every write. */
+/** /me and /me/team both read userTeams, so both go stale on every write. */
 function revalidateMe() {
   revalidatePath('/me')
   revalidatePath('/me/team')

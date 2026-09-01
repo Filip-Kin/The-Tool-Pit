@@ -11,20 +11,16 @@ export interface TeamRow {
 }
 
 /**
- * The user's teams, read-only. Editing lives on /me/team so this page stays a
- * dashboard. Renders a one-line prompt instead of an empty card when there are
- * no teams, because the teams are what make grant matching work.
+ * The user's teams, read-only. Editing and the grant profile both live on
+ * /me/team so this page stays a dashboard. Renders a one-line prompt instead of
+ * an empty card when there are no teams, because the teams are what make grant
+ * matching work.
  */
 export function TeamsSummary({ teams }: { teams: TeamRow[] }) {
   return (
     <section>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-semibold text-foreground">Your teams</h2>
-          <p className="text-sm text-muted">
-            Used to pick out the grants and events that are actually relevant to you.
-          </p>
-        </div>
+        <h2 className="text-lg font-semibold text-foreground">Your teams</h2>
         <Link href="/me/team" className="shrink-0 text-sm text-primary transition-colors hover:text-primary-hover">
           {teams.length === 0 ? 'Add a team' : 'Manage teams'}
         </Link>
@@ -37,8 +33,8 @@ export function TeamsSummary({ teams }: { teams: TeamRow[] }) {
             No teams yet.{' '}
             <Link href="/me/team" className="text-primary hover:underline">
               Add your team number
-            </Link>{' '}
-            and we can point out grants your team qualifies for and events it attended.
+            </Link>
+            .
           </p>
         </div>
       ) : (
