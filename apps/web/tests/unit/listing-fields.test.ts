@@ -63,8 +63,16 @@ describe('the spec itself', () => {
   })
 
   it('keeps admin-only columns out of every form', () => {
-    // The list from the ownership design: an owner improves their listing, an
-    // owner does not publish or promote it.
+    // The line an owner does not cross: an owner controls the CONTENT of their
+    // listing, not its moderation state and not the numbers we rank it by.
+    //
+    // WHAT MOVED OUT OF THIS LIST, AND WHY. A practice field's location and
+    // spec, and an event's map pin, used to be here: they were held back to
+    // field_edit_proposals so a move got a second look. They are now boxes on
+    // the owner's form, because an owner queueing behind a moderator to correct
+    // their own address was the gate this whole change exists to remove. The
+    // proposal route is unchanged and is still the path for a STRANGER
+    // suggesting an edit to somebody else's field.
     const forbidden = [
       'status',
       'isOfficial',
@@ -89,19 +97,58 @@ describe('the spec itself', () => {
       'submitterContact',
       'submitterIpHash',
       'submittedByUserId',
-      // A practice field's location keeps its review, and so does an event's
-      // map pin. Neither is a box on this form.
+      // Every practice field is assumed to have AprilTags set up, so it is not
+      // a per-field toggle for anybody, owner or admin.
+      'aprilTags',
+      // A grant's dates and amounts are a reviewer's verified reading of the
+      // funder's page. A wrong deadline costs a team an application.
+      'verifiedAt',
+      'verifiedBy',
+    ]
+    for (const spec of Object.values(LISTING_FORMS)) {
+      for (const field of spec.fields) expect(forbidden).not.toContain(field.key)
+    }
+  })
+
+  it('gives a field owner the location and spec, with no review in front of it', () => {
+    // The other half of the rule above, asserted positively, because a form
+    // that silently loses a field is exactly as broken as one that gains a
+    // forbidden column and neither shows up in a type error.
+    const keys = LISTING_FORMS.field.fields.map((f) => f.key)
+    for (const key of [
       'latitude',
       'longitude',
+      'address',
+      'city',
+      'region',
+      'country',
       'coverage',
       'perimeter',
       'elements',
       'hasFms',
-      'aprilTags',
       'ceilingHeightFt',
-    ]
-    for (const spec of Object.values(LISTING_FORMS)) {
-      for (const field of spec.fields) expect(forbidden).not.toContain(field.key)
+      'teamNumber',
+    ]) {
+      expect(keys).toContain(key)
+    }
+  })
+
+  it('lets an event owner move their own map pin', () => {
+    const keys = LISTING_FORMS.event.fields.map((f) => f.key)
+    expect(keys).toContain('latitude')
+    expect(keys).toContain('longitude')
+  })
+
+  it('keeps coordinates decimal, because rounding one moves the pin 100 km', () => {
+    for (const vertical of ['field', 'event'] as const) {
+      const lat = LISTING_FORMS[vertical].fields.find((f) => f.key === 'latitude')
+      const lng = LISTING_FORMS[vertical].fields.find((f) => f.key === 'longitude')
+      expect(lat?.kind).toBe('number')
+      expect(lng?.kind).toBe('number')
+      expect(lat?.min).toBe(-90)
+      expect(lat?.max).toBe(90)
+      expect(lng?.min).toBe(-180)
+      expect(lng?.max).toBe(180)
     }
   })
 

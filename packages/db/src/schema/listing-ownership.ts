@@ -17,20 +17,33 @@ import { users } from './accounts'
 // the way app/me/team/profile/queries.ts gates on team_profile_members, never
 // on the claim itself.
 //
-// Polymorphic over four entity types. Grants already have their own
+// Polymorphic over five entity types. Grants already have their own
 // team_profile_members with the same owner/editor/viewer vocabulary; this
-// mirrors it rather than inventing a second one, so grants can move onto this
-// model later without a rename.
+// mirrors it rather than inventing a second one.
 //
 // 'event' means a row in event_listings, the curated off-season listing with
 // the cost, capacity, registration state and venue on it. It earned its own
 // entity type once owners could edit: a tool with toolType 'offseason_event'
 // is a page ABOUT an event and has none of those columns, so pointing an
 // organiser at one gave them nothing of theirs to correct.
+//
+// 'grant' is owned on the same terms as everything else. What is narrower is
+// what an owner may EDIT: a grant listing's dates, amounts and eligibility are
+// a MODERATOR'S verified reading of the funder's page, and a wrong deadline is
+// worse than no deadline, so those stay with review; see LISTING_REVIEW_NOTE.
+// The words about the programme are the owner's.
+//
+// SUBMITTING WHILE SIGNED IN IS EVIDENCE. Everywhere else in this model a
+// claim proves nothing, and that rule is unchanged. A self-submission is not a
+// claim: we hold the submitter id ourselves, written by our own route at the
+// moment the row was created, so nobody asserted it. That is why practice
+// fields have always granted on it, and it is now what every vertical does, at
+// APPROVAL rather than at submit, because a pending row is not a listing yet.
+// The submitter can decline it on the form (submitter_owns = false).
 // ---------------------------------------------------------------------------
 
 /** The listing tables a claim can point at. */
-export const LISTING_ENTITY_TYPES = ['tool', 'album', 'field', 'event'] as const
+export const LISTING_ENTITY_TYPES = ['tool', 'album', 'field', 'event', 'grant'] as const
 export type ListingEntityType = (typeof LISTING_ENTITY_TYPES)[number]
 
 /** Same three roles as team_profile_members, on purpose. 'viewer' may only read. */

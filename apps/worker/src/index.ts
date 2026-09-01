@@ -22,6 +22,7 @@ import { processGrantAlertDrainJob } from './grants/alerts.js'
 import { processNotificationDrainJob } from './notifications/outbox.js'
 import { processGrantDeadlineSweepJob } from './grants/deadline-sweeper.js'
 import { enqueueDueGrantMonitors } from './grants/cadence.js'
+import { sendApprovalNotice, reviewQueueUrl } from '@the-tool-pit/types'
 import { processListingDiscoverJob } from './listings/discover.js'
 import { processSeasonRenewalJob } from './listings/season-renewal.js'
 import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload, AlbumIngestPayload, AlbumEnrichPayload } from '@the-tool-pit/types'
@@ -131,6 +132,27 @@ const grantDiscoverWorker = new Worker<GrantDiscoverPayload>(
     console.log(
       `[grant-discover] ${outcome.connector} queued ${outcome.insertedCandidateIds.length} candidates for enrichment`,
     )
+
+    // ONE SUMMARY PER RUN, not one per candidate: a discovery pass files
+    // dozens, and a message each would bury the human submissions this channel
+    // exists for. A run that found nothing says nothing.
+    const found = outcome.insertedCandidateIds.length
+    if (found > 0) {
+      sendApprovalNotice({
+        vertical: 'crawl',
+        title: `${outcome.connector} found ${found} new grant lead${found === 1 ? '' : 's'}`,
+        reviewUrl: reviewQueueUrl('/admin/grants/candidates?status=pending'),
+        description: `${found} candidate${found === 1 ? '' : 's'} waiting in the grants queue.`,
+        facts: [
+          { label: 'Connector', value: outcome.connector, inline: true },
+          { label: 'New', value: found, inline: true },
+          // A capped run and a complete run look identical otherwise, and a
+          // silent cap reads as "we found everything there is".
+          { label: 'Coverage limits', value: outcome.stats.limits.join('; ') || null },
+          { label: 'Errors', value: outcome.stats.errors.slice(0, 3).join('; ') || null },
+        ],
+      })
+    }
   },
   { connection, concurrency: CONCURRENCY },
 )
@@ -237,6 +259,27 @@ const listingDiscoverWorker = new Worker<ListingDiscoverPayload>(
     console.log(
       `[listing-discover] ${outcome.connector} filed ${outcome.insertedCandidateIds.length} ${outcome.vertical} candidates for review`,
     )
+
+    // One summary per run, same rule as the other three queues.
+    const filed = outcome.insertedCandidateIds.length
+    if (filed > 0) {
+      const queue =
+        outcome.vertical === 'field'
+          ? '/admin/practice-fields/candidates'
+          : '/admin/event-listings/candidates'
+      sendApprovalNotice({
+        vertical: 'crawl',
+        title: `${outcome.connector} found ${filed} ${outcome.vertical} lead${filed === 1 ? '' : 's'}`,
+        reviewUrl: reviewQueueUrl(queue),
+        description: `${filed} candidate${filed === 1 ? '' : 's'} waiting in the ${outcome.vertical} queue.`,
+        facts: [
+          { label: 'Connector', value: outcome.connector, inline: true },
+          { label: 'New', value: filed, inline: true },
+          { label: 'Coverage limits', value: outcome.stats.limits.join('; ') || null },
+          { label: 'Errors', value: outcome.stats.errors.slice(0, 3).join('; ') || null },
+        ],
+      })
+    }
   },
   // Serial. Both Chief Delphi connectors pace themselves inside the Discourse
   // client, and two of them running at once would double the request rate at

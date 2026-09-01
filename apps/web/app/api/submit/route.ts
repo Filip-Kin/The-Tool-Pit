@@ -3,11 +3,18 @@ import { createSubmission } from '@/lib/submissions/create'
 import { getIpHash } from '@/lib/utils/ip'
 import { checkSubmissionRateLimit } from '@/lib/submissions/rate-limit'
 import { getCurrentUser } from '@/lib/auth/session'
+import { submitterOwnsFromForm } from '@/lib/listings/passing-along'
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { url, note, turnstileToken } = body as { url: string; note?: string; turnstileToken?: string }
+    const { url, note, passingAlong, turnstileToken } = body as {
+      url: string
+      note?: string
+      /** "This tool is not mine". Ticked by default on this form; see passing-along.ts. */
+      passingAlong?: boolean
+      turnstileToken?: string
+    }
 
     if (!url || typeof url !== 'string') {
       return NextResponse.json({ error: 'url required' }, { status: 400 })
@@ -55,6 +62,7 @@ export async function POST(req: NextRequest) {
       note,
       submitterIpHash: ipHash,
       submittedByUserId: user?.id ?? undefined,
+      submitterOwns: submitterOwnsFromForm(passingAlong, 'tool', Boolean(user)),
     })
     return NextResponse.json(result)
   } catch (err) {

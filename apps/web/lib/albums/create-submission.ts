@@ -2,7 +2,8 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { albums, albumSubmissions, albumCandidates, events, canonicalizeAlbumUrl, resolveShareUrl } from '@the-tool-pit/db'
 import { getAlbumEnrichQueue } from './queue'
-import { notifyNewSubmission } from './notify'
+import { sendApprovalNotice, reviewAlbumUrl } from '@the-tool-pit/types'
+import { fetchOgImage } from './og'
 
 interface CreateAlbumSubmissionInput {
   url: string
@@ -24,6 +25,12 @@ interface CreateAlbumSubmissionInput {
    * email when a moderator gets to it.
    */
   submittedByUserId?: string
+  /**
+   * What the "just passing it along" box said, resolved by the route with
+   * lib/listings/passing-along.ts. NULL for a signed-out submitter, TRUE means
+   * the listing is theirs when a moderator approves it.
+   */
+  submitterOwns?: boolean | null
 }
 
 export interface CreateAlbumSubmissionResult {
@@ -108,6 +115,7 @@ export async function createAlbumSubmission(
       submitterNote: input.note,
       submitterIpHash: input.submitterIpHash,
       submittedByUserId: input.submittedByUserId ?? null,
+      submitterOwns: input.submitterOwns ?? null,
       status: 'pending',
       pipelineLog: [
         { stage: 'received', status: 'ok', message: 'Submission queued for review', timestamp: new Date().toISOString() },
@@ -140,18 +148,38 @@ export async function createAlbumSubmission(
 
   await getAlbumEnrichQueue().add('album-enrich', { candidateId: candidate.id, submissionId: submission.id })
 
-  // Best-effort Discord ping so a moderator sees new submissions promptly.
-  void notifyNewSubmission({
-    url: input.url,
-    coverUrl: canon.canonicalUrl,
-    eventHint: input.eventHint,
-    eventName: resolvedName,
-    eventCode: targetEventCode,
-    year: targetEventYear,
-    program: targetProgram,
-    provider: canon.provider,
-    photographer: input.photographerHint,
-    note: input.note,
+  // Discord ping so a moderator sees new submissions promptly. The cover is
+  // scraped first and awaited INSIDE this detached call, never before the
+  // return: an album host that takes ten seconds to answer must not make the
+  // submitter wait ten seconds for "thanks". og.ts swallows its own errors and
+  // hands back null, and not every host exposes an og:image (Drive and Dropbox
+  // folders, Flickr from the cloud IP), so those simply arrive without a
+  // picture.
+  const eventLabel =
+    resolvedName || input.eventHint
+      ? [resolvedName ?? input.eventHint, targetEventYear].filter(Boolean).join(' · ')
+      : null
+
+  void (async () => {
+    const cover = await fetchOgImage(canon.canonicalUrl || input.url).catch(() => null)
+    sendApprovalNotice({
+      vertical: 'album',
+      title: eventLabel ?? input.url,
+      reviewUrl: reviewAlbumUrl(candidate.id),
+      sourceUrl: input.url,
+      imageUrl: cover,
+      facts: [
+        { label: 'Event', value: eventLabel },
+        { label: 'Event code', value: targetEventCode, inline: true },
+        { label: 'Year', value: targetEventYear, inline: true },
+        { label: 'Program', value: targetProgram?.toUpperCase(), inline: true },
+        { label: 'Provider', value: canon.provider, inline: true },
+        { label: 'Photographer', value: input.photographerHint, inline: true },
+        { label: 'Note', value: input.note },
+      ],
+    })
+  })().catch((err: unknown) => {
+    console.error(`[albums/submit] notice failed: ${(err as Error).message}`)
   })
 
   return {

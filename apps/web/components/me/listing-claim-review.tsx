@@ -67,7 +67,8 @@ function ReviewCard({
   }
 
   return (
-    <li className="rounded-lg border border-border-subtle bg-surface p-4">
+    // id: the Discord notice for a claim links straight to this card.
+    <li id={`claim-${claim.id}`} className="scroll-mt-6 rounded-lg border border-border-subtle bg-surface p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="font-medium text-foreground">{claim.facts?.title ?? 'Listing'}</span>
         <span className="text-xs text-muted-2">

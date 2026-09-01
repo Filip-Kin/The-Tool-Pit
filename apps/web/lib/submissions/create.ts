@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { submissions } from '@the-tool-pit/db'
 import { getSubmissionQueue } from './queue'
-import type { SubmitToolResponse } from '@the-tool-pit/types'
+import { sendApprovalNotice, reviewSubmissionUrl, type SubmitToolResponse } from '@the-tool-pit/types'
 
 interface CreateSubmissionInput {
   url: string
@@ -14,6 +14,12 @@ interface CreateSubmissionInput {
    * email when a moderator gets to it.
    */
   submittedByUserId?: string
+  /**
+   * What the "just passing it along" box said, resolved by the route with
+   * lib/listings/passing-along.ts. NULL for a signed-out submitter, TRUE means
+   * the listing is theirs when a moderator approves it.
+   */
+  submitterOwns?: boolean | null
 }
 
 /**
@@ -45,6 +51,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Su
       submitterNote: input.note,
       submitterIpHash: input.submitterIpHash,
       submittedByUserId: input.submittedByUserId ?? null,
+      submitterOwns: input.submitterOwns ?? null,
       status: 'pending',
       pipelineLog: [
         {
@@ -59,6 +66,17 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Su
 
   // Enqueue worker job — worker handles extract → classify → publish
   await getSubmissionQueue().add('process-submission', { submissionId: created.id })
+
+  // NEWLY WIRED. The oldest submit form on the site and the only one that never
+  // pinged anybody: a tool submitted here sat in the queue until somebody
+  // thought to open it.
+  sendApprovalNotice({
+    vertical: 'tool',
+    title: input.url,
+    reviewUrl: reviewSubmissionUrl(created.id),
+    sourceUrl: input.url,
+    facts: [{ label: 'Note', value: input.note ?? null }],
+  })
 
   return {
     submissionId: created.id,

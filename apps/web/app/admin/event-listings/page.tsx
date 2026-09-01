@@ -71,12 +71,14 @@ export default async function EventListingsAdminPage({
 
       <div className="mt-4 flex flex-col gap-3">
         {rows.length === 0 && <p className="text-sm text-muted-2">Nothing here.</p>}
+        {/* id: the Discord notice links straight to the row it is about. */}
         {rows.map((r) => (
-          <EventAdminRow
-            key={r.listing.id}
-            listing={r.listing}
-            account={r.accountId ? { id: r.accountId, displayName: r.accountName, email: r.accountEmail } : null}
-          />
+          <div key={r.listing.id} id={`event-${r.listing.id}`} className="scroll-mt-6">
+            <EventAdminRow
+              listing={r.listing}
+              account={r.accountId ? { id: r.accountId, displayName: r.accountName, email: r.accountEmail } : null}
+            />
+          </div>
         ))}
       </div>
     </div>

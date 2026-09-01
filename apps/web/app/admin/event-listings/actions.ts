@@ -13,6 +13,7 @@ import {
   VOLUNTEER_STATUSES,
 } from '@the-tool-pit/db'
 import { notifyEventPublished, notifyEventRejected } from '@/lib/notify/approvals'
+import { grantEventOwnership } from '@/lib/listings/submitter-ownership'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -40,6 +41,8 @@ export async function approveEvent(id: string): Promise<{ error?: string }> {
     .update(eventListings)
     .set({ status: 'published', publishedAt: new Date(), rejectionReason: null, updatedAt: new Date() })
     .where(eq(eventListings.id, id))
+  // The organiser who filled this in now runs it, unless they said otherwise.
+  await grantEventOwnership(id)
   await notifyEventPublished(id)
   revalidateAll()
   return {}

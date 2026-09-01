@@ -106,7 +106,11 @@ export default async function FieldEditsAdminPage() {
           const addIds = pendingByProposal.get(proposal.id) ?? []
           const hasPhotoChanges = removeIds.length > 0 || addIds.length > 0
           return (
-            <div key={proposal.id} className="rounded-lg border border-border-subtle bg-surface p-4">
+            <div
+              key={proposal.id}
+              id={`proposal-${proposal.id}`}
+              className="scroll-mt-6 rounded-lg border border-border-subtle bg-surface p-4"
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="font-medium text-foreground">{field.name}</div>

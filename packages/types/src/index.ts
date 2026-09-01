@@ -6,9 +6,14 @@
  * its own: it lives here because both apps send the same mail and a template
  * kept in one app has to be copied into the other, which is how the two grant
  * alert copies drifted.
+ *
+ * ./discord is here for exactly that reason. It used to be five copies, one per
+ * vertical, in apps/web, and one of them had been posting to a deleted webhook
+ * for months without saying so.
  */
 
 export * from './email/index'
+export * from './discord/index'
 
 // ---------------------------------------------------------------------------
 // Search

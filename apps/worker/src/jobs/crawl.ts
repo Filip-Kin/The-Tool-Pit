@@ -13,6 +13,7 @@ import { extractMetadata, canonicalizeUrl } from '../pipeline/extract.js'
 import { checkDuplicateByUrl, checkDuplicateByName } from '../pipeline/deduplicate.js'
 import { enrichQueue } from '../queues.js'
 import { delay } from '../connectors/base.js'
+import { sendApprovalNotice, reviewQueueUrl } from '@the-tool-pit/types'
 import type { CrawlJobPayload } from '@the-tool-pit/types'
 
 const CONNECTOR_REGISTRY: Record<string, () => { run(): Promise<{ candidates: unknown[]; stats: unknown }> }> = {
@@ -177,6 +178,26 @@ export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {
     console.log(
       `[crawl] ${connectorName} done: ${totalNew} new, ${totalSkipped} skipped, ${totalFailed} failed`,
     )
+
+    // ONE SUMMARY PER RUN, not one per candidate. A crawl finds tens of tools
+    // at a time and a message each would bury the human submissions this
+    // channel exists for. A run that turned up nothing new is not news either,
+    // so it says nothing at all.
+    if (totalNew > 0) {
+      sendApprovalNotice({
+        vertical: 'crawl',
+        title: `${connectorName} found ${totalNew} new tool${totalNew === 1 ? '' : 's'}`,
+        reviewUrl: reviewQueueUrl('/admin/candidates?status=pending'),
+        description: `${totalNew} candidate${totalNew === 1 ? '' : 's'} waiting in the tools queue.`,
+        facts: [
+          { label: 'Connector', value: connectorName, inline: true },
+          { label: 'Discovered', value: candidates.length, inline: true },
+          { label: 'New', value: totalNew, inline: true },
+          { label: 'Skipped', value: totalSkipped, inline: true },
+          { label: 'Failed', value: totalFailed || null, inline: true },
+        ],
+      })
+    }
   } catch (err) {
     await db
       .update(crawlJobs)

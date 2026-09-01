@@ -5,8 +5,11 @@ import { and, eq, isNull } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { getDb } from '@/lib/db'
 import {
+  albumCovers,
   albums,
   eventListings,
+  events,
+  grants,
   listingClaims,
   listingInvites,
   listingOwners,
@@ -39,6 +42,9 @@ import {
   parseListingValues,
 } from '@/components/me/listing-fields'
 import { notifyClaimResolved } from '@/lib/notify/approvals'
+import { normaliseUploadedImage } from '@/lib/images/normalise'
+import { sendApprovalNotice, reviewClaimUrl } from '@the-tool-pit/types'
+import { entityNoun } from '@/components/me/listing-labels'
 
 /**
  * Listing ownership writes.
@@ -47,7 +53,9 @@ import { notifyClaimResolved } from '@/lib/notify/approvals'
  * put a listing_owners row into the table. Ownership is only ever written here
  * by three paths, each of which is proof or a decision, never a bare claim:
  *
- *   1. You submitted the field yourself (we hold the submitter id).
+ *   1. You submitted it yourself, whatever the vertical, and did not disclaim
+ *      it on the form (we hold the submitter id, written from the session by
+ *      our own route; nobody can post one).
  *   2. You proved control of the listing's GitHub repo (a token we set, that
  *      you committed, that we then fetched back).
  *   3. An existing owner invited you, or an admin decided.
@@ -168,8 +176,11 @@ export async function startClaim(
     return { message: 'This claim is already waiting for review.' }
   }
 
-  // PATH 1: you submitted this field or event while signed in. Strongest
-  // signal, and only for an unowned listing, so it can grant on the spot.
+  // PATH 1: you submitted this listing while signed in, and did not tick "I am
+  // only passing this along". Strongest signal on the site short of a repo
+  // file, and only for an unowned listing, so it can grant on the spot. Every
+  // vertical now, which is what lets somebody pick up a listing that was
+  // approved before ownership was granted at approval.
   if (target.isSelfSubmitted && !target.alreadyOwned) {
     await grantOwnership(entityType, entityId, user.id, 'owner', 'self_submitted', null)
     await db.insert(listingClaims).values({
@@ -220,14 +231,35 @@ export async function startClaim(
   if (!note) {
     return { error: 'Say how you are connected to it. An admin reads this.' }
   }
-  await db.insert(listingClaims).values({
-    entityType,
-    entityId,
-    userId: user.id,
-    method: 'manual_review',
-    status: 'pending',
-    evidence: { note },
+  const [filed] = await db
+    .insert(listingClaims)
+    .values({
+      entityType,
+      entityId,
+      userId: user.id,
+      method: 'manual_review',
+      status: 'pending',
+      evidence: { note },
+    })
+    .returning({ id: listingClaims.id })
+
+  // NEWLY WIRED. This queue is the one nobody was told about: a claim sat in
+  // /admin/claims until somebody happened to open the page, and it is the queue
+  // where a real person is waiting on an answer about something they say is
+  // theirs. A dispute says so in the title, because it is the one a reviewer
+  // must not rubber-stamp.
+  sendApprovalNotice({
+    vertical: 'claim',
+    title: `${entityNoun(entityType)} · ${target.facts.title}`,
+    reviewUrl: reviewClaimUrl(filed.id),
+    submitter: user.displayName ?? user.email ?? null,
+    facts: [
+      { label: 'Contested', value: target.alreadyOwned ? 'Yes, this listing already has an owner' : 'No, nobody owns it yet' },
+      { label: 'They say', value: note },
+      { label: 'Listing', value: target.facts.subtitle },
+    ],
   })
+
   revalidatePath('/me/listings')
   return {
     message: target.alreadyOwned
@@ -280,6 +312,19 @@ export async function verifyRepoClaim(claimId: string): Promise<OwnershipActionR
         reviewerNote: 'Repo proof passed but the listing was already owned. Held for review.',
       })
       .where(eq(listingClaims.id, claim.id))
+    // Real proof that landed on an owned listing. This is the sharpest dispute
+    // the site can produce and it used to arrive silently.
+    sendApprovalNotice({
+      vertical: 'claim',
+      title: `${entityNoun(claim.entityType)} · repo proof on an owned listing`,
+      reviewUrl: reviewClaimUrl(claim.id),
+      submitter: user.displayName ?? user.email ?? null,
+      facts: [
+        { label: 'Contested', value: 'Yes, and the claimant proved control of the repo' },
+        { label: 'Repo', value: claim.evidence.repoUrl },
+        { label: 'File we read', value: found.url },
+      ],
+    })
     revalidatePath('/me/listings')
     return { message: 'Your repo checked out, but this listing already has an owner. An admin will review it.' }
   }
@@ -548,21 +593,27 @@ export async function adminResolveClaim(
 
 // #region owner edits
 //
-// An owner (or editor) edits their listing's DESCRIPTIVE fields directly.
+// AN OWNER FACES NO REVIEW QUEUE ON THEIR OWN LISTING. Everything a visitor
+// reads on the page is theirs to change, and it saves as they type. A practice
+// field's location, its coverage, elements, perimeter, ceiling and FMS, and an
+// event's map pin are all in the form. They used to sit behind
+// field_edit_proposals, which is the right path for a STRANGER suggesting a
+// change to somebody else's field and the wrong one for the person who owns it:
+// it made the owner queue behind a moderator to correct their own address.
+// The suggest-an-edit form on the public map is unchanged and still queues.
 //
 // WHAT IS NOT HERE, AND WHY. An owner never writes a column that expresses our
 // judgement of their listing or its place in a ranking: status, isOfficial,
 // isVendor, isRookieFriendly, confidenceScore, popularityScore, githubStars,
 // chiefDelphiLikes, freshnessState, adminNotes and slug on a tool; provider,
-// sourceType, canonicalUrl, url and eventId on an album; status, source and
+// sourceType, canonicalUrl, url and eventId on an album; verifiedAt, verifiedBy
+// and the deadline and amount columns on a grant; status, source and
 // rejectionReason everywhere; tbaKey, registeredTeamCount and the roster
 // counts on an event; and every submitter audit column wherever one exists.
+// An owner controls the CONTENT, not the moderation state and not the metrics.
 // The update set is built from components/me/listing-fields.ts, so none of them
 // can arrive by accident: a column that is not a form field is not in the set.
 //
-// A practice field's LOCATION and equipment spec stay on field_edit_proposals.
-// A change to where a field IS keeps its review; a change to how you reach it
-// does not. An event's map coordinates are held back for the same reason.
 // Anonymous submit and suggest-edit are untouched by any of this.
 //
 // THE CRAWLER. apps/worker/src/pipeline/publish.ts re-publishes a tool whose
@@ -589,6 +640,22 @@ function columnSet(
 /** The spec keys that are real columns on the listing's own table. */
 function columnKeys(entityType: ListingEntityType): string[] {
   return listingColumnFields(entityType).map((f) => f.key)
+}
+
+/**
+ * An owner may MOVE their pin. They may not erase it.
+ *
+ * Both queues refuse to publish a listing with no coordinates, because the map
+ * only carries what it can place, and a live listing whose pin was blanked
+ * simply vanishes from the map with nothing on the page to say why. Clearing
+ * the box is far more likely to be a slip than an intention, so an empty
+ * coordinate is dropped from the update and the old pin stands. Typing a new
+ * pair moves it immediately, with no review.
+ */
+function keepPinIfCleared(set: Record<string, unknown>): void {
+  for (const key of ['latitude', 'longitude']) {
+    if (set[key] === null) delete set[key]
+  }
 }
 
 async function requireEditor(
@@ -706,18 +773,113 @@ export async function saveAlbumListing(formData: FormData): Promise<OwnershipAct
     .set({ ...columnSet(step.values, columnKeys('album')), updatedAt: new Date() })
     .where(eq(albums.id, step.entityId))
   revalidatePath('/me/listings')
+  revalidatePath('/photos')
   return { message: 'Saved.' }
+}
+
+/**
+ * An owner sets the cover image on their own album.
+ *
+ * The picture is the whole card. Most album hosts hand us an og:image and we
+ * scrape it, but Google Drive and Dropbox folders expose nothing and Flickr
+ * blocks the cloud IP, so those albums have always sat on the event page as a
+ * grey rectangle with nobody but an admin able to fix it. Now the photographer
+ * can, which is the one person who has the picture.
+ *
+ * Not part of the autosaving form: a file upload is a deliberate act with its
+ * own success and failure, and it has no business being fired on blur.
+ *
+ * The bytes go through lib/images/normalise.ts rather than being stored as
+ * uploaded, which is the SAME path the admin upload uses: it caps the long
+ * edge, re-encodes to WebP and drops EXIF, so a phone photo does not carry its
+ * GPS coordinates onto a public page.
+ */
+export async function saveAlbumCover(formData: FormData): Promise<OwnershipActionResult> {
+  const entityId = String(formData.get('entityId') ?? '')
+  const gate = await requireEditor('album', entityId)
+  if ('error' in gate) return gate
+
+  const file = formData.get('cover')
+  if (!(file instanceof File) || file.size === 0) return { error: 'Choose an image first.' }
+
+  const normalised = await normaliseUploadedImage(file, 'cover')
+  if ('error' in normalised) return { error: normalised.error }
+  const { data, contentType } = normalised.image
+
+  const db = getDb()
+  const [album] = await db
+    .select({ id: albums.id, eventId: albums.eventId })
+    .from(albums)
+    .where(eq(albums.id, entityId))
+    .limit(1)
+  if (!album) return { error: 'That album is no longer listed.' }
+
+  await db
+    .insert(albumCovers)
+    .values({ albumId: album.id, contentType, data, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: albumCovers.albumId,
+      set: { contentType, data, updatedAt: new Date() },
+    })
+
+  // The version query busts every cache between here and the reader's browser.
+  // Without it a replaced cover keeps showing the old picture, which reads as
+  // the upload having failed.
+  await db
+    .update(albums)
+    .set({ coverImageUrl: `/api/albums/cover/${album.id}?v=${Date.now()}`, updatedAt: new Date() })
+    .where(eq(albums.id, album.id))
+
+  revalidatePath('/me/listings')
+  revalidatePath('/photos')
+  const [event] = await db
+    .select({ tbaKey: events.tbaKey })
+    .from(events)
+    .where(eq(events.id, album.eventId))
+    .limit(1)
+  if (event?.tbaKey) revalidatePath(`/photos/event/${event.tbaKey}`)
+
+  return { message: 'Cover updated.' }
 }
 
 export async function saveFieldListing(formData: FormData): Promise<OwnershipActionResult> {
   const step = await saveListing('field', formData)
   if ('result' in step) return step.result
+  const set = columnSet(step.values, columnKeys('field'))
+  keepPinIfCleared(set)
 
   const db = getDb()
   await db
     .update(practiceFields)
-    .set({ ...columnSet(step.values, columnKeys('field')), updatedAt: new Date() })
+    .set({ ...set, updatedAt: new Date() })
     .where(eq(practiceFields.id, step.entityId))
+  // The pin, the address and the spec are all on this form now, so the map and
+  // the field's own page both have to be refreshed, not just /me.
+  revalidatePath('/me/listings')
+  revalidatePath('/fields')
+  revalidatePath(`/fields/${step.entityId}`)
+  return { message: 'Saved.' }
+}
+
+/**
+ * A grant owner edits the words about their own programme.
+ *
+ * The narrowest of these five on purpose: the spec only carries summary,
+ * description and the application link, and everything a reviewer verified
+ * (name, funder, dates, amounts, eligibility) is simply not a form field, so it
+ * cannot arrive here. grants.verifiedAt and verifiedBy are untouched, because
+ * an owner rewriting their own blurb is not a re-verification of the funder's
+ * page.
+ */
+export async function saveGrantListing(formData: FormData): Promise<OwnershipActionResult> {
+  const step = await saveListing('grant', formData)
+  if ('result' in step) return step.result
+
+  const db = getDb()
+  await db
+    .update(grants)
+    .set({ ...columnSet(step.values, columnKeys('grant')), updatedAt: new Date() })
+    .where(eq(grants.id, step.entityId))
   revalidatePath('/me/listings')
   return { message: 'Saved.' }
 }
@@ -736,12 +898,16 @@ export async function saveEventListing(formData: FormData): Promise<OwnershipAct
     set.registrationOpensAt = null
   }
 
+  keepPinIfCleared(set)
+
   const db = getDb()
   await db
     .update(eventListings)
     .set({ ...set, updatedAt: new Date() })
     .where(eq(eventListings.id, step.entityId))
   revalidatePath('/me/listings')
+  revalidatePath('/events')
+  revalidatePath(`/events/${step.entityId}`)
   return { message: 'Saved.' }
 }
 

@@ -3,11 +3,12 @@ import { getIpHash } from '@/lib/utils/ip'
 import { checkAlbumSubmissionRateLimit } from '@/lib/albums/rate-limit'
 import { createAlbumSubmission } from '@/lib/albums/create-submission'
 import { getCurrentUser } from '@/lib/auth/session'
+import { submitterOwnsFromForm } from '@/lib/listings/passing-along'
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { url, eventHint, code, year, program, tbaKey, photographer, note, turnstileToken } = body as {
+    const { url, eventHint, code, year, program, tbaKey, photographer, note, passingAlong, turnstileToken } = body as {
       url: string
       eventHint?: string
       code?: string
@@ -16,6 +17,8 @@ export async function POST(req: NextRequest) {
       tbaKey?: string
       photographer?: string
       note?: string
+      /** "This album is not mine". Absent falls back to the vertical default. */
+      passingAlong?: boolean
       turnstileToken?: string
     }
 
@@ -54,6 +57,7 @@ export async function POST(req: NextRequest) {
     const result = await createAlbumSubmission({
       url,
       submittedByUserId: user?.id ?? undefined,
+      submitterOwns: submitterOwnsFromForm(passingAlong, 'album', Boolean(user)),
       eventHint,
       code,
       year: typeof year === 'number' && Number.isInteger(year) ? year : undefined,

@@ -4,7 +4,7 @@ import { submissions } from '@the-tool-pit/db'
 import { ARTIFACT_KINDS, MIN_SEASON_YEAR, maxSeasonYear, type ArtifactKind } from '@the-tool-pit/db/robot-code-enums'
 import { FIELD_PROGRAMS, type FieldProgram } from '@the-tool-pit/db/field-enums'
 import { getSubmissionQueue } from '@/lib/submissions/queue'
-import { notifyNewRobotCodeSubmission } from './notify'
+import { sendApprovalNotice, reviewSubmissionUrl } from '@the-tool-pit/types'
 
 /**
  * Public robot code / CAD submissions.
@@ -42,6 +42,12 @@ export interface CreateRobotCodeSubmissionInput {
    * email when a moderator gets to it.
    */
   submittedByUserId?: string
+  /**
+   * What the "just passing it along" box said, resolved by the route with
+   * lib/listings/passing-along.ts. NULL for a signed-out submitter, TRUE means
+   * the listing is theirs when a moderator approves it.
+   */
+  submitterOwns?: boolean | null
 }
 
 export type CreateRobotCodeSubmissionResult =
@@ -119,6 +125,7 @@ export async function createRobotCodeSubmission(
       submitterNote: input.note?.trim() || null,
       submitterIpHash: input.submitterIpHash || null,
       submittedByUserId: input.submittedByUserId ?? null,
+      submitterOwns: input.submitterOwns ?? null,
       program,
       teamNumber: input.teamNumber,
       seasonYear: input.seasonYear,
@@ -140,14 +147,19 @@ export async function createRobotCodeSubmission(
   // pending candidate for a human.
   await getSubmissionQueue().add('process-submission', { submissionId: created.id })
 
-  void notifyNewRobotCodeSubmission({
-    submissionId: created.id,
-    url,
-    program,
-    teamNumber: input.teamNumber,
-    seasonYear: input.seasonYear,
-    artifactKind,
-    note: input.note?.trim() || null,
+  // Team, season and kind lead, because they are the three the reviewer checks
+  // against the repo rather than reads off the page.
+  sendApprovalNotice({
+    vertical: 'robot_code',
+    title: `${program.toUpperCase()} ${input.teamNumber}, ${input.seasonYear}`,
+    reviewUrl: reviewSubmissionUrl(created.id),
+    sourceUrl: url,
+    facts: [
+      { label: 'Team', value: `${program.toUpperCase()} ${input.teamNumber}`, inline: true },
+      { label: 'Season', value: String(input.seasonYear), inline: true },
+      { label: 'Kind', value: artifactKind === 'cad' ? 'CAD' : 'Robot code', inline: true },
+      { label: 'Note', value: input.note?.trim() || null },
+    ],
   })
 
   return {

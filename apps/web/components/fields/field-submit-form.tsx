@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
+import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { X, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { PinMap } from './pin-map'
@@ -148,6 +150,8 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
   const [removePhotoIds, setRemovePhotoIds] = useState<string[]>([])
   const [editReason, setEditReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // Unticked, like every other submit form. See lib/listings/passing-along.ts.
+  const [passingAlong, setPassingAlong] = useState(PASSING_ALONG_DEFAULT.field)
   const [result, setResult] = useState<{ ok?: boolean; message: string } | null>(null)
 
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
@@ -246,6 +250,8 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
         fd.set('removePhotoIds', JSON.stringify(removePhotoIds))
       }
       if (turnstileToken) fd.set('turnstileToken', turnstileToken)
+      // Always explicit, never left to a default the server would have to guess.
+      if (!editing) fd.set('passingAlong', passingAlong ? 'true' : 'false')
 
       const url = editing ? `/api/fields/${edit.field.id}/edit` : '/api/fields/submit'
       const res = await fetch(url, { method: 'POST', body: fd })
@@ -428,8 +434,8 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
             label="Photos of the field"
             hint={
               editing
-                ? 'Add or remove photos. Changes are reviewed before they go live. Up to 8, max 10 MB each.'
-                : 'Optional. Reviewed before it goes live. Up to 8 photos, max 10 MB each.'
+                ? 'Add or remove photos. Changes are reviewed before they go live. Up to 8, max 25 MB each.'
+                : 'Optional. Reviewed before it goes live. Up to 8 photos, max 25 MB each.'
             }
           >
             <PhotoEditor
@@ -475,6 +481,10 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
             </p>
           )}
         </Section>
+
+        {!editing && (
+          <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="practice field" />
+        )}
 
         {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
 

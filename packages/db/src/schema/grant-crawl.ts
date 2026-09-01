@@ -110,6 +110,17 @@ export const grantCandidates = pgTable(
      * NULL therefore means "nobody to tell", and that is the whole check.
      */
     submittedByUserId: uuid('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /**
+     * Did the submitter say this is theirs to run?
+     *
+     * TRUE  - they left the "I am only passing this along" box unticked, so
+     *         approving this grants them the listing. See
+     *         apps/web/lib/listings/submitter-ownership.ts.
+     * FALSE - they ticked it. Nothing is granted, ever, from this row.
+     * NULL  - submitted before the form asked. Not a refusal, just never asked,
+     *         so the claim page still reads their submission as evidence.
+     */
+    submitterOwns: boolean('submitter_owns'),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

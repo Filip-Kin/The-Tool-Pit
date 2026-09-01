@@ -11,6 +11,7 @@ const ENTITY_NOUNS: Record<ListingEntityType, string> = {
   album: 'Photo album',
   field: 'Practice field',
   event: 'Off-season event',
+  grant: 'Grant',
 }
 
 export function entityNoun(type: ListingEntityType): string {

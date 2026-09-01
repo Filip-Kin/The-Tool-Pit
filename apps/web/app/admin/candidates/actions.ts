@@ -8,6 +8,7 @@ import { getDb } from '@/lib/db'
 import { crawlCandidates } from '@the-tool-pit/db'
 import { adminPublishCandidate } from '@/lib/admin/publish-candidate'
 import { notifyToolPublished, notifyToolCandidateRejected } from '@/lib/notify/approvals'
+import { grantToolOwnership } from '@/lib/listings/submitter-ownership'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -21,7 +22,9 @@ export async function approveCandidate(candidateId: string): Promise<{ error?: s
   revalidatePath('/admin/tools')
   if ('error' in result) return { error: result.error }
   // Only a candidate that came from a public submission has anyone to tell. One
-  // found by a crawler falls straight through this without a query.
+  // found by a crawler falls straight through this without a query. Same for
+  // ownership: nobody submitted a crawled tool, so nobody gets it.
+  await grantToolOwnership(candidateId, result.toolId)
   await notifyToolPublished(candidateId, result.toolId)
   return {}
 }

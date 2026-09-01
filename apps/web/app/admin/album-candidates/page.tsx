@@ -164,7 +164,11 @@ export default async function AdminAlbumCandidatesPage({
                 const cls = (row.classification ?? {}) as Partial<AlbumEventMatch>
                 const displayUrl = row.canonicalUrl ?? row.sourceUrl
                 return (
-                  <tr key={row.id} className="border-t border-border-subtle align-top hover:bg-surface">
+                  <tr
+                    key={row.id}
+                    id={`album-${row.id}`}
+                    className="border-t border-border-subtle align-top scroll-mt-6 hover:bg-surface"
+                  >
                     <td className="max-w-xs px-4 py-3">
                       <span className="line-clamp-1 text-xs font-medium text-foreground">
                         {meta.title ?? displayUrl}

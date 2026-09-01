@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
+import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { useSession, type SessionUser } from '@/components/auth/session-provider'
 
 declare global {
@@ -67,6 +69,8 @@ export function GrantSubmitForm() {
   const { user } = useSession()
   const [form, setForm] = useState<FormState>(INITIAL)
   const [submitting, setSubmitting] = useState(false)
+  // Unticked, like every other submit form. See lib/listings/passing-along.ts.
+  const [passingAlong, setPassingAlong] = useState(PASSING_ALONG_DEFAULT.grant)
   const [result, setResult] = useState<{ ok?: boolean; message: string; slug?: string } | null>(null)
 
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
@@ -154,6 +158,8 @@ export function GrantSubmitForm() {
       const fd = new FormData()
       for (const [k, v] of Object.entries(form)) if (v) fd.set(k, v)
       if (turnstileToken) fd.set('turnstileToken', turnstileToken)
+      // Always explicit, never left to a default the server would have to guess.
+      fd.set('passingAlong', passingAlong ? 'true' : 'false')
 
       const res = await fetch('/api/grants/submit', { method: 'POST', body: fd })
       const data = (await res.json()) as { message?: string; error?: string; status?: string; slug?: string }
@@ -261,6 +267,8 @@ export function GrantSubmitForm() {
           </p>
         )}
       </Section>
+
+      <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="grant" />
 
       {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
 

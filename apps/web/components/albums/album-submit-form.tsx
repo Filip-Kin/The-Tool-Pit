@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
+import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 
 // Cloudflare Turnstile API injected by their script (shared shape with the tools form).
@@ -47,6 +49,8 @@ export function AlbumSubmitForm() {
   const [photographer, setPhotographer] = useState('')
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // Unticked, like every other submit form. See lib/listings/passing-along.ts.
+  const [passingAlong, setPassingAlong] = useState(PASSING_ALONG_DEFAULT.album)
   const [result, setResult] = useState<{ ok?: boolean; message: string } | null>(null)
 
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
@@ -170,6 +174,8 @@ export function AlbumSubmitForm() {
           year: year ? parseInt(year, 10) : undefined,
           photographer: photographer.trim(),
           note: note.trim(),
+          // Always explicit, never left to a default the server would have to guess.
+          passingAlong,
           turnstileToken: turnstileToken ?? undefined,
         }),
       })
@@ -289,6 +295,8 @@ export function AlbumSubmitForm() {
       <Field label="Note" hint="Anything else we should know (optional).">
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className="input resize-y" />
       </Field>
+
+      <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="album" />
 
       {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
 

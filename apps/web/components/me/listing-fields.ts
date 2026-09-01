@@ -1,12 +1,23 @@
 import type { ListingEntityType } from '@the-tool-pit/db'
 import { EVENT_PROGRAMS, EVENT_STATUSES, REGISTRATION_STATUSES, VOLUNTEER_STATUSES } from '@the-tool-pit/db/event-enums'
-import { FIELD_AVAILABILITY } from '@the-tool-pit/db/field-enums'
+import {
+  FIELD_AVAILABILITY,
+  FIELD_COVERAGE,
+  FIELD_ELEMENTS,
+  FIELD_PERIMETER,
+  FIELD_PROGRAMS,
+} from '@the-tool-pit/db/field-enums'
 import {
   EVENT_STATUS_LABEL,
   REGISTRATION_STATUS_LABEL,
   VOLUNTEER_STATUS_LABEL,
 } from '@/lib/events/event-display'
-import { AVAILABILITY_LABEL } from '@/lib/fields/field-display'
+import {
+  AVAILABILITY_LABEL,
+  COVERAGE_LABEL,
+  ELEMENTS_LABEL,
+  PERIMETER_LABEL,
+} from '@/lib/fields/field-display'
 
 /**
  * What an owner may edit on their own listing, per vertical, as data.
@@ -42,6 +53,8 @@ export type ListingFieldKind =
   | 'url'
   | 'email'
   | 'int'
+  /** A decimal. Only latitude and longitude need one, and 'int' would round a pin into the next suburb. */
+  | 'number'
   | 'date'
   | 'select'
   | 'checkbox'
@@ -60,7 +73,7 @@ export interface ListingFieldSpec {
   required?: boolean
   /** text | textarea | url | email: hard cap. The server truncates to it. */
   maxLength?: number
-  /** int: inclusive bounds. Out of range is refused, not clamped. */
+  /** int and number: inclusive bounds. Out of range is refused, not clamped. */
   min?: number
   max?: number
   /** select: allowed values. null means the page supplies them as a prop. */
@@ -266,9 +279,23 @@ const ALBUM_FORM: ListingFormSpec = {
 
 // #region practice fields
 
+/** Shared by the practice field and off-season event forms. */
+const PROGRAM_LABEL: Record<string, string> = { frc: 'FRC', ftc: 'FTC', fll: 'FLL' }
+
 const FIELD_FORM: ListingFormSpec = {
   groups: [
     { key: 'about', title: 'The field' },
+    {
+      key: 'spec',
+      title: 'What is on it',
+      blurb: 'The three things every team asks before they book a drive: how much field, what the elements are made of, and whether there is an FMS.',
+    },
+    {
+      key: 'where',
+      title: 'Where it is',
+      blurb:
+        'The pin is what puts you on the map. Move it and the map moves with you, straight away.',
+    },
     {
       key: 'access',
       title: 'Getting in',
@@ -277,6 +304,72 @@ const FIELD_FORM: ListingFormSpec = {
   ],
   fields: [
     { key: 'name', label: 'Field name', kind: 'text', group: 'about', required: true, maxLength: 200 },
+    {
+      key: 'teamNumber',
+      label: 'Team number',
+      kind: 'int',
+      group: 'about',
+      min: 1,
+      max: 99_999,
+      hint: 'Leave blank when no single team runs it.',
+    },
+    { key: 'teamName', label: 'Team or organisation', kind: 'text', group: 'about', maxLength: 200 },
+    {
+      key: 'program',
+      label: 'Program',
+      kind: 'select',
+      group: 'about',
+      options: FIELD_PROGRAMS,
+      optionLabels: PROGRAM_LABEL,
+    },
+    {
+      key: 'coverage',
+      label: 'How much field',
+      kind: 'select',
+      group: 'spec',
+      options: FIELD_COVERAGE,
+      optionLabels: COVERAGE_LABEL,
+    },
+    {
+      key: 'elements',
+      label: 'Field elements',
+      kind: 'select',
+      group: 'spec',
+      options: FIELD_ELEMENTS,
+      optionLabels: ELEMENTS_LABEL,
+    },
+    {
+      key: 'perimeter',
+      label: 'Perimeter',
+      kind: 'select',
+      group: 'spec',
+      options: FIELD_PERIMETER,
+      optionLabels: PERIMETER_LABEL,
+    },
+    { key: 'hasFms', label: 'There is a working FMS', kind: 'checkbox', group: 'spec' },
+    {
+      key: 'ceilingHeightFt',
+      label: 'Ceiling height (ft)',
+      kind: 'int',
+      group: 'spec',
+      min: 1,
+      max: 199,
+      hint: 'Teams with tall mechanisms check this first.',
+    },
+    { key: 'address', label: 'Street address', kind: 'text', group: 'where', maxLength: 300, wide: true },
+    { key: 'city', label: 'City', kind: 'text', group: 'where', maxLength: 120 },
+    { key: 'region', label: 'State or province', kind: 'text', group: 'where', maxLength: 120 },
+    { key: 'country', label: 'Country', kind: 'text', group: 'where', maxLength: 120 },
+    {
+      key: 'latitude',
+      label: 'Pin latitude',
+      kind: 'number',
+      group: 'where',
+      min: -90,
+      max: 90,
+      hint: 'Decimal degrees. Right-click a spot in Google Maps to copy the pair.',
+    },
+    { key: 'longitude', label: 'Pin longitude', kind: 'number', group: 'where', min: -180, max: 180 },
     {
       key: 'availability',
       label: 'Availability',
@@ -320,8 +413,6 @@ const FIELD_FORM: ListingFormSpec = {
 // #endregion
 
 // #region off-season events
-
-const PROGRAM_LABEL: Record<string, string> = { frc: 'FRC', ftc: 'FTC', fll: 'FLL' }
 
 const EVENT_FORM: ListingFormSpec = {
   groups: [
@@ -369,6 +460,16 @@ const EVENT_FORM: ListingFormSpec = {
     { key: 'city', label: 'City', kind: 'text', group: 'where', maxLength: 120 },
     { key: 'region', label: 'State or province', kind: 'text', group: 'where', maxLength: 120 },
     { key: 'country', label: 'Country', kind: 'text', group: 'where', maxLength: 120 },
+    {
+      key: 'latitude',
+      label: 'Pin latitude',
+      kind: 'number',
+      group: 'where',
+      min: -90,
+      max: 90,
+      hint: 'Decimal degrees. Right-click a spot in Google Maps to copy the pair.',
+    },
+    { key: 'longitude', label: 'Pin longitude', kind: 'number', group: 'where', min: -180, max: 180 },
     { key: 'startDate', label: 'First day', kind: 'date', group: 'when' },
     { key: 'endDate', label: 'Last day', kind: 'date', group: 'when' },
     {
@@ -456,6 +557,60 @@ const EVENT_FORM: ListingFormSpec = {
 
 // #endregion
 
+// #region grants
+//
+// DELIBERATELY THE SMALLEST FORM HERE. A grant listing's name, funder,
+// deadlines, amounts and eligibility are a moderator's VERIFIED reading of the
+// funder's own page; grants.verifiedAt says a human checked them, and a wrong
+// deadline costs a team an application. None of those can be an owner's to
+// edit without that promise becoming untrue.
+//
+// What is left is real and worth having: the words about the programme, and
+// where the application actually happens, which is the link that moves most
+// often and which the funder notices first.
+
+const GRANT_FORM: ListingFormSpec = {
+  groups: [
+    {
+      key: 'about',
+      title: 'About this grant',
+      blurb: 'The words teams read. Dates, amounts and who can apply are checked by a reviewer.',
+    },
+  ],
+  fields: [
+    {
+      key: 'summary',
+      label: 'Summary',
+      kind: 'text',
+      group: 'about',
+      maxLength: 500,
+      wide: true,
+      hint: 'One or two sentences. This is the line under the name on every card.',
+    },
+    {
+      key: 'description',
+      label: 'Description',
+      kind: 'textarea',
+      group: 'about',
+      maxLength: 20_000,
+      rows: 8,
+      wide: true,
+      hint: 'Markdown is fine. What it funds, and what a good application looks like.',
+    },
+    {
+      key: 'applicationUrl',
+      label: 'Application link',
+      kind: 'url',
+      group: 'about',
+      maxLength: 1000,
+      wide: true,
+      hint: 'Where the form actually is, when that is a different page from the write-up.',
+    },
+  ],
+}
+
+// #endregion
+
 // #region lookup
 
 export const LISTING_FORMS: Record<ListingEntityType, ListingFormSpec> = {
@@ -463,6 +618,7 @@ export const LISTING_FORMS: Record<ListingEntityType, ListingFormSpec> = {
   album: ALBUM_FORM,
   field: FIELD_FORM,
   event: EVENT_FORM,
+  grant: GRANT_FORM,
 }
 
 export function listingFormSpec(entityType: ListingEntityType): ListingFormSpec {
@@ -531,6 +687,17 @@ export function parseListingValues(
         values[field.key] = n
         break
       }
+      case 'number': {
+        // Rounding a coordinate to a whole degree moves a pin about 100 km, so
+        // this is the one numeric kind that keeps its decimals.
+        const n = Number(text)
+        if (!Number.isFinite(n)) return { error: `${field.label} has to be a number.` }
+        const min = field.min ?? -Number.MAX_VALUE
+        const max = field.max ?? Number.MAX_VALUE
+        if (n < min || n > max) return { error: `${field.label} has to be between ${min} and ${max}.` }
+        values[field.key] = n
+        break
+      }
       case 'date': {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return { error: `${field.label} has to be a date.` }
         values[field.key] = text
@@ -585,11 +752,14 @@ function isHttpUrl(value: string): boolean {
  */
 export const LISTING_REVIEW_NOTE: Record<ListingEntityType, string> = {
   tool: 'Whether a tool is marked official, vendor-published or rookie friendly is set by a reviewer, along with the programs and roles it is filed under.',
-  album: 'The album address and which event it belongs to are set by a reviewer, because they are what stops the same gallery being listed twice.',
+  album:
+    'Which event the album belongs to, and its address, are set by a reviewer: they are what stops the same gallery being listed twice.',
   field:
-    'Where the field is, and its size, perimeter, elements and ceiling, go through the suggest-an-edit review on the map, so a move gets a second look. Everything here you change directly.',
+    'Everything here is yours and saves as you type. There is no review queue in front of your own field. The suggest-an-edit form on the map is for somebody else proposing a change to it.',
   event:
-    'The map pin coordinates are set by a reviewer, because the map only carries events it can place. Ask us to move it if the venue changes.',
+    'Everything here is yours and saves as you type, including the map pin. There is no review queue in front of your own event.',
+  grant:
+    'The deadlines, the amounts and who can apply are checked against the funder page by a reviewer before they go live, and stay with them. A wrong deadline costs a team an application. Tell us and we will re-check it.',
 }
 
 // #endregion

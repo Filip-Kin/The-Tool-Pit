@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
+import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 // Value tuples come from the zero-dependency enum subpaths (NOT the barrel),
 // so the DB client / postgres never lands in the client bundle. FIELD_PROGRAMS
@@ -72,6 +74,8 @@ function initialState(): FormState {
 export function RobotCodeSubmitForm() {
   const [form, setForm] = useState<FormState>(initialState)
   const [submitting, setSubmitting] = useState(false)
+  // Unticked, like every other submit form. See lib/listings/passing-along.ts.
+  const [passingAlong, setPassingAlong] = useState(PASSING_ALONG_DEFAULT.robot_code)
   const [result, setResult] = useState<{ ok?: boolean; message: string } | null>(null)
 
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
@@ -155,6 +159,8 @@ export function RobotCodeSubmitForm() {
       const fd = new FormData()
       for (const [k, v] of Object.entries(form)) if (v) fd.set(k, v)
       if (turnstileToken) fd.set('turnstileToken', turnstileToken)
+      // Always explicit, never left to a default the server would have to guess.
+      fd.set('passingAlong', passingAlong ? 'true' : 'false')
 
       const res = await fetch('/api/robot-code/submit', { method: 'POST', body: fd })
       const data = (await res.json()) as { message?: string; error?: string; status?: string }
@@ -274,6 +280,8 @@ export function RobotCodeSubmitForm() {
           <textarea value={form.note} onChange={(e) => set('note', e.target.value)} rows={3} className="input resize-y" />
         </Field>
       </Section>
+
+      <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="repository" />
 
       {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
 

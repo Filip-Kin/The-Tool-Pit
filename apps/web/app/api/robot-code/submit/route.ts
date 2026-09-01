@@ -5,6 +5,7 @@ import { formStr as str, formNum as num } from '@/lib/fields/form-parse'
 import { checkRobotCodeSubmissionRateLimit } from '@/lib/robot-code/rate-limit'
 import { createRobotCodeSubmission } from '@/lib/robot-code/create-submission'
 import { getCurrentUser } from '@/lib/auth/session'
+import { submitterOwnsFromForm } from '@/lib/listings/passing-along'
 
 /**
  * Public robot code / CAD submission. No account required, same shape as the
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
     const result = await createRobotCodeSubmission({
       url,
       submittedByUserId: user?.id ?? undefined,
+      submitterOwns: submitterOwnsFromForm(str(form, 'passingAlong'), 'robot_code', Boolean(user)),
       program: str(form, 'program') ?? '',
       teamNumber: num(form, 'teamNumber') ?? NaN,
       seasonYear: num(form, 'seasonYear') ?? NaN,

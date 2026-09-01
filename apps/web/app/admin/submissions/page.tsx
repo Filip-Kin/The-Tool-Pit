@@ -149,7 +149,8 @@ export default async function AdminSubmissionsPage({
                 return (
                   <tr
                     key={row.id}
-                    className="border-t border-border-subtle hover:bg-surface align-top"
+                    id={`submission-${row.id}`}
+                    className="border-t border-border-subtle hover:bg-surface align-top scroll-mt-6"
                   >
                     {/* URL */}
                     <td className="px-4 py-3 max-w-xs">

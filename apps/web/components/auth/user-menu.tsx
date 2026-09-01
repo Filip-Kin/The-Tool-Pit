@@ -63,8 +63,14 @@ export function UserMenu() {
         >
           <div className="px-3 py-2 text-xs text-muted">{user.email ?? label}</div>
           <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
+          {/* One entry per /me tab, in the order MeShell shows them. The menu
+              had two of the four, so "Your listings" and "Notifications" were
+              reachable only by already being on a /me page, which is the one
+              place you do not need a link to them. */}
           <MenuLink href="/me">Saved items</MenuLink>
+          <MenuLink href="/me/listings">Your listings</MenuLink>
           <MenuLink href="/me/team">My teams</MenuLink>
+          <MenuLink href="/me/notifications">Notifications</MenuLink>
           <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
           <DropdownMenu.Item
             onSelect={() => {

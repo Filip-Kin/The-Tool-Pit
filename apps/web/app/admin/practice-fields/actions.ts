@@ -8,6 +8,7 @@ import { getDb } from '@/lib/db'
 import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import { readPhotoFiles } from '@/lib/fields/form-parse'
 import { notifyFieldPublished, notifyFieldRejected } from '@/lib/notify/approvals'
+import { grantFieldOwnership } from '@/lib/listings/submitter-ownership'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -38,6 +39,11 @@ export async function approveField(id: string): Promise<{ error?: string }> {
   // After the publish, never before, and never in a way that can fail it. A
   // second click on Approve re-runs this and the outbox dedupe key collapses it
   // to the one email that already went.
+  //
+  // Ownership first, so "Your listings" is already true when the email lands.
+  // It does nothing for an anonymous submission or for somebody who ticked the
+  // "just passing it along" box on the form.
+  await grantFieldOwnership(id)
   await notifyFieldPublished(id)
   revalidateAll()
   return {}

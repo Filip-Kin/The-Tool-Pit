@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { getIpHash } from '@/lib/utils/ip'
 import { getCurrentUser } from '@/lib/auth/session'
+import { submitterOwnsFromForm } from '@/lib/listings/passing-along'
 import { checkEventSubmissionRateLimit } from '@/lib/events/rate-limit'
 import { createEventSubmission } from '@/lib/events/create-submission'
 import { formStr as str, formNum as num, formBool as bool } from '@/lib/events/form-parse'
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
       submitterContact: str(form, 'submitterContact'),
       submitterIpHash: ipHash,
       submittedByUserId: user?.id ?? undefined,
+      submitterOwns: submitterOwnsFromForm(str(form, 'passingAlong'), 'event', Boolean(user)),
       // Set by the form when it was opened from /events/submit?renew=<id>.
       // createEventSubmission checks it against a published listing, so a
       // hand-edited value gets dropped rather than stored.

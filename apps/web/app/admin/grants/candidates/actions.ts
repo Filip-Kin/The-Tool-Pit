@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { eq, or } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
-import { grantCandidates, grantCycles, grants } from '@the-tool-pit/db'
+import { grantCandidates, grantCycles, grants, grantSources } from '@the-tool-pit/db'
 import {
   adminIdentity,
   bumpSourceCounter,
@@ -16,6 +16,7 @@ import {
   uniqueGrantSlug,
 } from '@/lib/admin/grants'
 import { notifyGrantPublished, notifyGrantCandidateRejected } from '@/lib/notify/approvals'
+import { grantGrantOwnership } from '@/lib/listings/submitter-ownership'
 
 const QUEUE_PATH = '/admin/grants/candidates'
 
@@ -116,6 +117,11 @@ export async function publishGrantCandidate(
     .where(eq(grantCandidates.id, candidateId))
   await bumpSourceCounter(candidate.sourceId, 'yield')
 
+  // Same rule as every other vertical: whoever submitted it runs it, unless
+  // they ticked "I am only passing this along". A grant a team administers, or
+  // a programme officer's own, is a real case and is what this is for.
+  await grantGrantOwnership(candidateId, created.id)
+
   // The name that goes in the email is the one on the LISTING, not the one that
   // was submitted: a moderator has just read the funder's page and corrected
   // the form, so telling the submitter what they typed would be telling them
@@ -155,6 +161,114 @@ export async function attachGrantCandidate(candidateId: string, grantRef: string
 
   revalidatePath(QUEUE_PATH)
   return {}
+}
+
+/**
+ * Turn an aggregator into a crawl source.
+ *
+ * A page that LISTS twenty grants is worth twenty listings, but only if
+ * something crawls it, and until now the classifier could say isAggregator and
+ * the queue had nowhere to put the answer. 82 of them were sitting in the
+ * pending tab as things a reviewer could only publish (wrong) or suppress
+ * (throwing the list away). This is the third door.
+ *
+ * The new row goes in DISABLED, for the same reason grant_seed inserts its nine
+ * curated funders disabled: nothing points a crawler at a URL until a human has
+ * opened it and confirmed it is the live index. An enabled row created by one
+ * click from a queue screen is exactly how a directory fills with the wrong
+ * programme.
+ *
+ * The candidate becomes 'matched' rather than 'suppressed'. Suppression means
+ * "this source produced noise", it bumps rejectCount and it emails the person
+ * who sent the page in that we did not list it. None of that is true here: the
+ * page was a good find, so this bumps yield, the same call attachGrantCandidate
+ * makes.
+ */
+export async function routeGrantCandidateToSource(candidateId: string): Promise<{ error?: string; label?: string }> {
+  await assertAdmin()
+  const db = getDb()
+
+  const candidate = await loadCandidate(candidateId)
+  if (!candidate) return { error: 'Candidate not found.' }
+  if (candidate.status === 'published') {
+    return { error: 'This one is published as a grant. Unpublish it first if it is really a list page.' }
+  }
+
+  const target = (candidate.canonicalUrl ?? candidate.sourceUrl).trim()
+  let host: string
+  try {
+    host = new URL(target).hostname.replace(/^www\./, '')
+  } catch {
+    return { error: `"${target}" is not a URL a crawler can be pointed at.` }
+  }
+
+  // Matched on target, the same key grant_seed dedupes its curated list on. A
+  // second source row for the same page would double every candidate it finds.
+  const [existing] = await db
+    .select({ id: grantSources.id, label: grantSources.label, enabled: grantSources.enabled })
+    .from(grantSources)
+    .where(eq(grantSources.target, target))
+    .limit(1)
+  if (existing) {
+    return {
+      error: `Already a source: "${existing.label}"${existing.enabled ? '' : ' (switched off)'}. Nothing was created.`,
+    }
+  }
+
+  const classification = candidate.classification ?? {}
+  const meta = candidate.rawMetadata ?? {}
+  // The classifier's name beats the raw <title>, which is usually "Grants |
+  // Home". The host is the last resort so the sources screen never shows a
+  // blank label.
+  const label = (classification.name ?? meta.title ?? host).trim().slice(0, 120) || host
+
+  const [created] = await db
+    .insert(grantSources)
+    .values({
+      // GRANT_SOURCE_KINDS. See the note on the Run button in ../sources: no
+      // connector answers to 'aggregator' yet, so this row is a confirmed,
+      // named target waiting for one rather than something that runs tonight.
+      kind: 'aggregator',
+      label,
+      target,
+      enabled: false,
+      // A funder index is republished once a season at most, the same
+      // assumption grant_seed makes about a funder's grants page.
+      cadenceHours: 168,
+      config: {
+        funderName: classification.funderName ?? meta.funderName ?? null,
+        // Provenance, so the row can be traced back to the page and the verdict
+        // that produced it.
+        fromCandidateId: candidate.id,
+        needsVerification: true,
+      },
+      notes:
+        `Routed from the candidate queue by ${await adminIdentity()}. ` +
+        `Classifier said: ${classification.reasoning ?? 'no reasoning recorded'} ` +
+        `URL NOT CONFIRMED as the live index. Open it, check it lists several separate grants, then enable.`,
+    })
+    .returning({ id: grantSources.id })
+
+  await db
+    .update(grantCandidates)
+    .set({
+      status: 'matched',
+      // Not a rejection. This column is the only free-text audit line on the
+      // row, and leaving it null would make a routed candidate look identical
+      // to one attached to a grant.
+      rejectionReason: `Routed to grant_sources as an aggregator: "${label}" (created disabled, confirm the URL before enabling)`,
+      updatedAt: new Date(),
+    })
+    .where(eq(grantCandidates.id, candidateId))
+
+  // A list page the crawler found is a good find, so it counts for the source
+  // that found it, exactly like an attach does.
+  await bumpSourceCounter(candidate.sourceId, 'yield')
+
+  revalidatePath(QUEUE_PATH)
+  revalidatePath('/admin/grants/sources')
+  console.log(`[grants] candidate ${candidateId} routed to grant_sources ${created.id} (${target})`)
+  return { label }
 }
 
 /**

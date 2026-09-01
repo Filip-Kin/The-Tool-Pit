@@ -1,7 +1,15 @@
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import type { NewPracticeField } from '@the-tool-pit/db'
-import { notifyNewFieldSubmission } from './notify'
+import { sendApprovalNotice, reviewFieldUrl } from '@the-tool-pit/types'
+import {
+  COVERAGE_LABEL,
+  ELEMENTS_LABEL,
+  PERIMETER_LABEL,
+  AVAILABILITY_LABEL,
+  accessLabel,
+  isLowCeiling,
+} from '@/lib/fields/field-display'
 
 export interface CreateFieldSubmissionInput {
   name: string
@@ -35,6 +43,12 @@ export interface CreateFieldSubmissionInput {
    * lets the submitter find this again later.
    */
   submittedByUserId?: string
+  /**
+   * What the "just passing it along" box said, resolved by the route with
+   * lib/listings/passing-along.ts. NULL for a signed-out submitter, TRUE means
+   * the listing is theirs when a moderator approves it.
+   */
+  submitterOwns?: boolean | null
   /** Optional photos to attach and review before publish (gallery order). */
   photos?: { data: Buffer; contentType: string }[]
 }
@@ -108,6 +122,7 @@ export async function createFieldSubmission(
     submitterContact: input.submitterContact?.trim() || null,
     submitterIpHash: input.submitterIpHash,
     submittedByUserId: input.submittedByUserId ?? null,
+    submitterOwns: input.submitterOwns ?? null,
     status: 'pending',
     source: 'submission',
   }
@@ -126,31 +141,30 @@ export async function createFieldSubmission(
     firstPhotoId = inserted[0]?.id ?? null
   }
 
-  void notifyNewFieldSubmission({
-    fieldId: row.id,
-    name,
-    teamNumber,
-    teamName: values.teamName,
-    program: values.program,
-    city: values.city,
-    region: values.region,
-    country: values.country,
-    address: values.address,
-    coverage,
-    perimeter,
-    elements,
-    hasFms,
-    ceilingHeightFt: ceiling,
-    availability,
-    hours: values.hours,
-    contactInfo: values.contactInfo,
-    contactUrl: values.contactUrl,
-    website: values.website,
-    notes: values.notes,
-    submitterName: values.submitterName,
-    submitterContact: values.submitterContact,
-    photoId: firstPhotoId,
-    photoCount: photos.length,
+  // The photo is served from the public fields host, which serves it whatever
+  // the moderation state, so the embed shows the uploaded picture while the
+  // field is still pending. That is most of the review right there.
+  sendApprovalNotice({
+    vertical: 'field',
+    title: name,
+    reviewUrl: reviewFieldUrl(row.id),
+    imageUrl: firstPhotoId ? `https://fields.filipkin.com/api/fields/photo/${firstPhotoId}` : null,
+    submitter: [values.submitterName, values.submitterContact].filter(Boolean).join(' · ') || null,
+    facts: [
+      { label: 'Team', value: teamNumber ? `#${teamNumber}${values.teamName ? ` ${values.teamName}` : ''}` : values.teamName, inline: true },
+      { label: 'Program', value: values.program && values.program !== 'frc' ? values.program.toUpperCase() : null, inline: true },
+      { label: 'FMS', value: hasFms ? 'Yes' : 'No', inline: true },
+      { label: 'Spec', value: [COVERAGE_LABEL[coverage], ELEMENTS_LABEL[elements], PERIMETER_LABEL[perimeter]].filter(Boolean).join(' · ') },
+      { label: 'Ceiling', value: ceiling != null ? `${ceiling} ft${isLowCeiling(ceiling) ? ' ⚠️ low' : ''}` : null, inline: true },
+      { label: 'Availability', value: [AVAILABILITY_LABEL[availability], values.hours].filter(Boolean).join(' · '), inline: true },
+      { label: 'Location', value: [values.city, values.region, values.country].filter(Boolean).join(', ') },
+      { label: 'Address', value: values.address },
+      { label: 'Access', value: [accessLabel({ contactUrl: values.contactUrl ?? null }), values.contactInfo].filter(Boolean).join(' · ') },
+      { label: 'Sign-up link', value: values.contactUrl },
+      { label: 'Website', value: values.website },
+      { label: 'Notes', value: values.notes },
+      { label: 'Photos', value: photos.length > 1 ? `${photos.length} uploaded` : null, inline: true },
+    ],
   })
 
   return {

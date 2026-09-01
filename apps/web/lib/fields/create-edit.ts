@@ -2,7 +2,7 @@ import { eq, and, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import type { FieldEditProposalData } from '@the-tool-pit/db'
-import { notifyFieldEdit } from './notify'
+import { sendApprovalNotice, reviewFieldEditUrl } from '@the-tool-pit/types'
 
 export interface CreateFieldEditInput {
   name?: string
@@ -135,11 +135,22 @@ export async function createFieldEditProposal(
     )
   }
 
-  void notifyFieldEdit({
-    fieldName: field.name,
-    note: input.note,
-    addedPhotos: newPhotos.length,
-    removedPhotos: removePhotoIds.length,
+  const photoChange = [
+    newPhotos.length ? `+${newPhotos.length} photo${newPhotos.length > 1 ? 's' : ''}` : null,
+    removePhotoIds.length ? `-${removePhotoIds.length} photo${removePhotoIds.length > 1 ? 's' : ''}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
+
+  sendApprovalNotice({
+    vertical: 'field_edit',
+    title: field.name,
+    reviewUrl: reviewFieldEditUrl(proposal.id),
+    submitter: [input.submitterName, input.submitterContact].filter(Boolean).join(' · ') || null,
+    facts: [
+      { label: 'What changed', value: input.note },
+      { label: 'Photos', value: photoChange || null },
+    ],
   })
 
   return { status: 'pending', message: "Thanks! Your edit is in for review." }

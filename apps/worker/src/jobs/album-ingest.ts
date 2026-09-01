@@ -16,6 +16,7 @@ import { SmugmugAlbumsConnector } from '../connectors/smugmug-albums.js'
 import type { AlbumConnector } from '../connectors/album-hosts.js'
 import { albumEnrichQueue } from '../queues.js'
 import type { AlbumIngestPayload } from '@the-tool-pit/types'
+import { sendApprovalNotice, reviewQueueUrl } from '@the-tool-pit/types'
 
 const ALBUM_CONNECTOR_REGISTRY: Record<string, () => AlbumConnector> = {
   fim_albums: () => new FimAlbumsConnector(),
@@ -147,6 +148,24 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
       .where(eq(albumCrawlJobs.id, jobId))
 
     console.log(`[album-ingest] ${connectorName} done: ${totalNew} new, ${totalSkipped} skipped, ${totalFailed} failed`)
+
+    // One summary per run. See the same block in jobs/crawl.ts for why.
+    if (totalNew > 0) {
+      sendApprovalNotice({
+        vertical: 'crawl',
+        title: `${connectorName} found ${totalNew} new album${totalNew === 1 ? '' : 's'}`,
+        reviewUrl: reviewQueueUrl('/admin/album-candidates?status=pending'),
+        description: `${totalNew} candidate${totalNew === 1 ? '' : 's'} waiting in the albums queue.`,
+        facts: [
+          { label: 'Connector', value: connectorName, inline: true },
+          { label: 'Season', value: year, inline: true },
+          { label: 'Discovered', value: result.candidates.length, inline: true },
+          { label: 'New', value: totalNew, inline: true },
+          { label: 'Skipped', value: totalSkipped, inline: true },
+          { label: 'Failed', value: totalFailed || null, inline: true },
+        ],
+      })
+    }
   } catch (err) {
     await db
       .update(albumCrawlJobs)

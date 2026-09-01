@@ -12,7 +12,14 @@ import {
   VOLUNTEER_STATUSES,
 } from '@the-tool-pit/db'
 import type { NewEventListing } from '@the-tool-pit/db'
-import { notifyNewEventSubmission } from './notify'
+import { sendApprovalNotice, reviewEventUrl } from '@the-tool-pit/types'
+import {
+  eventDateRange,
+  eventLocation,
+  costLabel,
+  EVENT_STATUS_LABEL,
+  REGISTRATION_STATUS_LABEL,
+} from '@/lib/events/event-display'
 
 export interface CreateEventSubmissionInput {
   name: string
@@ -51,6 +58,12 @@ export interface CreateEventSubmissionInput {
    * attribution and lets the submitter find it again later.
    */
   submittedByUserId?: string
+  /**
+   * What the "just passing it along" box said, resolved by the route with
+   * lib/listings/passing-along.ts. NULL for a signed-out submitter, TRUE means
+   * the listing is theirs when a moderator approves it.
+   */
+  submitterOwns?: boolean | null
   /**
    * Set when this is a renewal, from /events/submit?renew=<id>. It links the
    * new season's listing back to last year's, which is what carries the
@@ -156,6 +169,7 @@ export async function createEventSubmission(
     submitterContact: input.submitterContact?.trim() || null,
     submitterIpHash: input.submitterIpHash,
     submittedByUserId: input.submittedByUserId ?? null,
+    submitterOwns: input.submitterOwns ?? null,
     status: 'pending',
     source: 'submission',
   }
@@ -169,27 +183,44 @@ export async function createEventSubmission(
     await carryOwnershipForward(previousListingId, row.id, input.submittedByUserId)
   }
 
-  void notifyNewEventSubmission({
-    listingId: row.id,
-    event: {
-      name,
-      program: values.program ?? 'frc',
-      startDate: values.startDate ?? null,
-      endDate: values.endDate ?? null,
-      venueName: values.venueName ?? null,
-      city: values.city ?? null,
-      region: values.region ?? null,
-      country: values.country ?? null,
-      capacity: values.capacity ?? null,
-      costUsd: values.costUsd ?? null,
-      costNote: values.costNote ?? null,
-      registrationStatus,
-      eventStatus,
-      website: values.website ?? null,
-      notes: values.notes ?? null,
-    },
-    submitterName: values.submitterName,
-    submitterContact: values.submitterContact,
+  // The display helpers do the formatting, so the embed says a date range and a
+  // cost the same way the public card does. A moderator comparing the two is
+  // reading one wording, not two.
+  const display = {
+    name,
+    program: values.program ?? 'frc',
+    startDate: values.startDate ?? null,
+    endDate: values.endDate ?? null,
+    venueName: values.venueName ?? null,
+    city: values.city ?? null,
+    region: values.region ?? null,
+    country: values.country ?? null,
+    capacity: values.capacity ?? null,
+    costUsd: values.costUsd ?? null,
+    costNote: values.costNote ?? null,
+    registrationStatus,
+    eventStatus,
+    website: values.website ?? null,
+    notes: values.notes ?? null,
+  }
+
+  sendApprovalNotice({
+    vertical: 'event',
+    title: name,
+    reviewUrl: reviewEventUrl(row.id),
+    sourceUrl: values.website ?? null,
+    submitter: [values.submitterName, values.submitterContact].filter(Boolean).join(' · ') || null,
+    facts: [
+      { label: 'Program', value: display.program !== 'frc' ? display.program.toUpperCase() : null, inline: true },
+      { label: 'Status', value: EVENT_STATUS_LABEL[eventStatus], inline: true },
+      { label: 'Dates', value: eventDateRange(display), inline: true },
+      { label: 'Location', value: eventLocation(display) },
+      { label: 'Capacity', value: display.capacity != null ? `${display.capacity} teams` : null, inline: true },
+      { label: 'Cost', value: costLabel(display), inline: true },
+      { label: 'Registration', value: REGISTRATION_STATUS_LABEL[registrationStatus], inline: true },
+      { label: 'Notes', value: display.notes },
+      { label: 'Renewal of', value: previousListingId ? "last year's listing" : null, inline: true },
+    ],
   })
 
   return {

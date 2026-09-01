@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { grantCandidates, grantSources, grants } from '@the-tool-pit/db'
 import type { RawGrantMetadata } from '@the-tool-pit/db'
-import { notifyNewGrantSubmission } from './notify'
+import { sendApprovalNotice, reviewGrantUrl } from '@the-tool-pit/types'
 
 /**
  * Public grant submissions.
@@ -33,6 +33,12 @@ export interface CreateGrantSubmissionInput {
    * email when a moderator gets to it.
    */
   submittedByUserId?: string
+  /**
+   * What the "just passing it along" box said, resolved by the route with
+   * lib/listings/passing-along.ts. NULL for a signed-out submitter, TRUE means
+   * the listing is theirs when a moderator approves it.
+   */
+  submitterOwns?: boolean | null
 }
 
 export type CreateGrantSubmissionResult =
@@ -189,19 +195,24 @@ export async function createGrantSubmission(
       submitterContact: input.submitterContact?.trim() || null,
       submitterIpHash: input.submitterIpHash || null,
       submittedByUserId: input.submittedByUserId ?? null,
+      submitterOwns: input.submitterOwns ?? null,
     })
     .returning({ id: grantCandidates.id })
 
-  void notifyNewGrantSubmission({
-    candidateId: row.id,
-    name,
-    funderName: rawMetadata.funderName ?? null,
-    infoUrl: rawUrl,
-    applicationUrl: applicationUrl ?? null,
-    summary: rawMetadata.description ?? null,
-    notes: rawMetadata.contentText ?? null,
-    submitterName: input.submitterName?.trim() || null,
-    submitterContact: input.submitterContact?.trim() || null,
+  sendApprovalNotice({
+    vertical: 'grant',
+    title: name,
+    reviewUrl: reviewGrantUrl(row.id),
+    // The funder's own page, which is the thing a reviewer has to open and read
+    // before any of this is published.
+    sourceUrl: rawUrl,
+    submitter: [input.submitterName?.trim(), input.submitterContact?.trim()].filter(Boolean).join(' · ') || null,
+    facts: [
+      { label: 'Funder', value: rawMetadata.funderName ?? null, inline: true },
+      { label: 'Application', value: applicationUrl ?? null },
+      { label: 'What it funds', value: rawMetadata.description ?? null },
+      { label: 'What they told us', value: rawMetadata.contentText ?? null },
+    ],
   })
 
   return {

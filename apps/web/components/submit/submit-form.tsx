@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useTransition, useEffect, useRef } from 'react'
+import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
+import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import Link from 'next/link'
@@ -28,6 +30,9 @@ export function SubmitForm() {
   const [note, setNote] = useState('')
   const [result, setResult] = useState<{ submissionId?: string; status: string; message: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Unticked, like every other submit form. A tool you sent in while signed in
+  // is yours to manage once it is approved; tick the box to decline it.
+  const [passingAlong, setPassingAlong] = useState(PASSING_ALONG_DEFAULT.tool)
   const [isPending, startTransition] = useTransition()
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
   const turnstileRef = useRef<HTMLDivElement>(null)
@@ -96,6 +101,8 @@ export function SubmitForm() {
           body: JSON.stringify({
             url: url.trim(),
             note: note.trim() || undefined,
+            // Always explicit, never left to a default the server would have to guess.
+            passingAlong,
             turnstileToken: turnstileToken ?? undefined,
           }),
         })
@@ -169,6 +176,8 @@ export function SubmitForm() {
           className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-2 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors resize-none"
         />
       </div>
+
+      <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="tool" />
 
       {/* Cloudflare Turnstile widget — only rendered when site key is configured */}
       {SITE_KEY && (

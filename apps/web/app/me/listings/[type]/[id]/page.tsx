@@ -5,8 +5,11 @@ import { getCurrentUser } from '@/lib/auth/session'
 import { MeShell } from '@/components/me/me-shell'
 import { ListingEditForm } from '@/components/me/listing-edit-form'
 import { ListingAccessPanel } from '@/components/me/listing-access-panel'
+import { AlbumCoverPanel } from '@/components/me/album-cover-panel'
 import { entityNoun } from '@/components/me/listing-labels'
-import { TOOL_TYPES } from '@the-tool-pit/db'
+import { albums, TOOL_TYPES } from '@the-tool-pit/db'
+import { eq } from 'drizzle-orm'
+import { getDb } from '@/lib/db'
 import {
   getOwnerRole,
   isListingEntityType,
@@ -16,9 +19,11 @@ import {
 import {
   createInvite,
   removeOwner,
+  saveAlbumCover,
   saveAlbumListing,
   saveEventListing,
   saveFieldListing,
+  saveGrantListing,
   saveToolListing,
 } from '../../actions'
 
@@ -34,6 +39,7 @@ const SAVE_ACTIONS = {
   album: saveAlbumListing,
   field: saveFieldListing,
   event: saveEventListing,
+  grant: saveGrantListing,
 } as const
 
 /**
@@ -64,6 +70,10 @@ export default async function EditListingPage({
   const [listing, members] = await Promise.all([loadListingForEdit(type, id), listOwnersOf(type, id)])
   if (!listing) notFound()
 
+  // The cover is not a form field (it is a file), so it is read separately and
+  // only for the one vertical that has one.
+  const coverUrl = type === 'album' ? await albumCoverUrl(id) : null
+
   return (
     <MeShell
       title={`Edit ${entityNoun(type).toLowerCase()}`}
@@ -81,6 +91,12 @@ export default async function EditListingPage({
           dynamicOptions={DYNAMIC_OPTIONS}
           saveAction={SAVE_ACTIONS[type]}
         />
+
+        {/* Albums only. A file upload is not an autosaving text box, so it gets
+            its own panel and its own button rather than a field in the form. */}
+        {type === 'album' && (
+          <AlbumCoverPanel entityId={id} currentUrl={coverUrl} saveAction={saveAlbumCover} />
+        )}
 
         <ListingAccessPanel
           entityType={type}
@@ -104,4 +120,15 @@ export default async function EditListingPage({
       </div>
     </MeShell>
   )
+}
+
+/** The album's current cover, for the upload panel's preview. Null when it has none. */
+async function albumCoverUrl(albumId: string): Promise<string | null> {
+  const db = getDb()
+  const [row] = await db
+    .select({ coverImageUrl: albums.coverImageUrl })
+    .from(albums)
+    .where(eq(albums.id, albumId))
+    .limit(1)
+  return row?.coverImageUrl ?? null
 }

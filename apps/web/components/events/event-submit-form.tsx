@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
+import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { cn } from '@/lib/utils/cn'
 // The pin-drop map and its Nominatim geocode proxy are vertical-neutral, so we
 // reuse the fields ones rather than duplicate ~200 lines and a second API route.
@@ -186,6 +188,8 @@ export function EventSubmitForm({ renewal }: { renewal?: RenewalPrefill | null }
       : null,
   )
   const [submitting, setSubmitting] = useState(false)
+  // Unticked, like every other submit form. See lib/listings/passing-along.ts.
+  const [passingAlong, setPassingAlong] = useState(PASSING_ALONG_DEFAULT.event)
   const [result, setResult] = useState<{ ok?: boolean; message: string } | null>(null)
 
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
@@ -277,6 +281,8 @@ export function EventSubmitForm({ renewal }: { renewal?: RenewalPrefill | null }
       fd.set('longitude', String(coords.lng))
       if (renewal) fd.set('previousListingId', renewal.previousListingId)
       if (turnstileToken) fd.set('turnstileToken', turnstileToken)
+      // Always explicit, never left to a default the server would have to guess.
+      fd.set('passingAlong', passingAlong ? 'true' : 'false')
 
       const res = await fetch('/api/events/submit', { method: 'POST', body: fd })
       const data = (await res.json()) as { message?: string; error?: string }
@@ -497,6 +503,8 @@ export function EventSubmitForm({ renewal }: { renewal?: RenewalPrefill | null }
           <p className="text-xs text-muted-2">No account needed. Signing in just lets you find your submission later.</p>
         )}
       </Section>
+
+      <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="event" />
 
       {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
 

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { getIpHash } from '@/lib/utils/ip'
 import { getCurrentUser } from '@/lib/auth/session'
+import { submitterOwnsFromForm } from '@/lib/listings/passing-along'
 import { checkFieldSubmissionRateLimit } from '@/lib/fields/rate-limit'
 import { createFieldSubmission } from '@/lib/fields/create-submission'
 import { formStr as str, formNum as num, formBool as bool, readPhotoFiles } from '@/lib/fields/form-parse'
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
       submitterContact: str(form, 'submitterContact'),
       submitterIpHash: ipHash,
       submittedByUserId: user?.id ?? undefined,
+      submitterOwns: submitterOwnsFromForm(str(form, 'passingAlong'), 'field', Boolean(user)),
       photos: parsed.photos,
     })
 

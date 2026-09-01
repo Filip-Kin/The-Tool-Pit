@@ -152,7 +152,11 @@ export default async function AdminGrantCandidatesPage({
                 const cls = (row.classification ?? {}) as GrantClassification
                 const url = row.canonicalUrl ?? row.sourceUrl
                 return (
-                  <tr key={row.id} className="border-t border-border-subtle align-top hover:bg-surface">
+                  <tr
+                    key={row.id}
+                    id={`grant-${row.id}`}
+                    className="border-t border-border-subtle align-top scroll-mt-6 hover:bg-surface"
+                  >
                     <td className="max-w-sm px-4 py-3">
                       <span className="line-clamp-2 text-xs font-medium text-foreground">
                         {cls.name || meta.title || url}
@@ -178,8 +182,18 @@ export default async function AdminGrantCandidatesPage({
                           </Link>
                         </p>
                       )}
+                      {/* This column doubles as the audit line. It is red for a
+                          rejection and muted for a routing note, because a
+                          candidate turned into a crawl source was a good find,
+                          not a reject. */}
                       {row.rejectionReason && (
-                        <p className="mt-1 text-[10px] text-frc">{row.rejectionReason}</p>
+                        <p
+                          className={`mt-1 text-[10px] ${
+                            row.status === 'matched' ? 'text-muted-2' : 'text-frc'
+                          }`}
+                        >
+                          {row.rejectionReason}
+                        </p>
                       )}
                     </td>
 
@@ -206,6 +220,7 @@ export default async function AdminGrantCandidatesPage({
                         candidateId={row.id}
                         status={row.status}
                         matchedGrantSlug={grantSlug ?? null}
+                        isAggregator={cls.isAggregator === true}
                       />
                     </td>
                   </tr>

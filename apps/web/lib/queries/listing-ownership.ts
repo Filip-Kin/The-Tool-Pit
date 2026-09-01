@@ -2,12 +2,18 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import type { PgColumn } from 'drizzle-orm/pg-core'
 import { getDb } from '@/lib/db'
 import {
+  albumCandidates,
+  albumSubmissions,
   albums,
   eventListings,
   events,
+  grantCandidates,
+  grantFunders,
+  grants,
   listingClaims,
   listingOwners,
   practiceFields,
+  submissions,
   toolLinks,
   tools,
   users,
@@ -170,11 +176,38 @@ async function resolveEvents(ids: string[]): Promise<Resolved> {
   return out
 }
 
+async function resolveGrants(ids: string[]): Promise<Resolved> {
+  const db = getDb()
+  const rows = await db
+    .select({
+      id: grants.id,
+      slug: grants.slug,
+      name: grants.name,
+      summary: grants.summary,
+      status: grants.status,
+      funderName: grantFunders.name,
+    })
+    .from(grants)
+    .leftJoin(grantFunders, eq(grantFunders.id, grants.funderId))
+    .where(inArray(grants.id, ids))
+  const out: Resolved = new Map()
+  for (const r of rows) {
+    const status = r.status === 'published' ? null : `(${r.status})`
+    out.set(r.id, {
+      title: r.name,
+      subtitle: [r.funderName, r.summary, status].filter(Boolean).join(' · ') || null,
+      href: `/grants/${r.slug}`,
+    })
+  }
+  return out
+}
+
 const RESOLVERS: Record<ListingEntityType, (ids: string[]) => Promise<Resolved>> = {
   tool: resolveTools,
   album: resolveAlbums,
   field: resolveFields,
   event: resolveEvents,
+  grant: resolveGrants,
 }
 
 /**
@@ -406,10 +439,17 @@ export interface ClaimableListing {
   /** For tools: a repo we can verify against, when there is one. */
   repoUrl: string | null
   /**
-   * True when the signed-in user is the one who submitted this listing. Only
-   * practice fields and off-season events carry a submitter id; the strongest
-   * possible proof, so it short-circuits to instant ownership in the claim
-   * action.
+   * True when the signed-in user is the one who submitted this listing, AND
+   * they did not tick "I am only passing this along" when they did.
+   *
+   * The strongest proof on the site short of a repo file: we wrote the
+   * submitter id ourselves, off the session, at the moment the row was created.
+   * It short-circuits to instant ownership in the claim action.
+   *
+   * Every vertical carries it now, not just fields and events. It is what
+   * closes the gap for everything approved BEFORE ownership was granted at
+   * approval: those rows have an owner-less listing and a submitter id, and
+   * this is how their submitter gets it back without a data migration.
    */
   isSelfSubmitted: boolean
   /**
@@ -438,28 +478,8 @@ export async function resolveClaimable(
 
   const alreadyOwned = (await countOwners(entityType, entityId)) > 0
 
-  let repoUrl: string | null = null
-  let isSelfSubmitted = false
-
-  if (entityType === 'tool') {
-    repoUrl = await findToolRepoUrl(entityId)
-  } else if (entityType === 'field') {
-    const db = getDb()
-    const [row] = await db
-      .select({ submittedByUserId: practiceFields.submittedByUserId })
-      .from(practiceFields)
-      .where(eq(practiceFields.id, entityId))
-      .limit(1)
-    isSelfSubmitted = row?.submittedByUserId === userId
-  } else if (entityType === 'event') {
-    const db = getDb()
-    const [row] = await db
-      .select({ submittedByUserId: eventListings.submittedByUserId })
-      .from(eventListings)
-      .where(eq(eventListings.id, entityId))
-      .limit(1)
-    isSelfSubmitted = row?.submittedByUserId === userId
-  }
+  const repoUrl = entityType === 'tool' ? await findToolRepoUrl(entityId) : null
+  const isSelfSubmitted = await submittedByThisUser(entityType, entityId, userId)
 
   const db = getDb()
   const [open] = await db
@@ -480,6 +500,79 @@ export async function resolveClaimable(
     : null
 
   return { entityType, entityId, facts, alreadyOwned, repoUrl, isSelfSubmitted, existingClaim }
+}
+
+/**
+ * Did THIS user submit this listing, and did they want it?
+ *
+ * Two questions, one answer, because either one alone is the wrong answer. A
+ * submitter id with submitter_owns = false is somebody who explicitly said the
+ * thing was not theirs, and handing it to them anyway on the claim page would
+ * make the checkbox on the submit form a lie. A NULL submitter_owns is a row
+ * from before the form asked: they were never given the chance to decline, so
+ * their submission still counts as the evidence it always was.
+ *
+ * A field or an event IS the submitted row. A tool, an album and a grant are
+ * one hop away from theirs, through the column the publish step wrote when it
+ * turned a submission into a listing.
+ */
+async function submittedByThisUser(
+  entityType: ListingEntityType,
+  entityId: string,
+  userId: string,
+): Promise<boolean> {
+  const db = getDb()
+  const owns = (row: { submittedByUserId: string | null; submitterOwns: boolean | null } | undefined) =>
+    Boolean(row && row.submittedByUserId === userId && row.submitterOwns !== false)
+
+  if (entityType === 'field') {
+    const [row] = await db
+      .select({ submittedByUserId: practiceFields.submittedByUserId, submitterOwns: practiceFields.submitterOwns })
+      .from(practiceFields)
+      .where(eq(practiceFields.id, entityId))
+      .limit(1)
+    return owns(row)
+  }
+
+  if (entityType === 'event') {
+    const [row] = await db
+      .select({ submittedByUserId: eventListings.submittedByUserId, submitterOwns: eventListings.submitterOwns })
+      .from(eventListings)
+      .where(eq(eventListings.id, entityId))
+      .limit(1)
+    return owns(row)
+  }
+
+  if (entityType === 'tool') {
+    // submissions.resolved_tool_id is written when the pipeline publishes, so
+    // it is the one link back from a live tool to the person who sent it in.
+    const [row] = await db
+      .select({ submittedByUserId: submissions.submittedByUserId, submitterOwns: submissions.submitterOwns })
+      .from(submissions)
+      .where(eq(submissions.resolvedToolId, entityId))
+      .limit(1)
+    return owns(row)
+  }
+
+  if (entityType === 'album') {
+    const [row] = await db
+      .select({
+        submittedByUserId: albumSubmissions.submittedByUserId,
+        submitterOwns: albumSubmissions.submitterOwns,
+      })
+      .from(albumCandidates)
+      .innerJoin(albumSubmissions, eq(albumSubmissions.id, albumCandidates.submissionId))
+      .where(eq(albumCandidates.matchedAlbumId, entityId))
+      .limit(1)
+    return owns(row)
+  }
+
+  const [row] = await db
+    .select({ submittedByUserId: grantCandidates.submittedByUserId, submitterOwns: grantCandidates.submitterOwns })
+    .from(grantCandidates)
+    .where(eq(grantCandidates.matchedGrantId, entityId))
+    .limit(1)
+  return owns(row)
 }
 
 // #endregion
@@ -512,6 +605,7 @@ const EDIT_TABLES = {
   album: albums,
   field: practiceFields,
   event: eventListings,
+  grant: grants,
 } as const
 
 /**

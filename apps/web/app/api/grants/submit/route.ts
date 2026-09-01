@@ -6,6 +6,7 @@ import { formStr as str } from '@/lib/fields/form-parse'
 import { checkGrantSubmissionRateLimit } from '@/lib/grants/rate-limit'
 import { createGrantSubmission } from '@/lib/grants/create-submission'
 import { getCurrentUser } from '@/lib/auth/session'
+import { submitterOwnsFromForm } from '@/lib/listings/passing-along'
 
 /**
  * Public grant submission. No account required, same shape as the fields
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
     const result = await createGrantSubmission({
       name,
       submittedByUserId: user?.id ?? undefined,
+      submitterOwns: submitterOwnsFromForm(str(form, 'passingAlong'), 'grant', Boolean(user)),
       infoUrl,
       funderName: str(form, 'funderName'),
       applicationUrl: str(form, 'applicationUrl'),

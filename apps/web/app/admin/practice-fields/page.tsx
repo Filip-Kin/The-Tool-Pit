@@ -87,13 +87,15 @@ export default async function PracticeFieldsAdminPage({
 
       <div className="mt-4 flex flex-col gap-3">
         {rows.length === 0 && <p className="text-sm text-muted-2">Nothing here.</p>}
+        {/* id: the Discord notice links straight to the row it is about. */}
         {rows.map((r) => (
-          <FieldAdminRow
-            key={r.field.id}
-            field={r.field}
-            photos={photosByField.get(r.field.id) ?? []}
-            account={r.accountId ? { id: r.accountId, displayName: r.accountName, email: r.accountEmail } : null}
-          />
+          <div key={r.field.id} id={`field-${r.field.id}`} className="scroll-mt-6">
+            <FieldAdminRow
+              field={r.field}
+              photos={photosByField.get(r.field.id) ?? []}
+              account={r.accountId ? { id: r.accountId, displayName: r.accountName, email: r.accountEmail } : null}
+            />
+          </div>
         ))}
       </div>
     </div>

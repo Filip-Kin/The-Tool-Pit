@@ -314,10 +314,11 @@ function Input({
       name={field.key}
       value={text}
       onChange={(e) => onChange(e.target.value)}
-      maxLength={field.kind === 'int' || field.kind === 'date' ? undefined : field.maxLength}
-      min={field.kind === 'int' ? field.min : undefined}
-      max={field.kind === 'int' ? field.max : undefined}
-      inputMode={field.kind === 'int' ? 'numeric' : undefined}
+      step={field.kind === 'number' ? 'any' : undefined}
+      maxLength={field.kind === 'int' || field.kind === 'number' || field.kind === 'date' ? undefined : field.maxLength}
+      min={field.kind === 'int' || field.kind === 'number' ? field.min : undefined}
+      max={field.kind === 'int' || field.kind === 'number' ? field.max : undefined}
+      inputMode={field.kind === 'int' ? 'numeric' : field.kind === 'number' ? 'decimal' : undefined}
       placeholder={field.kind === 'url' ? 'https://' : undefined}
       className="input"
     />
@@ -327,6 +328,7 @@ function Input({
 function inputType(kind: ListingFieldSpec['kind']): string {
   switch (kind) {
     case 'int':
+    case 'number':
       return 'number'
     case 'date':
       return 'date'
