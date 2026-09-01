@@ -24,11 +24,17 @@ export function displayEventName(e: Pick<Event, 'name' | 'eventType' | 'year'>):
   return e.name
 }
 
+/** The one published album of a one-album event, when there is exactly one. */
+interface AlbumRef {
+  id: string
+  url: string
+}
+
 function toEventResult(
   e: Event,
   albumCount: number,
   coverImages: string[] = [],
-  soleAlbumUrl: string | null = null,
+  soleAlbum: AlbumRef | null = null,
 ): EventSearchResult {
   return {
     id: e.id,
@@ -45,7 +51,8 @@ function toEventResult(
     country: e.country,
     albumCount,
     coverImages,
-    soleAlbumUrl,
+    soleAlbumUrl: soleAlbum?.url ?? null,
+    soleAlbumId: soleAlbum?.id ?? null,
   }
 }
 
@@ -78,18 +85,25 @@ async function publishedAlbumCounts(eventIds: string[]): Promise<Map<string, num
   return map
 }
 
-/** Published album external URLs per event (for the single-album direct link). */
-async function publishedAlbumUrls(eventIds: string[]): Promise<Map<string, string[]>> {
-  const map = new Map<string, string[]>()
+/**
+ * Published albums per event, id and URL.
+ *
+ * The URL drives the single-album direct link. The id came later, for the menu
+ * that link has to carry: skipping the event page means skipping the album
+ * card, so the event card has to be able to name the album it is standing in
+ * for.
+ */
+async function publishedAlbumRefs(eventIds: string[]): Promise<Map<string, AlbumRef[]>> {
+  const map = new Map<string, AlbumRef[]>()
   if (eventIds.length === 0) return map
   const db = getDb()
   const rows = await db
-    .select({ eventId: albums.eventId, url: albums.url })
+    .select({ eventId: albums.eventId, id: albums.id, url: albums.url })
     .from(albums)
     .where(and(inArray(albums.eventId, eventIds), eq(albums.status, 'published')))
   for (const r of rows) {
     const arr = map.get(r.eventId) ?? []
-    arr.push(r.url)
+    arr.push({ id: r.id, url: r.url })
     map.set(r.eventId, arr)
   }
   return map
@@ -148,7 +162,7 @@ async function collapseDivisions(
   rows: Event[],
   counts: Map<string, number>,
   covers: Map<string, string[]>,
-  urls: Map<string, string[]> = new Map(),
+  refs: Map<string, AlbumRef[]> = new Map(),
 ): Promise<EventSearchResult[]> {
   const db = getDb()
   // Fetch parent events for any divisions present.
@@ -174,9 +188,9 @@ async function collapseDivisions(
     const count = g.memberIds.reduce((s, id) => s + (counts.get(id) ?? 0), 0)
     const cov: string[] = []
     for (const id of g.memberIds) for (const c of covers.get(id) ?? []) if (cov.length < PREVIEW_COVERS) cov.push(c)
-    const allUrls = g.memberIds.flatMap((id) => urls.get(id) ?? [])
-    const soleUrl = count === 1 && allUrls.length === 1 ? allUrls[0] : null
-    return toEventResult(g.event, count, cov, soleUrl)
+    const all = g.memberIds.flatMap((id) => refs.get(id) ?? [])
+    const sole = count === 1 && all.length === 1 ? all[0]! : null
+    return toEventResult(g.event, count, cov, sole)
   })
   results.sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? ''))
   return results
@@ -213,7 +227,7 @@ export async function getEventsByDatePage(
   const [counts, covers, urls] = await Promise.all([
     publishedAlbumCounts(ids),
     publishedAlbumCovers(ids),
-    publishedAlbumUrls(ids),
+    publishedAlbumRefs(ids),
   ])
   return {
     events: await collapseDivisions(rows, counts, covers, urls),
@@ -260,7 +274,7 @@ export async function searchEvents(params: {
   const [counts, covers, urls] = await Promise.all([
     publishedAlbumCounts(rows.map((r) => r.id)),
     publishedAlbumCovers(rows.map((r) => r.id)),
-    publishedAlbumUrls(rows.map((r) => r.id)),
+    publishedAlbumRefs(rows.map((r) => r.id)),
   ])
   return {
     events: await collapseDivisions(rows, counts, covers, urls),
@@ -373,7 +387,7 @@ export async function getTeamEvents(teamNumber: number): Promise<EventSearchResu
   const [counts, covers, urls] = await Promise.all([
     publishedAlbumCounts(eventRows.map((e) => e.id)),
     publishedAlbumCovers(eventRows.map((e) => e.id)),
-    publishedAlbumUrls(eventRows.map((e) => e.id)),
+    publishedAlbumRefs(eventRows.map((e) => e.id)),
   ])
   return collapseDivisions(eventRows, counts, covers, urls)
 }
@@ -474,10 +488,10 @@ export async function suggestEvents(q: string, limit = 5): Promise<EventSearchRe
 
   // Counts + sole-album URLs so a one-album suggestion links straight to it.
   const ids = rows.map((e) => e.id)
-  const [counts, urls] = await Promise.all([publishedAlbumCounts(ids), publishedAlbumUrls(ids)])
+  const [counts, refs] = await Promise.all([publishedAlbumCounts(ids), publishedAlbumRefs(ids)])
   return rows.map((e) => {
     const count = counts.get(e.id) ?? 0
-    const evUrls = urls.get(e.id) ?? []
-    return toEventResult(e, count, [], count === 1 && evUrls.length === 1 ? evUrls[0] : null)
+    const evRefs = refs.get(e.id) ?? []
+    return toEventResult(e, count, [], count === 1 && evRefs.length === 1 ? evRefs[0]! : null)
   })
 }

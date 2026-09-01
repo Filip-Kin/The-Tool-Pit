@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { AlbumSearchBar } from '@/components/albums/album-search-bar'
 import { EventList } from '@/components/albums/event-list'
 import { getTeamEvents } from '@/lib/queries/albums'
+import { soleAlbumClaimStates } from '@/lib/albums/claim-states'
 
 interface PageProps {
   params: Promise<{ team: string }>
@@ -21,6 +22,7 @@ export default async function TeamPage({ params }: PageProps) {
 
   const events = await getTeamEvents(teamNumber)
   const withAlbums = events.filter((e) => e.albumCount > 0)
+  const claimStates = await soleAlbumClaimStates(events)
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-10">
@@ -39,6 +41,7 @@ export default async function TeamPage({ params }: PageProps) {
 
       <EventList
         events={events}
+        claimStates={claimStates}
         emptyMessage={`No events found for team ${teamNumber}. Event data syncs from The Blue Alliance.`}
       />
     </div>

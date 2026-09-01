@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AlbumSearchBar } from '@/components/albums/album-search-bar'
 import { EventList } from '@/components/albums/event-list'
 import { searchEvents, resolveEvent } from '@/lib/queries/albums'
+import { soleAlbumClaimStates } from '@/lib/albums/claim-states'
 
 interface PageProps {
   searchParams: Promise<{ q?: string; page?: string }>
@@ -23,6 +24,7 @@ export default async function AlbumSearchPage({ searchParams }: PageProps) {
   const { events, total } = query
     ? await searchEvents({ query, page, pageSize: 20 })
     : { events: [], total: 0 }
+  const claimStates = await soleAlbumClaimStates(events)
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-10">
@@ -36,7 +38,11 @@ export default async function AlbumSearchPage({ searchParams }: PageProps) {
           <p className="mb-6 text-sm text-muted">
             {total} {total === 1 ? 'event' : 'events'} matching “{query}”
           </p>
-          <EventList events={events} emptyMessage={`No events found for “${query}”.`} />
+          <EventList
+            events={events}
+            claimStates={claimStates}
+            emptyMessage={`No events found for “${query}”.`}
+          />
         </>
       ) : (
         <p className="text-sm text-muted">Type an event name, event code, or team number to search.</p>

@@ -3,22 +3,23 @@ import { notFound, redirect } from 'next/navigation'
 import { Calendar, MapPin, ExternalLink } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { AlbumGrid } from '@/components/albums/album-grid'
-import { AlbumOwnershipSection, type AlbumOwnershipRow } from '@/components/albums/album-ownership-section'
 import { formatEventDates, formatLocation } from '@/components/albums/format'
 import { getEventPage, displayEventName } from '@/lib/queries/albums'
 import { listingClaimStates } from '@/lib/queries/listing-ownership'
+import { getFavoritedIds } from '@/lib/queries/favorites'
 
 interface PageProps {
   params: Promise<{ code: string }>
 }
 
 /**
- * Per visitor now, so it cannot be cached.
+ * Per visitor, so it cannot be cached.
  *
- * The album cards carry an ownership control, and which one of the four it is
+ * Every album card's menu shows one of four ownership states, and which one
  * depends on who is signed in. Reading the session cookie already forces a
  * dynamic render; saying so here means the next person to add a revalidate
- * knows it would be wrong rather than finding out from a stale menu.
+ * knows it would be wrong rather than finding out from a menu that offers a
+ * stranger's album to be claimed.
  */
 export const dynamic = 'force-dynamic'
 
@@ -47,21 +48,14 @@ export default async function EventPage({ params }: PageProps) {
   const location = formatLocation(event.city, event.stateProv, event.country)
   const totalAlbums = allAlbums.length
 
-  // One resolve for the parent grid, every division grid and the ownership
-  // list. The biggest page in the database today is a championship with eight
-  // albums across four events, so this is one query where per card would be
-  // sixteen.
-  const claimStates = await listingClaimStates('album', allAlbums.map((a) => a.id))
-
-  // The list only earns its space once there is more than one album to tell
-  // apart. A single-album page has one card and one menu, which is not a hunt.
-  const ownershipRows: AlbumOwnershipRow[] =
-    totalAlbums > 1
-      ? [
-          ...albums.map((a) => ({ album: a, groupLabel: null })),
-          ...divisions.flatMap((d) => d.albums.map((a) => ({ album: a, groupLabel: d.label }))),
-        ]
-      : []
+  // One resolve for the parent grid and every division grid. The biggest page
+  // in the database today is a championship with eight albums across four
+  // events, so this is two queries where per card would be twenty four.
+  const albumIds = allAlbums.map((a) => a.id)
+  const [claimStates, favorited] = await Promise.all([
+    listingClaimStates('album', albumIds),
+    getFavoritedIds('album', albumIds),
+  ])
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-10">
@@ -106,7 +100,7 @@ export default async function EventPage({ params }: PageProps) {
       <h2 className="mb-4 text-lg font-semibold text-foreground">
         {totalAlbums} {totalAlbums === 1 ? 'album' : 'albums'}
       </h2>
-      <AlbumGrid albums={albums} claimStates={claimStates} />
+      <AlbumGrid albums={albums} claimStates={claimStates} favorited={favorited} />
 
       {divisions.map((d) => (
         <section key={d.event.id} className="mt-10">
@@ -114,11 +108,9 @@ export default async function EventPage({ params }: PageProps) {
             {d.label}
             <span className="font-mono text-xs font-normal text-muted-2">{d.event.eventCode}</span>
           </h3>
-          <AlbumGrid albums={d.albums} claimStates={claimStates} />
+          <AlbumGrid albums={d.albums} claimStates={claimStates} favorited={favorited} />
         </section>
       ))}
-
-      <AlbumOwnershipSection rows={ownershipRows} claimStates={claimStates} />
     </div>
   )
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { EventSearchResult } from '@the-tool-pit/types'
+import type { AlbumClaimStates } from '@/lib/albums/claim-states'
 import { EventCard } from './event-card'
 import { loadMoreEvents } from '@/app/photos/actions'
 
@@ -14,6 +15,13 @@ interface Persisted {
   offset: number
   hasMore: boolean
   scrollY: number
+  /**
+   * Saved with the events, because they are only useful together. Restore the
+   * events without these and every card past the first page comes back with a
+   * menu that has quietly dropped its claim item, which is the one thing on
+   * this feed a photographer came for.
+   */
+  claimStates: AlbumClaimStates
 }
 
 /**
@@ -26,12 +34,16 @@ export function InfiniteEventList({
   initial,
   initialOffset,
   initialHasMore,
+  initialClaimStates,
 }: {
   initial: EventSearchResult[]
   initialOffset: number
   initialHasMore: boolean
+  /** Claim state per sole-album id, extended by every page the feed appends. */
+  initialClaimStates: AlbumClaimStates
 }) {
   const [events, setEvents] = useState<EventSearchResult[]>(initial)
+  const [claimStates, setClaimStates] = useState<AlbumClaimStates>(initialClaimStates)
   const [hasMore, setHasMore] = useState(initialHasMore)
   const [loading, setLoading] = useState(false)
 
@@ -41,8 +53,13 @@ export function InfiniteEventList({
   const seen = useRef(new Set(initial.map((e) => e.tbaKey)))
   const sentinelRef = useRef<HTMLDivElement>(null)
   // Latest feed state, so the scroll saver always persists current values.
-  const latest = useRef<Omit<Persisted, 'scrollY'>>({ events: initial, offset: initialOffset, hasMore: initialHasMore })
-  latest.current = { events, offset: offsetRef.current, hasMore }
+  const latest = useRef<Omit<Persisted, 'scrollY'>>({
+    events: initial,
+    offset: initialOffset,
+    hasMore: initialHasMore,
+    claimStates: initialClaimStates,
+  })
+  latest.current = { events, offset: offsetRef.current, hasMore, claimStates }
 
   const load = useCallback(async () => {
     if (loading || !hasMore) return
@@ -55,6 +72,7 @@ export function InfiniteEventList({
         add.forEach((e) => seen.current.add(e.tbaKey))
         return [...prev, ...add]
       })
+      setClaimStates((prev) => ({ ...prev, ...res.claimStates }))
       setHasMore(res.hasMore)
     } finally {
       setLoading(false)
@@ -85,6 +103,7 @@ export function InfiniteEventList({
           seen.current = new Set(saved.events.map((e) => e.tbaKey))
           offsetRef.current = saved.offset
           setEvents(saved.events)
+          setClaimStates(saved.claimStates ?? {})
           setHasMore(saved.hasMore)
           lastY.current = saved.scrollY
           const target = saved.scrollY
@@ -121,8 +140,14 @@ export function InfiniteEventList({
     const save = () => {
       raf = 0
       try {
-        const { events: evs, offset, hasMore: more } = latest.current
-        const payload: Persisted = { events: evs.slice(0, MAX_PERSIST), offset, hasMore: more, scrollY: lastY.current }
+        const { events: evs, offset, hasMore: more, claimStates: states } = latest.current
+        const payload: Persisted = {
+          events: evs.slice(0, MAX_PERSIST),
+          offset,
+          hasMore: more,
+          scrollY: lastY.current,
+          claimStates: states,
+        }
         sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
       } catch {
         // ignore quota / serialization errors
@@ -169,7 +194,11 @@ export function InfiniteEventList({
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {events.map((e) => (
-            <EventCard key={e.tbaKey} event={e} />
+            <EventCard
+              key={e.tbaKey}
+              event={e}
+              soleAlbumClaimState={e.soleAlbumId ? claimStates[e.soleAlbumId] : undefined}
+            />
           ))}
         </div>
       )}

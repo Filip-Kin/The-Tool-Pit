@@ -3,6 +3,7 @@ import { AlbumSearchBar } from '@/components/albums/album-search-bar'
 import { SectionHeader } from '@/components/ui/section-header'
 import { InfiniteEventList } from '@/components/albums/infinite-event-list'
 import { getEventsByDatePage } from '@/lib/queries/albums'
+import { soleAlbumClaimStates } from '@/lib/albums/claim-states'
 
 /**
  * Not frozen at build time.
@@ -14,7 +15,16 @@ import { getEventsByDatePage } from '@/lib/queries/albums'
  * recomputed, and how a suppressed listing can keep appearing until the next
  * unrelated deploy. Sixty seconds is far fresher than a deploy and still cheap.
  */
-export const revalidate = 60
+/**
+ * Per visitor, so it cannot be cached.
+ *
+ * This page used to hold a sixty second cache, which was already far fresher
+ * than a deploy and stopped the feed freezing at build time. It cannot keep it
+ * now: a one album event card carries that album's ownership menu, and which
+ * of the four states it shows depends on who is signed in. A cached page would
+ * hand one visitor another visitor's answer.
+ */
+export const dynamic = 'force-dynamic'
 
 
 // Absolute so the home tab reads "FIRST Event Photos", not the parent
@@ -25,6 +35,7 @@ export const metadata: Metadata = {
 
 export default async function PhotosHomePage() {
   const first = await getEventsByDatePage({ limit: 30, offset: 0 })
+  const claimStates = await soleAlbumClaimStates(first.events)
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-10">
@@ -46,6 +57,7 @@ export default async function PhotosHomePage() {
           initial={first.events}
           initialOffset={first.rawCount}
           initialHasMore={first.hasMore}
+          initialClaimStates={claimStates}
         />
       </section>
     </div>

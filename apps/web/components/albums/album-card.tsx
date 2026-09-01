@@ -1,17 +1,26 @@
 import { ExternalLink, Camera, Images, Calendar } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { FavoriteButton } from '@/components/auth/favorite-button'
 import type { AlbumDTO } from '@the-tool-pit/types'
 import type { ListingClaimState } from '@/lib/queries/listing-ownership'
 import { providerLabel } from './format'
 import { AlbumMenu } from './album-menu'
 
-export function AlbumCard({ album, claimState }: { album: AlbumDTO; claimState: ListingClaimState }) {
+export function AlbumCard({
+  album,
+  claimState,
+  favorited,
+}: {
+  album: AlbumDTO
+  claimState: ListingClaimState
+  favorited: boolean
+}) {
   const title = album.title || providerLabel(album.provider)
-  // The card used to BE the link. The overflow menu cannot live inside an
-  // anchor (a button inside a link is invalid, and every click would navigate
-  // away before the menu opened), so the anchor now covers the card content and
-  // the menu sits beside it. The group class stays on the outer element so the
-  // hover treatment still covers the whole card.
+  // The card used to BE the link. Controls cannot live inside an anchor (a
+  // button inside a link is invalid, and every click would navigate away
+  // instead), so the anchor covers the image and the text, and the footer row
+  // sits below it. The group class stays on the outer element so the hover
+  // treatment still covers the whole card.
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:border-primary/50">
       <a
@@ -60,16 +69,25 @@ export function AlbumCard({ album, claimState }: { album: AlbumDTO; claimState: 
               {album.dateText}
             </span>
           )}
-          {album.photoCount != null && (
-            <span className="text-xs text-muted-2">{album.photoCount} photos</span>
-          )}
         </div>
       </a>
 
-      {/* Always shown, not hover-only: a touch screen has no hover, and this is
-          the only route a photographer has to their own album. */}
-      <div className="absolute right-2 top-2">
-        <AlbumMenu albumId={album.id} albumUrl={album.url} claimState={claimState} />
+      {/* Controls row, outside the anchor. Same place a tool card puts its
+          save and vote buttons, so every card in the app keeps its controls in
+          the same corner of the eye. */}
+      <div className="flex items-center justify-between gap-2 px-3 pb-3">
+        <span className="text-xs text-muted-2">
+          {album.photoCount != null ? `${album.photoCount} photos` : ''}
+        </span>
+        <div className="flex items-center gap-2">
+          <FavoriteButton
+            entityType="album"
+            entityId={album.id}
+            initialFavorited={favorited}
+            reason="Sign in to save this album to your home page"
+          />
+          <AlbumMenu albumId={album.id} albumUrl={album.url} claimState={claimState} />
+        </div>
       </div>
     </div>
   )

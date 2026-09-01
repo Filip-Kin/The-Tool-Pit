@@ -195,6 +195,16 @@ export interface EventSearchResult {
    * single item.
    */
   soleAlbumUrl?: string | null
+  /**
+   * That same album's id.
+   *
+   * Linking straight out means a one-album event never shows an album card,
+   * and roughly two thirds of events have exactly one album, so without this
+   * most photographers had no card to claim their album from. The event card
+   * carries the album's own menu instead, and this is what it needs to say
+   * which album it means.
+   */
+  soleAlbumId?: string | null
 }
 
 export interface AlbumDTO {

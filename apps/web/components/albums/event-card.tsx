@@ -3,6 +3,8 @@ import { Calendar, MapPin, Images } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils/cn'
 import type { EventSearchResult } from '@the-tool-pit/types'
+import type { ListingClaimState } from '@/lib/queries/listing-ownership'
+import { AlbumMenu } from './album-menu'
 import { formatEventDates, formatLocation } from './format'
 
 /** TBA event_type 99 = offseason, 100 = preseason. */
@@ -46,7 +48,22 @@ function CoverCollage({ covers }: { covers: string[] }) {
   )
 }
 
-export function EventCard({ event }: { event: EventSearchResult }) {
+/**
+ * An event in the photo feed. Not the off-season events vertical's card, which
+ * is components/events/event-card.tsx and deliberately carries no controls.
+ */
+export function EventCard({
+  event,
+  soleAlbumClaimState,
+}: {
+  event: EventSearchResult
+  /**
+   * For a one-album event only: the claim state of that album, resolved on the
+   * server for the whole feed. Absent for every other event, whose card leads
+   * to the event page and its album cards.
+   */
+  soleAlbumClaimState?: ListingClaimState
+}) {
   const location = formatLocation(event.city, event.stateProv, event.country)
   const dates = formatEventDates(event.startDate, event.endDate)
   const covers = event.coverImages.slice(0, 4)
@@ -57,47 +74,72 @@ export function EventCard({ event }: { event: EventSearchResult }) {
     ? { href: direct, target: '_blank' as const, rel: 'noopener noreferrer' }
     : { href: `/photos/event/${event.tbaKey}` }
 
-  return (
-    <Link
-      {...linkProps}
-      className="group flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:border-primary/50"
-    >
-      <div className="relative">
-        <CoverCollage covers={covers} />
-        {isOffseason(event.eventType) ? (
-          <span className="absolute right-2 top-2 whitespace-nowrap rounded-full bg-sky-500 px-2 py-0.5 text-xs font-semibold text-white shadow">
-            Offseason
-          </span>
-        ) : event.week != null ? (
-          <span className="absolute right-2 top-2 whitespace-nowrap rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-black shadow">
-            Week {event.week}
-          </span>
-        ) : null}
-        <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
-          <Images className="h-3 w-3" />
-          {event.albumCount}
-        </span>
-      </div>
+  // A one-album event links straight out to the gallery, so its event page is
+  // never reached and neither is the album card that would carry the album's
+  // menu. About two thirds of events are this shape, so without a menu here
+  // most photographers had no route at all to claiming their own work.
+  //
+  // A multi-album event gets NO menu: its card leads to the event page, where
+  // every album card has its own. A menu here would be a second route to the
+  // same items.
+  const menu =
+    direct && event.soleAlbumId ? (
+      <AlbumMenu
+        albumId={event.soleAlbumId}
+        albumUrl={direct}
+        claimState={soleAlbumClaimState ?? 'signed_out'}
+      />
+    ) : null
 
-      <div className="flex flex-col gap-1 p-3">
-        <h3 className="line-clamp-1 font-semibold leading-tight text-foreground group-hover:text-primary transition-colors">
-          {event.name}
-        </h3>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted">
-          {dates && (
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3 w-3 shrink-0" />
-              {dates}
+  // The card can no longer BE the link where it carries a menu: a trigger
+  // inside an anchor is invalid, and every click on it would navigate instead
+  // of opening. The link covers the card content and the footer sits below it,
+  // with group still on the outer element so hover treats the tile as one.
+  return (
+    <div className="group relative flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:border-primary/50">
+      <Link {...linkProps} className="flex flex-1 flex-col">
+        <div className="relative">
+          <CoverCollage covers={covers} />
+          {isOffseason(event.eventType) ? (
+            <span className="absolute right-2 top-2 whitespace-nowrap rounded-full bg-sky-500 px-2 py-0.5 text-xs font-semibold text-white shadow">
+              Offseason
             </span>
-          )}
-          {location && (
-            <span className="flex items-center gap-1">
-              <MapPin className="h-3 w-3 shrink-0" />
-              {location}
+          ) : event.week != null ? (
+            <span className="absolute right-2 top-2 whitespace-nowrap rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-black shadow">
+              Week {event.week}
             </span>
-          )}
+          ) : null}
+          <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
+            <Images className="h-3 w-3" />
+            {event.albumCount}
+          </span>
         </div>
-      </div>
-    </Link>
+
+        <div className="flex flex-col gap-1 p-3">
+          <h3 className="line-clamp-1 font-semibold leading-tight text-foreground group-hover:text-primary transition-colors">
+            {event.name}
+          </h3>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted">
+            {dates && (
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3 w-3 shrink-0" />
+                {dates}
+              </span>
+            )}
+            {location && (
+              <span className="flex items-center gap-1">
+                <MapPin className="h-3 w-3 shrink-0" />
+                {location}
+              </span>
+            )}
+          </div>
+        </div>
+      </Link>
+
+      {/* Footer row, where every card in the app keeps its controls. The photo
+          count badge already sits over the thumbnail, and two floating
+          controls on one image is worse than one in a row of its own. */}
+      {menu && <div className="flex items-center justify-end px-3 pb-3">{menu}</div>}
+    </div>
   )
 }
