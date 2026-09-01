@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ToolCard } from '@/components/tools/tool-card'
 import { cn } from '@/lib/utils/cn'
 import type { SearchResultRow } from '@/lib/search/search'
+import { getVotedToolIds } from '@/lib/queries/tools'
 
 interface SearchResultsProps {
   results: SearchResultRow[]
@@ -11,8 +12,13 @@ interface SearchResultsProps {
   pageSize: number
 }
 
-export function SearchResults({ results, total, query, page, pageSize }: SearchResultsProps) {
+// Async for the same reason ToolGrid is: the visitor's existing votes are
+// resolved ONCE for the whole page rather than per card. Search used to skip
+// this entirely, so a tool you had already upvoted rendered unpressed here
+// while the very same card rendered pressed on a vertical's page.
+export async function SearchResults({ results, total, query, page, pageSize }: SearchResultsProps) {
   const totalPages = Math.ceil(total / pageSize)
+  const voted = await getVotedToolIds(results.map((t) => t.id))
 
   return (
     <div className="flex flex-col gap-6">
@@ -52,7 +58,7 @@ export function SearchResults({ results, total, query, page, pageSize }: SearchR
       {results.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {results.map((tool) => (
-            <ToolCard key={tool.id} tool={tool} />
+            <ToolCard key={tool.id} tool={tool} voted={voted.has(tool.id)} />
           ))}
         </div>
       )}

@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
-import { getToolBySlug } from '@/lib/queries/tools'
+import { getToolBySlug, getVotedToolIds } from '@/lib/queries/tools'
 import { ToolDetail } from '@/components/tools/tool-detail'
 import { recordClickEvent } from '@/lib/analytics/events'
 
@@ -23,5 +23,9 @@ export default async function ToolPage({ params }: PageProps) {
   const tool = await getToolBySlug(slug)
   if (!tool) notFound()
 
-  return <ToolDetail tool={tool} />
+  // The detail page rendered its vote button unpressed no matter what, so a
+  // tool you had upvoted from a grid looked unvoted the moment you opened it.
+  const voted = await getVotedToolIds([tool.id])
+
+  return <ToolDetail tool={tool} voted={voted.has(tool.id)} />
 }

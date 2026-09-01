@@ -36,6 +36,8 @@ const LINK_CONFIG: Record<string, { icon: React.ElementType; label: string; prom
 
 interface ToolDetailProps {
   tool: ToolDetailData
+  /** Whether this visitor has already upvoted, resolved by the page. */
+  voted?: boolean
 }
 
 function normalizeUrl(url: string): string {
@@ -47,7 +49,7 @@ function normalizeUrl(url: string): string {
   }
 }
 
-export function ToolDetail({ tool }: ToolDetailProps) {
+export function ToolDetail({ tool, voted = false }: ToolDetailProps) {
   const githubLink = tool.links.find((l) => l.linkType === 'github')
   const githubNorm = githubLink ? normalizeUrl(githubLink.url) : null
   const prominentLinks = tool.links.filter((l) => {
@@ -112,7 +114,7 @@ export function ToolDetail({ tool }: ToolDetailProps) {
                   Updated {formatRelativeTime(tool.lastActivityAt)}
                 </span>
               )}
-              <VoteButton toolId={tool.id} initialCount={tool.voteCount} />
+              <VoteButton toolId={tool.id} initialCount={tool.voteCount} initialVoted={voted} />
               <ClaimListingButton entityType="tool" entityId={tool.id} />
             </div>
           </div>
