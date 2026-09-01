@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { SearchBar } from '@/components/search/search-bar'
 import { UserMenu } from '@/components/auth/user-menu'
+import { MobileNav } from './mobile-nav'
 
 export function SiteHeader() {
   return (
@@ -9,7 +10,7 @@ export function SiteHeader() {
       <div className="container mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-lg font-bold tracking-tight text-foreground">
+          <span className="whitespace-nowrap text-lg font-bold tracking-tight text-foreground">
             The Tool Pit
           </span>
         </Link>
@@ -21,21 +22,38 @@ export function SiteHeader() {
           </Suspense>
         </div>
 
-        {/* Nav */}
+        {/* Nav. Below lg the links move into the hamburger: five of them plus a
+            wordmark and an account menu do not fit on a phone, and they were
+            overflowing the bar rather than wrapping. */}
         <nav className="ml-auto flex items-center gap-1">
-          <NavLink href="/frc" label="FRC" color="var(--color-frc)" />
-          <NavLink href="/ftc" label="FTC" color="var(--color-ftc)" />
-          <NavLink href="/fll" label="FLL" color="var(--color-fll)" />
-          <NavLink href="/robot-code" label="Robot Code / CAD" color="var(--color-foreground)" />
-          <Link
-            href="/submit"
-            className="ml-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
-          >
-            Submit
-          </Link>
+          <div className="hidden items-center gap-1 lg:flex">
+            <NavLink href="/frc" label="FRC" color="var(--color-frc)" />
+            <NavLink href="/ftc" label="FTC" color="var(--color-ftc)" />
+            <NavLink href="/fll" label="FLL" color="var(--color-fll)" />
+            <NavLink href="/robot-code" label="Robot Code / CAD" color="var(--color-foreground)" />
+            <Link
+              href="/submit"
+              className="ml-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+            >
+              Submit
+            </Link>
+          </div>
           <div className="ml-2">
             <UserMenu />
           </div>
+          <MobileNav
+            className="ml-1 lg:hidden"
+            items={[
+              { href: '/frc', label: 'FRC' },
+              { href: '/ftc', label: 'FTC' },
+              { href: '/fll', label: 'FLL' },
+              { href: '/robot-code', label: 'Robot Code / CAD' },
+              { href: '/photos', label: 'Event Photos' },
+              { href: '/fields', label: 'Practice Fields' },
+              { href: '/grants', label: 'Grants' },
+              { href: '/submit', label: 'Submit a tool', primary: true },
+            ]}
+          />
         </nav>
       </div>
     </header>

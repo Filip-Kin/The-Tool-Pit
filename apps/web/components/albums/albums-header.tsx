@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Camera } from 'lucide-react'
 import { AlbumSearchBar } from './album-search-bar'
 import { UserMenu } from '@/components/auth/user-menu'
+import { MobileNav } from '@/components/layout/mobile-nav'
 import { VerticalHomeCrumb } from '@/components/layout/vertical-switcher'
 
 export function AlbumsHeader() {
@@ -12,7 +13,10 @@ export function AlbumsHeader() {
 
         <Link href="/" className="flex shrink-0 items-center gap-2">
           <Camera className="h-5 w-5 text-primary" />
-          <span className="text-lg font-bold tracking-tight text-foreground">FIRST Event Photos</span>
+          <span className="whitespace-nowrap text-lg font-bold tracking-tight text-foreground">
+            <span className="hidden sm:inline">FIRST Event Photos</span>
+            <span className="sm:hidden">Photos</span>
+          </span>
         </Link>
 
 
@@ -21,13 +25,25 @@ export function AlbumsHeader() {
         </div>
 
         <nav className="ml-auto flex items-center gap-2">
+          {/* Below sm the call to action moves into the hamburger: this
+              wordmark is long and the bar was overflowing on a phone. */}
           <Link
             href="/submit"
-            className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+            className="hidden shrink-0 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover sm:block"
           >
             Submit album
           </Link>
           <UserMenu />
+          <MobileNav
+            className="sm:hidden"
+            items={[
+              { href: '/', label: 'FIRST Event Photos' },
+              { href: '/photos', label: 'Event Photos' },
+              { href: '/fields', label: 'Practice Fields' },
+              { href: '/grants', label: 'Grants' },
+              { href: '/submit', label: 'Submit album', primary: true },
+            ]}
+          />
         </nav>
       </div>
     </header>

@@ -25,7 +25,7 @@ export function UserMenu() {
         <button
           type="button"
           onClick={() => setDialogOpen(true)}
-          className="rounded-md border border-border-subtle px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-surface"
+          className="shrink-0 whitespace-nowrap rounded-md border border-border-subtle px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-surface"
         >
           Sign in
         </button>

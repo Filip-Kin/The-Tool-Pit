@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { MapPin } from 'lucide-react'
 import { UserMenu } from '@/components/auth/user-menu'
+import { MobileNav } from '@/components/layout/mobile-nav'
 import { VerticalHomeCrumb } from '@/components/layout/vertical-switcher'
 
 export function FieldsHeader() {
@@ -11,18 +12,33 @@ export function FieldsHeader() {
 
         <Link href="/" className="flex shrink-0 items-center gap-2">
           <MapPin className="h-5 w-5 text-primary" />
-          <span className="text-lg font-bold tracking-tight text-foreground">Practice Field Map</span>
+          <span className="whitespace-nowrap text-lg font-bold tracking-tight text-foreground">
+            <span className="hidden sm:inline">Practice Field Map</span>
+            <span className="sm:hidden">Fields</span>
+          </span>
         </Link>
 
 
         <nav className="ml-auto flex items-center gap-2">
+          {/* Below sm the call to action moves into the hamburger: this
+              wordmark is long and the bar was overflowing on a phone. */}
           <Link
             href="/submit"
-            className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+            className="hidden shrink-0 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover sm:block"
           >
             Add a field
           </Link>
           <UserMenu />
+          <MobileNav
+            className="sm:hidden"
+            items={[
+              { href: '/', label: 'Practice Field Map' },
+              { href: '/photos', label: 'Event Photos' },
+              { href: '/fields', label: 'Practice Fields' },
+              { href: '/grants', label: 'Grants' },
+              { href: '/submit', label: 'Add a field', primary: true },
+            ]}
+          />
         </nav>
       </div>
     </header>
