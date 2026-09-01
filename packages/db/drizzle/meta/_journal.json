@@ -141,6 +141,13 @@
       "when": 1788285586906,
       "tag": "0019_dashing_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788289454250,
+      "tag": "0020_supreme_the_hand",
+      "breakpoints": true
     }
   ]
 }

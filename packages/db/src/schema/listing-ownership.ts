@@ -60,6 +60,16 @@ export type ClaimStatus = (typeof CLAIM_STATUSES)[number]
  * How a claim was (or would be) proven.
  *   self_submitted - the claimant is the signed-in user who created the row.
  *   repo_file      - a token committed to the listing's GitHub repo, then fetched.
+ *   github_account - the claimant's linked GitHub account owns the repo the
+ *                    listing is built from, or belongs to the organisation that
+ *                    owns it. Proven at link time from the claimant's own OAuth
+ *                    token: GitHub told us their login and every org they are a
+ *                    member of, including private membership, and the repo sits
+ *                    in one of those namespaces. Nobody can assert that set,
+ *                    which is what makes it proof rather than a claim. It says
+ *                    nothing about write access, and it does not need to: a
+ *                    person inside the namespace is the person to talk to about
+ *                    the listing.
  *   domain_email   - the claimant's verified email domain matches the listing's contact.
  *   invite         - an existing owner's single-use link.
  *   admin          - an admin decided it by hand.
@@ -68,6 +78,7 @@ export type ClaimStatus = (typeof CLAIM_STATUSES)[number]
 export const CLAIM_METHODS = [
   'self_submitted',
   'repo_file',
+  'github_account',
   'domain_email',
   'invite',
   'admin',
@@ -129,6 +140,14 @@ export interface ClaimEvidence {
   token?: string
   /** repo_file: the raw file URL we last fetched, and what we found. */
   checkedUrl?: string
+  /**
+   * github_account: the GitHub login we verified, and the namespace segment of
+   * the repo URL that matched it. Both are kept so an admin reading a dispute
+   * can see WHICH namespace earned the grant without re-running the check,
+   * which is impossible later anyway: the OAuth token is never stored.
+   */
+  githubLogin?: string
+  githubNamespace?: string
   /** domain_email: the domain that matched. */
   emailDomain?: string
   /** Free-text context the claimant gave, shown to the admin reviewer. */

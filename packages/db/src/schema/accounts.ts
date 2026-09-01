@@ -31,6 +31,25 @@ export const users = pgTable(
     isAdmin: boolean('is_admin').notNull().default(false),
     /** Free-text ban reason. Non-null = signed in but blocked from writing. */
     blockedReason: text('blocked_reason'),
+    /**
+     * A linked GitHub account, used to grant ownership of listings built from
+     * that account's repositories. See listing-ownership.ts, method
+     * 'github_account'.
+     *
+     * The OAuth access token is deliberately absent. Firebase hands it to the
+     * browser once, at the moment of sign-in or link; we use it for two
+     * read-only API calls and drop it. Storing it would turn this table into a
+     * store of other people's GitHub credentials for no gain, because the only
+     * thing we need afterwards is the identity below.
+     *
+     * `githubLogin` is for display and is NOT an identity: GitHub logins are
+     * renamed, and a freed login is handed to the next person who asks for it.
+     * `githubUserId` is the numeric id, which never changes and is never
+     * reissued, so that is what carries the unique index.
+     */
+    githubLogin: text('github_login'),
+    githubUserId: text('github_user_id'),
+    githubLinkedAt: timestamp('github_linked_at', { withTimezone: true }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -38,6 +57,11 @@ export const users = pgTable(
   (table) => [
     uniqueIndex('users_firebase_uid_idx').on(table.firebaseUid),
     index('users_email_idx').on(table.email),
+    // One GitHub identity, one account here. Without this a second TTP account
+    // could link the same GitHub user and collect the same grants, which would
+    // make the audit trail on listing_owners meaningless. Postgres treats NULLs
+    // as distinct, so every unlinked account still fits.
+    uniqueIndex('users_github_user_id_idx').on(table.githubUserId),
   ],
 )
 
