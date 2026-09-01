@@ -8,7 +8,7 @@ interface FreshnessChipProps {
 }
 
 const labelConfig = {
-  Current: { dot: 'bg-current', text: 'text-current' },
+  Current: { dot: 'bg-fresh', text: 'text-fresh' },
   Stale: { dot: 'bg-stale', text: 'text-stale' },
   Abandoned: { dot: 'bg-abandoned', text: 'text-abandoned' },
 }

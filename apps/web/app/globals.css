@@ -48,7 +48,11 @@
   --color-vendor: #8b5cf6;        /* violet - vendor badge */
   --color-rookie: #10b981;        /* emerald - rookie friendly */
 
-  --color-current: #22c55e;       /* freshness: current */
+  /* Named "fresh", not "current". A token called --color-current makes Tailwind
+     generate text-current, bg-current and fill-current as THIS green instead of
+     the CSS currentColor keyword, so a saved heart and a saved bookmark were
+     rendering green rather than taking the colour of the control around them. */
+  --color-fresh: #22c55e;         /* freshness: current */
   --color-stale: #f59e0b;         /* freshness: stale */
   --color-abandoned: #6b7280;     /* freshness: abandoned */
 
@@ -131,7 +135,7 @@ html[data-theme='light'] {
   --color-vendor: #7c3aed;
   --color-rookie: #047051;
 
-  --color-current: #15803d;
+  --color-fresh: #15803d;
   --color-stale: #944707;
   --color-abandoned: #5b6472;
 
