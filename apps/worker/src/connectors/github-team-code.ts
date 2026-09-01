@@ -216,24 +216,6 @@ export function teamNumberFromRepo(fullName: string, topics: string[]): number |
   return orgYear ? orgYear.n : null
 }
 
-/**
- * The later year of a two-year season range, or null if there is not one.
- *
- * Teams write the range every way there is: "2024-2025", "2025-26", an en dash
- * out of a word processor, a slash. The second half is accepted as two digits
- * or four, and the pair has to be consecutive, so a genuine range is caught
- * while "logs 2019-2024" is left alone.
- */
-function seasonFromRange(text: string): number | null {
-  const m = text.match(/(?<![0-9])(20[0-9]{2})\s*[-\u2013\u2014/]\s*((?:20)?[0-9]{2})(?![0-9])/)
-  if (!m) return null
-  const first = parseInt(m[1]!, 10)
-  const rawSecond = m[2]!
-  const second = rawSecond.length === 2 ? 2000 + parseInt(rawSecond, 10) : parseInt(rawSecond, 10)
-  if (second !== first + 1) return null
-  if (second < FIRST_SEASON || second > new Date().getUTCFullYear() + 1) return null
-  return second
-}
 
 /**
  * The season this repo is for.
@@ -250,50 +232,36 @@ function seasonFromRange(text: string): number | null {
  * season first, so those errors do not sit quietly in the middle of the list,
  * they crowd the top of it with last year's robots.
  *
- * A two-year range resolves differently per program, which is why this needs
- * to be told the program rather than sniffing it out of the string.
+ * A two-year range needs no special case. An FTC season spans two calendar
+ * years and is named by the one it STARTS in, which is how teams write it and
+ * how people talk about it: INTO THE DEEP is the 2024 season, so
+ * `IntoTheDeep 2024-2025` and `DECODE (2025-26)` want 2024 and 2025. The plain
+ * year match below already takes the first year it finds, so it lands on the
+ * right one without a range parser. An earlier version had a whole
+ * seasonFromRange branch to reach the LATER year; that was the wrong
+ * convention and the branch went with it.
  *
- * An FRC season sits inside one calendar year, so a range in an FRC repo is
- * something else (a rolling repo, a date span) and the first year is taken, as
- * before. An FTC season spans two, and this platform names it by the SPRING
- * competition year: seasonKeyToYear in toa-events.ts turns the TOA key "2223"
- * into 2023, and the events table holds the 2025-26 FTC season as year 2026.
- * So "INTO THE DEEP 2024-2025" is season 2025 and `2025-2026-Decode` is 2026.
- *
- * Do not "simplify" the two branches back together. Making FTC take the first
- * year files a team's DECODE code under 2025 while every DECODE event in the
- * same database is 2026, and the archive page then shows a season whose repos
- * and events disagree.
- *
- * Only a RANGE gets this treatment. A lone year in an FTC repo is left as the
- * team wrote it, because there is no way to tell whether they meant the autumn
- * kickoff year or the spring competition year, and guessing would move rows
- * that are already correct.
+ * This does disagree with the `events` table, where TOA's seasonKeyToYear
+ * stores the same season under its spring competition year: the 2025-26 FTC
+ * season is year 2026 there and 2025 here. Two sources, two conventions. This
+ * one follows what a team writes on its own repo. If the UI ever shows both
+ * side by side, decide which wins rather than quietly changing one.
  */
 export function seasonFromRepo(
   name: string,
   pushedAt: string,
   description?: string | null,
-  program?: 'frc' | 'ftc',
 ): number | null {
   // Lookarounds, not \b. A word boundary needs a non-word character beside the
   // year, so `\b2025\b` does not match "2025Reefscape" or "R2025", and both
   // silently fell through to the last-push year: Team2537/2025Reefscape and
   // Team334/R2025 were both filed as 2026 because that is when they were last
   // touched. Digit lookarounds match the year wherever the team glued it.
-  // Ranges first, because a single-year match would otherwise take the left
-  // half of "2025-2026-Decode" and never reach the range rule at all.
-  const nameRange = program === 'ftc' ? seasonFromRange(name) : null
-  if (nameRange) return nameRange
-
   const inName = name.match(/(?<![0-9])(20[0-9]{2})(?![0-9])/)
   if (inName) {
     const y = parseInt(inName[1]!, 10)
     if (y >= 2000 && y <= 2100) return y
   }
-  const descriptionRange = program === 'ftc' ? seasonFromRange(description ?? '') : null
-  if (descriptionRange) return descriptionRange
-
   const inDescription = (description ?? '').match(/(?<![0-9])(20[0-9]{2})(?![0-9])/)
   if (inDescription) {
     const y = parseInt(inDescription[1]!, 10)
@@ -305,15 +273,10 @@ export function seasonFromRepo(
   const pushed = new Date(pushedAt)
   if (!Number.isNaN(pushed.getTime())) {
     const y = pushed.getUTCFullYear()
-    // An FTC season runs across the new year and the platform names it by the
-    // spring competition year, so a repo last touched after kickoff belongs to
-    // NEXT year's season, not this one. Without this an FTC repo carrying no
-    // year at all and pushed in, say, October 2025 lands on 2025 while every
-    // event for the season it was written for is stored as 2026.
-    // getUTCMonth is zero-based, so 7 is August, which is early enough to catch
-    // pre-kickoff repos without reaching back into the previous season.
-    const kickoffAdjusted = program === 'ftc' && pushed.getUTCMonth() >= 7 ? y + 1 : y
-    if (kickoffAdjusted >= FIRST_SEASON) return kickoffAdjusted
+    // No kickoff adjustment. An FTC season is named by the year it starts in,
+    // and a repo pushed during that season was already pushed in that year, so
+    // the push year is the answer for both programs.
+    if (y >= FIRST_SEASON) return y
   }
   return null
 }
@@ -395,7 +358,7 @@ export class GitHubTeamCodeConnector implements Connector {
             if (isNotRobotCode(repo.name, repo.description) || hasDeniedTopic(repo.topics)) { skipped++; continue }
 
             seen.add(repo.html_url)
-            const year = seasonFromRepo(repo.name, repo.pushed_at, repo.description, program)
+            const year = seasonFromRepo(repo.name, repo.pushed_at, repo.description)
             const isCad = looksLikeCad(repo.name, repo.description)
 
             const keywords = [
