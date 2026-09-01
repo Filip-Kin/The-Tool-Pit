@@ -7,7 +7,6 @@ import {
   type ListingFieldSpec,
   type ListingGroup,
 } from './listing-fields'
-import { Check, CloudUpload, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import type { EditableListing, ListingFormValues } from '@/lib/queries/listing-ownership'
 
@@ -418,9 +417,13 @@ function SaveStatusLine({
 
   // There is no Save button on this form, and the first thing someone does on a
   // form with no Save button is look for the Save button. This line is the
-  // answer, so it has to be findable: a bordered pill with an icon, stuck to
-  // the top of the form so it stays on screen while a long one is scrolled.
-  // As muted 14px text at the top it read as a caption and got missed.
+  // answer, so it has to be findable: the status dot pattern, stuck to the top
+  // of the form so it stays on screen while a long one is scrolled. As muted
+  // 14px text above the first field it read as a caption and got missed.
+  //
+  // The dot carries the state and the words confirm it, which is why the dot
+  // has a colour per state rather than being decoration. It pulses only while
+  // a request is actually in flight, so motion means something is happening.
   const saving = status.kind === 'saving'
   const saved = status.kind === 'saved'
 
@@ -435,20 +438,20 @@ function SaveStatusLine({
             : 'border-border-subtle bg-surface/90 text-muted',
         )}
       >
-        {saving ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        ) : saved ? (
-          <Check className="h-4 w-4" aria-hidden />
-        ) : (
-          <CloudUpload className="h-4 w-4" aria-hidden />
-        )}
-        {saving
-          ? 'Saving your changes'
-          : saved
-            ? 'Saved'
-            : status.dirty
-              ? 'Not saved yet'
-              : 'Saves automatically as you type. There is no save button.'}
+        <span
+          aria-hidden
+          className={cn(
+            'h-2 w-2 shrink-0 rounded-full',
+            saving
+              ? 'animate-pulse bg-amber-400'
+              : saved
+                ? 'bg-primary'
+                : status.dirty
+                  ? 'bg-amber-400'
+                  : 'bg-muted-2',
+          )}
+        />
+        {saving ? 'Saving…' : saved ? 'Saved' : status.dirty ? 'Not saved yet' : 'Saves as you type'}
       </span>
     </div>
   )
