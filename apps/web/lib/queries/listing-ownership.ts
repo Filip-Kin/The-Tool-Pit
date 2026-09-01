@@ -360,6 +360,15 @@ export interface ClaimableListing {
    * circuits to instant ownership in the claim action.
    */
   isSelfSubmitted: boolean
+  /**
+   * The user's own open claim on this listing, when there is one.
+   *
+   * Without this the claim page rebuilt its form on every load, so a claim you
+   * had already sent looked unsent and the obvious move was to send it again.
+   * The action refuses a second one, but the UI has to say so before the click,
+   * not after it.
+   */
+  existingClaim: { status: string; method: string; token: string | null } | null
 }
 
 /**
@@ -392,7 +401,25 @@ export async function resolveClaimable(
     isSelfSubmitted = row?.submittedByUserId === userId
   }
 
-  return { entityType, entityId, facts, alreadyOwned, repoUrl, isSelfSubmitted }
+  const db = getDb()
+  const [open] = await db
+    .select({ status: listingClaims.status, method: listingClaims.method, evidence: listingClaims.evidence })
+    .from(listingClaims)
+    .where(
+      and(
+        eq(listingClaims.userId, userId),
+        eq(listingClaims.entityType, entityType),
+        eq(listingClaims.entityId, entityId),
+        eq(listingClaims.status, 'pending'),
+      ),
+    )
+    .limit(1)
+
+  const existingClaim = open
+    ? { status: open.status, method: open.method, token: open.evidence?.token ?? null }
+    : null
+
+  return { entityType, entityId, facts, alreadyOwned, repoUrl, isSelfSubmitted, existingClaim }
 }
 
 // #endregion

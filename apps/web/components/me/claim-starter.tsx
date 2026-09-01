@@ -33,8 +33,11 @@ export function ClaimStarter({
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
+  // Seeded from the server, so an open claim survives a reload. Set on a
+  // successful submit too, which is what swaps the card over without one.
+  const [claimed, setClaimed] = useState(target.existingClaim !== null)
   const [msg, setMsg] = useState<string | null>(null)
-  const [token, setToken] = useState<string | null>(null)
+  const [token, setToken] = useState<string | null>(target.existingClaim?.token ?? null)
   const [note, setNote] = useState('')
   const [err, setErr] = useState<string | null>(null)
 
@@ -61,6 +64,10 @@ export function ClaimStarter({
       }
       setMsg(res.message ?? null)
       if (res.verifyToken) setToken(res.verifyToken)
+      // The card becomes a receipt. Leaving the form up invited a second
+      // request for a claim that is already open; the action refuses one, but
+      // the button should not have been there to press.
+      setClaimed(true)
       // Refresh so /me/listings reflects a new claim or a granted listing when
       // the user heads back.
       router.refresh()
@@ -84,7 +91,35 @@ export function ClaimStarter({
       <h2 className="mt-1 text-lg font-semibold text-foreground">{target.facts.title}</h2>
       {target.facts.subtitle && <p className="mt-1 text-sm text-muted">{target.facts.subtitle}</p>}
 
-      <p className="mt-4 text-sm text-muted">{how}</p>
+      {claimed ? (
+        <div className="mt-4 flex flex-col gap-3">
+          <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2">
+            <span className="text-sm font-medium text-foreground">
+              {token ? 'Waiting on your repo' : 'Thanks, that is sent'}
+            </span>
+          </div>
+          {token ? (
+            <>
+              <p className="text-sm text-muted">
+                Add a file named{' '}
+                <code className="rounded bg-surface-2 px-1 py-0.5 text-foreground">{verifyFilename}</code>{' '}
+                containing this token to your default branch, then finish the check on your listings
+                page.
+              </p>
+              <code className="block break-all rounded-md border border-border-subtle bg-surface-2 p-2 text-xs text-foreground">
+                {token}
+              </code>
+            </>
+          ) : (
+            <p className="text-sm text-muted">
+              {msg ?? 'A reviewer will take a look.'}{' '}
+              {user?.email ? `We will email ${user.email} when it is decided.` : ''}
+            </p>
+          )}
+        </div>
+      ) : (
+        <>
+          <p className="mt-4 text-sm text-muted">{how}</p>
 
       {path === 'review' && !token && (
         <label className="mt-4 flex flex-col gap-1.5">
@@ -123,7 +158,7 @@ export function ClaimStarter({
         </button>
       )}
 
-      {token && (
+      {false && (
         <div className="mt-4 flex flex-col gap-2">
           <p className="text-sm text-muted">
             Add a file named <code className="rounded bg-surface-2 px-1 py-0.5 text-foreground">{verifyFilename}</code>{' '}
@@ -134,6 +169,9 @@ export function ClaimStarter({
             {token}
           </code>
         </div>
+      )}
+
+        </>
       )}
 
       {msg && !token && <p className="mt-3 text-sm text-muted">{msg}</p>}
