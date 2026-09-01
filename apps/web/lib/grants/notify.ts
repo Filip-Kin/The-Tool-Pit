@@ -8,7 +8,7 @@
  * main host: /admin is served there, not on the grants subdomain.
  */
 
-const ADMIN_QUEUE_URL = 'https://ttp.filipkin.com/admin/grants/candidates'
+const ADMIN_QUEUE_URL = 'https://frc.tools/admin/grants/candidates'
 
 interface EmbedField {
   name: string

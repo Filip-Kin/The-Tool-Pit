@@ -64,7 +64,7 @@ export async function notifyNewFieldSubmission(s: FieldSubmissionNotice): Promis
   const webhook = process.env.FIELD_SUBMISSION_DISCORD_WEBHOOK
   if (!webhook) return
   // Admin lives on the main host, not the fields subdomain (which rewrites to /fields).
-  const adminUrl = 'https://ttp.filipkin.com/admin/practice-fields?status=pending'
+  const adminUrl = 'https://frc.tools/admin/practice-fields?status=pending'
 
   const location = [s.city, s.region, s.country].filter(Boolean).join(', ')
   const spec = [COVERAGE_LABEL[s.coverage], ELEMENTS_LABEL[s.elements], PERIMETER_LABEL[s.perimeter]]
@@ -128,7 +128,7 @@ export async function notifyFieldEdit(s: {
 }): Promise<void> {
   const webhook = process.env.FIELD_SUBMISSION_DISCORD_WEBHOOK
   if (!webhook) return
-  const adminUrl = 'https://ttp.filipkin.com/admin/field-edits'
+  const adminUrl = 'https://frc.tools/admin/field-edits'
   const photoChange = [
     s.addedPhotos ? `+${s.addedPhotos} photo${s.addedPhotos > 1 ? 's' : ''}` : null,
     s.removedPhotos ? `-${s.removedPhotos} photo${s.removedPhotos > 1 ? 's' : ''}` : null,

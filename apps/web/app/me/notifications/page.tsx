@@ -234,7 +234,7 @@ async function addEmailAddress(formData: FormData): Promise<void> {
       set: { verifyTokenHash: hashToken(token), verifyExpiresAt: expiresAt, disabledAt: null },
     })
 
-  const base = (process.env.NEXT_PUBLIC_URL ?? 'https://ttp.filipkin.com').replace(/\/+$/, '')
+  const base = (process.env.NEXT_PUBLIC_URL ?? 'https://frc.tools').replace(/\/+$/, '')
   const body = renderVerifyEmail({
     verifyUrl: `${base}/me/notifications?verify=${encodeURIComponent(token)}`,
     expiresInHours: VERIFY_TTL_HOURS,

@@ -7,7 +7,7 @@ export const OIDC = {
   issuer: process.env.OIDC_ISSUER || 'https://auth.filipkin.com',
   clientId: process.env.TOOLPIT_OIDC_CLIENT_ID || 'toolpit',
   clientSecret: process.env.TOOLPIT_OIDC_CLIENT_SECRET || '',
-  redirectUri: process.env.TOOLPIT_OIDC_REDIRECT_URI || 'https://ttp.filipkin.com/admin/api/auth/oidc/callback',
+  redirectUri: process.env.TOOLPIT_OIDC_REDIRECT_URI || 'https://frc.tools/admin/api/auth/oidc/callback',
 }
 
 export const OIDC_ENDPOINTS = {

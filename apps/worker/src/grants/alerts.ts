@@ -398,7 +398,7 @@ function renderGrantChange(p: GrantChangeAlertPayload, preferencesUrl: string): 
 
 /** Where /me/notifications lives. Same host as the tools directory. */
 export function preferencesUrl(): string {
-  const base = (process.env.NEXT_PUBLIC_URL ?? 'https://ttp.filipkin.com').replace(/\/+$/, '')
+  const base = (process.env.NEXT_PUBLIC_URL ?? 'https://frc.tools').replace(/\/+$/, '')
   return `${base}/me/notifications`
 }
 

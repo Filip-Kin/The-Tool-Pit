@@ -36,7 +36,7 @@ export async function notifyNewSubmission(s: SubmissionNotice): Promise<void> {
   const webhook = process.env.PHOTO_SUBMISSION_DISCORD_WEBHOOK
   if (!webhook) return
   // Admin lives on the main host, not the photos subdomain (which rewrites to /photos).
-  const adminUrl = 'https://ttp.filipkin.com/admin/album-candidates?status=submitted'
+  const adminUrl = 'https://frc.tools/admin/album-candidates?status=submitted'
 
   // Best-effort album cover. og.ts already swallows all errors and returns null,
   // and this whole function is fire-and-forget, so a slow host never affects the
