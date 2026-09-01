@@ -63,6 +63,25 @@ export const tools = pgTable(
     vendorName: text('vendor_name'),
 
     /**
+     * Hand-picked for the Featured row on the home page.
+     *
+     * NOT A ROTATION. There is no week, no expiry and no schedule attached to
+     * this, on purpose: the moment a featured set goes stale on a date, keeping
+     * the home page honest becomes a standing chore, and a chore nobody does is
+     * a home page that looks abandoned. A set chosen once has to still look
+     * deliberate a year later, so it simply stays until somebody changes it.
+     *
+     * The note is the reason it is here at all. Popular, Rookie Friendly and
+     * Official already say what a flag can say; Featured earns its place on the
+     * page only by saying something none of those can, in a sentence a person
+     * wrote. It is optional, because a tool worth featuring is still worth
+     * featuring while you think of the words.
+     */
+    isFeatured: boolean('is_featured').notNull().default(false),
+    /** One short line on why this is worth a look. Shown on the card. */
+    featuredNote: text('featured_note'),
+
+    /**
      * Scores computed by the ranking pipeline.
      * popularityScore is denormalized from vote count + click events.
      */
@@ -120,6 +139,7 @@ export const tools = pgTable(
     index('tools_is_team_cad_idx').on(table.isTeamCad),
     index('tools_team_number_idx').on(table.teamNumber),
     index('tools_season_year_idx').on(table.seasonYear),
+    index('tools_is_featured_idx').on(table.isFeatured),
   ],
 )
 

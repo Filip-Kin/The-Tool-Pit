@@ -70,6 +70,10 @@ export async function saveTool(formData: FormData) {
     seasonYear: formData.get('seasonYear') ? parseInt(formData.get('seasonYear') as string, 10) : null,
     vendorName: (formData.get('vendorName') as string)?.trim() || null,
     freshnessState: (formData.get('freshnessState') as string) || 'unknown',
+    // Editorial, not extracted. No crawl writes either of these, so neither is
+    // claimable in human_edited_fields the way the fields above it are.
+    isFeatured: formData.get('isFeatured') === 'on',
+    featuredNote: (formData.get('featuredNote') as string)?.trim() || null,
     adminNotes: (formData.get('adminNotes') as string)?.trim() || null,
   }
 
@@ -162,6 +166,10 @@ export async function saveTool(formData: FormData) {
   revalidatePath(`/admin/tools`)
   revalidatePath(`/admin/tools/${toolId}`)
   revalidatePath(`/tools`)
+  // The home page reads tool rows now that Featured is on it, and a curator who
+  // just featured something should not have to wait out its revalidate window
+  // to see whether the row looks right.
+  revalidatePath('/')
 }
 
 /** The slugs a tool is currently filed under, keyed the way the form posts them. */

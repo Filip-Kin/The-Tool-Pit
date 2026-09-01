@@ -243,6 +243,32 @@ export default async function AdminToolEditPage({
           </div>
         </section>
 
+        {/* Featured */}
+        <section className="flex flex-col gap-4 rounded-lg border border-border p-5">
+          <h2 className="text-sm font-semibold text-foreground">Featured</h2>
+          <p className="text-xs text-muted">
+            Featured tools get their own row on the home page, above Popular. Nothing rotates and
+            nothing expires: a tool stays featured until you clear it here. The six most popular
+            featured tools are shown.
+          </p>
+
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+            <input type="checkbox" name="isFeatured" defaultChecked={tool.isFeatured} className="rounded" />
+            Feature on the home page
+          </label>
+
+          <Field label="Why it is worth a look">
+            <textarea
+              name="featuredNote"
+              defaultValue={tool.featuredNote ?? ''}
+              rows={2}
+              maxLength={160}
+              placeholder="One line, in your own words. This is the whole reason the section exists."
+              className="input resize-none"
+            />
+          </Field>
+        </section>
+
         {/* Links */}
         <section className="flex flex-col gap-4 rounded-lg border border-border p-5">
           <h2 className="text-sm font-semibold text-foreground">Links</h2>

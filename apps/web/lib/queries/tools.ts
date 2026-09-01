@@ -161,6 +161,46 @@ export async function getFavoriteTools(limit = 6): Promise<SearchResultRow[]> {
   return enrichTools(rows.map((r) => r.tools))
 }
 
+/**
+ * The home page's Featured row: the tools somebody chose by hand.
+ *
+ * Empty is a normal answer, and the home page renders no section at all for
+ * it. That is the whole contract that keeps this from becoming a chore: an
+ * unset Featured row costs nothing and shows nothing, so nobody has to keep it
+ * fed. Nothing here expires and nothing rotates.
+ *
+ * The notes come back beside the tools rather than on them. Only this section
+ * shows them, and threading an extra field through SearchResultRow would put a
+ * curator's line on every card in search and in Popular, where it says nothing
+ * the section title has not already said.
+ *
+ * Popularity order, the same as Rookie Friendly and Official, so the row reads
+ * the same way as its neighbours. A tool with no note is not held back: the
+ * flag is the decision and the note is the explanation.
+ */
+export interface FeaturedTools {
+  tools: SearchResultRow[]
+  /** Keyed by tool id. A featured tool with no note is simply absent. */
+  notes: Record<string, string>
+}
+
+export async function getFeaturedTools(limit = 6): Promise<FeaturedTools> {
+  const db = getDb()
+  const rows = await db
+    .select()
+    .from(tools)
+    .where(and(eq(tools.status, 'published'), eq(tools.isFeatured, true)))
+    .orderBy(desc(tools.popularityScore))
+    .limit(limit)
+
+  const notes: Record<string, string> = {}
+  for (const row of rows) {
+    if (row.featuredNote) notes[row.id] = row.featuredNote
+  }
+
+  return { tools: await enrichTools(rows), notes }
+}
+
 export async function getOfficialTools(limit = 6): Promise<SearchResultRow[]> {
   const db = getDb()
   const rows = await db

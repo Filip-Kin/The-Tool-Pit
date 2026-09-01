@@ -10,6 +10,7 @@ import {
   getRookieFriendlyTools,
   getOfficialTools,
   getFavoriteTools,
+  getFeaturedTools,
 } from '@/lib/queries/tools'
 
 /**
@@ -25,8 +26,9 @@ import {
 export const revalidate = 60
 
 export default async function HomePage() {
-  const [favorites, trending, recent, rookie, official] = await Promise.all([
+  const [favorites, featured, trending, recent, rookie, official] = await Promise.all([
     getFavoriteTools(6),
+    getFeaturedTools(6),
     getTrendingTools(6),
     getRecentlyUpdatedTools(6),
     getRookieFriendlyTools(6),
@@ -107,6 +109,24 @@ export default async function HomePage() {
           />
           <Suspense fallback={<ToolGrid.Skeleton count={favorites.length} />}>
             <ToolGrid tools={favorites} />
+          </Suspense>
+        </section>
+      )}
+
+      {/* Featured, above Popular and below the visitor's own saves.
+          Somebody opening the site for the first time has nothing saved, so
+          this is the first row they read, which is the point of it: Popular,
+          Rookie Friendly and Official are all things you would guess were
+          here, and none of them can say why one particular tool is worth the
+          click. Nothing is featured to begin with and the section renders
+          nothing at all until something is, so an unset home page is the old
+          home page rather than an empty shelf. No link out: it is a short list
+          somebody chose, not a category you can browse. */}
+      {featured.tools.length > 0 && (
+        <section className="container mx-auto max-w-6xl px-4">
+          <SectionHeader title="Featured" description="Worth a look, and why" />
+          <Suspense fallback={<ToolGrid.Skeleton count={featured.tools.length} />}>
+            <ToolGrid tools={featured.tools} notes={featured.notes} />
           </Suspense>
         </section>
       )}

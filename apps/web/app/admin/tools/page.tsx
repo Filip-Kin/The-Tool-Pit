@@ -121,6 +121,7 @@ export default async function AdminToolsPage({
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-foreground">{tool.name}</span>
+                    {tool.isFeatured && <Badge variant="program" className="text-[10px]">Featured</Badge>}
                     {tool.isOfficial && <Badge variant="official" className="text-[10px]">Official</Badge>}
                     {tool.isVendor && <Badge variant="vendor" className="text-[10px]">Vendor</Badge>}
                   </div>

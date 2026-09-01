@@ -6,12 +6,17 @@ import { getFavoritedIds } from '@/lib/queries/favorites'
 
 interface ToolGridProps {
   tools: SearchResultRow[]
+  /**
+   * A curator's line per tool id, for the home page's Featured row. Every other
+   * grid leaves this out and gets plain cards.
+   */
+  notes?: Record<string, string>
   className?: string
 }
 
 // Async so the visitor's existing votes are resolved ONCE for the whole grid
 // rather than per card. A card cannot do it itself without a query each.
-export async function ToolGrid({ tools, className }: ToolGridProps) {
+export async function ToolGrid({ tools, notes, className }: ToolGridProps) {
   if (tools.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border p-12 text-center">
@@ -36,6 +41,7 @@ export async function ToolGrid({ tools, className }: ToolGridProps) {
           tool={tool}
           voted={voted.has(tool.id)}
           favorited={favorited.has(tool.id)}
+          note={notes?.[tool.id]}
         />
       ))}
     </div>

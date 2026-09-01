@@ -24,10 +24,15 @@ interface ToolCardProps {
   voted?: boolean
   /** Whether this visitor already saved it. Resolved once for the whole grid. */
   favorited?: boolean
+  /**
+   * Why somebody picked this out, in their words. Only the home page's
+   * Featured row passes one; everywhere else the card is the same card.
+   */
+  note?: string
   className?: string
 }
 
-export function ToolCard({ tool, voted = false, favorited = false, className }: ToolCardProps) {
+export function ToolCard({ tool, voted = false, favorited = false, note, className }: ToolCardProps) {
   return (
     <article className={cardClass({ interactive: true, className: cn('group relative flex flex-col gap-3', className) })}>
       {/* Header */}
@@ -71,6 +76,14 @@ export function ToolCard({ tool, voted = false, favorited = false, className }: 
           </a>
         )}
       </div>
+
+      {/* The note reads as somebody talking, so it gets a rule and the
+          foreground colour and sits above the machine-written summary. */}
+      {note && (
+        <p className="border-l-2 border-primary/50 pl-2.5 text-xs leading-relaxed text-foreground">
+          {note}
+        </p>
+      )}
 
       {/* Summary */}
       {tool.summary && (

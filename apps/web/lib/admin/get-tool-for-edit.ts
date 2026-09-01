@@ -28,6 +28,8 @@ export interface ToolForEdit {
   seasonYear: number | null
   vendorName: string | null
   freshnessState: string | null
+  isFeatured: boolean
+  featuredNote: string | null
   adminNotes: string | null
   programs: string[]
   audienceRoles: string[]
@@ -83,6 +85,8 @@ export async function getToolForEdit(id: string): Promise<ToolForEdit | null> {
     seasonYear: tool.seasonYear ?? null,
     vendorName: tool.vendorName,
     freshnessState: tool.freshnessState,
+    isFeatured: tool.isFeatured,
+    featuredNote: tool.featuredNote,
     adminNotes: tool.adminNotes,
     programs: programRows.map((r) => r.slug),
     audienceRoles: roleRows.map((r) => r.slug),

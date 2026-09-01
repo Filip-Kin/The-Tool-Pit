@@ -162,6 +162,13 @@
       "when": 1788293080273,
       "tag": "0022_votes_belong_to_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788297395544,
+      "tag": "0023_lonely_mongu",
+      "breakpoints": true
     }
   ]
 }
