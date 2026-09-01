@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Map as LeafletMap, Marker as LeafletMarker } from 'leaflet'
 import type { GeocodeResult, AddressParts } from '@/app/api/fields/geocode/route'
+import { wrapLongitude, longitudeNearestTo } from '@/lib/geo/longitude'
 import { addDarkBasemap } from './dark-basemap'
 
 interface Coords {
@@ -64,31 +65,63 @@ export function PinMap({ value, onChange, onResolveAddress, height = 320 }: PinM
       if (cancelled || !containerRef.current || mapRef.current) return
 
       const start: [number, number] = value ? [value.lat, value.lng] : DEFAULT_CENTER
-      const map = L.map(containerRef.current, { center: start, zoom: value ? 15 : 4, zoomControl: true })
+      // The basemap tiles repeat forever, so panning east or west lands the
+      // visitor on another copy of the world, where the pin, which is drawn
+      // only at its real longitude, is nowhere to be seen. worldCopyJump holds
+      // the view on the real copy as they drag, so the pin stays.
+      const map = L.map(containerRef.current, {
+        center: start,
+        zoom: value ? 15 : 4,
+        zoomControl: true,
+        worldCopyJump: true,
+      })
       await addDarkBasemap(map)
 
       const icon = L.divIcon({ html: PIN_HTML, className: '', iconSize: [22, 22], iconAnchor: [11, 22] })
 
-      function place(lat: number, lng: number) {
+      /**
+       * Put the pin where it was clicked and report where that really is.
+       *
+       * The marker keeps the longitude Leaflet gave us, so it lands under the
+       * cursor even in the sliver of screen past the dateline. The value that
+       * leaves this component is folded back onto the real world, because the
+       * submit and edit handlers drop a longitude outside [-180, 180] and would
+       * file the field with no coordinates at all.
+       */
+      function place(lat: number, lng: number): Coords {
         if (markerRef.current) {
           markerRef.current.setLatLng([lat, lng])
         } else {
           const m = L.marker([lat, lng], { icon, draggable: true }).addTo(map)
           m.on('dragend', () => {
             const p = m.getLatLng()
-            onChangeRef.current({ lat: p.lat, lng: p.lng })
-            void reverseResolve(p.lat, p.lng)
+            const real = { lat: p.lat, lng: wrapLongitude(p.lng) }
+            onChangeRef.current(real)
+            void reverseResolve(real.lat, real.lng)
           })
           markerRef.current = m
         }
-        onChangeRef.current({ lat, lng })
+        const real = { lat, lng: wrapLongitude(lng) }
+        onChangeRef.current(real)
+        return real
       }
 
       // Initial pin (from an existing value) does not re-fill the address fields.
       if (value) place(value.lat, value.lng)
       map.on('click', (e) => {
-        place(e.latlng.lat, e.latlng.lng)
-        void reverseResolve(e.latlng.lat, e.latlng.lng)
+        const real = place(e.latlng.lat, e.latlng.lng)
+        void reverseResolve(real.lat, real.lng)
+      })
+
+      // A pin dropped past the dateline is drawn on the copy of the world it
+      // was clicked on. Once a pan settles, bring it to the copy now on screen
+      // so it can never end up a whole world off the side.
+      map.on('moveend', () => {
+        const m = markerRef.current
+        if (!m) return
+        const p = m.getLatLng()
+        const onScreen = longitudeNearestTo(p.lng, map.getCenter().lng)
+        if (onScreen !== p.lng) m.setLatLng([p.lat, onScreen])
       })
       mapRef.current = map
     })()
@@ -143,8 +176,10 @@ export function PinMap({ value, onChange, onResolveAddress, height = 320 }: PinM
       const m = L.marker([r.lat, r.lon], { icon, draggable: true }).addTo(map)
       m.on('dragend', () => {
         const p = m.getLatLng()
-        onChangeRef.current({ lat: p.lat, lng: p.lng })
-        void reverseResolve(p.lat, p.lng)
+        // Same fold as the click path: never report a longitude off the world.
+        const real = { lat: p.lat, lng: wrapLongitude(p.lng) }
+        onChangeRef.current(real)
+        void reverseResolve(real.lat, real.lng)
       })
       markerRef.current = m
     }

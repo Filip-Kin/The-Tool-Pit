@@ -73,7 +73,16 @@ export function EventMap({ events, now, selectedId, onSelect, userLoc, height = 
       if (cancelled || !containerRef.current) return
 
       if (!mapRef.current) {
-        const map = L.map(containerRef.current, { center: DEFAULT_CENTER, zoom: 4, zoomControl: true })
+        // The basemap tiles repeat forever, so panning east or west lands the
+        // visitor on another copy of the world, where the pins, which are drawn
+        // only at their real longitude, are nowhere to be seen. worldCopyJump
+        // holds the view on the real copy as they drag, so the pins stay.
+        const map = L.map(containerRef.current, {
+          center: DEFAULT_CENTER,
+          zoom: 4,
+          zoomControl: true,
+          worldCopyJump: true,
+        })
         await addDarkBasemap(map)
         mapRef.current = map
       }
