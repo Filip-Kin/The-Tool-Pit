@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { Pager } from '@/components/admin/pager'
 import Link from 'next/link'
 import { getDb } from '@/lib/db'
 import { crawlJobs, crawlCandidates } from '@the-tool-pit/db'
@@ -208,29 +209,7 @@ export default async function CrawlJobDetailPage({
         )}
 
         {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex gap-2 justify-center">
-            {page > 1 && (
-              <Link
-                href={`/admin/crawls/${id}?status=${status}&page=${page - 1}`}
-                className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
-              >
-                ← Prev
-              </Link>
-            )}
-            <span className="px-3 py-1.5 text-xs text-muted">
-              {page} / {totalPages}
-            </span>
-            {page < totalPages && (
-              <Link
-                href={`/admin/crawls/${id}?status=${status}&page=${page + 1}`}
-                className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
-              >
-                Next →
-              </Link>
-            )}
-          </div>
-        )}
+        <Pager page={page} totalPages={totalPages} href={(n) => `/admin/crawls/${id}?status=${status}&page=${n}`} />
       </section>
     </div>
   )

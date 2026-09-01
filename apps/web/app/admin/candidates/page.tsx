@@ -1,4 +1,5 @@
 import { getDb } from '@/lib/db'
+import { Pager } from '@/components/admin/pager'
 import { crawlCandidates, crawlJobs } from '@the-tool-pit/db'
 import { eq, desc, sql } from 'drizzle-orm'
 import Link from 'next/link'
@@ -170,29 +171,7 @@ export default async function AdminCandidatesPage({
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex gap-2 justify-center">
-          {page > 1 && (
-            <Link
-              href={`/admin/candidates?status=${status}&page=${page - 1}`}
-              className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
-            >
-              ← Prev
-            </Link>
-          )}
-          <span className="px-3 py-1.5 text-xs text-muted">
-            {page} / {totalPages}
-          </span>
-          {page < totalPages && (
-            <Link
-              href={`/admin/candidates?status=${status}&page=${page + 1}`}
-              className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
-            >
-              Next →
-            </Link>
-          )}
-        </div>
-      )}
+      <Pager page={page} totalPages={totalPages} href={(n) => `/admin/candidates?status=${status}&page=${n}`} />
     </div>
   )
 }

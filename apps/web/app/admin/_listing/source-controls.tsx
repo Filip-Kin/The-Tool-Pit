@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
 
 /**
@@ -119,16 +120,16 @@ export function ConnectorRunButtons({
       <div className="flex flex-wrap gap-3">
         {connectors.map((c) => (
           <div key={c.connector} className="flex max-w-xs flex-col gap-1">
-            <button
+            <Button
               disabled={pending}
               onClick={() => {
                 setLast(c.connector)
                 run(() => runConnector(c.connector), 'Queued')
               }}
-              className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2 disabled:opacity-50"
+              variant="secondary" size="sm"
             >
               {pending && last === c.connector ? 'Queuing…' : c.label}
-            </button>
+            </Button>
             <p className="text-[10px] text-muted-2">{c.description}</p>
             {done && last === c.connector && <p className="text-[10px] text-rookie">{done}</p>}
           </div>

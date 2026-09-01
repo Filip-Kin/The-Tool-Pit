@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Pager } from '@/components/admin/pager'
 import { desc, eq, sql } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
@@ -188,29 +189,7 @@ export default async function EventCandidatesPage({
         </div>
       )}
 
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          {page > 1 && (
-            <Link
-              href={`/admin/event-listings/candidates?status=${status}&page=${page - 1}`}
-              className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground"
-            >
-              ← Prev
-            </Link>
-          )}
-          <span className="px-3 py-1.5 text-xs text-muted">
-            {page} / {totalPages}
-          </span>
-          {page < totalPages && (
-            <Link
-              href={`/admin/event-listings/candidates?status=${status}&page=${page + 1}`}
-              className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground"
-            >
-              Next →
-            </Link>
-          )}
-        </div>
-      )}
+      <Pager page={page} totalPages={totalPages} href={(n) => `/admin/event-listings/candidates?status=${status}&page=${n}`} />
     </div>
   )
 }

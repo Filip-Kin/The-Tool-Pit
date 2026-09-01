@@ -29,7 +29,6 @@ export function SubmissionActions({ submissionId, status }: { submissionId: stri
           label="Reject"
           confirmLabel="Reject"
           disabled={pending}
-          className="rounded px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-40 bg-surface-3 text-muted hover:text-foreground"
           onConfirm={(reason) => rejectSubmission(submissionId, reason)}
         />
       </div>

@@ -25,7 +25,6 @@ export function CandidateActions({ candidateId, status }: { candidateId: string;
           label="Suppress"
           confirmLabel="Reject"
           disabled={approvePending}
-          className="rounded bg-surface-3 px-2.5 py-1 text-xs font-medium text-muted hover:text-foreground transition-colors disabled:opacity-40"
           onConfirm={(reason) => suppressCandidate(candidateId, reason)}
         />
       )}

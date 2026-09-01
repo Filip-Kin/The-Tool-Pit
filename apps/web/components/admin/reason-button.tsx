@@ -2,6 +2,7 @@
 
 import { useState, useTransition, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
+import { Button, buttonClass } from '@/components/ui/button'
 
 /**
  * A moderation button that will not fire without a reason.
@@ -14,16 +15,19 @@ import { useRouter } from 'next/navigation'
  * would simply stop working, and six hand-rolled boxes would be six chances to
  * get the empty case subtly different.
  *
- * It stays out of the way until it is needed. Closed it is the same button the
- * row had before; clicking opens the box, and nothing is sent until Confirm.
- * That keeps the reason a deliberate sentence rather than a field an admin
- * tabs past, which is what makes the email worth receiving.
+ * It stays out of the way until it is needed. Closed it is one small button;
+ * clicking opens the box, and nothing is sent until Confirm. That keeps the
+ * reason a deliberate sentence rather than a field an admin tabs past, which is
+ * what makes the email worth receiving.
+ *
+ * The trigger used to take a className from whichever row it sat in, and eight
+ * call sites had supplied five different ones. It styles itself now: the same
+ * control doing the same job on eight screens has no reason to look five ways.
  */
 export function ReasonButton({
   label,
   confirmLabel = 'Confirm',
   placeholder = 'Why. The submitter is sent this.',
-  className = '',
   title,
   disabled,
   onConfirm,
@@ -32,8 +36,6 @@ export function ReasonButton({
   label: ReactNode
   confirmLabel?: string
   placeholder?: string
-  /** Classes for the trigger, so it matches the row it sits in. */
-  className?: string
   title?: string
   disabled?: boolean
   onConfirm: (reason: string) => Promise<{ error?: string } | void>
@@ -46,18 +48,18 @@ export function ReasonButton({
 
   if (!open) {
     return (
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="sm"
         title={title}
         disabled={disabled}
         onClick={() => {
           setError(null)
           setOpen(true)
         }}
-        className={className}
       >
         {label}
-      </button>
+      </Button>
     )
   }
 
@@ -91,28 +93,29 @@ export function ReasonButton({
           if (e.key === 'Escape') setOpen(false)
         }}
         placeholder={placeholder}
-        className="w-64 rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+        className="w-64 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
       />
       <button
         type="button"
         disabled={pending || !reason.trim()}
         onClick={confirm}
-        className="rounded-md border border-frc/40 px-2.5 py-1.5 text-xs font-medium text-frc hover:bg-frc/10 disabled:opacity-40"
+        // Red, because this is the one that sends the rejection email.
+        className={buttonClass({ variant: 'none', size: 'sm', className: 'border border-frc/40 text-frc hover:bg-frc/10' })}
       >
         {pending ? '…' : confirmLabel}
       </button>
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="sm"
         disabled={pending}
         onClick={() => {
           setOpen(false)
           setReason('')
           setError(null)
         }}
-        className="rounded-md border border-border px-2.5 py-1.5 text-xs text-muted hover:text-foreground disabled:opacity-40"
       >
         Cancel
-      </button>
+      </Button>
       {error && <span className="text-xs text-frc">{error}</span>}
     </span>
   )

@@ -139,7 +139,6 @@ async function shrinkImage(file: File): Promise<File> {
               label="Suppress"
               confirmLabel="Reject"
               disabled={pending}
-              className="rounded bg-surface-3 px-2.5 py-1 text-xs font-medium text-muted hover:text-foreground transition-colors disabled:opacity-40"
               onConfirm={(reason) => suppressAlbumCandidate(candidateId, reason)}
             />
           )}
@@ -205,7 +204,6 @@ async function shrinkImage(file: File): Promise<File> {
               confirmLabel="Remove"
               placeholder="Why it is coming down. The submitter is sent this."
               disabled={pending}
-              className="rounded bg-frc/15 px-2 py-1 text-xs font-medium text-frc hover:bg-frc/25 transition-colors disabled:opacity-40"
               onConfirm={(reason) => deletePublishedAlbum(candidateId, reason)}
             />
           </div>

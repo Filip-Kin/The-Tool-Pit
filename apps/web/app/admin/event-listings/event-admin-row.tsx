@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { Button } from '@/components/ui/button'
 import { MapPin, CalendarDays, Pencil, Check, X, Trash2, RotateCcw, UserRound } from 'lucide-react'
 import type { EventListing } from '@the-tool-pit/db'
 import {
@@ -100,36 +101,37 @@ export function EventAdminRow({ listing, account }: { listing: EventListing; acc
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-          <button onClick={() => setEditing((v) => !v)} disabled={pending} className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2">
+          <Button variant="secondary" size="sm" onClick={() => setEditing((v) => !v)} disabled={pending}>
             <Pencil className="h-3 w-3" /> Edit
-          </button>
+          </Button>
           {listing.status !== 'published' && (
-            <button onClick={() => run(() => approveEvent(listing.id))} disabled={pending} className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-hover disabled:opacity-50">
+            <Button size="sm" onClick={() => run(() => approveEvent(listing.id))} disabled={pending}>
               <Check className="h-3 w-3" /> Publish
-            </button>
+            </Button>
           )}
           {listing.status === 'suppressed' ? (
-            <button onClick={() => run(() => unsuppressEvent(listing.id))} disabled={pending} className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2">
+            <Button variant="secondary" size="sm" onClick={() => run(() => unsuppressEvent(listing.id))} disabled={pending}>
               <RotateCcw className="h-3 w-3" /> Restore
-            </button>
+            </Button>
           ) : (
             <ReasonButton
               label={<><X className="h-3 w-3" /> Suppress</>}
               confirmLabel={listing.status === 'published' ? 'Remove' : 'Reject'}
               disabled={pending}
-              className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2 disabled:opacity-50"
               onConfirm={(reason) => suppressEvent(listing.id, reason)}
             />
           )}
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
+            className="text-frc"
             onClick={() => {
               if (confirm('Delete this event permanently?')) run(() => deleteEvent(listing.id))
             }}
             disabled={pending}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-frc hover:bg-surface-2"
           >
             <Trash2 className="h-3 w-3" />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -231,12 +233,12 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
       </label>
 
       <div className="flex gap-2">
-        <button onClick={save} disabled={pending} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover disabled:opacity-50">
+        <Button onClick={save} disabled={pending}>
           {pending ? 'Saving…' : 'Save changes'}
-        </button>
-        <button onClick={onDone} disabled={pending} className="rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
+        </Button>
+        <Button variant="secondary" onClick={onDone} disabled={pending}>
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   )

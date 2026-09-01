@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
 import { triggerCrawl } from '../crawls/actions'
 
@@ -20,13 +21,13 @@ export function SourceTriggerButton({ connector, label }: { connector: string; l
 
   return (
     <div className="flex flex-col gap-1">
-      <button
+      <Button
         onClick={handleClick}
         disabled={pending}
-        className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
+        variant="secondary" size="sm"
       >
         {pending ? 'Queuing…' : `Crawl ${label}`}
-      </button>
+      </Button>
       {result?.ok && <p className="text-xs text-official">Queued ✓</p>}
       {result?.error && <p className="text-xs text-frc">Error: {result.error}</p>}
     </div>

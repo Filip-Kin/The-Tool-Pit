@@ -1,4 +1,6 @@
 import { getDb } from '@/lib/db'
+import { ButtonLink } from '@/components/ui/button'
+import { Pager } from '@/components/admin/pager'
 import { tools, toolPrograms, programs } from '@the-tool-pit/db'
 import { eq, sql, desc, inArray, ilike, and } from 'drizzle-orm'
 import Link from 'next/link'
@@ -64,12 +66,9 @@ export default async function AdminToolsPage({
     <div className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Tools</h1>
-        <Link
-          href="/admin/tools/new"
-          className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-hover transition-colors"
-        >
+        <ButtonLink href="/admin/tools/new" size="sm">
           + New Tool
-        </Link>
+        </ButtonLink>
       </div>
 
       {/* Status tabs */}
@@ -150,29 +149,7 @@ export default async function AdminToolsPage({
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex gap-2 justify-center">
-          {page > 1 && (
-            <Link
-              href={`/admin/tools?status=${status}&page=${page - 1}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
-              className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
-            >
-              ← Prev
-            </Link>
-          )}
-          <span className="px-3 py-1.5 text-xs text-muted">
-            {page} / {totalPages}
-          </span>
-          {page < totalPages && (
-            <Link
-              href={`/admin/tools?status=${status}&page=${page + 1}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
-              className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
-            >
-              Next →
-            </Link>
-          )}
-        </div>
-      )}
+      <Pager page={page} totalPages={totalPages} href={(n) => `/admin/tools?status=${status}&page=${n}${q ? `&q=${encodeURIComponent(q)}` : ''}`} />
     </div>
   )
 }
