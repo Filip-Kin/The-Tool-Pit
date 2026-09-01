@@ -29,6 +29,10 @@
       "bun": "./src/grant-enums.ts",
       "default": "./dist/grant-enums.js"
     },
+    "./event-enums": {
+      "bun": "./src/event-enums.ts",
+      "default": "./dist/event-enums.js"
+    },
     "./client": {
       "bun": "./src/client.ts",
       "default": "./dist/client.js"

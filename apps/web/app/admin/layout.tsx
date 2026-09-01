@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: '/admin/album-sources', label: 'Album Sources' },
   { href: '/admin/practice-fields', label: 'Practice Fields' },
   { href: '/admin/field-edits', label: 'Field Edits' },
+  { href: '/admin/event-listings', label: 'Off-Season Events' },
   { href: '/admin/grants', label: 'Grants' },
   { href: '/admin/grants/candidates', label: 'Grant Candidates' },
   { href: '/admin/grants/changes', label: 'Grant Changes' },
