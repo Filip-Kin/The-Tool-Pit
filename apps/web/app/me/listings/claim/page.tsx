@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { getCurrentUser } from '@/lib/auth/session'
 import { MeShell } from '@/components/me/me-shell'
 import { ClaimStarter } from '@/components/me/claim-starter'
+import { GithubLinkCard } from '@/components/me/github-link-card'
 import { SignedInGate } from '@/components/auth/signed-in-gate'
 import { isListingEntityType, resolveClaimable, VERIFY_FILENAME } from '@/lib/queries/listing-ownership'
 import { startClaim } from '../actions'
@@ -36,7 +37,15 @@ export default async function ClaimPage({
     >
       {target ? (
         <SignedInGate reason="Sign in to claim a listing you run.">
-          <ClaimStarter target={target} verifyFilename={VERIFY_FILENAME} startAction={startClaim} />
+          <div className="flex flex-col gap-6">
+            {/* The fast path, and only where it IS one. A listing with no
+                GitHub repository behind it cannot be claimed this way, so the
+                card would be an unrelated ask sitting on top of the thing the
+                person came to do. The card itself renders nothing once the
+                account is linked. */}
+            {target.repoUrl && <GithubLinkCard purpose="claim" />}
+            <ClaimStarter target={target} verifyFilename={VERIFY_FILENAME} startAction={startClaim} />
+          </div>
         </SignedInGate>
       ) : (
         <div className="rounded-lg border border-border-subtle bg-surface p-5 text-sm text-muted">

@@ -5,6 +5,7 @@ import { getCurrentUser } from '@/lib/auth/session'
 import { MeShell } from '@/components/me/me-shell'
 import { ListingEditForm } from '@/components/me/listing-edit-form'
 import { ListingAccessPanel } from '@/components/me/listing-access-panel'
+import { LeaveListingPanel } from '@/components/me/leave-listing-panel'
 import { AlbumCoverPanel } from '@/components/me/album-cover-panel'
 import { entityNoun } from '@/components/me/listing-labels'
 import { albums, TOOL_TYPES } from '@the-tool-pit/db'
@@ -103,6 +104,7 @@ export default async function EditListingPage({
           entityId={id}
           members={members}
           isOwner={role === 'owner'}
+          currentUserId={user.id}
           createInviteAction={createInvite}
           removeAction={removeOwner}
         />
@@ -117,6 +119,10 @@ export default async function EditListingPage({
             View the public listing
           </a>
         </p>
+
+        {/* Last on the page, past everything anyone came here for. It used to be
+            a one-click button beside Edit on /me/listings. */}
+        <LeaveListingPanel entityType={type} entityId={id} leaveAction={removeOwner} />
       </div>
     </MeShell>
   )

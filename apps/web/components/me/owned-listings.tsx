@@ -1,30 +1,25 @@
-'use client'
-
 import Link from 'next/link'
-import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
-import { Pencil } from 'lucide-react'
+import { ExternalLink, Pencil } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { entityNoun, roleLabel } from './listing-labels'
 import type { OwnedListing } from '@/lib/queries/listing-ownership'
 
 /**
- * The listings a signed-in user manages, with a link to edit each and a way to
- * step back from one. Ownership itself is resolved server-side off
- * listing_owners, so this component only ever renders rows the user genuinely
- * has a permission row for.
+ * The listings a signed-in user manages: what each one is, the page everybody
+ * else sees, and the way in to edit it. Ownership itself is resolved
+ * server-side off listing_owners, so this component only ever renders rows the
+ * user genuinely has a permission row for.
+ *
+ * A SERVER COMPONENT AGAIN. It was a client one only to carry Leave, and Leave
+ * has moved to the bottom of the listing's own edit page: a destructive action
+ * had no business sitting beside Edit on the list of everything you run, one
+ * slip away from the button people actually come here for.
+ *
+ * What replaced it is the thing that was missing. There was no way from here to
+ * the public page, so the only way to check how an edit came out was to
+ * remember the URL.
  */
-export function OwnedListings({
-  listings,
-  leaveAction,
-}: {
-  listings: OwnedListing[]
-  leaveAction: (
-    entityType: string,
-    entityId: string,
-    targetUserId: string,
-  ) => Promise<{ error?: string; message?: string }>
-}) {
+export function OwnedListings({ listings }: { listings: OwnedListing[] }) {
   return (
     <section>
       <h2 className="text-lg font-semibold text-foreground">
@@ -40,7 +35,7 @@ export function OwnedListings({
       ) : (
         <ul className="mt-4 flex flex-col gap-2">
           {listings.map((l) => (
-            <Row key={`${l.entityType}:${l.entityId}`} listing={l} leaveAction={leaveAction} />
+            <Row key={`${l.entityType}:${l.entityId}`} listing={l} />
           ))}
         </ul>
       )}
@@ -48,32 +43,12 @@ export function OwnedListings({
   )
 }
 
-function Row({
-  listing,
-  leaveAction,
-}: {
-  listing: OwnedListing
-  leaveAction: (
-    entityType: string,
-    entityId: string,
-    targetUserId: string,
-  ) => Promise<{ error?: string; message?: string }>
-}) {
-  const router = useRouter()
-  const [pending, start] = useTransition()
-  const [err, setErr] = useState<string | null>(null)
-
-  function onLeave() {
-    setErr(null)
-    // Passing the empty string as the target means "me": the action reads the
-    // signed-in user for a self-removal, so no client-held user id is trusted.
-    start(async () => {
-      const res = await leaveAction(listing.entityType, listing.entityId, '__self__')
-      if (res.error) setErr(res.error)
-      else router.refresh()
-    })
-  }
-
+function Row({ listing }: { listing: OwnedListing }) {
+  // An album has no page of ours: facts.href is the gallery on the
+  // photographer's own host. So the public link opens in a new tab for every
+  // vertical rather than for some of them, because "View" behaving one way on
+  // one row and another way on the next is the kind of near-miss that makes the
+  // list feel assembled rather than built.
   return (
     <li className="flex flex-wrap items-center gap-3 rounded-lg border border-border-subtle bg-surface p-3">
       <div className="min-w-0 flex-1">
@@ -87,28 +62,26 @@ function Row({
         </p>
       </div>
 
+      <a
+        href={listing.facts.href}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+      >
+        <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+        View
+        <span className="sr-only"> the public page for {listing.facts.title}</span>
+      </a>
+
       {listing.canEdit && (
         <Link
           href={`/me/listings/${listing.entityType}/${listing.entityId}`}
           className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
         >
-          <Pencil className="h-3.5 w-3.5" />
+          <Pencil className="h-3.5 w-3.5" aria-hidden />
           Edit
+          <span className="sr-only"> {listing.facts.title}</span>
         </Link>
-      )}
-      <button
-        type="button"
-        onClick={onLeave}
-        disabled={pending}
-        className="rounded-md px-2.5 py-1.5 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
-      >
-        Leave
-      </button>
-
-      {err && (
-        <p role="alert" className="w-full text-sm text-frc">
-          {err}
-        </p>
       )}
     </li>
   )

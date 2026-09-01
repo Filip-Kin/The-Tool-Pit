@@ -20,6 +20,7 @@ export function ListingAccessPanel({
   entityId,
   members,
   isOwner,
+  currentUserId,
   createInviteAction,
   removeAction,
 }: {
@@ -27,6 +28,15 @@ export function ListingAccessPanel({
   entityId: string
   members: OwnerRow[]
   isOwner: boolean
+  /**
+   * Whose row not to put a Remove button on.
+   *
+   * Removing yourself from this list IS leaving the listing, and leaving has
+   * its own panel at the bottom of this page, which explains what it costs and
+   * asks before it fires. Two buttons for one action on one screen, one of them
+   * one click and unlabelled, is exactly what that panel exists to replace.
+   */
+  currentUserId: string
   createInviteAction: (
     entityType: string,
     entityId: string,
@@ -76,7 +86,8 @@ export function ListingAccessPanel({
               <span className="truncate text-sm text-foreground">{m.displayName ?? m.email ?? 'Member'}</span>
             </div>
             <Badge variant="muted">{roleLabel(m.role)}</Badge>
-            {isOwner && (
+            {m.userId === currentUserId && <Badge variant="muted">You</Badge>}
+            {isOwner && m.userId !== currentUserId && (
               <button
                 type="button"
                 onClick={() => onRemove(m.userId)}

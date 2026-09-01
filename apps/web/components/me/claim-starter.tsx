@@ -158,19 +158,6 @@ export function ClaimStarter({
         </button>
       )}
 
-      {false && (
-        <div className="mt-4 flex flex-col gap-2">
-          <p className="text-sm text-muted">
-            Add a file named <code className="rounded bg-surface-2 px-1 py-0.5 text-foreground">{verifyFilename}</code>{' '}
-            containing this token to the default branch of your repo, then finish the check on your
-            listings page.
-          </p>
-          <code className="block break-all rounded-md border border-border-subtle bg-surface-2 p-2 text-xs text-foreground">
-            {token}
-          </code>
-        </div>
-      )}
-
         </>
       )}
 

@@ -11,10 +11,15 @@ import { describeGithubGrant, type GithubGrantSummary } from '@/lib/github/summa
 /**
  * Link your GitHub account, and take ownership of what you wrote.
  *
- * Sits on /me/listings and on the submit forms, which is where somebody is
- * already thinking about a repository of theirs. It renders nothing for a
- * signed-out visitor: linking needs an account to link to, and a card offering
- * something you cannot do is worse than no card.
+ * Sits on /me/listings, on the claim page and on the submit forms, which is
+ * where somebody is already thinking about a repository of theirs. It renders
+ * nothing for a signed-out visitor: linking needs an account to link to, and a
+ * card offering something you cannot do is worse than no card.
+ *
+ * THE PROMPT IS FOR PEOPLE WHO HAVE NOT LINKED. A full-width card telling
+ * somebody who linked months ago that they have linked is the noise Filip keeps
+ * pointing at. So the linked state is one line with the re-check action on it,
+ * not a section, and only on the page where managing listings is the job.
  *
  * After a run it says what changed, by name. "Linked" on its own leaves the
  * user to go and count, and zero has to be said out loud as zero rather than
@@ -22,13 +27,20 @@ import { describeGithubGrant, type GithubGrantSummary } from '@/lib/github/summa
  */
 export function GithubLinkCard({
   showWhenLinked = false,
+  purpose = 'general',
 }: {
   /**
-   * Show the re-check button to somebody who has already linked. True on
-   * /me/listings, where managing listings is the job. False on a submit form,
-   * where a linked user has nothing left to do and the card is just noise.
+   * Keep the re-check line for somebody who has already linked. True on
+   * /me/listings, where managing listings is the job. False on a submit form
+   * and on the claim page, where a linked user has nothing left to do here.
    */
   showWhenLinked?: boolean
+  /**
+   * What the copy is about. 'claim' is the claim page, where this is the fast
+   * path past a human review and the card has to say so, because the slow path
+   * is the thing right underneath it with the big button on it.
+   */
+  purpose?: 'general' | 'claim'
 }) {
   const { user, loading, refresh } = useSession()
   const router = useRouter()
@@ -58,18 +70,48 @@ export function GithubLinkCard({
     }
   }
 
+  if (linked) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+          <span className="inline-flex items-center gap-2 text-muted">
+            <Github className="h-4 w-4 shrink-0" aria-hidden />
+            GitHub: <span className="font-medium text-foreground">{user.githubLogin}</span>
+          </span>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void run(recheckGithubRepos)}
+            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-medium text-primary transition-colors hover:bg-surface-2 disabled:opacity-40"
+          >
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+            {busy ? 'Checking…' : 'Re-check my repositories'}
+          </button>
+        </div>
+
+        {summary && <GrantResult summary={summary} />}
+
+        {error && (
+          <p role="alert" className="text-sm text-frc">
+            {error}
+          </p>
+        )}
+      </div>
+    )
+  }
+
   return (
     <section className="rounded-lg border border-border-subtle bg-surface p-6">
       <div className="flex items-start gap-3">
         <Github className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
         <div className="min-w-0 flex-1">
           <h2 className="text-base font-semibold text-foreground">
-            {linked ? `GitHub: ${user.githubLogin}` : 'Link your GitHub account'}
+            {purpose === 'claim' ? 'Own the repository? Link GitHub instead' : 'Link your GitHub account'}
           </h2>
 
           <p className="mt-2 max-w-2xl text-sm text-muted">
-            {linked
-              ? 'Re-check to pick up listings added since you linked. Nothing you already manage is touched.'
+            {purpose === 'claim'
+              ? 'This listing is built from a GitHub repository. If it is yours, or it belongs to an organisation you are in, linking your account hands it straight to you. No token to commit and nobody to wait for. We ask to read your profile and your organisations. Nothing else, and nothing is written to GitHub.'
               : 'Link your GitHub account and you get any listing here that is built from your repositories, or from a repository belonging to an organisation you are in. We ask to read your profile and your organisations. Nothing else, and nothing is written to GitHub.'}
           </p>
 
@@ -77,11 +119,11 @@ export function GithubLinkCard({
             <button
               type="button"
               disabled={busy}
-              onClick={() => void run(linked ? recheckGithubRepos : linkGithubAccount)}
+              onClick={() => void run(linkGithubAccount)}
               className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-40"
             >
-              {linked ? <RefreshCw className="h-4 w-4" aria-hidden /> : <Github className="h-4 w-4" aria-hidden />}
-              {busy ? 'Checking…' : linked ? 'Re-check my repositories' : 'Link GitHub'}
+              <Github className="h-4 w-4" aria-hidden />
+              {busy ? 'Checking…' : 'Link GitHub'}
             </button>
           </div>
 

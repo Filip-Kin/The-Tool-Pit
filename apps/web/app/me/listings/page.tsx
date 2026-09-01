@@ -10,7 +10,7 @@ import {
   listClaimsForUser,
   VERIFY_FILENAME,
 } from '@/lib/queries/listing-ownership'
-import { removeOwner, verifyRepoClaim } from './actions'
+import { verifyRepoClaim } from './actions'
 
 export const metadata: Metadata = {
   title: 'Listings',
@@ -40,9 +40,10 @@ export default async function ListingsPage() {
       <div className="flex flex-col gap-12">
         {/* Above the list on purpose. For a repo-backed listing this is the
             one-click route to ownership, and the claim flow below it is the
-            slow path somebody falls back to. */}
+            slow path somebody falls back to. Once the account is linked it
+            collapses to a single line with the re-check on it. */}
         <GithubLinkCard showWhenLinked />
-        <OwnedListings listings={owned} leaveAction={removeOwner} />
+        <OwnedListings listings={owned} />
         <PendingClaims claims={openClaims} verifyFilename={VERIFY_FILENAME} verifyAction={verifyRepoClaim} />
 
         {/* The one fact here that is not obvious: a claim never takes a listing
