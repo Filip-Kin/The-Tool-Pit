@@ -54,12 +54,6 @@ export interface OwnershipActionResult {
   inviteUrl?: string
 }
 
-/**
- * The shortest claim note an admin can actually act on. A claim with no proof
- * behind it is a request, and a request with no words in it is unreviewable.
- */
-const MIN_CLAIM_NOTE = 40
-
 /** The file we ask a repo owner to add, and the branches we look on. */
 const VERIFY_FILENAME = '.frc-tools-verify'
 const VERIFY_BRANCHES = ['main', 'master'] as const
@@ -204,11 +198,12 @@ export async function startClaim(
   // nothing to decide on, so we refuse to file one. The note is never treated
   // as proof: it only ever reaches an admin, and only an admin's approval
   // writes an ownership row.
+  // Something rather than nothing. A character count was arbitrary and did not
+  // make a claim any more checkable: a long note is not proof and a short one
+  // pointing at a public page is. An admin reads it either way.
   const note = (noteRaw ?? '').trim().slice(0, 1000)
-  if (note.length < MIN_CLAIM_NOTE) {
-    return {
-      error: `We cannot check this one automatically, so tell us how you run it and an admin will read it. At least ${MIN_CLAIM_NOTE} characters.`,
-    }
+  if (!note) {
+    return { error: 'Say how you are connected to it. An admin reads this.' }
   }
   await db.insert(listingClaims).values({
     entityType,

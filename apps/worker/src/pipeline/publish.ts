@@ -38,6 +38,37 @@ export interface PublishResult {
   reason?: string
 }
 
+
+/**
+ * Whether a candidate carries enough to be a useful listing.
+ *
+ * Confidence says the classifier believed it. This says there is actually
+ * something to show. Both have to hold, and this one is deterministic, so it
+ * costs nothing and cannot drift with a prompt.
+ *
+ * It checks presence, not length. 500 of 1110 published listings had no usable
+ * summary because publishing gated on confidence alone, and confidence answers
+ * "is this FRC related", which sat around 0.83 for almost everything including
+ * Flask. A character count would have been just as arbitrary a proxy.
+ *
+ * Deliberately NOT a rejection: a thin candidate stays pending for a human
+ * rather than being suppressed, because "we could not describe it" is a
+ * statement about our scrape, not about the tool.
+ */
+export function missingForPublish(fields: {
+  name: string | null | undefined
+  summary: string | null | undefined
+  url: string | null | undefined
+}): string[] {
+  const missing: string[] = []
+  const name = fields.name?.trim() ?? ''
+  const summary = fields.summary?.trim() ?? ''
+  if (!name || name.toLowerCase() === 'untitled tool') missing.push('name')
+  if (!summary) missing.push('summary')
+  if (!fields.url?.trim()) missing.push('link')
+  return missing
+}
+
 export async function publishCandidate(candidateId: string, sourceType = 'manual'): Promise<PublishResult> {
   const db = getDb()
 
@@ -67,6 +98,23 @@ export async function publishCandidate(candidateId: string, sourceType = 'manual
   const rawDescription = (meta.description as string) ?? ''
   const summary = rawSummary.slice(0, 300) || null
   const description = rawDescription.length > 300 ? rawDescription : null
+
+  // Completeness, checked separately from confidence. A row that clears the
+  // model's bar but has no real summary is exactly the "incomplete entry"
+  // problem: it renders as a card with a title and a blank space under it.
+  // Held for a human instead of published or suppressed.
+  const missing = missingForPublish({
+    name: (meta.title as string) ?? null,
+    summary: rawSummary,
+    url: (meta.canonicalUrl as string) ?? (meta.url as string) ?? candidate.canonicalUrl ?? candidate.sourceUrl,
+  })
+  if (missing.length > 0 && !candidate.matchedToolId) {
+    return {
+      toolId: '',
+      action: 'skipped',
+      reason: `Incomplete, needs a human: missing ${missing.join(', ')}`,
+    }
+  }
 
   // If this candidate already maps to a tool, update it rather than creating a duplicate.
   if (candidate.matchedToolId) {
