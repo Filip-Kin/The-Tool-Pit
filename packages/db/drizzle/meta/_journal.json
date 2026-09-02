@@ -190,6 +190,20 @@
       "when": 1788372359209,
       "tag": "0026_events_remember_their_team_list",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788378468905,
+      "tag": "0027_events_get_a_team_list_parser",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788381161743,
+      "tag": "0028_hot_sentinels",
+      "breakpoints": true
     }
   ]
 }

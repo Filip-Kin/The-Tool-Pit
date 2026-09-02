@@ -72,6 +72,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/admin/event-listings', label: 'Submissions', queue: 'eventSubmissions' },
       { href: '/admin/event-listings/candidates', label: 'Candidates', queue: 'eventCandidates' },
+      { href: '/admin/event-edits', label: 'Suggested edits', queue: 'eventEdits' },
       { href: '/admin/crawls?vertical=events', label: 'Crawl jobs' },
       { href: '/admin/event-listings?status=all', label: 'All events' },
       { href: '/admin/event-listings/sources', label: 'Sources' },

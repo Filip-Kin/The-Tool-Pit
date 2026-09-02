@@ -7,6 +7,7 @@ import type { PublicField } from '@/lib/fields/field-display'
 import { fieldMarkerStyle, fieldSpecSummary } from '@/lib/fields/field-display'
 import { markerHtml } from './marker-html'
 import { attachBasemap } from '@/lib/map/basemap'
+import { userMarkerHtml } from '@/lib/map/user-marker'
 
 interface FieldMapProps {
   fields: PublicField[]
@@ -21,14 +22,6 @@ const DEFAULT_CENTER: [number, number] = [39.5, -98.35]
 // Zoom level to drop the visitor into once we know where they are: regional,
 // enough to see their city and the fields around it.
 const USER_ZOOM = 9
-
-// A "you are here" pin: brand-purple device dot with a soft halo, distinct from
-// the red/blue field pins so it never reads as a field. It borrows the events
-// map's open-registration purple rather than owning a colour of its own, which
-// is safe here because no field pin is ever purple.
-function userMarkerHtml(): string {
-  return `<div style="width:14px;height:14px;background:var(--color-reg-open);border:2px solid var(--color-pin-ring);border-radius:50%;box-shadow:0 0 0 6px color-mix(in srgb, var(--color-reg-open) 25%, transparent),0 1px 4px var(--color-pin-shadow)"></div>`
-}
 
 function tooltipHtml(f: PublicField): string {
   const team =

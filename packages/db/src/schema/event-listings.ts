@@ -212,6 +212,33 @@ export const eventListings = pgTable(
     teamListUrl: text('team_list_url'),
 
     /**
+     * A small function, WRITTEN BY THE MODEL, that turns this event's team
+     * list page into structured entries. Executed deterministically and with
+     * no model call on every refresh after the first.
+     *
+     * WHY A SCRIPT AND NOT A SHARED PARSER. Every event's list is shaped
+     * differently and there is no format that covers them: RiverRage writes
+     * "88 TJ2" (number, then the team's name); CORI and MARC write "6 - 4145"
+     * (a SLOT index, a dash, the team number, with blank slots for unfilled
+     * spots and "4145 B" for a second robot from the same org). A single
+     * regex tuned for one shape reads the other's slot numbers as team
+     * numbers. So the model is shown one page's text, once, and writes the
+     * few lines of parsing logic that page actually needs. Every refresh
+     * after that runs the stored function, which is what makes it cheap: no
+     * model call on a schedule that fires daily across every event with a
+     * team-list page.
+     *
+     * A pure function body, executed in a locked-down VM context with no
+     * require, no process, no fetch, no DOM: text in, an array of
+     * {number, robot} out. See listings/team-list-parser.ts for the sandbox
+     * and the check that runs before a generated script is trusted at all.
+     */
+    teamListParser: text('team_list_parser'),
+    /** The teamListUrl the parser was written against. A changed URL means a changed page; the parser is regenerated rather than trusted on a page it never saw. */
+    teamListParserSourceUrl: text('team_list_parser_source_url'),
+    teamListParserUpdatedAt: timestamp('team_list_parser_updated_at', { withTimezone: true }),
+
+    /**
      * The fields a person has set by hand, so an automated pass leaves them be.
      *
      * Same column and same helpers as tools.human_edited_fields, deliberately:
@@ -272,6 +299,27 @@ export const eventListings = pgTable(
 export interface RosterTeam {
   number: number
   name?: string
+  /**
+   * Which robot from this team, when the org brought more than one.
+   *
+   * null/undefined for the ordinary case: one team, one robot. "B" for a
+   * second robot, which is common enough that CORI's own list carries three
+   * of them (4145 B, 4611 B, 6964 B). "C" and beyond exist and are rare; the
+   * field is free text rather than an enum so a parser is never blocked by a
+   * letter nobody anticipated.
+   */
+  robot?: string | null
+  /**
+   * True when the entry is on the WAITLIST rather than in the event.
+   *
+   * Some events publish both: the teams that are in, and, below, a waitlist in
+   * the order they will be admitted if a spot opens. A waitlisted team is not
+   * registered, so it is not counted toward registeredTeamCount, but it is
+   * worth showing so a team can see where it stands.
+   */
+  waitlisted?: boolean
+  /** 1-based position in the waitlist, when the page shows an order. */
+  waitlistPosition?: number | null
 }
 
 export const eventRosterSnapshots = pgTable(
@@ -314,10 +362,95 @@ export const eventRosterSnapshots = pgTable(
 
 export const eventListingsRelations = relations(eventListings, ({ many }) => ({
   rosterSnapshots: many(eventRosterSnapshots),
+  editProposals: many(eventEditProposals),
 }))
 
 export const eventRosterSnapshotsRelations = relations(eventRosterSnapshots, ({ one }) => ({
   listing: one(eventListings, { fields: [eventRosterSnapshots.eventListingId], references: [eventListings.id] }),
+}))
+
+// ---------------------------------------------------------------------------
+// Anonymous edit proposals (the "Suggest an edit" path, mirrors fields)
+//
+// A published listing has one control anyone can use without an account: they
+// propose a corrected snapshot, it lands here as `pending`, and nothing on the
+// public listing changes until a moderator applies it. It is the same submit ->
+// moderate loop as a fresh listing, so a stale cost or a closed registration
+// gets fixed by the people reading the map, not only by whoever first typed it.
+//
+// No photos table, unlike fields: an event listing carries no gallery, so there
+// is nothing to add or remove alongside the text.
+// ---------------------------------------------------------------------------
+
+export const EVENT_EDIT_STATUSES = ['pending', 'applied', 'rejected'] as const
+export type EventEditStatus = (typeof EVENT_EDIT_STATUSES)[number]
+
+/** The editable snapshot a proposal carries (full proposed state of the listing). */
+export interface EventEditProposalData {
+  name?: string
+  program?: string
+  hostTeamNumber?: number | null
+  latitude?: number | null
+  longitude?: number | null
+  venueName?: string | null
+  address?: string | null
+  city?: string | null
+  region?: string | null
+  country?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  days?: number | null
+  parallelDivisions?: boolean
+  capacity?: number | null
+  costUsd?: number | null
+  costNote?: string | null
+  registrationStatus?: string
+  registrationOpensAt?: string | null
+  volunteerStatus?: string
+  eventStatus?: string
+  website?: string | null
+  registrationUrl?: string | null
+  volunteerUrl?: string | null
+  chiefDelphiUrl?: string | null
+  contactEmail?: string | null
+  notes?: string | null
+}
+
+export const eventEditProposals = pgTable(
+  'event_edit_proposals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventListingId: uuid('event_listing_id')
+      .notNull()
+      .references(() => eventListings.id, { onDelete: 'cascade' }),
+    proposed: jsonb('proposed').$type<EventEditProposalData>().notNull(),
+    /** Submitter's note explaining what changed / why. */
+    note: text('note'),
+    submitterName: text('submitter_name'),
+    submitterContact: text('submitter_contact'),
+    submitterIpHash: text('submitter_ip_hash'),
+    /**
+     * The signed-in user who submitted this, when there was one. Sign-in is
+     * OPTIONAL here on purpose (same as the submit path): anonymous edits stay
+     * open so a mentor without an account can still fix a listing. Signing in
+     * only buys attribution.
+     */
+    submittedByUserId: uuid('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** EVENT_EDIT_STATUSES */
+    status: text('status').notNull().default('pending'),
+    /** Why an admin did not apply it, and the same text the submitter is sent. */
+    rejectionReason: text('rejection_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('event_edit_proposals_event_listing_id_idx').on(table.eventListingId),
+    index('event_edit_proposals_status_idx').on(table.status),
+  ],
+)
+
+export const eventEditProposalsRelations = relations(eventEditProposals, ({ one }) => ({
+  listing: one(eventListings, { fields: [eventEditProposals.eventListingId], references: [eventListings.id] }),
 }))
 
 // ---------------------------------------------------------------------------
@@ -410,3 +543,5 @@ export type EventListing = typeof eventListings.$inferSelect
 export type NewEventListing = typeof eventListings.$inferInsert
 export type EventRosterSnapshot = typeof eventRosterSnapshots.$inferSelect
 export type NewEventRosterSnapshot = typeof eventRosterSnapshots.$inferInsert
+export type EventEditProposal = typeof eventEditProposals.$inferSelect
+export type NewEventEditProposal = typeof eventEditProposals.$inferInsert

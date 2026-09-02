@@ -19,6 +19,7 @@ import {
   REGISTRATION_STATUS_LABEL,
   VOLUNTEER_STATUS_LABEL,
 } from '@/lib/events/event-display'
+import type { PublicEvent } from '@/lib/events/event-display'
 import { useSession } from '@/components/auth/session-provider'
 
 declare global {
@@ -167,27 +168,82 @@ function fromRenewal(r: RenewalPrefill): FormState {
 }
 
 /**
+ * A published listing, folded onto the form for an edit. Unlike a renewal this
+ * DOES carry the dates and registration state across: an edit is a correction
+ * to the same event, not a fresh one, so every field starts where it is now.
+ */
+function fromEvent(ev: PublicEvent): FormState {
+  const s = (v: string | null) => v ?? ''
+  const n = (v: number | null) => (v == null ? '' : String(v))
+  return {
+    ...INITIAL,
+    name: ev.name,
+    program: (['frc', 'ftc', 'fll'] as const).includes(ev.program as Program) ? (ev.program as Program) : 'frc',
+    hostTeamNumber: n(ev.hostTeamNumber),
+    venueName: s(ev.venueName),
+    address: s(ev.address),
+    city: s(ev.city),
+    region: s(ev.region),
+    country: s(ev.country),
+    startDate: s(ev.startDate),
+    endDate: s(ev.endDate),
+    days: n(ev.days),
+    parallelDivisions: ev.parallelDivisions,
+    capacity: n(ev.capacity),
+    costUsd: n(ev.costUsd),
+    costNote: s(ev.costNote),
+    registrationStatus: ev.registrationStatus,
+    registrationOpensAt: s(ev.registrationOpensAt),
+    volunteerStatus: ev.volunteerStatus,
+    eventStatus: ev.eventStatus,
+    website: s(ev.website),
+    registrationUrl: s(ev.registrationUrl),
+    volunteerUrl: s(ev.volunteerUrl),
+    chiefDelphiUrl: s(ev.chiefDelphiUrl),
+    contactEmail: s(ev.contactEmail),
+    notes: s(ev.notes),
+  }
+}
+
+/**
  * The off-season event submit form. Sign-in is optional throughout: the server
  * reads the session cookie if it is there, and a signed-out submission is a
  * first-class submission. Getting an event on the map must not need an account.
  *
- * There is no edit mode here - the claim-and-edit model for listings is a
- * separate session's (feat/listing-ownership).
+ * `edit` turns it into an anonymous "Suggest an edit" for an existing listing:
+ * every box arrives filled in and the post goes to the edit-proposal route for
+ * moderation instead of creating a new listing. Same open-to-everyone rule.
  *
  * `renewal` turns it into next year's listing for an event that already ran.
  * It is still a normal submission: same moderation queue, same rules. The only
  * differences are that most of the boxes arrive filled in and the new row
  * carries previousListingId, which is what links the two seasons together.
  */
-export function EventSubmitForm({ renewal }: { renewal?: RenewalPrefill | null } = {}) {
+export function EventSubmitForm({
+  renewal,
+  edit,
+  onSubmitted,
+}: {
+  renewal?: RenewalPrefill | null
+  /** An existing listing to correct, rather than a new one to add. */
+  edit?: { event: PublicEvent } | null
+  /** Called after a successful edit, so a host dialog can keep the confirmation up. */
+  onSubmitted?: () => void
+} = {}) {
   const { user } = useSession()
-  const [form, setForm] = useState<FormState>(() => (renewal ? fromRenewal(renewal) : INITIAL))
+  const editing = !!edit
+  const [form, setForm] = useState<FormState>(() =>
+    edit ? fromEvent(edit.event) : renewal ? fromRenewal(renewal) : INITIAL,
+  )
+  const [editReason, setEditReason] = useState('')
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
     // The pin is the single most tedious part of this form and the venue almost
-    // never moves between years, so a renewal starts with it already dropped.
-    renewal && renewal.latitude != null && renewal.longitude != null
-      ? { lat: renewal.latitude, lng: renewal.longitude }
-      : null,
+    // never moves, so an edit or a renewal starts with it already dropped.
+    edit && edit.event.latitude != null && edit.event.longitude != null
+      ? { lat: edit.event.latitude, lng: edit.event.longitude }
+      : renewal && renewal.latitude != null && renewal.longitude != null
+        ? { lat: renewal.latitude, lng: renewal.longitude }
+        : null,
   )
   const [submitting, setSubmitting] = useState(false)
   // Unticked, like every other submit form. See lib/listings/passing-along.ts.
@@ -281,18 +337,29 @@ export function EventSubmitForm({ renewal }: { renewal?: RenewalPrefill | null }
       }
       fd.set('latitude', String(coords.lat))
       fd.set('longitude', String(coords.lng))
-      if (renewal) fd.set('previousListingId', renewal.previousListingId)
       if (turnstileToken) fd.set('turnstileToken', turnstileToken)
-      // Always explicit, never left to a default the server would have to guess.
-      fd.set('passingAlong', passingAlong ? 'true' : 'false')
+      if (editing) {
+        if (editReason.trim()) fd.set('editReason', editReason.trim())
+      } else {
+        if (renewal) fd.set('previousListingId', renewal.previousListingId)
+        // Always explicit, never left to a default the server would have to guess.
+        fd.set('passingAlong', passingAlong ? 'true' : 'false')
+      }
 
-      const res = await fetch('/api/events/submit', { method: 'POST', body: fd })
+      const url = editing ? `/api/events/${edit.event.id}/edit` : '/api/events/submit'
+      const res = await fetch(url, { method: 'POST', body: fd })
       const data = (await res.json()) as { message?: string; error?: string }
       if (res.ok) {
         setResult({ ok: true, message: data.message ?? 'Submitted.' })
-        setForm({ ...INITIAL, submitterName: form.submitterName, submitterContact: form.submitterContact })
-        setCoords(null)
         resetTurnstile()
+        if (editing) {
+          // Leave the filled form as-is under the confirmation, and let the host
+          // dialog react (it keeps the thank-you visible rather than resetting).
+          onSubmitted?.()
+        } else {
+          setForm({ ...INITIAL, submitterName: form.submitterName, submitterContact: form.submitterContact })
+          setCoords(null)
+        }
       } else {
         setResult({ ok: false, message: data.error ?? 'Submission failed.' })
         resetTurnstile()
@@ -306,6 +373,17 @@ export function EventSubmitForm({ renewal }: { renewal?: RenewalPrefill | null }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      {editing && (
+        <Section title="What changed" hint="A short note on what you updated and why (optional). Your edit is reviewed before it goes live.">
+          <textarea
+            value={editReason}
+            onChange={(e) => setEditReason(e.target.value)}
+            rows={2}
+            className="input resize-y"
+            placeholder="e.g. registration is open now and the cost went up to $350"
+          />
+        </Section>
+      )}
       <Section title="The event">
         <Field label="Event name" required>
           <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Kettering Kickoff" className="input" required />
@@ -500,13 +578,15 @@ export function EventSubmitForm({ renewal }: { renewal?: RenewalPrefill | null }
           </div>
         </div>
         {user ? (
-          <p className="text-xs text-muted-2">Signed in as {user.displayName || user.email}. This submission will be credited to your account.</p>
+          <p className="text-xs text-muted-2">Signed in as {user.displayName || user.email}. This {editing ? 'edit' : 'submission'} will be credited to your account.</p>
         ) : (
-          <p className="text-xs text-muted-2">No account needed. Signing in just lets you find your submission later.</p>
+          <p className="text-xs text-muted-2">No account needed. Signing in just lets you find your {editing ? 'edit' : 'submission'} later.</p>
         )}
       </Section>
 
-      <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="event" />
+      {/* Ownership only, so it belongs to a fresh listing. An edit is a
+          correction to someone's event, not a claim on it. */}
+      {!editing && <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="event" />}
 
       {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
 
@@ -515,7 +595,7 @@ export function EventSubmitForm({ renewal }: { renewal?: RenewalPrefill | null }
         disabled={submitting || !form.name.trim() || !coords || (Boolean(SITE_KEY) && !turnstileToken)}
         className="self-start"
       >
-        {submitting ? 'Submitting…' : 'Submit event'}
+        {submitting ? 'Submitting…' : editing ? 'Submit edit for review' : 'Submit event'}
       </Button>
 
       {result && <p className={result.ok ? 'text-sm text-rookie' : 'text-sm text-frc'}>{result.message}</p>}

@@ -102,6 +102,94 @@ async function getBrowser(): Promise<import('playwright').Browser | null> {
   return browserPromise
 }
 
+/**
+ * Wait for lazily-loaded content to stop arriving.
+ *
+ * Counts the short numbers across every frame and waits until that count holds
+ * steady between checks, which is what a roster table does once it has finished
+ * filling in. Bounded, so a page that never settles is not waited on forever.
+ */
+async function settleDynamicContent(page: import('playwright').Page): Promise<void> {
+  // Up to 30 seconds. A Wix data widget in a cross-origin iframe can take the
+  // better part of ten seconds to fill, and a shorter wait catches a partial
+  // list or, worse, a transient placeholder: MARC briefly showed a run of years
+  // that read as team numbers before its real table arrived. Filip's rule, and
+  // it is the right one: if the content is not there after 30 seconds it is not
+  // going to be, so take what there is and move on.
+  //
+  // Settled means the count held across TWO consecutive checks two seconds
+  // apart, not one, so a mid-load pause cannot be mistaken for the end.
+  let previous = -1
+  let stableFor = 0
+  for (let i = 0; i < 15; i++) {
+    let total = 0
+    for (const frame of page.frames()) {
+      try {
+        total += (await frame.evaluate(`((document.body?document.body.innerText:'').match(/\\b\\d{2,5}\\b/g)||[]).length`)) as number
+      } catch {
+        // A frame that will not evaluate contributes nothing.
+      }
+    }
+    if (total > 0 && total === previous) {
+      if (++stableFor >= 2) return
+    } else {
+      stableFor = 0
+    }
+    previous = total
+    await page.waitForTimeout(2000).catch(() => {})
+  }
+}
+
+/**
+ * Open a URL, render it, and hand the live page to a callback.
+ *
+ * For the callers that need the DOM itself rather than its text: the team-list
+ * parser reads structure a browser keeps and htmlToText throws away, and it
+ * runs a model-authored function against the real DOM in the page's own realm.
+ *
+ * Same render settings as renderPage (block heavy resources, wait for the DOM
+ * then a short settle for a Wix or Squarespace page to fill in), plus a scroll
+ * to the bottom, because a lazy list only loads when it comes into view. The
+ * context is fresh and cookieless, and it is closed no matter what, which also
+ * terminates any script the callback left running in the page.
+ *
+ * Returns null when no browser is available, exactly like renderPage, so a box
+ * with no chromium degrades rather than throws.
+ */
+export async function withRenderedPage<T>(
+  url: string,
+  fn: (page: import('playwright').Page) => Promise<T>,
+): Promise<T | null> {
+  const browser = await getBrowser()
+  if (!browser) return null
+
+  let context: import('playwright').BrowserContext | null = null
+  try {
+    context = await browser.newContext()
+    const page = await context.newPage()
+    await page.route('**/*', (route) => {
+      const type = route.request().resourceType()
+      if (['image', 'media', 'font'].includes(type)) void route.abort()
+      else void route.continue()
+    })
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: TIMEOUT_MS })
+    await page.waitForLoadState('networkidle', { timeout: SETTLE_MS }).catch(() => {})
+    // A team list that lazy-loads needs to be scrolled into view first.
+    await page.evaluate('window.scrollTo(0, document.body.scrollHeight)').catch(() => {})
+    // A Wix data widget in a cross-origin iframe loads its host team first and
+    // fills the rest in a second or two later, so a single short wait catches a
+    // partial list. Wait until the numbers across all frames stop growing, or
+    // give up after a few seconds and take what is there.
+    await settleDynamicContent(page)
+    return await fn(page)
+  } catch (err) {
+    console.warn(`[render] withRenderedPage failed for ${url}: ${String(err).split('\n')[0]}`)
+    return null
+  } finally {
+    await context?.close().catch(() => {})
+  }
+}
+
 /** Close the shared browser. Called from the worker's shutdown path. */
 export async function closeBrowser(): Promise<void> {
   const browser = browserPromise ? await browserPromise : null

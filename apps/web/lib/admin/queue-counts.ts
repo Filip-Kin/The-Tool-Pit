@@ -37,6 +37,8 @@ export interface AdminQueueCounts {
   fieldCandidates: number
   /** Practice fields > Suggested edits. */
   fieldEdits: number
+  /** Off-season events > Suggested edits. */
+  eventEdits: number
   /** Grants > Candidates. */
   grantCandidates: number
   /** Grants > Changes. */
@@ -54,6 +56,7 @@ const EMPTY: AdminQueueCounts = {
   fieldSubmissions: 0,
   fieldCandidates: 0,
   fieldEdits: 0,
+  eventEdits: 0,
   grantCandidates: 0,
   grantChanges: 0,
   listingClaims: 0,
@@ -68,6 +71,7 @@ export async function getAdminQueueCounts(): Promise<AdminQueueCounts> {
     union all select 'albumCandidates', count(*)::int from album_candidates where status = 'pending'
     union all select 'eventSubmissions', count(*)::int from event_listings where status = 'pending'
     union all select 'eventCandidates', count(*)::int from event_listing_candidates where status = 'pending'
+    union all select 'eventEdits', count(*)::int from event_edit_proposals where status = 'pending'
     union all select 'fieldSubmissions', count(*)::int from practice_fields where status = 'pending'
     union all select 'fieldCandidates', count(*)::int from practice_field_candidates where status = 'pending'
     union all select 'fieldEdits', count(*)::int from field_edit_proposals where status = 'pending'

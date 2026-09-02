@@ -13,6 +13,7 @@ import {
 } from '@/lib/events/event-display'
 import { markerHtml } from './marker-html'
 import { attachBasemap } from '@/lib/map/basemap'
+import { userMarkerHtml } from '@/lib/map/user-marker'
 
 interface EventMapProps {
   events: PublicEvent[]
@@ -25,10 +26,6 @@ interface EventMapProps {
 
 const DEFAULT_CENTER: [number, number] = [39.5, -98.35]
 const USER_ZOOM = 8
-
-function userMarkerHtml(): string {
-  return `<div style="width:14px;height:14px;background:var(--color-reg-open);border:2px solid var(--color-pin-ring);border-radius:50%;box-shadow:0 0 0 6px color-mix(in srgb, var(--color-reg-open) 25%, transparent),0 1px 4px var(--color-pin-shadow)"></div>`
-}
 
 function tooltipHtml(ev: PublicEvent, now: Date): string {
   const esc = (s: string) => s.replace(/</g, '&lt;').replace(/>/g, '&gt;')

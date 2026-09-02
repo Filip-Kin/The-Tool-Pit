@@ -44,6 +44,7 @@ export type ApprovalVertical =
   | 'album'
   | 'field'
   | 'field_edit'
+  | 'event_edit'
   | 'event'
   | 'grant'
   | 'claim'
@@ -107,6 +108,7 @@ const VERTICAL_LABEL: Record<ApprovalVertical, string> = {
   album: 'Photo album submission',
   field: 'Practice field submission',
   field_edit: 'Practice field edit',
+  event_edit: 'Off-season event edit',
   event: 'Off-season event submission',
   grant: 'Grant submission',
   claim: 'Listing claim',
@@ -123,6 +125,7 @@ const VERTICAL_COLOR: Record<ApprovalVertical, number> = {
   album: 0x7c3aed,
   field: 0x22c55e,
   field_edit: 0xf59e0b,
+  event_edit: 0xf59e0b,
   event: 0xec4899,
   grant: 0xeab308,
   claim: 0xef4444,
@@ -153,6 +156,10 @@ export function reviewFieldEditUrl(proposalId: string): string {
 
 export function reviewEventUrl(listingId: string): string {
   return admin(`/admin/event-listings?status=pending#event-${listingId}`)
+}
+
+export function reviewEventEditUrl(proposalId: string): string {
+  return admin(`/admin/event-edits#proposal-${proposalId}`)
 }
 
 export function reviewAlbumUrl(candidateId: string): string {

@@ -137,14 +137,8 @@ export function FieldCard({
 }
 
 /** Full detail view, used in the dialog and on the shareable /fields/[id] page. */
-export function FieldDetail({ field, onSuggestEdit }: { field: PublicField; onSuggestEdit?: () => void }) {
+export function FieldDetail({ field }: { field: PublicField }) {
   const loc = locationOf(field)
-  const mapsHref =
-    field.latitude != null && field.longitude != null
-      ? `https://www.openstreetmap.org/?mlat=${field.latitude}&mlon=${field.longitude}#map=17/${field.latitude}/${field.longitude}`
-      : field.address
-        ? `https://www.openstreetmap.org/search?query=${encodeURIComponent(field.address)}`
-        : null
 
   return (
     <div className="flex flex-col gap-5">
@@ -199,11 +193,6 @@ export function FieldDetail({ field, onSuggestEdit }: { field: PublicField; onSu
             Website <ExternalLink className="h-3.5 w-3.5" />
           </ButtonLink>
         )}
-        {mapsHref && (
-          <ButtonLink href={mapsHref} external variant="secondary">
-            Open in map <ExternalLink className="h-3.5 w-3.5" />
-          </ButtonLink>
-        )}
       </div>
 
       {field.contactInfo && (
@@ -211,16 +200,6 @@ export function FieldDetail({ field, onSuggestEdit }: { field: PublicField; onSu
           <span className="font-medium text-foreground">How to arrange access: </span>
           {field.contactInfo}
         </Card>
-      )}
-
-      {onSuggestEdit && (
-        <div className="border-t border-border-subtle pt-4 text-sm text-muted-2">
-          Something out of date?{' '}
-          <button type="button" onClick={onSuggestEdit} className="text-primary hover:underline">
-            Suggest an edit
-          </button>
-          . Changes are reviewed before they go live.
-        </div>
       )}
     </div>
   )

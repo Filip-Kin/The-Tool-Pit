@@ -6,9 +6,15 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { X, ArrowLeft, Link2 } from 'lucide-react'
 import type { PublicField } from '@/lib/fields/field-display'
 import type { ListingClaimState } from '@/lib/queries/listing-ownership'
+import { cn } from '@/lib/utils/cn'
 import { ClaimListingButton } from '@/components/auth/claim-listing-button'
 import { FieldDetail } from './field-card'
 import { FieldSubmitForm } from './field-submit-form'
+
+// A quiet footer link, matching ClaimListingButton's weight so the whole row
+// reads as one set of asides rather than a call to action.
+const FOOTER_LINK =
+  'inline-flex items-center gap-1.5 text-sm text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline'
 
 /**
  * Modal showing a field's full details (photo, spec, access, notes, links).
@@ -71,15 +77,19 @@ export function FieldDialog({
               </div>
             ) : (
               <div className="flex flex-col gap-5">
-                <FieldDetail field={field} onSuggestEdit={() => setEditing(true)} />
-                <div className="flex flex-wrap items-center gap-3 border-t border-border-subtle pt-4">
+                <FieldDetail field={field} />
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border-subtle pt-4">
                   <ClaimListingButton entityType="field" entityId={field.id} state={claimState} />
-                  <Link
-                    href={`/fields/${field.id}`}
-                    className="inline-flex items-center gap-1.5 text-sm text-muted-2 hover:text-foreground"
-                  >
+                  {/* Just the words: "suggest" already says it is a proposal that
+                      gets reviewed, so no "Something out of date?" preamble. */}
+                  <button type="button" onClick={() => setEditing(true)} className={FOOTER_LINK}>
+                    Suggest an edit
+                  </button>
+                  {/* Pinned right: the permalink is a share handle, not an action,
+                      so it sits apart from the two things you DO here. */}
+                  <Link href={`/fields/${field.id}`} className={cn(FOOTER_LINK, 'ml-auto')}>
                     <Link2 className="h-4 w-4" aria-hidden />
-                    Permalink for this field
+                    Permalink
                   </Link>
                 </div>
               </div>

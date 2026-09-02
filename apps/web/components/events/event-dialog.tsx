@@ -1,21 +1,64 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X } from 'lucide-react'
+import { X, ArrowLeft, Link2 } from 'lucide-react'
 import type { PublicEvent } from '@/lib/events/event-display'
+import type { ListingClaimState } from '@/lib/queries/listing-ownership'
+import { cn } from '@/lib/utils/cn'
+import { ClaimListingButton } from '@/components/auth/claim-listing-button'
 import { EventDetail } from './event-card'
+import { EventSubmitForm } from './event-submit-form'
+
+// A quiet footer link, matching ClaimListingButton's weight so the whole row
+// reads as one set of asides rather than a call to action.
+const FOOTER_LINK =
+  'inline-flex items-center gap-1.5 text-sm text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline'
 
 /**
  * Modal showing an event's full details. Opened by clicking a list card or a
  * map pin. Renders above the map's stacking context via a Radix portal.
  *
- * There is no "suggest an edit" here yet: a separate session
- * (feat/listing-ownership) owns the claim-and-edit model for listings, so this
- * stays a read-only detail view until that lands.
+ * It carries the same two affordances the practice-field dialog does, because
+ * every route into an event ends here and the shareable /events/[id] page was
+ * the only place with the ownership control on it. "Suggest an edit" swaps the
+ * body to a pre-filled edit form that submits a proposal for moderation; the
+ * permalink is the way to reach and share the detail page.
  */
-export function EventDialog({ event, now, onClose }: { event: PublicEvent | null; now: Date; onClose: () => void }) {
+export function EventDialog({
+  event,
+  now,
+  claimState = 'signed_out',
+  onClose,
+}: {
+  event: PublicEvent | null
+  now: Date
+  /**
+   * Resolved on the server per event, like the field map does. Optional so the
+   * explorer can adopt it without this prop landing first; the default offers
+   * the claim as a sign-in, which is the honest thing for a signed-out reader.
+   */
+  claimState?: ListingClaimState
+  onClose: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+
+  // Always start on the detail view when a different event opens.
+  useEffect(() => {
+    setEditing(false)
+  }, [event?.id])
+
   return (
-    <Dialog.Root open={!!event} onOpenChange={(open) => { if (!open) onClose() }}>
+    <Dialog.Root
+      open={!!event}
+      onOpenChange={(open) => {
+        if (!open) {
+          setEditing(false)
+          onClose()
+        }
+      }}
+    >
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[2000] bg-black/60 backdrop-blur-sm" />
         <Dialog.Content
@@ -23,7 +66,38 @@ export function EventDialog({ event, now, onClose }: { event: PublicEvent | null
           aria-describedby={undefined}
         >
           <Dialog.Title className="sr-only">{event?.name ?? 'Event'}</Dialog.Title>
-          {event && <EventDetail event={event} now={now} />}
+          {event &&
+            (editing ? (
+              <div className="flex flex-col gap-4">
+                <button
+                  type="button"
+                  onClick={() => setEditing(false)}
+                  className="flex items-center gap-1 self-start text-sm text-muted hover:text-foreground"
+                >
+                  <ArrowLeft className="h-4 w-4" /> Back to details
+                </button>
+                <h2 className="text-lg font-semibold text-foreground">Suggest an edit</h2>
+                <EventSubmitForm edit={{ event }} onSubmitted={() => { /* keep the confirmation visible */ }} />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-5">
+                <EventDetail event={event} now={now} />
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border-subtle pt-4">
+                  <ClaimListingButton entityType="event" entityId={event.id} state={claimState} />
+                  {/* Just the words: "suggest" already says it is a proposal that
+                      gets reviewed, so no "Something out of date?" preamble. */}
+                  <button type="button" onClick={() => setEditing(true)} className={FOOTER_LINK}>
+                    Suggest an edit
+                  </button>
+                  {/* Pinned right: the permalink is a share handle, not an action,
+                      so it sits apart from the two things you DO here. */}
+                  <Link href={`/events/${event.id}`} className={cn(FOOTER_LINK, 'ml-auto')}>
+                    <Link2 className="h-4 w-4" aria-hidden />
+                    Permalink
+                  </Link>
+                </div>
+              </div>
+            ))}
           <Dialog.Close
             aria-label="Close"
             className="absolute right-4 top-4 rounded-md p-1 text-muted-2 transition-colors hover:bg-surface-2 hover:text-foreground"
