@@ -85,7 +85,7 @@ export default async function AdminSubmissionsPage({
   const ALERT_STATUSES: TabStatus[] = ['pending', 'needs_review']
 
   return (
-    <div className="p-8 flex flex-col gap-6">
+    <div className="p-4 md:p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Submissions</h1>
         <p className="text-sm text-muted">
@@ -130,112 +130,114 @@ export default async function AdminSubmissionsPage({
         <p className="text-sm text-muted">No {TAB_LABELS[status].toLowerCase()} submissions.</p>
       ) : (
         <div className="rounded-lg border border-border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-2 text-muted text-xs">
-              <tr>
-                <th className="px-4 py-2 text-left">URL</th>
-                <th className="px-4 py-2 text-left">Note</th>
-                <th className="px-4 py-2 text-left">Pipeline</th>
-                <th className="px-4 py-2 text-left w-32">Submitted</th>
-                <th className="px-4 py-2 text-right w-40">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const log = (row.pipelineLog ?? []) as PipelineLogEntry[]
-                const lastLog = log[log.length - 1]
-                const resolvedTool = row.resolvedToolId ? resolvedMap.get(row.resolvedToolId) : null
-                const linkedCandidate = candidateMap.get(row.id)
+          <div className="overflow-x-auto">
+            <table className="min-w-[36rem] w-full text-sm">
+                        <thead className="bg-surface-2 text-muted text-xs">
+                          <tr>
+                            <th className="px-4 py-2 text-left">URL</th>
+                            <th className="px-4 py-2 text-left">Note</th>
+                            <th className="px-4 py-2 text-left">Pipeline</th>
+                            <th className="px-4 py-2 text-left w-32">Submitted</th>
+                            <th className="px-4 py-2 text-right w-40">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row) => {
+                            const log = (row.pipelineLog ?? []) as PipelineLogEntry[]
+                            const lastLog = log[log.length - 1]
+                            const resolvedTool = row.resolvedToolId ? resolvedMap.get(row.resolvedToolId) : null
+                            const linkedCandidate = candidateMap.get(row.id)
 
-                return (
-                  <tr
-                    key={row.id}
-                    id={`submission-${row.id}`}
-                    className="border-t border-border-subtle hover:bg-surface align-top scroll-mt-6"
-                  >
-                    {/* URL */}
-                    <td className="px-4 py-3 max-w-xs">
-                      <a
-                        href={row.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-primary hover:underline break-all line-clamp-2"
-                      >
-                        {row.url}
-                      </a>
-                      {/* What the submitter stated, not what anything inferred.
-                          Shown here so a reviewer checks three facts against
-                          the link rather than working them out again. */}
-                      {row.artifactKind && (
-                        <p className="mt-1 text-[10px] text-muted tabular-nums">
-                          {(row.program ?? 'frc').toUpperCase()} {row.teamNumber} · {row.seasonYear} ·{' '}
-                          {row.artifactKind === 'cad' ? 'CAD' : 'code'}
-                        </p>
-                      )}
-                      {resolvedTool && (
-                        <Link
-                          href={`/admin/tools/${resolvedTool.id}`}
-                          className="mt-1 block text-[10px] text-rookie hover:underline"
-                        >
-                          → {resolvedTool.name}
-                        </Link>
-                      )}
-                      {linkedCandidate && !resolvedTool && (
-                        <Link
-                          href={`/admin/candidates/${linkedCandidate.id}`}
-                          className="mt-1 block text-[10px] text-primary hover:underline"
-                        >
-                          → View candidate ({linkedCandidate.status})
-                        </Link>
-                      )}
-                    </td>
+                            return (
+                              <tr
+                                key={row.id}
+                                id={`submission-${row.id}`}
+                                className="border-t border-border-subtle hover:bg-surface align-top scroll-mt-6"
+                              >
+                                {/* URL */}
+                                <td className="px-4 py-3 max-w-xs">
+                                  <a
+                                    href={row.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-primary hover:underline break-all line-clamp-2"
+                                  >
+                                    {row.url}
+                                  </a>
+                                  {/* What the submitter stated, not what anything inferred.
+                                      Shown here so a reviewer checks three facts against
+                                      the link rather than working them out again. */}
+                                  {row.artifactKind && (
+                                    <p className="mt-1 text-[10px] text-muted tabular-nums">
+                                      {(row.program ?? 'frc').toUpperCase()} {row.teamNumber} · {row.seasonYear} ·{' '}
+                                      {row.artifactKind === 'cad' ? 'CAD' : 'code'}
+                                    </p>
+                                  )}
+                                  {resolvedTool && (
+                                    <Link
+                                      href={`/admin/tools/${resolvedTool.id}`}
+                                      className="mt-1 block text-[10px] text-rookie hover:underline"
+                                    >
+                                      → {resolvedTool.name}
+                                    </Link>
+                                  )}
+                                  {linkedCandidate && !resolvedTool && (
+                                    <Link
+                                      href={`/admin/candidates/${linkedCandidate.id}`}
+                                      className="mt-1 block text-[10px] text-primary hover:underline"
+                                    >
+                                      → View candidate ({linkedCandidate.status})
+                                    </Link>
+                                  )}
+                                </td>
 
-                    {/* Submitter note */}
-                    <td className="px-4 py-3 max-w-[180px]">
-                      {row.submitterNote ? (
-                        <p className="text-xs text-muted line-clamp-3">{row.submitterNote}</p>
-                      ) : (
-                        <span className="text-xs text-muted-2">—</span>
-                      )}
-                    </td>
+                                {/* Submitter note */}
+                                <td className="px-4 py-3 max-w-[180px]">
+                                  {row.submitterNote ? (
+                                    <p className="text-xs text-muted line-clamp-3">{row.submitterNote}</p>
+                                  ) : (
+                                    <span className="text-xs text-muted-2">—</span>
+                                  )}
+                                </td>
 
-                    {/* Pipeline log, last entry only */}
-                    <td className="px-4 py-3">
-                      {lastLog ? (
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <LogDot logStatus={lastLog.status} />
-                            <span className="text-xs text-muted font-mono">{lastLog.stage}</span>
-                          </div>
-                          {lastLog.message && (
-                            <p className="mt-0.5 text-[10px] text-muted-2 line-clamp-2">
-                              {lastLog.message}
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-2">—</span>
-                      )}
-                    </td>
+                                {/* Pipeline log, last entry only */}
+                                <td className="px-4 py-3">
+                                  {lastLog ? (
+                                    <div>
+                                      <div className="flex items-center gap-1.5">
+                                        <LogDot logStatus={lastLog.status} />
+                                        <span className="text-xs text-muted font-mono">{lastLog.stage}</span>
+                                      </div>
+                                      {lastLog.message && (
+                                        <p className="mt-0.5 text-[10px] text-muted-2 line-clamp-2">
+                                          {lastLog.message}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-muted-2">—</span>
+                                  )}
+                                </td>
 
-                    {/* Submitted at */}
-                    <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                      {new Date(row.createdAt).toLocaleDateString()}
-                      <br />
-                      <span className="text-muted-2">
-                        {new Date(row.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </td>
+                                {/* Submitted at */}
+                                <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
+                                  {new Date(row.createdAt).toLocaleDateString()}
+                                  <br />
+                                  <span className="text-muted-2">
+                                    {new Date(row.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </td>
 
-                    {/* Actions */}
-                    <td className="px-4 py-3">
-                      <SubmissionActions submissionId={row.id} status={row.status} />
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                                {/* Actions */}
+                                <td className="px-4 py-3">
+                                  <SubmissionActions submissionId={row.id} status={row.status} />
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+          </div>
         </div>
       )}
 

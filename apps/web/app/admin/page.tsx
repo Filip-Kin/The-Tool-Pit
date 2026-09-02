@@ -70,7 +70,7 @@ export default async function AdminOverviewPage() {
   const stats = await getStats()
 
   return (
-    <div className="p-8 flex flex-col gap-8">
+    <div className="p-4 md:p-8 flex flex-col gap-8">
       <h1 className="text-2xl font-bold text-foreground">Overview</h1>
 
       {/* Stats grid */}
@@ -102,32 +102,34 @@ export default async function AdminOverviewPage() {
           <p className="text-sm text-muted">No crawl jobs yet.</p>
         ) : (
           <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-2 text-muted text-xs">
-                <tr>
-                  <th className="px-4 py-2 text-left">Connector</th>
-                  <th className="px-4 py-2 text-left">Status</th>
-                  <th className="px-4 py-2 text-left">Started</th>
-                  <th className="px-4 py-2 text-right">Stats</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.recentJobs.map((job) => (
-                  <ClickableRow key={job.id} href={`/admin/crawls/${job.id}`} className="border-t border-border-subtle hover:bg-surface">
-                    <td className="px-4 py-2 font-mono text-xs text-foreground">{job.connector}</td>
-                    <td className="px-4 py-2">
-                      <StatusText status={job.status} />
-                    </td>
-                    <td className="px-4 py-2 text-xs text-muted">
-                      {job.startedAt ? new Date(job.startedAt).toLocaleString() : '—'}
-                    </td>
-                    <td className="px-4 py-2 text-right text-xs text-muted">
-                      {job.stats ? `${(job.stats as any).discovered ?? 0} found` : '—'}
-                    </td>
-                  </ClickableRow>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="min-w-[36rem] w-full text-sm">
+                            <thead className="bg-surface-2 text-muted text-xs">
+                              <tr>
+                                <th className="px-4 py-2 text-left">Connector</th>
+                                <th className="px-4 py-2 text-left">Status</th>
+                                <th className="px-4 py-2 text-left">Started</th>
+                                <th className="px-4 py-2 text-right">Stats</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {stats.recentJobs.map((job) => (
+                                <ClickableRow key={job.id} href={`/admin/crawls/${job.id}`} className="border-t border-border-subtle hover:bg-surface">
+                                  <td className="px-4 py-2 font-mono text-xs text-foreground">{job.connector}</td>
+                                  <td className="px-4 py-2">
+                                    <StatusText status={job.status} />
+                                  </td>
+                                  <td className="px-4 py-2 text-xs text-muted">
+                                    {job.startedAt ? new Date(job.startedAt).toLocaleString() : '—'}
+                                  </td>
+                                  <td className="px-4 py-2 text-right text-xs text-muted">
+                                    {job.stats ? `${(job.stats as any).discovered ?? 0} found` : '—'}
+                                  </td>
+                                </ClickableRow>
+                              ))}
+                            </tbody>
+                          </table>
+            </div>
           </div>
         )}
       </div>

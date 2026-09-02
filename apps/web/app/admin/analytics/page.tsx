@@ -78,7 +78,7 @@ export default async function AdminAnalyticsPage() {
   const data = await getAnalytics()
 
   return (
-    <div className="p-8 flex flex-col gap-8">
+    <div className="p-4 md:p-8 flex flex-col gap-8">
       <h1 className="text-2xl font-bold text-foreground">Analytics (last 7 days)</h1>
 
       {/* Daily trend charts */}
@@ -179,34 +179,36 @@ function AnalyticsTable({
         {description && <p className="text-xs text-muted mt-0.5">{description}</p>}
       </div>
       <div className={`rounded-lg border overflow-hidden ${highlightEmpty ? 'border-official/30' : 'border-border'}`}>
-        <table className="w-full text-sm">
-          <thead className="bg-surface-2 text-muted text-xs">
-            <tr>
-              {headers.map((h) => (
-                <th key={h} className="px-3 py-2 text-left">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={headers.length} className="px-3 py-4 text-center text-xs text-muted">
-                  No data
-                </td>
-              </tr>
-            ) : (
-              rows.map((row, i) => (
-                <tr key={i} className="border-t border-border-subtle hover:bg-surface">
-                  {row.map((cell, j) => (
-                    <td key={j} className={`px-3 py-2 ${j === 0 ? 'font-mono text-xs text-foreground' : 'text-xs text-muted'}`}>
-                      {cell ?? '—'}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+                    <thead className="bg-surface-2 text-muted text-xs">
+                      <tr>
+                        {headers.map((h) => (
+                          <th key={h} className="px-3 py-2 text-left">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.length === 0 ? (
+                        <tr>
+                          <td colSpan={headers.length} className="px-3 py-4 text-center text-xs text-muted">
+                            No data
+                          </td>
+                        </tr>
+                      ) : (
+                        rows.map((row, i) => (
+                          <tr key={i} className="border-t border-border-subtle hover:bg-surface">
+                            {row.map((cell, j) => (
+                              <td key={j} className={`px-3 py-2 ${j === 0 ? 'font-mono text-xs text-foreground' : 'text-xs text-muted'}`}>
+                                {cell ?? '—'}
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+        </div>
       </div>
     </div>
   )

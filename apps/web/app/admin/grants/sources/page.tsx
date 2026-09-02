@@ -109,71 +109,73 @@ export default async function AdminGrantSourcesPage() {
           </p>
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-2 text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-2 text-left">Source</th>
-                  <th className="w-28 px-4 py-2 text-left">Cadence</th>
-                  <th className="w-44 px-4 py-2 text-left">Last run</th>
-                  <th className="w-40 px-4 py-2 text-left">Yield / reject</th>
-                  <th className="w-56 px-4 py-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sources.map((s) => {
-                  const decided = s.yieldCount + s.rejectCount
-                  const acceptRate = decided > 0 ? Math.round((s.yieldCount / decided) * 100) : null
-                  const overdue =
-                    s.enabled && (!s.lastRunAt || Date.now() - new Date(s.lastRunAt).getTime() > s.cadenceHours * 3_600_000)
-                  const pending = pendingBySource.get(s.id) ?? 0
-                  return (
-                    <tr key={s.id} className={`border-t border-border-subtle align-top ${s.enabled ? '' : 'opacity-50'}`}>
-                      <td className="max-w-sm px-4 py-3">
-                        <p className="text-xs font-medium text-foreground">{s.label}</p>
-                        <p className="font-mono text-[10px] text-muted-2">{s.kind}</p>
-                        <p className="mt-0.5 line-clamp-2 break-all text-[10px] text-muted" title={s.target}>
-                          {s.target}
-                        </p>
-                        {!s.enabled && <p className="mt-1 text-[10px] text-muted-2">switched off</p>}
-                        {pending > 0 && (
-                          <p className="mt-1 text-[10px] text-official">{pending} candidates still undecided</p>
-                        )}
-                        {s.notes && <p className="mt-1 text-[10px] text-muted-2">{s.notes}</p>}
-                      </td>
+            <div className="overflow-x-auto">
+              <table className="min-w-[36rem] w-full text-sm">
+                            <thead className="bg-surface-2 text-xs text-muted">
+                              <tr>
+                                <th className="px-4 py-2 text-left">Source</th>
+                                <th className="w-28 px-4 py-2 text-left">Cadence</th>
+                                <th className="w-44 px-4 py-2 text-left">Last run</th>
+                                <th className="w-40 px-4 py-2 text-left">Yield / reject</th>
+                                <th className="w-56 px-4 py-2 text-right">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sources.map((s) => {
+                                const decided = s.yieldCount + s.rejectCount
+                                const acceptRate = decided > 0 ? Math.round((s.yieldCount / decided) * 100) : null
+                                const overdue =
+                                  s.enabled && (!s.lastRunAt || Date.now() - new Date(s.lastRunAt).getTime() > s.cadenceHours * 3_600_000)
+                                const pending = pendingBySource.get(s.id) ?? 0
+                                return (
+                                  <tr key={s.id} className={`border-t border-border-subtle align-top ${s.enabled ? '' : 'opacity-50'}`}>
+                                    <td className="max-w-sm px-4 py-3">
+                                      <p className="text-xs font-medium text-foreground">{s.label}</p>
+                                      <p className="font-mono text-[10px] text-muted-2">{s.kind}</p>
+                                      <p className="mt-0.5 line-clamp-2 break-all text-[10px] text-muted" title={s.target}>
+                                        {s.target}
+                                      </p>
+                                      {!s.enabled && <p className="mt-1 text-[10px] text-muted-2">switched off</p>}
+                                      {pending > 0 && (
+                                        <p className="mt-1 text-[10px] text-official">{pending} candidates still undecided</p>
+                                      )}
+                                      {s.notes && <p className="mt-1 text-[10px] text-muted-2">{s.notes}</p>}
+                                    </td>
 
-                      <td className="px-4 py-3 text-xs text-muted">
-                        every {s.cadenceHours}h
-                        {overdue && <span className="mt-0.5 block text-[10px] text-official">due</span>}
-                      </td>
+                                    <td className="px-4 py-3 text-xs text-muted">
+                                      every {s.cadenceHours}h
+                                      {overdue && <span className="mt-0.5 block text-[10px] text-official">due</span>}
+                                    </td>
 
-                      <td className="px-4 py-3 text-[10px]">
-                        <p className="text-muted">{s.lastRunAt ? new Date(s.lastRunAt).toLocaleString() : 'never run'}</p>
-                        {s.lastError && <p className="mt-1 text-frc">{s.lastError.slice(0, 120)}</p>}
-                      </td>
+                                    <td className="px-4 py-3 text-[10px]">
+                                      <p className="text-muted">{s.lastRunAt ? new Date(s.lastRunAt).toLocaleString() : 'never run'}</p>
+                                      {s.lastError && <p className="mt-1 text-frc">{s.lastError.slice(0, 120)}</p>}
+                                    </td>
 
-                      <td className="px-4 py-3 text-xs">
-                        <span className="text-rookie">{s.yieldCount}</span>
-                        <span className="text-muted-2"> / </span>
-                        <span className="text-frc">{s.rejectCount}</span>
-                        {acceptRate != null && (
-                          <p
-                            className={`mt-0.5 text-[10px] ${
-                              acceptRate < 20 ? 'text-frc' : acceptRate < 50 ? 'text-official' : 'text-muted-2'
-                            }`}
-                          >
-                            {acceptRate}% of decided candidates were kept
-                          </p>
-                        )}
-                      </td>
+                                    <td className="px-4 py-3 text-xs">
+                                      <span className="text-rookie">{s.yieldCount}</span>
+                                      <span className="text-muted-2"> / </span>
+                                      <span className="text-frc">{s.rejectCount}</span>
+                                      {acceptRate != null && (
+                                        <p
+                                          className={`mt-0.5 text-[10px] ${
+                                            acceptRate < 20 ? 'text-frc' : acceptRate < 50 ? 'text-official' : 'text-muted-2'
+                                          }`}
+                                        >
+                                          {acceptRate}% of decided candidates were kept
+                                        </p>
+                                      )}
+                                    </td>
 
-                      <td className="px-4 py-3 text-right">
-                        <GrantSourceControls sourceId={s.id} enabled={s.enabled} cadenceHours={s.cadenceHours} />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                                    <td className="px-4 py-3 text-right">
+                                      <GrantSourceControls sourceId={s.id} enabled={s.enabled} cadenceHours={s.cadenceHours} />
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+            </div>
           </div>
         )}
       </section>
@@ -186,66 +188,68 @@ export default async function AdminGrantSourcesPage() {
           <p className="text-sm text-muted">No discovery runs yet.</p>
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-2 text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-2 text-left">Connector</th>
-                  <th className="w-24 px-4 py-2 text-left">Status</th>
-                  <th className="px-4 py-2 text-left">Result</th>
-                  <th className="w-44 px-4 py-2 text-left">When</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map(({ job, sourceLabel }) => {
-                  const stats = (job.stats ?? {}) as Record<string, unknown>
-                  const limits = Array.isArray(stats.limits) ? (stats.limits as string[]) : []
-                  const errors = Array.isArray(stats.errors) ? (stats.errors as string[]) : []
-                  const n = (k: string) => (typeof stats[k] === 'number' ? (stats[k] as number) : 0)
-                  return (
-                    <tr key={job.id} className="border-t border-border-subtle align-top">
-                      <td className="px-4 py-2">
-                        <p className="font-mono text-xs text-foreground">{job.connector}</p>
-                        {sourceLabel && <p className="text-[10px] text-muted-2">{sourceLabel}</p>}
-                      </td>
-                      <td className="px-4 py-2 text-xs">
-                        <span
-                          className={
-                            job.status === 'done' ? 'text-rookie' : job.status === 'failed' ? 'text-frc' : 'text-muted'
-                          }
-                        >
-                          {job.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-[10px] text-muted">
-                        {n('discovered')} found, {n('new')} new, {n('unchanged')} known, {n('skipped')} skipped,{' '}
-                        {n('failed')} failed
-                        {job.error && <p className="mt-1 text-frc">{job.error.slice(0, 160)}</p>}
-                        {/* A cap that bit is shown, never swallowed. A run cut off
-                            by a budget or a per-run limit is a partial sweep, and
-                            reading it as a complete one is how coverage silently
-                            shrinks. */}
-                        {limits.map((l) => (
-                          <p key={l} className="mt-1 text-official">
-                            coverage limit: {l}
-                          </p>
-                        ))}
-                        {errors.slice(0, 3).map((e) => (
-                          <p key={e} className="mt-1 text-frc">
-                            {e.slice(0, 160)}
-                          </p>
-                        ))}
-                        {errors.length > 3 && (
-                          <p className="mt-1 text-muted-2">and {errors.length - 3} more errors</p>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-[10px] text-muted-2">
-                        {new Date(job.createdAt).toLocaleString()}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="min-w-[36rem] w-full text-sm">
+                            <thead className="bg-surface-2 text-xs text-muted">
+                              <tr>
+                                <th className="px-4 py-2 text-left">Connector</th>
+                                <th className="w-24 px-4 py-2 text-left">Status</th>
+                                <th className="px-4 py-2 text-left">Result</th>
+                                <th className="w-44 px-4 py-2 text-left">When</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {jobs.map(({ job, sourceLabel }) => {
+                                const stats = (job.stats ?? {}) as Record<string, unknown>
+                                const limits = Array.isArray(stats.limits) ? (stats.limits as string[]) : []
+                                const errors = Array.isArray(stats.errors) ? (stats.errors as string[]) : []
+                                const n = (k: string) => (typeof stats[k] === 'number' ? (stats[k] as number) : 0)
+                                return (
+                                  <tr key={job.id} className="border-t border-border-subtle align-top">
+                                    <td className="px-4 py-2">
+                                      <p className="font-mono text-xs text-foreground">{job.connector}</p>
+                                      {sourceLabel && <p className="text-[10px] text-muted-2">{sourceLabel}</p>}
+                                    </td>
+                                    <td className="px-4 py-2 text-xs">
+                                      <span
+                                        className={
+                                          job.status === 'done' ? 'text-rookie' : job.status === 'failed' ? 'text-frc' : 'text-muted'
+                                        }
+                                      >
+                                        {job.status}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2 text-[10px] text-muted">
+                                      {n('discovered')} found, {n('new')} new, {n('unchanged')} known, {n('skipped')} skipped,{' '}
+                                      {n('failed')} failed
+                                      {job.error && <p className="mt-1 text-frc">{job.error.slice(0, 160)}</p>}
+                                      {/* A cap that bit is shown, never swallowed. A run cut off
+                                          by a budget or a per-run limit is a partial sweep, and
+                                          reading it as a complete one is how coverage silently
+                                          shrinks. */}
+                                      {limits.map((l) => (
+                                        <p key={l} className="mt-1 text-official">
+                                          coverage limit: {l}
+                                        </p>
+                                      ))}
+                                      {errors.slice(0, 3).map((e) => (
+                                        <p key={e} className="mt-1 text-frc">
+                                          {e.slice(0, 160)}
+                                        </p>
+                                      ))}
+                                      {errors.length > 3 && (
+                                        <p className="mt-1 text-muted-2">and {errors.length - 3} more errors</p>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-2 text-[10px] text-muted-2">
+                                      {new Date(job.createdAt).toLocaleString()}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+            </div>
           </div>
         )}
       </section>

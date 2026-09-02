@@ -141,56 +141,58 @@ export function DedupPanel() {
                     </button>
                   </div>
                 </div>
-                <table className="w-full text-sm">
-                  <thead className="text-muted text-xs">
-                    <tr>
-                      <th className="px-3 py-2 text-left w-8">Keep</th>
-                      <th className="px-3 py-2 text-left">Name</th>
-                      <th className="px-3 py-2 text-left">URL</th>
-                      <th className="px-3 py-2 text-left">Published</th>
-                      <th className="px-3 py-2 text-right">Votes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.tools.map((tool) => (
-                      <tr
-                        key={tool.id}
-                        className={`border-t border-border-subtle ${canonical === tool.id ? 'bg-surface' : ''}`}
-                      >
-                        <td className="px-3 py-2">
-                          <input
-                            type="radio"
-                            name={`canonical-${i}`}
-                            checked={canonical === tool.id}
-                            onChange={() =>
-                              setSelections((prev) => ({ ...prev, [i]: tool.id }))
-                            }
-                            className="accent-primary"
-                          />
-                        </td>
-                        <td className="px-3 py-2 text-xs font-medium text-foreground">
-                          <a
-                            href={`/admin/tools/${tool.id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="hover:underline"
-                          >
-                            {tool.name}
-                          </a>
-                        </td>
-                        <td className="px-3 py-2 text-xs text-muted truncate max-w-xs">
-                          {tool.homepageUrl ?? '—'}
-                        </td>
-                        <td className="px-3 py-2 text-xs text-muted">
-                          {tool.publishedAt
-                            ? new Date(tool.publishedAt).toLocaleDateString()
-                            : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-right text-xs text-muted">{tool.votes}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <table className="min-w-[36rem] w-full text-sm">
+                                    <thead className="text-muted text-xs">
+                                      <tr>
+                                        <th className="px-3 py-2 text-left w-8">Keep</th>
+                                        <th className="px-3 py-2 text-left">Name</th>
+                                        <th className="px-3 py-2 text-left">URL</th>
+                                        <th className="px-3 py-2 text-left">Published</th>
+                                        <th className="px-3 py-2 text-right">Votes</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {group.tools.map((tool) => (
+                                        <tr
+                                          key={tool.id}
+                                          className={`border-t border-border-subtle ${canonical === tool.id ? 'bg-surface' : ''}`}
+                                        >
+                                          <td className="px-3 py-2">
+                                            <input
+                                              type="radio"
+                                              name={`canonical-${i}`}
+                                              checked={canonical === tool.id}
+                                              onChange={() =>
+                                                setSelections((prev) => ({ ...prev, [i]: tool.id }))
+                                              }
+                                              className="accent-primary"
+                                            />
+                                          </td>
+                                          <td className="px-3 py-2 text-xs font-medium text-foreground">
+                                            <a
+                                              href={`/admin/tools/${tool.id}`}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="hover:underline"
+                                            >
+                                              {tool.name}
+                                            </a>
+                                          </td>
+                                          <td className="px-3 py-2 text-xs text-muted truncate max-w-xs">
+                                            {tool.homepageUrl ?? '—'}
+                                          </td>
+                                          <td className="px-3 py-2 text-xs text-muted">
+                                            {tool.publishedAt
+                                              ? new Date(tool.publishedAt).toLocaleDateString()
+                                              : '—'}
+                                          </td>
+                                          <td className="px-3 py-2 text-right text-xs text-muted">{tool.votes}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                </div>
               </div>
             )
           })}

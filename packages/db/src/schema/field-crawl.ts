@@ -203,6 +203,18 @@ export interface RawPracticeFieldMetadata {
   evidence?: string[]
   /** Outbound links found in the thread, in the order they appeared. */
   links?: string[]
+
+  // What the model read, and what was thrown away doing it. Kept on the
+  // candidate so a reviewer sees the sentence behind every filled field, and so
+  // a re-run knows this one has already been read.
+  /** ISO timestamp of the last model read. Absent means never read. */
+  readAt?: string
+  /** Field name to the quote that supports it and the page it came from. */
+  readEvidence?: Record<string, { quote: string; source: string }>
+  /** Every page the reader opened, in order. */
+  readPages?: string[]
+  /** Values the reader offered that the evidence did not support. */
+  readRejected?: string[]
 }
 
 /**
@@ -224,4 +236,26 @@ export interface ExtractedPracticeFieldFields {
   website?: string
   /** A sign-up / booking form linked in the thread. */
   contactUrl?: string
+
+  // Read by the model, each one backed by a quote from the thread or a page it
+  // opened. The deterministic connector refuses to parse these, and it is right
+  // to: "full field" in a thread may describe what the poster WANTS. A reader
+  // that understands the sentence can tell, and the quote is kept so a
+  // moderator can check the sentence rather than trust the label.
+  address?: string
+  /** Free text as the poster wrote it: "Mon/Wed 5:30-8:30 during offseason". */
+  hours?: string
+  /** FIELD_AVAILABILITY. */
+  availability?: string
+  /** FIELD_COVERAGE. */
+  coverage?: string
+  /** FIELD_PERIMETER. */
+  perimeter?: string
+  /** FIELD_ELEMENTS. */
+  elements?: string
+  hasFms?: boolean
+  ceilingHeightFt?: number
+  /** An email address or "ask for Dave in the FiM Discord". */
+  contactInfo?: string
+  notes?: string
 }

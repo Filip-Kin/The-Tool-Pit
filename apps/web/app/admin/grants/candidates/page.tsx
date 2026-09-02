@@ -141,97 +141,99 @@ export default async function AdminGrantCandidatesPage({
         <p className="text-sm text-muted">{q ? `No matches for "${q}".` : `No ${status} candidates.`}</p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-2 text-xs text-muted">
-              <tr>
-                <th className="px-4 py-2 text-left">Page</th>
-                <th className="w-72 px-4 py-2 text-left">Classifier</th>
-                <th className="w-44 px-4 py-2 text-left">Found by</th>
-                <th className="w-72 px-4 py-2 text-right">Decision</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ candidate: row, sourceLabel, sourceKind, grantSlug, grantName }) => {
-                const meta = (row.rawMetadata ?? {}) as RawGrantMetadata
-                const cls = (row.classification ?? {}) as GrantClassification
-                const url = row.canonicalUrl ?? row.sourceUrl
-                return (
-                  <tr
-                    key={row.id}
-                    id={`grant-${row.id}`}
-                    className="border-t border-border-subtle align-top scroll-mt-6 hover:bg-surface"
-                  >
-                    <td className="max-w-sm px-4 py-3">
-                      <span className="line-clamp-2 text-xs font-medium text-foreground">
-                        {cls.name || meta.title || url}
-                      </span>
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-0.5 block line-clamp-1 break-all text-[10px] text-muted hover:underline"
-                      >
-                        {url}
-                      </a>
-                      {(cls.funderName || meta.funderName) && (
-                        <p className="mt-1 text-[10px] text-muted-2">
-                          funder: {cls.funderName || meta.funderName}
-                        </p>
-                      )}
-                      {grantSlug && (
-                        <p className="mt-1 text-[10px] text-muted-2">
-                          attached to{' '}
-                          <Link href={`/admin/grants/${row.matchedGrantId}`} className="text-primary hover:underline">
-                            {grantName ?? grantSlug}
-                          </Link>
-                        </p>
-                      )}
-                      {/* This column doubles as the audit line. It is red for a
-                          rejection and muted for a routing note, because a
-                          candidate turned into a crawl source was a good find,
-                          not a reject. */}
-                      {row.rejectionReason && (
-                        <p
-                          className={`mt-1 text-[10px] ${
-                            row.status === 'matched' ? 'text-muted-2' : 'text-frc'
-                          }`}
-                        >
-                          {row.rejectionReason}
-                        </p>
-                      )}
-                    </td>
+          <div className="overflow-x-auto">
+            <table className="min-w-[36rem] w-full text-sm">
+                        <thead className="bg-surface-2 text-xs text-muted">
+                          <tr>
+                            <th className="px-4 py-2 text-left">Page</th>
+                            <th className="w-72 px-4 py-2 text-left">Classifier</th>
+                            <th className="w-44 px-4 py-2 text-left">Found by</th>
+                            <th className="w-72 px-4 py-2 text-right">Decision</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map(({ candidate: row, sourceLabel, sourceKind, grantSlug, grantName }) => {
+                            const meta = (row.rawMetadata ?? {}) as RawGrantMetadata
+                            const cls = (row.classification ?? {}) as GrantClassification
+                            const url = row.canonicalUrl ?? row.sourceUrl
+                            return (
+                              <tr
+                                key={row.id}
+                                id={`grant-${row.id}`}
+                                className="border-t border-border-subtle align-top scroll-mt-6 hover:bg-surface"
+                              >
+                                <td className="max-w-sm px-4 py-3">
+                                  <span className="line-clamp-2 text-xs font-medium text-foreground">
+                                    {cls.name || meta.title || url}
+                                  </span>
+                                  <a
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-0.5 block line-clamp-1 break-all text-[10px] text-muted hover:underline"
+                                  >
+                                    {url}
+                                  </a>
+                                  {(cls.funderName || meta.funderName) && (
+                                    <p className="mt-1 text-[10px] text-muted-2">
+                                      funder: {cls.funderName || meta.funderName}
+                                    </p>
+                                  )}
+                                  {grantSlug && (
+                                    <p className="mt-1 text-[10px] text-muted-2">
+                                      attached to{' '}
+                                      <Link href={`/admin/grants/${row.matchedGrantId}`} className="text-primary hover:underline">
+                                        {grantName ?? grantSlug}
+                                      </Link>
+                                    </p>
+                                  )}
+                                  {/* This column doubles as the audit line. It is red for a
+                                      rejection and muted for a routing note, because a
+                                      candidate turned into a crawl source was a good find,
+                                      not a reject. */}
+                                  {row.rejectionReason && (
+                                    <p
+                                      className={`mt-1 text-[10px] ${
+                                        row.status === 'matched' ? 'text-muted-2' : 'text-frc'
+                                      }`}
+                                    >
+                                      {row.rejectionReason}
+                                    </p>
+                                  )}
+                                </td>
 
-                    <td className="px-4 py-3">
-                      <Verdict cls={cls} score={row.confidenceScore} />
-                    </td>
+                                <td className="px-4 py-3">
+                                  <Verdict cls={cls} score={row.confidenceScore} />
+                                </td>
 
-                    <td className="px-4 py-3">
-                      <p className="text-[10px] text-foreground">{sourceLabel ?? 'no source row'}</p>
-                      <p className="text-[10px] text-muted-2">{sourceKind ?? 'unknown kind'}</p>
-                      {meta.discoveredVia && (
-                        <p className="mt-1 line-clamp-3 text-[10px] text-muted-2" title={meta.discoveredVia}>
-                          via {meta.discoveredVia}
-                        </p>
-                      )}
-                      {row.submitterName && (
-                        <p className="mt-1 text-[10px] text-muted-2">submitted by {row.submitterName}</p>
-                      )}
-                      <p className="mt-1 text-[10px] text-muted-2">{new Date(row.createdAt).toLocaleDateString()}</p>
-                    </td>
+                                <td className="px-4 py-3">
+                                  <p className="text-[10px] text-foreground">{sourceLabel ?? 'no source row'}</p>
+                                  <p className="text-[10px] text-muted-2">{sourceKind ?? 'unknown kind'}</p>
+                                  {meta.discoveredVia && (
+                                    <p className="mt-1 line-clamp-3 text-[10px] text-muted-2" title={meta.discoveredVia}>
+                                      via {meta.discoveredVia}
+                                    </p>
+                                  )}
+                                  {row.submitterName && (
+                                    <p className="mt-1 text-[10px] text-muted-2">submitted by {row.submitterName}</p>
+                                  )}
+                                  <p className="mt-1 text-[10px] text-muted-2">{new Date(row.createdAt).toLocaleDateString()}</p>
+                                </td>
 
-                    <td className="px-4 py-3 text-right">
-                      <GrantCandidateActions
-                        candidateId={row.id}
-                        status={row.status}
-                        matchedGrantSlug={grantSlug ?? null}
-                        isAggregator={cls.isAggregator === true}
-                      />
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                                <td className="px-4 py-3 text-right">
+                                  <GrantCandidateActions
+                                    candidateId={row.id}
+                                    status={row.status}
+                                    matchedGrantSlug={grantSlug ?? null}
+                                    isAggregator={cls.isAggregator === true}
+                                  />
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+          </div>
         </div>
       )}
 

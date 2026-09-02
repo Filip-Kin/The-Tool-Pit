@@ -63,7 +63,7 @@ export default async function AdminToolsPage({
   const totalPages = Math.ceil(total / pageSize)
 
   return (
-    <div className="p-8 flex flex-col gap-6">
+    <div className="p-4 md:p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Tools</h1>
         <ButtonLink href="/admin/tools/new" size="sm">
@@ -105,48 +105,50 @@ export default async function AdminToolsPage({
 
       {/* Table */}
       <div className="rounded-lg border border-border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-2 text-muted text-xs">
-            <tr>
-              <th className="px-4 py-2 text-left">Name</th>
-              <th className="px-4 py-2 text-left">Programs</th>
-              <th className="px-4 py-2 text-left">Type</th>
-              <th className="px-4 py-2 text-left">Freshness</th>
-              <th className="px-4 py-2 text-right">Score</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((tool) => (
-              <ClickableRow key={tool.id} href={`/admin/tools/${tool.id}`} className="border-t border-border-subtle hover:bg-surface">
-                <td className="px-4 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground">{tool.name}</span>
-                    {tool.isFeatured && <Badge variant="program" className="text-[10px]">Featured</Badge>}
-                    {tool.isOfficial && <Badge variant="official" className="text-[10px]">Official</Badge>}
-                    {tool.isVendor && <Badge variant="vendor" className="text-[10px]">Vendor</Badge>}
-                  </div>
-                  <span className="text-xs text-muted-2">/tools/{tool.slug}</span>
-                </td>
-                <td className="px-4 py-2">
-                  <div className="flex gap-1 flex-wrap">
-                    {(progMap.get(tool.id) ?? []).map((p) => (
-                      <Badge key={p} variant="program" className="text-[10px]">{p.toUpperCase()}</Badge>
-                    ))}
-                  </div>
-                </td>
-                <td className="px-4 py-2 text-xs text-muted">
-                  {tool.toolType.replace(/_/g, ' ')}
-                </td>
-                <td className="px-4 py-2">
-                  <FreshnessChip freshnessState={tool.freshnessState} lastActivityAt={tool.lastActivityAt} />
-                </td>
-                <td className="px-4 py-2 text-right text-xs text-muted">
-                  {tool.popularityScore.toFixed(0)}
-                </td>
-              </ClickableRow>
-            ))}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="min-w-[36rem] w-full text-sm">
+                    <thead className="bg-surface-2 text-muted text-xs">
+                      <tr>
+                        <th className="px-4 py-2 text-left">Name</th>
+                        <th className="px-4 py-2 text-left">Programs</th>
+                        <th className="px-4 py-2 text-left">Type</th>
+                        <th className="px-4 py-2 text-left">Freshness</th>
+                        <th className="px-4 py-2 text-right">Score</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((tool) => (
+                        <ClickableRow key={tool.id} href={`/admin/tools/${tool.id}`} className="border-t border-border-subtle hover:bg-surface">
+                          <td className="px-4 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-foreground">{tool.name}</span>
+                              {tool.isFeatured && <Badge variant="program" className="text-[10px]">Featured</Badge>}
+                              {tool.isOfficial && <Badge variant="official" className="text-[10px]">Official</Badge>}
+                              {tool.isVendor && <Badge variant="vendor" className="text-[10px]">Vendor</Badge>}
+                            </div>
+                            <span className="text-xs text-muted-2">/tools/{tool.slug}</span>
+                          </td>
+                          <td className="px-4 py-2">
+                            <div className="flex gap-1 flex-wrap">
+                              {(progMap.get(tool.id) ?? []).map((p) => (
+                                <Badge key={p} variant="program" className="text-[10px]">{p.toUpperCase()}</Badge>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2 text-xs text-muted">
+                            {tool.toolType.replace(/_/g, ' ')}
+                          </td>
+                          <td className="px-4 py-2">
+                            <FreshnessChip freshnessState={tool.freshnessState} lastActivityAt={tool.lastActivityAt} />
+                          </td>
+                          <td className="px-4 py-2 text-right text-xs text-muted">
+                            {tool.popularityScore.toFixed(0)}
+                          </td>
+                        </ClickableRow>
+                      ))}
+                    </tbody>
+                  </table>
+        </div>
       </div>
 
       {/* Pagination */}

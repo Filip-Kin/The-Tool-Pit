@@ -51,6 +51,7 @@ import {
 } from '@the-tool-pit/db'
 import { parseLooseDate } from './extract.js'
 import { GRANT_AWARD_MAX } from '@the-tool-pit/db/grant-enums'
+import { normaliseForQuoteMatch, quoteSource, urlSource } from '../model/evidence.js'
 
 /** Bumped when the field set changes, so an old row reads as old. */
 export const GRANT_EXTRACTION_VERSION = 1
@@ -85,37 +86,6 @@ export interface GrantEvidence {
   aggregator: string
 }
 
-/**
- * Whitespace-folded and lowercased, so a quote that crossed a line break in
- * the page still matches. Nothing else is stripped: dropping punctuation would
- * let a paraphrase pass as a quote, which is the one thing the check is for.
- */
-function normaliseForQuoteMatch(text: string): string {
-  return (
-    text
-      // Typographic characters, folded to their ascii twin on BOTH sides of the
-      // comparison. Real pages are full of curly apostrophes, en dashes and
-      // non-breaking spaces; the model writes the plain versions back. The
-      // check was losing correct data to that alone: 51 fields across the first
-      // 29 records were dropped as "quote is in neither text", including
-      // deadlines, which are the fields most worth having.
-      //
-      // This does not soften the check. A paraphrase still fails, because every
-      // word still has to be there in order. It only stops a quotation mark
-      // deciding whether a grant has a deadline.
-      .replace(/[\u2018\u2019\u201a\u201b\u2032]/g, "'")
-      .replace(/[\u201c\u201d\u201e\u201f\u2033]/g, '"')
-      .replace(/[\u2010-\u2015\u2212]/g, '-')
-      .replace(/\u2026/g, '...')
-      // Zero width joiners and marks carry no meaning and are invisible in the
-      // model's copy of the text.
-      .replace(/[\u200b-\u200d\ufeff]/g, '')
-      // Every kind of space, including nbsp and the thin spaces, collapses.
-      .replace(/[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+/g, ' ')
-      .trim()
-      .toLowerCase()
-  )
-}
 
 /**
  * Where a quote really came from, or null when nobody wrote it.
@@ -125,12 +95,10 @@ function normaliseForQuoteMatch(text: string): string {
  * moderator trust it less than they should.
  */
 export function verifyQuote(quote: string, evidence: GrantEvidence): GrantEvidenceSource | null {
-  const needle = normaliseForQuoteMatch(quote)
-  // Two or three words are not evidence of anything, they match by accident.
-  if (needle.length < 12) return null
-  if (normaliseForQuoteMatch(evidence.funderPage).includes(needle)) return 'funder_page'
-  if (normaliseForQuoteMatch(evidence.aggregator).includes(needle)) return 'aggregator'
-  return null
+  return quoteSource<GrantEvidenceSource>(quote, [
+    { source: 'funder_page', text: evidence.funderPage },
+    { source: 'aggregator', text: evidence.aggregator },
+  ])
 }
 
 // #endregion
@@ -394,18 +362,10 @@ function cleanDeadline(raw: unknown): string | null {
  * describing the same destination.
  */
 export function verifyUrlPresence(url: string, evidence: GrantEvidence): GrantEvidenceSource | null {
-  const bare = (u: string) =>
-    u
-      .trim()
-      .toLowerCase()
-      .replace(/^https?:\/\//, '')
-      .replace(/^www\./, '')
-      .replace(/\/+$/, '')
-  const needle = bare(url)
-  if (!needle) return null
-  if (bare(evidence.funderPage).includes(needle)) return 'funder_page'
-  if (evidence.aggregator && bare(evidence.aggregator).includes(needle)) return 'aggregator'
-  return null
+  return urlSource<GrantEvidenceSource>(url, [
+    { source: 'funder_page', text: evidence.funderPage },
+    { source: 'aggregator', text: evidence.aggregator },
+  ])
 }
 
 const QUOTE_EXEMPT: ReadonlySet<keyof GrantExtractionFields> = new Set([

@@ -10,6 +10,7 @@ import type { GrantEnrichPayload, GrantExtractPayload } from './grants/enrich.js
 import type { GrantMonitorPayload } from './grants/monitor.js'
 import type { GrantMatchJobPayload } from './grants/matcher.js'
 import type { ListingDiscoverPayload } from './listings/discover.js'
+import type { ReadCandidatesPayload } from './listings/read-candidates.js'
 import type { PopularityRefreshPayload } from './jobs/popularity.js'
 // The offseason season rule and the renewal date live beside the column they
 // describe, so the schedule below and the migration that backfills the season
@@ -246,6 +247,28 @@ export const listingDiscoverQueue = new Queue<ListingDiscoverPayload>('listing-d
 })
 
 /**
+ * Reading a discovered candidate properly: the thread, the event's own site,
+ * and the pages behind its registration and pay links.
+ *
+ * Its own queue rather than part of listing-discover, because the two have
+ * nothing in common operationally. Discovery is one request per source and
+ * finishes in seconds. A read is a model call and up to eight page loads per
+ * candidate, so it belongs somewhere it can take its time without holding a
+ * sweep open, and somewhere a re-read does not force a re-crawl.
+ *
+ * Concurrency stays at 1 in index.ts: these open real browsers.
+ */
+export const readCandidatesQueue = new Queue<ReadCandidatesPayload>('read-candidates', {
+  connection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 60000 },
+    removeOnComplete: { count: 50 },
+    removeOnFail: { count: 100 },
+  },
+})
+
+/**
  * The yearly "are you running it again" ask for last season's event listings.
  *
  * attempts: 1, the same reasoning as grant-alert-drain. The retry story lives
@@ -455,6 +478,15 @@ export async function scheduleRecurringJobs() {
   await listingDiscoverQueue.upsertJobScheduler('listing-discover-cd-fields', { pattern: '40 6 * * 0' }, {
     name: 'listing-discover-cd-fields',
     data: { connector: 'cd_practice_fields' },
+  })
+
+  // Read whatever discovery has filed and nobody has read yet. Twice a day
+  // rather than after each sweep: a candidate that failed its read at 02:40
+  // because a site was down gets another go at 14:40 without anybody asking,
+  // and a candidate added by hand from the admin is picked up the same way.
+  await readCandidatesQueue.upsertJobScheduler('read-candidates-sweep', { pattern: '20 3,15 * * *' }, {
+    name: 'read-candidates-sweep',
+    data: {},
   })
 
   // The mid-April renewal ask. A CRON PATTERN AND NOT `every`, and this is the

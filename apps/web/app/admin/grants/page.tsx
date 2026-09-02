@@ -120,70 +120,72 @@ export default async function AdminGrantsPage({
         <p className="text-sm text-muted">{q ? `No matches for "${q}".` : `No ${status} grants.`}</p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-2 text-xs text-muted">
-              <tr>
-                <th className="px-4 py-2 text-left">Grant</th>
-                <th className="w-44 px-4 py-2 text-left">Next deadline</th>
-                <th className="w-40 px-4 py-2 text-left">Verified</th>
-                <th className="w-32 px-4 py-2 text-left">Crawl</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ grant, funderName, nextDeadline }) => (
-                <tr key={grant.id} className="border-t border-border-subtle align-top hover:bg-surface">
-                  <td className="max-w-md px-4 py-3">
-                    <Link href={`/admin/grants/${grant.id}`} className="text-xs font-medium text-foreground hover:text-primary">
-                      {grant.name}
-                    </Link>
-                    <p className="mt-0.5 text-[10px] text-muted-2">
-                      /grants/{grant.slug}
-                      {funderName && ` · ${funderName}`}
-                      {` · ${grant.geoScope}`}
-                      {grant.regions.length > 0 && ` (${grant.regions.join(', ')})`}
-                    </p>
-                    {grant.status !== 'published' && (
-                      <span className="mt-1 inline-block rounded bg-surface-3 px-1.5 py-0.5 text-[10px] text-muted">
-                        {grant.status}
-                      </span>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="min-w-[36rem] w-full text-sm">
+                        <thead className="bg-surface-2 text-xs text-muted">
+                          <tr>
+                            <th className="px-4 py-2 text-left">Grant</th>
+                            <th className="w-44 px-4 py-2 text-left">Next deadline</th>
+                            <th className="w-40 px-4 py-2 text-left">Verified</th>
+                            <th className="w-32 px-4 py-2 text-left">Crawl</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map(({ grant, funderName, nextDeadline }) => (
+                            <tr key={grant.id} className="border-t border-border-subtle align-top hover:bg-surface">
+                              <td className="max-w-md px-4 py-3">
+                                <Link href={`/admin/grants/${grant.id}`} className="text-xs font-medium text-foreground hover:text-primary">
+                                  {grant.name}
+                                </Link>
+                                <p className="mt-0.5 text-[10px] text-muted-2">
+                                  /grants/{grant.slug}
+                                  {funderName && ` · ${funderName}`}
+                                  {` · ${grant.geoScope}`}
+                                  {grant.regions.length > 0 && ` (${grant.regions.join(', ')})`}
+                                </p>
+                                {grant.status !== 'published' && (
+                                  <span className="mt-1 inline-block rounded bg-surface-3 px-1.5 py-0.5 text-[10px] text-muted">
+                                    {grant.status}
+                                  </span>
+                                )}
+                              </td>
 
-                  <td className="px-4 py-3 text-[10px]">
-                    {nextDeadline ? (
-                      <span className="text-foreground">
-                        {new Date(nextDeadline).toISOString().replace('.000Z', 'Z')} (UTC)
-                      </span>
-                    ) : (
-                      <span className="text-muted-2">
-                        {grant.deadlineType === 'rolling' ? 'rolling, no deadline' : 'none recorded'}
-                      </span>
-                    )}
-                  </td>
+                              <td className="px-4 py-3 text-[10px]">
+                                {nextDeadline ? (
+                                  <span className="text-foreground">
+                                    {new Date(nextDeadline).toISOString().replace('.000Z', 'Z')} (UTC)
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-2">
+                                    {grant.deadlineType === 'rolling' ? 'rolling, no deadline' : 'none recorded'}
+                                  </span>
+                                )}
+                              </td>
 
-                  <td className="px-4 py-3 text-[10px]">
-                    {grant.verifiedAt ? (
-                      <>
-                        <span className="text-muted">{new Date(grant.verifiedAt).toLocaleDateString()}</span>
-                        <span className="block text-muted-2">{grant.verifiedBy ?? 'unknown'}</span>
-                      </>
-                    ) : (
-                      <span className="text-official">never</span>
-                    )}
-                  </td>
+                              <td className="px-4 py-3 text-[10px]">
+                                {grant.verifiedAt ? (
+                                  <>
+                                    <span className="text-muted">{new Date(grant.verifiedAt).toLocaleDateString()}</span>
+                                    <span className="block text-muted-2">{grant.verifiedBy ?? 'unknown'}</span>
+                                  </>
+                                ) : (
+                                  <span className="text-official">never</span>
+                                )}
+                              </td>
 
-                  <td className="px-4 py-3 text-[10px]">
-                    <span className="text-muted-2">
-                      {grant.lastCheckedAt ? new Date(grant.lastCheckedAt).toLocaleDateString() : 'never fetched'}
-                    </span>
-                    {grant.checkFailureCount > 0 && (
-                      <span className="block text-frc">{grant.checkFailureCount} failures</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                              <td className="px-4 py-3 text-[10px]">
+                                <span className="text-muted-2">
+                                  {grant.lastCheckedAt ? new Date(grant.lastCheckedAt).toLocaleDateString() : 'never fetched'}
+                                </span>
+                                {grant.checkFailureCount > 0 && (
+                                  <span className="block text-frc">{grant.checkFailureCount} failures</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+          </div>
         </div>
       )}
 

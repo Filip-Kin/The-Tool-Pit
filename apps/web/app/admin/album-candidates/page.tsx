@@ -150,79 +150,81 @@ export default async function AdminAlbumCandidatesPage({
         <p className="text-sm text-muted">{q ? `No matches for "${q}".` : `No ${TAB_LABELS[status]} candidates.`}</p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-2 text-xs text-muted">
-              <tr>
-                <th className="px-4 py-2 text-left">Album</th>
-                <th className="px-4 py-2 text-left">Event</th>
-                <th className="px-4 py-2 text-left w-28">Match</th>
-                <th className="px-4 py-2 text-right w-56">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ candidate: row, eventName, eventCode, eventYear }) => {
-                const meta = (row.rawMetadata ?? {}) as AlbumCandidateMetadata
-                const cls = (row.classification ?? {}) as Partial<AlbumEventMatch>
-                const displayUrl = row.canonicalUrl ?? row.sourceUrl
-                return (
-                  <tr
-                    key={row.id}
-                    id={`album-${row.id}`}
-                    className="border-t border-border-subtle align-top scroll-mt-6 hover:bg-surface"
-                  >
-                    <td className="max-w-xs px-4 py-3">
-                      <span className="line-clamp-1 text-xs font-medium text-foreground">
-                        {meta.title ?? displayUrl}
-                      </span>
-                      <a
-                        href={displayUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-0.5 block line-clamp-1 break-all text-[10px] text-muted hover:underline"
-                      >
-                        {displayUrl}
-                      </a>
-                      <p className="mt-1 text-[10px] text-muted-2">
-                        {[row.provider, meta.photographer, meta.dateText].filter(Boolean).join(' · ')}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">
-                      {eventName ? (
-                        <span className="flex items-center gap-2 text-xs">
-                          <span className="rounded bg-primary/15 px-1.5 py-0.5 font-mono text-sm font-bold text-primary">
-                            {eventYear}
-                          </span>
-                          <span className="text-foreground">
-                            {eventName} <span className="font-mono text-muted-2">({eventCode})</span>
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-2">
-                          {row.targetEventCode
-                            ? `target: ${row.targetEventCode}${row.targetEventYear ? ` (${row.targetEventYear})` : ''}`
-                            : 'unmatched'}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-[10px] text-muted-2">{cls.method ?? '-'}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <AlbumCandidateActions
-                        candidateId={row.id}
-                        status={row.status}
-                        hasEvent={Boolean(row.matchedEventId)}
-                        targetEventCode={row.targetEventCode}
-                        targetEventYear={row.targetEventYear}
-                        matchedEventKey={eventCode && eventYear ? `${eventYear}${eventCode}` : null}
-                        albumTitle={meta.title ?? ''}
-                      />
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="min-w-[36rem] w-full text-sm">
+                        <thead className="bg-surface-2 text-xs text-muted">
+                          <tr>
+                            <th className="px-4 py-2 text-left">Album</th>
+                            <th className="px-4 py-2 text-left">Event</th>
+                            <th className="px-4 py-2 text-left w-28">Match</th>
+                            <th className="px-4 py-2 text-right w-56">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map(({ candidate: row, eventName, eventCode, eventYear }) => {
+                            const meta = (row.rawMetadata ?? {}) as AlbumCandidateMetadata
+                            const cls = (row.classification ?? {}) as Partial<AlbumEventMatch>
+                            const displayUrl = row.canonicalUrl ?? row.sourceUrl
+                            return (
+                              <tr
+                                key={row.id}
+                                id={`album-${row.id}`}
+                                className="border-t border-border-subtle align-top scroll-mt-6 hover:bg-surface"
+                              >
+                                <td className="max-w-xs px-4 py-3">
+                                  <span className="line-clamp-1 text-xs font-medium text-foreground">
+                                    {meta.title ?? displayUrl}
+                                  </span>
+                                  <a
+                                    href={displayUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-0.5 block line-clamp-1 break-all text-[10px] text-muted hover:underline"
+                                  >
+                                    {displayUrl}
+                                  </a>
+                                  <p className="mt-1 text-[10px] text-muted-2">
+                                    {[row.provider, meta.photographer, meta.dateText].filter(Boolean).join(' · ')}
+                                  </p>
+                                </td>
+                                <td className="px-4 py-3">
+                                  {eventName ? (
+                                    <span className="flex items-center gap-2 text-xs">
+                                      <span className="rounded bg-primary/15 px-1.5 py-0.5 font-mono text-sm font-bold text-primary">
+                                        {eventYear}
+                                      </span>
+                                      <span className="text-foreground">
+                                        {eventName} <span className="font-mono text-muted-2">({eventCode})</span>
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-muted-2">
+                                      {row.targetEventCode
+                                        ? `target: ${row.targetEventCode}${row.targetEventYear ? ` (${row.targetEventYear})` : ''}`
+                                        : 'unmatched'}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="text-[10px] text-muted-2">{cls.method ?? '-'}</span>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <AlbumCandidateActions
+                                    candidateId={row.id}
+                                    status={row.status}
+                                    hasEvent={Boolean(row.matchedEventId)}
+                                    targetEventCode={row.targetEventCode}
+                                    targetEventYear={row.targetEventYear}
+                                    matchedEventKey={eventCode && eventYear ? `${eventYear}${eventCode}` : null}
+                                    albumTitle={meta.title ?? ''}
+                                  />
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+          </div>
         </div>
       )}
 

@@ -43,34 +43,36 @@ export async function QueueStats() {
           </span>
         )}
       </div>
-      <table className="w-full text-sm">
-        <thead className="bg-surface-2 text-muted text-xs">
-          <tr>
-            <th className="px-4 py-2 text-left">Queue</th>
-            <th className="px-4 py-2 text-right">Waiting</th>
-            <th className="px-4 py-2 text-right">Active</th>
-            <th className="px-4 py-2 text-right">Delayed</th>
-            <th className="px-4 py-2 text-right">Failed</th>
-            <th className="px-4 py-2 text-right">Completed</th>
-          </tr>
-        </thead>
-        <tbody>
-          {queues.map(({ name, counts }) => (
-            <tr key={name} className="border-t border-border-subtle">
-              <td className="px-4 py-2 font-mono text-xs text-foreground">{name}</td>
-              <td className="px-4 py-2 text-right text-xs text-muted">{counts.waiting || '—'}</td>
-              <td className={`px-4 py-2 text-right text-xs font-medium ${counts.active > 0 ? 'text-official' : 'text-muted'}`}>
-                {counts.active || '—'}
-              </td>
-              <td className="px-4 py-2 text-right text-xs text-muted">{counts.delayed || '—'}</td>
-              <td className={`px-4 py-2 text-right text-xs font-medium ${counts.failed > 0 ? 'text-frc' : 'text-muted'}`}>
-                {counts.failed || '—'}
-              </td>
-              <td className="px-4 py-2 text-right text-xs text-muted">{counts.completed || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="overflow-x-auto">
+        <table className="min-w-[48rem] w-full text-sm">
+                <thead className="bg-surface-2 text-muted text-xs">
+                  <tr>
+                    <th className="px-4 py-2 text-left">Queue</th>
+                    <th className="px-4 py-2 text-right">Waiting</th>
+                    <th className="px-4 py-2 text-right">Active</th>
+                    <th className="px-4 py-2 text-right">Delayed</th>
+                    <th className="px-4 py-2 text-right">Failed</th>
+                    <th className="px-4 py-2 text-right">Completed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {queues.map(({ name, counts }) => (
+                    <tr key={name} className="border-t border-border-subtle">
+                      <td className="px-4 py-2 font-mono text-xs text-foreground">{name}</td>
+                      <td className="px-4 py-2 text-right text-xs text-muted">{counts.waiting || '—'}</td>
+                      <td className={`px-4 py-2 text-right text-xs font-medium ${counts.active > 0 ? 'text-official' : 'text-muted'}`}>
+                        {counts.active || '—'}
+                      </td>
+                      <td className="px-4 py-2 text-right text-xs text-muted">{counts.delayed || '—'}</td>
+                      <td className={`px-4 py-2 text-right text-xs font-medium ${counts.failed > 0 ? 'text-frc' : 'text-muted'}`}>
+                        {counts.failed || '—'}
+                      </td>
+                      <td className="px-4 py-2 text-right text-xs text-muted">{counts.completed || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+      </div>
     </section>
   )
 }

@@ -48,7 +48,7 @@ export default async function AdminCandidateDetailPage({
   const displayUrl = candidate.canonicalUrl ?? candidate.sourceUrl
 
   return (
-    <div className="p-8 max-w-3xl flex flex-col gap-8">
+    <div className="p-4 md:p-8 max-w-3xl flex flex-col gap-8">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>

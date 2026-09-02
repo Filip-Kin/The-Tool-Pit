@@ -5,7 +5,7 @@
  */
 import { Worker } from 'bullmq'
 import { getRedis } from './redis.js'
-import { scheduleRecurringJobs, grantEnrichQueue, grantExtractQueue, grantMonitorQueue } from './queues.js'
+import { scheduleRecurringJobs, grantEnrichQueue, grantExtractQueue, grantMonitorQueue, readCandidatesQueue } from './queues.js'
 import { processCrawlJob } from './jobs/crawl.js'
 import { processEnrichJob } from './jobs/enrich.js'
 import { processFreshnessJob } from './jobs/freshness.js'
@@ -25,6 +25,8 @@ import { processGrantDeadlineSweepJob } from './grants/deadline-sweeper.js'
 import { enqueueDueGrantMonitors } from './grants/cadence.js'
 import { sendApprovalNotice, reviewQueueUrl } from '@the-tool-pit/types'
 import { processListingDiscoverJob } from './listings/discover.js'
+import { processReadCandidatesJob } from './listings/read-candidates.js'
+import type { ReadCandidatesPayload } from './listings/read-candidates.js'
 import { processSeasonRenewalJob } from './listings/season-renewal.js'
 import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload, AlbumIngestPayload, AlbumEnrichPayload } from '@the-tool-pit/types'
 import type { GrantDiscoverPayload } from './grants/discover.js'
@@ -280,9 +282,17 @@ const listingDiscoverWorker = new Worker<ListingDiscoverPayload>(
     console.log(`[listing-discover] processing job ${job.id} connector=${job.data.connector}`)
     const outcome = await processListingDiscoverJob(job.data)
 
-    // Nothing is enqueued from here. Every connector in this vertical is
-    // deterministic, so there is no classification step and no Anthropic
-    // spend: the candidates sit pending until a human opens the admin.
+    // Hand what was just filed to the reader, which opens the thread and the
+    // event's own site and fills in what a pattern could not see. The
+    // connectors stay deterministic and this stays a separate job, so a slow
+    // read never holds a sweep open.
+    if (outcome.insertedCandidateIds.length > 0) {
+      await readCandidatesQueue.add('read-after-discovery', {
+        vertical: outcome.vertical === 'field' ? 'field' : 'event',
+        limit: outcome.insertedCandidateIds.length,
+      })
+    }
+
     if (outcome.stats.limits.length > 0) {
       console.warn(
         `[listing-discover] ${outcome.connector} coverage limits: ${outcome.stats.limits.join('; ')}`,
@@ -322,6 +332,18 @@ const listingDiscoverWorker = new Worker<ListingDiscoverPayload>(
   { connection, concurrency: 1 },
 )
 
+const readCandidatesWorker = new Worker<ReadCandidatesPayload>(
+  'read-candidates',
+  async (job) => {
+    console.log(`[read-candidates] processing job ${job.id}`)
+    return processReadCandidatesJob(job.data)
+  },
+  // One at a time. Each candidate opens a real browser and makes a model call,
+  // and running several at once buys nothing but a heavier box and a lot of
+  // simultaneous requests at one small event's website.
+  { connection, concurrency: 1 },
+)
+
 const seasonRenewalWorker = new Worker(
   'event-season-renewal',
   async () => {
@@ -338,7 +360,7 @@ const seasonRenewalWorker = new Worker(
 // #endregion
 
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, seasonRenewalWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, readCandidatesWorker, seasonRenewalWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -375,6 +397,7 @@ async function shutdown() {
     grantAlertWorker.close(),
     grantDeadlineWorker.close(),
     listingDiscoverWorker.close(),
+    readCandidatesWorker.close(),
     seasonRenewalWorker.close(),
   ])
   process.exit(0)

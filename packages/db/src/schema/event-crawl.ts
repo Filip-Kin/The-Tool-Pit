@@ -212,6 +212,18 @@ export interface RawEventListingMetadata {
   links?: string[]
   /** TBA event_type int, kept verbatim: 99 offseason, 100 preseason. */
   tbaEventType?: number
+
+  // What the model read, and what was thrown away doing it. Kept on the
+  // candidate so a reviewer sees the sentence behind every filled field, and so
+  // a re-run knows this one has already been read.
+  /** ISO timestamp of the last model read. Absent means never read. */
+  readAt?: string
+  /** Field name to the quote that supports it and the page it came from. */
+  readEvidence?: Record<string, { quote: string; source: string }>
+  /** Every page the reader opened, in order. */
+  readPages?: string[]
+  /** Values the reader offered that the evidence did not support. */
+  readRejected?: string[]
 }
 
 /**
@@ -240,4 +252,37 @@ export interface ExtractedEventListingFields {
   registrationUrl?: string
   chiefDelphiUrl?: string
   tbaKey?: string
+
+  // Fields the deterministic connectors never filled, because a thread does not
+  // carry them in a form a regex can read. A model that reads the thread AND
+  // the event's own site does: "Location: Capistrano Valley High School,
+  // Mission Viejo, California" is a venue, a city and a state, and the cost is
+  // on the /pay page the thread links to.
+  volunteerUrl?: string
+  contactEmail?: string
+  capacity?: number
+  costUsd?: number
+  costNote?: string
+  /** REGISTRATION_STATUSES. */
+  registrationStatus?: string
+  /** VOLUNTEER_STATUSES. */
+  volunteerStatus?: string
+  notes?: string
 }
+
+/**
+ * One extracted value, with the words that support it and where they came from.
+ *
+ * A value with no quote is a guess, and this vertical has no room for guesses:
+ * a wrong venue sends a team to the wrong building. The quote is checked
+ * against the source text before the value is allowed anywhere near a column,
+ * the same way the grants extractor does it.
+ */
+export interface EventExtractedField<T> {
+  value: T | null
+  quote: string | null
+  source: 'thread' | 'website' | null
+}
+
+/** Per-field evidence, kept beside the candidate for the reviewer to read. */
+export type EventFieldEvidence = Record<string, { quote: string; source: string }>

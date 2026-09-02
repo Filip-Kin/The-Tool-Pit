@@ -28,7 +28,7 @@ export default async function MaintenancePage() {
   const active = await hasActiveJobs()
 
   return (
-    <div className="p-8 flex flex-col gap-6">
+    <div className="p-4 md:p-8 flex flex-col gap-6">
       <QueuePoller active={active} />
 
       <h1 className="text-2xl font-bold text-foreground">Maintenance</h1>

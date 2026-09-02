@@ -60,7 +60,7 @@ export default async function SourcesPage() {
   const { countMap, recent } = await getSourceStats()
 
   return (
-    <div className="p-8 flex flex-col gap-8">
+    <div className="p-4 md:p-8 flex flex-col gap-8">
       <h1 className="text-2xl font-bold text-foreground">Sources</h1>
 
       {/* Source cards */}
@@ -110,42 +110,44 @@ export default async function SourcesPage() {
           <p className="text-sm text-muted">No sources recorded yet.</p>
         ) : (
           <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-2 text-muted text-xs">
-                <tr>
-                  <th className="px-4 py-2 text-left">Tool</th>
-                  <th className="px-4 py-2 text-left">Source Type</th>
-                  <th className="px-4 py-2 text-left">Source URL</th>
-                  <th className="px-4 py-2 text-left">Discovered</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map((s) => (
-                  <tr key={s.id} className="border-t border-border-subtle hover:bg-surface">
-                    <td className="px-4 py-2 text-xs text-foreground">
-                      {s.toolId ? (
-                        <Link href={`/admin/tools/${s.toolId}`} className="hover:underline text-primary">
-                          {s.toolName ?? s.toolId}
-                        </Link>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="px-4 py-2 font-mono text-xs text-muted">{s.sourceType}</td>
-                    <td className="px-4 py-2 text-xs text-muted max-w-xs truncate">
-                      {s.sourceUrl ? (
-                        <a href={s.sourceUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                          {s.sourceUrl}
-                        </a>
-                      ) : '—'}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-muted whitespace-nowrap">
-                      {s.discoveredAt ? new Date(s.discoveredAt).toLocaleDateString() : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="min-w-[36rem] w-full text-sm">
+                            <thead className="bg-surface-2 text-muted text-xs">
+                              <tr>
+                                <th className="px-4 py-2 text-left">Tool</th>
+                                <th className="px-4 py-2 text-left">Source Type</th>
+                                <th className="px-4 py-2 text-left">Source URL</th>
+                                <th className="px-4 py-2 text-left">Discovered</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {recent.map((s) => (
+                                <tr key={s.id} className="border-t border-border-subtle hover:bg-surface">
+                                  <td className="px-4 py-2 text-xs text-foreground">
+                                    {s.toolId ? (
+                                      <Link href={`/admin/tools/${s.toolId}`} className="hover:underline text-primary">
+                                        {s.toolName ?? s.toolId}
+                                      </Link>
+                                    ) : (
+                                      '—'
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2 font-mono text-xs text-muted">{s.sourceType}</td>
+                                  <td className="px-4 py-2 text-xs text-muted max-w-xs truncate">
+                                    {s.sourceUrl ? (
+                                      <a href={s.sourceUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                        {s.sourceUrl}
+                                      </a>
+                                    ) : '—'}
+                                  </td>
+                                  <td className="px-4 py-2 text-xs text-muted whitespace-nowrap">
+                                    {s.discoveredAt ? new Date(s.discoveredAt).toLocaleDateString() : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+            </div>
           </div>
         )}
       </div>

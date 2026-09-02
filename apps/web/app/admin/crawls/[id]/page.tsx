@@ -67,7 +67,7 @@ export default async function CrawlJobDetailPage({
   const stats = (job.stats ?? {}) as CrawlJobStats
 
   return (
-    <div className="p-8 max-w-4xl flex flex-col gap-8">
+    <div className="p-4 md:p-8 max-w-4xl flex flex-col gap-8">
       {/* Header */}
       <div>
         <Link href="/admin/crawls" className="text-xs text-muted hover:text-foreground">
@@ -155,59 +155,61 @@ export default async function CrawlJobDetailPage({
           <p className="text-sm text-muted">No {status === 'all' ? '' : status + ' '}candidates recorded for this job.</p>
         ) : (
           <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-2 text-muted text-xs">
-                <tr>
-                  <th className="px-4 py-2 text-left">Title / URL</th>
-                  <th className="px-4 py-2 text-left">Classification</th>
-                  <th className="px-4 py-2 text-center w-24">Status</th>
-                  <th className="px-4 py-2 text-right w-20">Confidence</th>
-                </tr>
-              </thead>
-              <tbody>
-                {candidates.map((c) => {
-                  const cls = (c.classification ?? {}) as CandidateClassification
-                  const meta = (c.rawMetadata ?? {}) as RawCandidateMetadata
-                  const displayUrl = c.canonicalUrl ?? c.sourceUrl
-                  const confidence = c.confidenceScore ?? cls.confidence ?? 0
-                  const pct = Math.round(confidence * 100)
+            <div className="overflow-x-auto">
+              <table className="min-w-[36rem] w-full text-sm">
+                            <thead className="bg-surface-2 text-muted text-xs">
+                              <tr>
+                                <th className="px-4 py-2 text-left">Title / URL</th>
+                                <th className="px-4 py-2 text-left">Classification</th>
+                                <th className="px-4 py-2 text-center w-24">Status</th>
+                                <th className="px-4 py-2 text-right w-20">Confidence</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {candidates.map((c) => {
+                                const cls = (c.classification ?? {}) as CandidateClassification
+                                const meta = (c.rawMetadata ?? {}) as RawCandidateMetadata
+                                const displayUrl = c.canonicalUrl ?? c.sourceUrl
+                                const confidence = c.confidenceScore ?? cls.confidence ?? 0
+                                const pct = Math.round(confidence * 100)
 
-                  return (
-                    <tr key={c.id} className="border-t border-border-subtle hover:bg-surface">
-                      <td className="px-4 py-2 max-w-xs">
-                        <Link
-                          href={`/admin/candidates/${c.id}`}
-                          className="text-xs text-primary hover:underline font-medium line-clamp-1"
-                        >
-                          {meta.title ?? displayUrl}
-                        </Link>
-                        <span className="block text-[10px] text-muted truncate">{displayUrl}</span>
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex flex-wrap gap-1">
-                          {cls.toolType && (
-                            <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium border bg-surface-3 text-muted border-border">
-                              {cls.toolType.replace(/_/g, ' ')}
-                            </span>
-                          )}
-                          {(cls.programs ?? []).map((p) => (
-                            <span key={p} className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium border bg-primary/10 text-primary border-primary/20">
-                              {p.toUpperCase()}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <StatusText status={c.status} />
-                      </td>
-                      <td className="px-4 py-2 text-right text-xs font-mono text-foreground">
-                        {pct}%
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                                return (
+                                  <tr key={c.id} className="border-t border-border-subtle hover:bg-surface">
+                                    <td className="px-4 py-2 max-w-xs">
+                                      <Link
+                                        href={`/admin/candidates/${c.id}`}
+                                        className="text-xs text-primary hover:underline font-medium line-clamp-1"
+                                      >
+                                        {meta.title ?? displayUrl}
+                                      </Link>
+                                      <span className="block text-[10px] text-muted truncate">{displayUrl}</span>
+                                    </td>
+                                    <td className="px-4 py-2">
+                                      <div className="flex flex-wrap gap-1">
+                                        {cls.toolType && (
+                                          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium border bg-surface-3 text-muted border-border">
+                                            {cls.toolType.replace(/_/g, ' ')}
+                                          </span>
+                                        )}
+                                        {(cls.programs ?? []).map((p) => (
+                                          <span key={p} className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium border bg-primary/10 text-primary border-primary/20">
+                                            {p.toUpperCase()}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-2 text-center">
+                                      <StatusText status={c.status} />
+                                    </td>
+                                    <td className="px-4 py-2 text-right text-xs font-mono text-foreground">
+                                      {pct}%
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+            </div>
           </div>
         )}
 

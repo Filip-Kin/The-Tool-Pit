@@ -63,7 +63,7 @@ export default async function AdminCandidatesPage({
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   return (
-    <div className="p-8 flex flex-col gap-6">
+    <div className="p-4 md:p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Candidates</h1>
         <p className="text-sm text-muted">
@@ -98,86 +98,88 @@ export default async function AdminCandidatesPage({
         <p className="text-sm text-muted">No {status} candidates.</p>
       ) : (
         <div className="rounded-lg border border-border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-2 text-muted text-xs">
-              <tr>
-                <th className="px-4 py-2 text-left">URL</th>
-                <th className="px-4 py-2 text-left">Classification</th>
-                <th className="px-4 py-2 text-right w-24">Confidence</th>
-                <th className="px-4 py-2 text-right w-36">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const cls = (row.classification ?? {}) as CandidateClassification
-                const meta = (row.rawMetadata ?? {}) as RawCandidateMetadata
-                const displayUrl = row.canonicalUrl ?? row.sourceUrl
-                const confidence = row.confidenceScore ?? cls.confidence ?? 0
+          <div className="overflow-x-auto">
+            <table className="min-w-[36rem] w-full text-sm">
+                        <thead className="bg-surface-2 text-muted text-xs">
+                          <tr>
+                            <th className="px-4 py-2 text-left">URL</th>
+                            <th className="px-4 py-2 text-left">Classification</th>
+                            <th className="px-4 py-2 text-right w-24">Confidence</th>
+                            <th className="px-4 py-2 text-right w-36">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row) => {
+                            const cls = (row.classification ?? {}) as CandidateClassification
+                            const meta = (row.rawMetadata ?? {}) as RawCandidateMetadata
+                            const displayUrl = row.canonicalUrl ?? row.sourceUrl
+                            const confidence = row.confidenceScore ?? cls.confidence ?? 0
 
-                return (
-                  <ClickableRow
-                    key={row.id}
-                    href={`/admin/candidates/${row.id}`}
-                    className="border-t border-border-subtle hover:bg-surface align-top"
-                  >
-                    {/* URL + title */}
-                    <td className="px-4 py-3 max-w-xs">
-                      <Link
-                        href={`/admin/candidates/${row.id}`}
-                        className="text-xs text-primary hover:underline break-all line-clamp-1 font-medium"
-                      >
-                        {meta.title ?? displayUrl}
-                      </Link>
-                      <a
-                        href={displayUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-0.5 text-[10px] text-muted hover:underline break-all line-clamp-1 block"
-                      >
-                        {displayUrl}
-                      </a>
-                      {cls.summary && (
-                        <p className="mt-1 text-xs text-muted line-clamp-2">{cls.summary}</p>
-                      )}
-                      <p className="mt-1 text-[10px] text-muted-2">
-                        {new Date(row.createdAt).toLocaleDateString()}
-                      </p>
-                    </td>
+                            return (
+                              <ClickableRow
+                                key={row.id}
+                                href={`/admin/candidates/${row.id}`}
+                                className="border-t border-border-subtle hover:bg-surface align-top"
+                              >
+                                {/* URL + title */}
+                                <td className="px-4 py-3 max-w-xs">
+                                  <Link
+                                    href={`/admin/candidates/${row.id}`}
+                                    className="text-xs text-primary hover:underline break-all line-clamp-1 font-medium"
+                                  >
+                                    {meta.title ?? displayUrl}
+                                  </Link>
+                                  <a
+                                    href={displayUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-0.5 text-[10px] text-muted hover:underline break-all line-clamp-1 block"
+                                  >
+                                    {displayUrl}
+                                  </a>
+                                  {cls.summary && (
+                                    <p className="mt-1 text-xs text-muted line-clamp-2">{cls.summary}</p>
+                                  )}
+                                  <p className="mt-1 text-[10px] text-muted-2">
+                                    {new Date(row.createdAt).toLocaleDateString()}
+                                  </p>
+                                </td>
 
-                    {/* Classification tags */}
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {cls.toolType && (
-                          <Badge>{cls.toolType.replace(/_/g, ' ')}</Badge>
-                        )}
-                        {(cls.programs ?? []).map((p) => (
-                          <Badge key={p} variant="program">{p.toUpperCase()}</Badge>
-                        ))}
-                        {cls.isOfficial && <Badge variant="official">official</Badge>}
-                        {cls.isVendor && <Badge variant="vendor">vendor</Badge>}
-                        {cls.isRookieFriendly && <Badge variant="rookie">rookie</Badge>}
-                      </div>
-                      {cls.reasoning && (
-                        <p className="mt-1.5 text-[10px] text-muted-2 line-clamp-2 italic">
-                          {cls.reasoning}
-                        </p>
-                      )}
-                    </td>
+                                {/* Classification tags */}
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-wrap gap-1">
+                                    {cls.toolType && (
+                                      <Badge>{cls.toolType.replace(/_/g, ' ')}</Badge>
+                                    )}
+                                    {(cls.programs ?? []).map((p) => (
+                                      <Badge key={p} variant="program">{p.toUpperCase()}</Badge>
+                                    ))}
+                                    {cls.isOfficial && <Badge variant="official">official</Badge>}
+                                    {cls.isVendor && <Badge variant="vendor">vendor</Badge>}
+                                    {cls.isRookieFriendly && <Badge variant="rookie">rookie</Badge>}
+                                  </div>
+                                  {cls.reasoning && (
+                                    <p className="mt-1.5 text-[10px] text-muted-2 line-clamp-2 italic">
+                                      {cls.reasoning}
+                                    </p>
+                                  )}
+                                </td>
 
-                    {/* Confidence */}
-                    <td className="px-4 py-3 text-right">
-                      <ConfidenceBar value={confidence} />
-                    </td>
+                                {/* Confidence */}
+                                <td className="px-4 py-3 text-right">
+                                  <ConfidenceBar value={confidence} />
+                                </td>
 
-                    {/* Actions */}
-                    <td className="px-4 py-3 text-right">
-                      <CandidateActions candidateId={row.id} status={row.status} />
-                    </td>
-                  </ClickableRow>
-                )
-              })}
-            </tbody>
-          </table>
+                                {/* Actions */}
+                                <td className="px-4 py-3 text-right">
+                                  <CandidateActions candidateId={row.id} status={row.status} />
+                                </td>
+                              </ClickableRow>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+          </div>
         </div>
       )}
 

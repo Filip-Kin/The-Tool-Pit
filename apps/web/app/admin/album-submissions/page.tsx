@@ -43,36 +43,38 @@ export default async function AdminAlbumSubmissionsPage({
         <p className="text-sm text-muted">No submissions yet.</p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-2 text-xs text-muted">
-              <tr>
-                <th className="px-4 py-2 text-left">URL</th>
-                <th className="px-4 py-2 text-left">Event hint</th>
-                <th className="px-4 py-2 text-left">Status</th>
-                <th className="px-4 py-2 text-left">When</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-t border-border-subtle align-top">
-                  <td className="max-w-xs px-4 py-2">
-                    <a
-                      href={r.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="line-clamp-1 break-all text-xs text-primary hover:underline"
-                    >
-                      {r.url}
-                    </a>
-                    {r.submitterNote && <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-2">{r.submitterNote}</p>}
-                  </td>
-                  <td className="px-4 py-2 text-xs text-muted">{r.eventHint ?? '-'}</td>
-                  <td className="px-4 py-2 text-xs text-foreground">{r.status}</td>
-                  <td className="px-4 py-2 text-xs text-muted-2">{new Date(r.createdAt).toLocaleDateString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="min-w-[36rem] w-full text-sm">
+                        <thead className="bg-surface-2 text-xs text-muted">
+                          <tr>
+                            <th className="px-4 py-2 text-left">URL</th>
+                            <th className="px-4 py-2 text-left">Event hint</th>
+                            <th className="px-4 py-2 text-left">Status</th>
+                            <th className="px-4 py-2 text-left">When</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((r) => (
+                            <tr key={r.id} className="border-t border-border-subtle align-top">
+                              <td className="max-w-xs px-4 py-2">
+                                <a
+                                  href={r.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="line-clamp-1 break-all text-xs text-primary hover:underline"
+                                >
+                                  {r.url}
+                                </a>
+                                {r.submitterNote && <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-2">{r.submitterNote}</p>}
+                              </td>
+                              <td className="px-4 py-2 text-xs text-muted">{r.eventHint ?? '-'}</td>
+                              <td className="px-4 py-2 text-xs text-foreground">{r.status}</td>
+                              <td className="px-4 py-2 text-xs text-muted-2">{new Date(r.createdAt).toLocaleDateString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+          </div>
         </div>
       )}
 
