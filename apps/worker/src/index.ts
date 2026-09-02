@@ -26,6 +26,7 @@ import { enqueueDueGrantMonitors } from './grants/cadence.js'
 import { sendApprovalNotice, reviewQueueUrl } from '@the-tool-pit/types'
 import { processListingDiscoverJob } from './listings/discover.js'
 import { processReadCandidatesJob } from './listings/read-candidates.js'
+import { closeBrowser } from './connectors/playwright-render.js'
 import type { ReadCandidatesPayload } from './listings/read-candidates.js'
 import { processSeasonRenewalJob } from './listings/season-renewal.js'
 import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload, AlbumIngestPayload, AlbumEnrichPayload } from '@the-tool-pit/types'
@@ -400,6 +401,9 @@ async function shutdown() {
     readCandidatesWorker.close(),
     seasonRenewalWorker.close(),
   ])
+  // The shared browser outlives any single job, so it is closed here rather
+  // than by whoever happened to render last.
+  await closeBrowser()
   process.exit(0)
 }
 

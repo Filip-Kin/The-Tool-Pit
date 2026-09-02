@@ -19,7 +19,9 @@
  */
 import { politeFetch } from './base.js'
 
-const TIMEOUT_MS = 30_000
+const TIMEOUT_MS = 20_000
+/** How long to wait for the JavaScript that fills a page in, after the DOM. */
+const SETTLE_MS = 4_000
 const MAX_TEXT_LENGTH = 25_000
 
 /** Tags whose contents are never prose. */
@@ -41,25 +43,66 @@ export function htmlToText(html: string): string {
     .trim()
 }
 
-async function renderWithBrowser(url: string): Promise<string | null> {
-  let playwright: typeof import('playwright')
-  try {
-    playwright = await import('playwright')
-  } catch {
-    return null
+/**
+ * ONE BROWSER, kept alive between pages.
+ *
+ * A launch is about a second and a fair amount of memory, and the reader opens
+ * up to eight pages per candidate across dozens of candidates. Launching per
+ * page made a single read take five minutes, which is most of a night for one
+ * sweep. The browser is started on first use and closed on shutdown; a crashed
+ * browser is dropped and the next call starts a fresh one.
+ */
+let browserPromise: Promise<import('playwright').Browser | null> | null = null
+
+async function getBrowser(): Promise<import('playwright').Browser | null> {
+  if (browserPromise) {
+    const existing = await browserPromise
+    if (existing?.isConnected()) return existing
+    // Crashed or closed underneath us. Forget it and start again.
+    browserPromise = null
   }
 
-  let browser: Awaited<ReturnType<typeof playwright.chromium.launch>> | null = null
-  try {
-    browser = await playwright.chromium.launch({
-      headless: true,
-      // Set on a machine that has a system chromium but no downloaded browsers.
-      ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
-        ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
-        : {}),
-    })
+  browserPromise = (async () => {
+    let playwright: typeof import('playwright')
+    try {
+      playwright = await import('playwright')
+    } catch {
+      return null
+    }
+    try {
+      return await playwright.chromium.launch({
+        headless: true,
+        // Set on a machine that has a system chromium but no downloaded browsers.
+        ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
+          ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
+          : {}),
+      })
+    } catch (err) {
+      console.warn(`[render] no browser available: ${String(err).split('\n')[0]}`)
+      return null
+    }
+  })()
 
-    const page = await browser.newPage()
+  return browserPromise
+}
+
+/** Close the shared browser. Called from the worker's shutdown path. */
+export async function closeBrowser(): Promise<void> {
+  const browser = browserPromise ? await browserPromise : null
+  browserPromise = null
+  await browser?.close().catch(() => {})
+}
+
+async function renderWithBrowser(url: string): Promise<string | null> {
+  const browser = await getBrowser()
+  if (!browser) return null
+
+  // A context per page, so cookies and storage from one site never reach the
+  // next, and closing it frees everything that page allocated.
+  let context: import('playwright').BrowserContext | null = null
+  try {
+    context = await browser.newContext()
+    const page = await context.newPage()
 
     // Block what cannot carry text, to keep a render inside the timeout.
     await page.route('**/*', (route) => {
@@ -68,7 +111,13 @@ async function renderWithBrowser(url: string): Promise<string | null> {
       else void route.continue()
     })
 
-    await page.goto(url, { waitUntil: 'networkidle', timeout: TIMEOUT_MS })
+    // NOT networkidle as the goto condition. Plenty of real sites poll or hold
+    // a socket open and never go idle, so waiting for it burns the entire
+    // timeout on a page that finished rendering in two seconds. Wait for the
+    // DOM, then give the network a short grace period for the JavaScript that
+    // fills a Wix or Squarespace page in.
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: TIMEOUT_MS })
+    await page.waitForLoadState('networkidle', { timeout: SETTLE_MS }).catch(() => {})
 
     const text = (await page.evaluate(`
       document.querySelectorAll('script,style,noscript,svg,iframe,nav,footer').forEach(el => el.remove());
@@ -80,7 +129,7 @@ async function renderWithBrowser(url: string): Promise<string | null> {
     console.warn(`[render] browser could not read ${url}: ${String(err).split('\n')[0]}`)
     return null
   } finally {
-    await browser?.close().catch(() => {})
+    await context?.close().catch(() => {})
   }
 }
 

@@ -127,6 +127,10 @@ export default async function EventCandidatesPage({
             const title = ex.name || meta.title || row.canonicalUrl || row.sourceUrl
             const dates = ex.startDate ? (ex.endDate && ex.endDate !== ex.startDate ? `${ex.startDate} to ${ex.endDate}` : ex.startDate) : null
             const place = [ex.city, ex.region, ex.country].filter(Boolean).join(', ') || null
+            const cost =
+              ex.costUsd !== undefined && ex.costUsd !== null
+                ? `$${ex.costUsd}${ex.costNote ? ` (${ex.costNote})` : ''}`
+                : (ex.costNote ?? null)
 
             return (
               <article key={row.id} className="rounded-lg border border-border bg-surface p-4">
@@ -151,10 +155,30 @@ export default async function EventCandidatesPage({
                       ['address', ex.address],
                       ['place', place],
                       ['host team', ex.hostTeamNumber],
+                      ['capacity', ex.capacity],
+                      ['cost', cost],
+                      ['registration', ex.registrationStatus],
+                      ['volunteers', ex.volunteerStatus],
                       ['website', ex.website],
-                      ['registration', ex.registrationUrl],
+                      ['sign up', ex.registrationUrl],
+                      ['volunteer at', ex.volunteerUrl],
+                      ['contact', ex.contactEmail],
+                      ['notes', ex.notes],
                       ['TBA key', ex.tbaKey ?? row.tbaKey],
                     ]}
+                    evidence={meta.readEvidence}
+                    keys={{
+                      dates: 'startDate',
+                      place: 'city',
+                      venue: 'venueName',
+                      'host team': 'hostTeamNumber',
+                      cost: 'costUsd',
+                      registration: 'registrationStatus',
+                      volunteers: 'volunteerStatus',
+                      'sign up': 'registrationUrl',
+                      'volunteer at': 'volunteerUrl',
+                      contact: 'contactEmail',
+                    }}
                   />
                   <EvidencePanel
                     sourceUrl={row.sourceUrl}
@@ -163,6 +187,9 @@ export default async function EventCandidatesPage({
                     discoveredVia={meta.discoveredVia}
                     evidence={meta.evidence}
                     links={meta.links}
+                    readPages={meta.readPages}
+                    readRejected={meta.readRejected}
+                    readAt={meta.readAt}
                   />
                 </div>
 

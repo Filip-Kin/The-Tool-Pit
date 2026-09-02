@@ -146,10 +146,30 @@ export default async function FieldCandidatesPage({
                       ['team', ex.teamNumber ?? row.teamNumber],
                       ['team name', ex.teamName],
                       ['program', ex.program],
+                      ['address', ex.address],
                       ['place', place],
-                      ['website', ex.website],
+                      ['hours', ex.hours],
+                      ['availability', ex.availability],
+                      ['coverage', ex.coverage],
+                      ['perimeter', ex.perimeter],
+                      ['elements', ex.elements],
+                      ['FMS', ex.hasFms === undefined ? null : ex.hasFms ? 'yes' : 'no'],
+                      ['ceiling', ex.ceilingHeightFt ? `${ex.ceilingHeightFt} ft` : null],
+                      ['contact', ex.contactInfo],
                       ['contact form', ex.contactUrl],
+                      ['website', ex.website],
+                      ['notes', ex.notes],
                     ]}
+                    evidence={meta.readEvidence}
+                    keys={{
+                      team: 'teamNumber',
+                      'team name': 'teamName',
+                      place: 'city',
+                      FMS: 'hasFms',
+                      ceiling: 'ceilingHeightFt',
+                      contact: 'contactInfo',
+                      'contact form': 'contactUrl',
+                    }}
                   />
                   <EvidencePanel
                     sourceUrl={row.sourceUrl}
@@ -159,6 +179,9 @@ export default async function FieldCandidatesPage({
                     evidence={meta.evidence}
                     signals={meta.signals}
                     links={meta.links}
+                    readPages={meta.readPages}
+                    readRejected={meta.readRejected}
+                    readAt={meta.readAt}
                   />
                 </div>
 
