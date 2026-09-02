@@ -62,13 +62,18 @@ Fields:
   country           two-letter code, "US" or "CA"
   startDate         "YYYY-MM-DD", the FIRST day. "October 30 - November 1" starts on 30 October
   endDate           "YYYY-MM-DD", the LAST day. Null for a one-day event
-  days              1 or 2: how many days of COMPETITION there are, which is not the same as how
-                    many days the event spans. Off-season events very often open with a day of
-                    load-in, move-in, setup, pit hours, inspection or practice matches only, and
-                    that day does not count. "Friday, October 30 - Sunday, November 1 (Friday
-                    load-in and practice matches in the late afternoon)" is TWO days of
-                    competition, not three. If the source does not distinguish, count the days
-                    that have qualification or elimination matches on them.
+  days              1 or 2: the number of days that PLAY QUALIFICATION OR PLAYOFF MATCHES.
+                    Nothing else counts, and this cannot be worked out from the dates. A day of
+                    setup, load-in, move-in, pit hours or inspection does not count. A day of
+                    PRACTICE MATCHES does not count either, even though matches are played on it:
+                    "Friday load-in and practice matches in the late afternoon, qualifications
+                    Saturday, playoffs Sunday" is TWO.
+                    The combinations vary and no rule of thumb covers them. One day can hold
+                    load-in and the whole competition. Setup and load-in can take a day each and
+                    be followed by a single competition day. A three-day span can be one
+                    competition day or two. Read the schedule and count the days with quals or
+                    playoffs on them; if the source never says, return null rather than guessing
+                    from the span.
   capacity          integer, how many teams can enter
   costUsd           integer US dollars per team to enter, so 250 for "$250 per team"
   costNote          ONLY when the price is not one flat number: a discount for a second robot, a

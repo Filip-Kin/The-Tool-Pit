@@ -6,6 +6,7 @@ export * from './human-edited'
 export * from './listing-identity'
 export * from './crawl-connectors'
 export * from './slug'
+export * from './geocode'
 export * from './popularity-score'
 
 // Re-export common drizzle operators so consumers (and top-level scripts that

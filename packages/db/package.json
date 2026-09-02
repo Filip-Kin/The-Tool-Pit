@@ -60,6 +60,10 @@
     "./slug": {
       "bun": "./src/slug.ts",
       "default": "./dist/slug.js"
+    },
+    "./geocode": {
+      "bun": "./src/geocode.ts",
+      "default": "./dist/geocode.js"
     }
   },
   "main": "./dist/index.js",

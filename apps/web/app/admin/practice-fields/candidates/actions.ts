@@ -7,6 +7,7 @@ import { getDb } from '@/lib/db'
 import { practiceFieldCandidates, practiceFields } from '@the-tool-pit/db'
 import { bumpListingSourceCounter, practiceFieldFromCandidate } from '@/lib/admin/listing-discovery'
 import { fieldPublishBlockers } from '@/lib/fields/publish-bar'
+import { geocodeVenue } from '@the-tool-pit/db/geocode'
 
 const QUEUE_PATH = '/admin/practice-fields/candidates'
 
@@ -96,6 +97,24 @@ export async function acceptFieldCandidate(
   // practice most of these land as pending with one thing missing. Saying which
   // is the point.
   const row = practiceFieldFromCandidate(candidate, clean)
+
+  // Same lookup as the events queue. A practice field usually has no address at
+  // all, so this rarely fires, and when it does the moderator typed the address
+  // into the form a moment ago and should not then be sent to a map.
+  if (row.latitude == null || row.longitude == null) {
+    const located = await geocodeVenue({
+      venueName: row.name,
+      address: row.address,
+      city: row.city,
+      region: row.region,
+      country: row.country,
+    })
+    if (located) {
+      row.latitude = located.latitude
+      row.longitude = located.longitude
+    }
+  }
+
   const missing = fieldPublishBlockers({
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,

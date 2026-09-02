@@ -97,20 +97,24 @@ export function eventListingFromCandidate(
   // pointer a lot of these events have.
   const cdFallback = /^https?:\/\/(www\.)?chiefdelphi\.com\//i.test(candidate.sourceUrl) ? candidate.sourceUrl : null
 
-  // COMPETITION days, which is not the span.
+  // Days that PLAY QUALIFICATION OR PLAYOFF MATCHES. Nothing else counts, and
+  // it cannot be derived from the dates.
   //
-  // Off-season events routinely open with a day of load-in, setup, pit hours
-  // and practice matches, and that day is not a day of competition. Beach
-  // Blitz runs Friday to Sunday and is a two-day event. So the reader is asked
-  // for this directly and its answer wins.
+  // Setup, load-in, pit hours and inspection do not count, and neither do
+  // practice matches, even though matches are played. The combinations vary
+  // and no rule of thumb survives them: one day can hold load-in and the whole
+  // competition; setup and load-in can take a day each before a single
+  // competition day; a three-day span can be one competition day or two.
   //
-  // The span is only a fallback, and only when it is already 1 or 2: a span of
-  // three says nothing on its own, because whether it is two competition days
-  // plus a load-in or something else is exactly the question.
+  // So this is READ, not computed. The one span that is safe is a single date:
+  // an event listed on one day plays its matches on that day, because a
+  // separate setup day would have made the span two. A span of two is exactly
+  // the case that breaks a derivation, since it is as likely to be setup plus
+  // one competition day as it is two competition days.
   const start = isoDate(ex.startDate)
   const end = isoDate(ex.endDate)
   const spanned = start && end ? Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000) + 1 : null
-  const days = ex.days === 1 || ex.days === 2 ? ex.days : spanned === 1 || spanned === 2 ? spanned : null
+  const days = ex.days === 1 || ex.days === 2 ? ex.days : spanned === 1 ? 1 : null
 
   return {
     name,

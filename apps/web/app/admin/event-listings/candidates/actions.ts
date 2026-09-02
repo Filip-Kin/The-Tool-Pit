@@ -7,6 +7,7 @@ import { getDb } from '@/lib/db'
 import { eventListingCandidates, eventListings } from '@the-tool-pit/db'
 import { bumpListingSourceCounter, eventListingFromCandidate } from '@/lib/admin/listing-discovery'
 import { eventPublishBlockers } from '@/lib/events/publish-bar'
+import { geocodeVenue } from '@the-tool-pit/db/geocode'
 
 const QUEUE_PATH = '/admin/event-listings/candidates'
 
@@ -95,6 +96,28 @@ export async function acceptEventCandidate(
   // reaching the map. A candidate that does not clear it is written as pending
   // and the reviewer is told exactly which field is missing.
   const row = eventListingFromCandidate(candidate, clean)
+
+  // A PIN IS A LOOKUP, so do it here rather than refusing over it.
+  //
+  // The read geocodes what it finds, but a candidate read before that existed
+  // has no pin, and a moderator who has just corrected the address in the form
+  // should not be told to go and find the building on a map. Same strictness as
+  // the reader: a real address or a venue with a town, and the answer has to
+  // land in the state the row claims.
+  if (row.latitude == null || row.longitude == null) {
+    const located = await geocodeVenue({
+      venueName: row.venueName,
+      address: row.address,
+      city: row.city,
+      region: row.region,
+      country: row.country,
+    })
+    if (located) {
+      row.latitude = located.latitude
+      row.longitude = located.longitude
+    }
+  }
+
   const missing = eventPublishBlockers({
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,
