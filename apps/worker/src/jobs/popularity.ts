@@ -266,7 +266,9 @@ export async function processPopularityRefreshJob(
       .innerJoin(toolLinks, eq(toolLinks.toolId, tools.id))
       .where(and(eq(tools.status, 'published'), sql`${toolLinks.url} like '%chiefdelphi.com/t/%'`))
 
-    const allShares = toolThreadShares(cdLinks.map((row) => ({ toolId: row.id, url: row.url })))
+    const allShares = toolThreadShares(
+      cdLinks.map((row) => ({ toolId: row.id, slug: row.slug, url: row.url })),
+    )
     const sharerCounts = countToolsPerTopic(allShares)
 
     const targets = onlyTool ? allShares.filter((s) => s.toolId === onlyTool) : allShares
