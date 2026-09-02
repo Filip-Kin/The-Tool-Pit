@@ -248,6 +248,7 @@ export const HUMAN_EDITABLE_EVENT_KEYS = [
   'website',
   'registrationUrl',
   'volunteerUrl',
+  'teamListUrl',
   'chiefDelphiUrl',
   'contactEmail',
   'notes',

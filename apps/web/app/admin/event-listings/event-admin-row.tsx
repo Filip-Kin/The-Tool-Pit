@@ -173,6 +173,7 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
     website: listing.website,
     registrationUrl: listing.registrationUrl,
     volunteerUrl: listing.volunteerUrl,
+    teamListUrl: listing.teamListUrl,
     chiefDelphiUrl: listing.chiefDelphiUrl,
     contactEmail: listing.contactEmail,
     notes: listing.notes,
@@ -249,6 +250,7 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
         <L label="Website"><input className="input" value={form.website ?? ''} onChange={(e) => set('website', e.target.value)} /></L>
         <L label="Registration URL"><input className="input" value={form.registrationUrl ?? ''} onChange={(e) => set('registrationUrl', e.target.value)} /></L>
         <L label="Volunteer URL"><input className="input" value={form.volunteerUrl ?? ''} onChange={(e) => set('volunteerUrl', e.target.value)} /></L>
+        <L label="Team list page"><input className="input" value={form.teamListUrl ?? ''} onChange={(e) => set('teamListUrl', e.target.value)} placeholder="the event's own team list" /></L>
         <L label="Chief Delphi URL"><input className="input" value={form.chiefDelphiUrl ?? ''} onChange={(e) => set('chiefDelphiUrl', e.target.value)} /></L>
         <L label="Organiser email"><input className="input" value={form.contactEmail ?? ''} onChange={(e) => set('contactEmail', e.target.value)} /></L>
         <L label="TBA key" ><input className="input" value={form.tbaKey ?? ''} onChange={(e) => set('tbaKey', e.target.value)} placeholder="e.g. 2026mifli1" /></L>

@@ -253,6 +253,28 @@ export function validateEventRead(
       rejected.push(`${key}: "${String(fields[key])}" is a site root, not a page for that`)
       delete fields[key]
       delete kept[key]
+      continue
+    }
+    // A team list is on the EVENT's own site. The Blue Alliance and Chief
+    // Delphi are where the roster comes from by other means, and one leaked
+    // into teamListUrl as if it were the event's own page.
+    if (key === 'teamListUrl' && /(?:thebluealliance\.com|chiefdelphi\.com)/i.test(value)) {
+      rejected.push(`${key}: that is The Blue Alliance, not the event's own team page`)
+      delete fields[key]
+      delete kept[key]
+    }
+  }
+
+  // A cost note that only restates the notes, or the price, is noise. "Free and
+  // open to the public" alongside costUsd 0 says nothing the number does not.
+  if (typeof fields.costNote === 'string') {
+    const note = fields.costNote.trim().toLowerCase()
+    const notes = typeof fields.notes === 'string' ? fields.notes.trim().toLowerCase() : ''
+    const justFree = fields.costUsd === 0 && /\bfree\b/.test(note)
+    if (note === notes || justFree) {
+      rejected.push('costNote: only restates the notes or the price, dropped')
+      delete fields.costNote
+      delete kept.costNote
     }
   }
 

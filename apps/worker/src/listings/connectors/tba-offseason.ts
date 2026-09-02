@@ -23,7 +23,6 @@
  *   actually choose on, and none of them exists in TBA at all.
  */
 import { TbaEventsConnector } from '../../connectors/tba-events.js'
-import { daysBetween } from './shared.js'
 import type {
   EventListingCandidateInput,
   EventListingConnector,
@@ -140,7 +139,11 @@ export class TbaOffseasonEventsConnector implements EventListingConnector {
             country: event.country ?? undefined,
             startDate,
             endDate,
-            days: daysBetween(startDate, endDate),
+            // NOT days. TBA gives the span, and competition days are not the
+            // span: a Friday-to-Sunday event with a Friday load-in is two
+            // days, not three. The reader works it out from the schedule; a
+            // guess from the dates is the exact mistake that put a 3 on
+            // several listings.
             website: event.website ?? undefined,
             tbaKey: event.tbaKey,
           },

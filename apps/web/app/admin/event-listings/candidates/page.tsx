@@ -15,6 +15,7 @@ import {
 import type { EventListingCandidateStatus, ExtractedEventListingFields, RawEventListingMetadata } from '@the-tool-pit/db'
 import { ExtractedList, EvidencePanel, StatusTabs } from '../../_listing/candidate-evidence'
 import { CandidateEditor } from '../../_listing/candidate-editor'
+import { DuplicateBanner } from '../../_listing/duplicate-banner'
 import { ListingCandidateActions } from '../../_listing/candidate-actions'
 import {
   acceptEventCandidate,
@@ -81,6 +82,40 @@ export default async function EventCandidatesPage({
   const total = totals?.total ?? 0
   const countMap: Record<string, number> = Object.fromEntries(counts.map((r) => [r.status, r.count]))
   const totalPages = Math.ceil(total / PAGE_SIZE)
+
+  // Does this lead already exist as a listing?
+  //
+  // Nothing checked before, so a moderator caught duplicates by recognising the
+  // name: Mos Eisley and Wolverine are both already on the site, and the
+  // crawler filed them again. Off-season names repeat across states, so this is
+  // a PROMPT, not a verdict: it shows the reviewer the listing it resembles and
+  // offers Attach, and the reviewer decides.
+  //
+  // Matched on name similarity, because the exact-key check misses the ones
+  // that matter: Mos Eisley's candidate and listing share a name but not a
+  // date. Only for the leads actually on this page, and only against listings
+  // that are not already what this candidate points at.
+  const pendingIds = rows.filter((r) => r.candidate.status === 'pending').map((r) => r.candidate.id)
+  const dupeRows = pendingIds.length
+    ? await db.execute<{ candidate_id: string; listing_id: string; listing_name: string; listing_status: string; sim: number }>(sql`
+        select c.id as candidate_id, l.id as listing_id, l.name as listing_name, l.status as listing_status,
+               similarity(coalesce(c.extracted->>'name', c.raw_metadata->>'title', ''), l.name) as sim
+        from event_listing_candidates c
+        join event_listings l
+          on similarity(coalesce(c.extracted->>'name', c.raw_metadata->>'title', ''), l.name) > 0.5
+         and l.id is distinct from c.matched_listing_id
+        where c.id in (${sql.join(pendingIds.map((id) => sql`${id}`), sql`, `)})
+        order by sim desc
+      `)
+    : []
+  const dupeByCandidate = new Map<string, { id: string; name: string; status: string; sim: number }>()
+  for (const d of dupeRows) {
+    // Best match per candidate only. The query is ordered by similarity, so the
+    // first one seen is the closest.
+    if (!dupeByCandidate.has(d.candidate_id)) {
+      dupeByCandidate.set(d.candidate_id, { id: d.listing_id, name: d.listing_name, status: d.listing_status, sim: d.sim })
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-8">
@@ -150,6 +185,14 @@ export default async function EventCandidatesPage({
 
                 {row.rejectionReason && <p className="mt-1 text-xs text-frc">{row.rejectionReason}</p>}
 
+                {dupeByCandidate.get(row.id) && (
+                  <DuplicateBanner
+                    candidateId={row.id}
+                    match={dupeByCandidate.get(row.id)!}
+                    attach={attachEventCandidate}
+                  />
+                )}
+
                 <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
                   <div className="min-w-0 flex-1">
                     {row.status === 'pending' ? (
@@ -177,6 +220,7 @@ export default async function EventCandidatesPage({
                           { name: 'website', label: 'Website', value: ex.website, wide: true, evidence: ev.website },
                           { name: 'registrationUrl', label: 'Sign-up link', value: ex.registrationUrl, wide: true, evidence: ev.registrationUrl },
                           { name: 'volunteerUrl', label: 'Volunteer link', value: ex.volunteerUrl, wide: true, evidence: ev.volunteerUrl },
+                          { name: 'teamListUrl', label: 'Team list page', value: ex.teamListUrl, wide: true, evidence: ev.teamListUrl },
                           { name: 'contactEmail', label: 'Contact email', value: ex.contactEmail, wide: true, evidence: ev.contactEmail },
                           { name: 'notes', label: 'Notes', type: 'textarea', value: ex.notes, wide: true, evidence: ev.notes },
                           { name: 'tbaKey', label: 'TBA key', value: ex.tbaKey ?? row.tbaKey, evidence: ev.tbaKey },

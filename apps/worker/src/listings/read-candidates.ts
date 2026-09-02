@@ -30,6 +30,27 @@ import { readFieldCandidate } from './read-field.js'
 import { fetchChiefDelphiTopic, parseChiefDelphiTopicId } from '../connectors/discourse.js'
 import { geocodeVenue, matchTbaEvent } from './locate.js'
 
+/**
+ * Every field the reader is asked for, per vertical.
+ *
+ * On a forced re-read these are cleared before the new answer is applied, so a
+ * value the reader no longer returns does not linger. Kept beside the readers
+ * they mirror; a field added to a read prompt has to be added here too, or a
+ * correction that removes it will not take.
+ */
+const READER_FIELDS: Record<'event' | 'field', string[]> = {
+  event: [
+    'name', 'program', 'hostTeamNumber', 'venueName', 'address', 'city', 'region', 'country',
+    'startDate', 'endDate', 'days', 'capacity', 'costUsd', 'costNote', 'registrationStatus',
+    'volunteerStatus', 'registrationUrl', 'volunteerUrl', 'website', 'teamListUrl', 'contactEmail', 'notes',
+  ],
+  field: [
+    'name', 'teamNumber', 'teamName', 'program', 'address', 'city', 'region', 'country',
+    'hours', 'availability', 'coverage', 'perimeter', 'elements', 'hasFms', 'ceilingHeightFt',
+    'contactInfo', 'contactUrl', 'website', 'notes',
+  ],
+}
+
 export interface ReadCandidatesPayload {
   /** 'event' or 'field'. Both when omitted. */
   vertical?: 'event' | 'field'
@@ -138,9 +159,21 @@ export async function processReadCandidatesJob(
         // the first pattern-matched pass had written it and "existing wins"
         // protected it, while the correct 30 October was thrown away each time.
         const rereading = Boolean(payload.force || payload.candidateId)
+
+        // On a FORCED re-read the reader is the authority for everything it
+        // reads, so a field it now omits must be CLEARED rather than kept. A
+        // discovery-set days of 3 survived otherwise: the reader correctly
+        // returned no days, and the old value merged straight back over the
+        // top. So the reader-owned keys are stripped from the existing record
+        // before the new answer goes on. Fields only discovery holds, a TBA
+        // key most of all, are not reader-owned and stay.
+        const readerOwned = new Set(READER_FIELDS[vertical])
+        const base = rereading
+          ? Object.fromEntries(Object.entries(stripEmpty(existing)).filter(([k]) => !readerOwned.has(k)))
+          : stripEmpty(existing)
         const merged: Record<string, unknown> = rereading
-          ? { ...stripEmpty(existing), ...read.fields }
-          : { ...read.fields, ...stripEmpty(existing) }
+          ? { ...base, ...read.fields }
+          : { ...read.fields, ...base }
         const added = Object.keys(read.fields).filter((k) => !(k in stripEmpty(existing))).length
 
         // A PIN AND A TBA CODE, both lookups rather than readings.

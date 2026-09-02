@@ -131,6 +131,7 @@ export interface EventEditInput {
   website?: string | null
   registrationUrl?: string | null
   volunteerUrl?: string | null
+  teamListUrl?: string | null
   chiefDelphiUrl?: string | null
   contactEmail?: string | null
   notes?: string | null
@@ -180,6 +181,7 @@ export async function updateEvent(id: string, input: EventEditInput): Promise<{ 
   if (input.website !== undefined) patch.website = input.website?.trim() || null
   if (input.registrationUrl !== undefined) patch.registrationUrl = input.registrationUrl?.trim() || null
   if (input.volunteerUrl !== undefined) patch.volunteerUrl = input.volunteerUrl?.trim() || null
+  if (input.teamListUrl !== undefined) patch.teamListUrl = input.teamListUrl?.trim() || null
   if (input.chiefDelphiUrl !== undefined) patch.chiefDelphiUrl = input.chiefDelphiUrl?.trim() || null
   if (input.contactEmail !== undefined) patch.contactEmail = input.contactEmail?.trim() || null
   if (input.notes !== undefined) patch.notes = input.notes?.trim() || null

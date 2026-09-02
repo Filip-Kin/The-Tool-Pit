@@ -136,3 +136,43 @@ describe('a team list read off a page', () => {
     expect(teamNumbersOnPage(page, 2026)).not.toContain(2026)
   })
 })
+
+describe('teamListUrl is the event own page', () => {
+  const sources = [{ source: 'thread', text: 'Chezy Champs at https://chezychamps.com this year' }]
+  it('drops a Blue Alliance link', () => {
+    const { fields, rejected } = validateEventRead(
+      {
+        website: { value: 'https://chezychamps.com', quote: 'https://chezychamps.com' },
+        teamListUrl: { value: 'https://www.thebluealliance.com/event/2026cc', quote: 'https://www.thebluealliance.com/event/2026cc' },
+      },
+      [...sources, { source: 'site', text: 'https://www.thebluealliance.com/event/2026cc' }],
+    )
+    expect(fields.teamListUrl).toBeUndefined()
+    expect(rejected.join(' ')).toContain('Blue Alliance')
+  })
+})
+
+describe('a redundant cost note', () => {
+  it('is dropped when it only restates free', () => {
+    const { fields } = validateEventRead(
+      {
+        costUsd: { value: 0, quote: 'free and open to the public' },
+        costNote: { value: 'Free and open to the public', quote: 'free and open to the public' },
+      },
+      [{ source: 'thread', text: 'This event is free and open to the public.' }],
+    )
+    expect(fields.costUsd).toBe(0)
+    expect(fields.costNote).toBeUndefined()
+  })
+
+  it('is kept when it says something the number does not', () => {
+    const { fields } = validateEventRead(
+      {
+        costUsd: { value: 400, quote: '$400 per team' },
+        costNote: { value: '$600 for a field-side pit', quote: '$600 for a field-side pit' },
+      },
+      [{ source: 'thread', text: '$400 per team, or $600 for a field-side pit.' }],
+    )
+    expect(fields.costNote).toBe('$600 for a field-side pit')
+  })
+})
