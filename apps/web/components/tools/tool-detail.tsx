@@ -141,8 +141,8 @@ export function ToolDetail({ tool, voted = false, favorited = false, claimState 
                 entityType="tool"
                 entityId={tool.id}
                 initialFavorited={favorited}
-                label="Save"
-                reason="Sign in to save this tool to your home page"
+                label="Bookmark"
+                reason="Sign in to bookmark this tool and find it again"
               />
               <ClaimListingButton entityType="tool" entityId={tool.id} state={claimState} />
             </div>

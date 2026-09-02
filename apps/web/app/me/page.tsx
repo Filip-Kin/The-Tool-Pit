@@ -13,7 +13,7 @@ import { TeamsSummary } from '@/components/me/teams-summary'
 import { FIELDS_ORIGIN, GRANTS_ORIGIN, PHOTOS_ORIGIN } from '@/components/me/vertical-links'
 
 export const metadata: Metadata = {
-  title: 'Saved',
+  title: 'Bookmarks',
   // Nothing here is public and every render is different, so keep it out of
   // search results entirely.
   robots: { index: false, follow: false },
@@ -55,7 +55,7 @@ export default async function MePage() {
 
   return (
     <MeShell
-      title={firstName ? `Welcome back, ${firstName}` : 'Your saved items'}
+      title={firstName ? `Welcome back, ${firstName}` : 'Your bookmarks'}
       intro="Everything you have saved across the tools directory, event photos, the practice field map and grants, in one place."
       active="saved"
     >
@@ -67,28 +67,28 @@ export default async function MePage() {
         ) : (
           <>
             <SavedSection
-              title="Saved tools"
+              title="Tools"
               description="Calculators, apps and resources you have kept."
               items={tools}
               browseHref="/"
               browseLabel="Browse tools"
             />
             <SavedSection
-              title="Saved photos"
+              title="Photo albums"
               description="Events and albums you are following."
               items={photos}
               browseHref={PHOTOS_ORIGIN}
               browseLabel="Browse event photos"
             />
             <SavedSection
-              title="Saved practice fields"
+              title="Practice fields"
               description="Fields other teams are willing to share."
               items={fields}
               browseHref={FIELDS_ORIGIN}
               browseLabel="Open the field map"
             />
             <SavedSection
-              title="Saved grants"
+              title="Grants"
               description="Funding you are keeping an eye on. Check the deadline on the funder's own page before you rely on it."
               items={grants}
               browseHref={GRANTS_ORIGIN}

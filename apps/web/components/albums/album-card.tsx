@@ -96,7 +96,7 @@ export function AlbumCard({
               entityType="album"
               entityId={album.id}
               initialFavorited={favorited}
-              reason="Sign in to save this album to your home page"
+              reason="Sign in to bookmark this album and find it again"
             />
             <AlbumMenu albumId={album.id} albumUrl={album.url} claimState={claimState} />
           </div>

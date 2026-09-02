@@ -136,7 +136,7 @@ export function SaveGrantButton({
         })}
       >
         <Bookmark className={cn('h-4 w-4', saved && 'fill-current')} aria-hidden />
-        {saved ? 'Saved' : 'Save this grant'}
+        {saved ? 'Bookmarked' : 'Bookmark this grant'}
       </button>
 
       <p className="text-xs text-muted-2">
@@ -156,7 +156,7 @@ export function SaveGrantButton({
       <SignInDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        reason="Sign in to save this grant and get a reminder before the deadline"
+        reason="Sign in to bookmark this grant and get a reminder before the deadline"
       />
     </div>
   )

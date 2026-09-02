@@ -24,7 +24,7 @@ export function FavoriteButton({
   entityType,
   entityId,
   initialFavorited,
-  reason = 'Sign in to save this to your home page',
+  reason = 'Sign in to bookmark this and find it again',
   label,
   className,
 }: {
@@ -104,7 +104,7 @@ export function FavoriteButton({
     void send(!favorited)
   }
 
-  const title = error ?? (favorited ? 'Saved. Click to remove' : 'Save this')
+  const title = error ?? (favorited ? 'Bookmarked. Click to remove' : 'Bookmark this')
 
   return (
     <>
@@ -115,7 +115,7 @@ export function FavoriteButton({
         // is still loading: a signed-out click is a useful click.
         disabled={busy}
         aria-pressed={favorited}
-        aria-label={favorited ? 'Remove from saved' : 'Save'}
+        aria-label={favorited ? 'Remove bookmark' : 'Bookmark'}
         aria-busy={busy || loading}
         title={title}
         className={cn(
@@ -136,7 +136,7 @@ export function FavoriteButton({
             mean the same thing. A bookmark says "keep this for me", which is
             what it does. It is also what the grant save control already uses. */}
         <Bookmark className={cn('h-4 w-4', favorited && 'fill-current')} aria-hidden />
-        {label && <span>{favorited ? 'Saved' : label}</span>}
+        {label && <span>{favorited ? 'Bookmarked' : label}</span>}
       </button>
 
       <SignInDialog open={dialogOpen} onOpenChange={setDialogOpen} reason={reason} />

@@ -31,7 +31,7 @@ export function MeShell({
             <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{title}</h1>
             {intro && <p className="mt-2 max-w-2xl text-sm text-muted">{intro}</p>}
             <nav className="mt-6 flex items-center gap-1 overflow-x-auto border-b border-border-subtle">
-              <Tab href="/me" label="Saved" active={active === 'saved'} />
+              <Tab href="/me" label="Bookmarks" active={active === 'saved'} />
               <Tab href="/me/listings" label="Listings" active={active === 'listings'} />
               <Tab href="/me/team" label="Teams" active={active === 'team'} />
               <Tab href="/me/notifications" label="Notifications" active={active === 'notifications'} />

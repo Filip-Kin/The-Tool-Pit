@@ -94,36 +94,10 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Browse by program */}
-      <section className="container mx-auto max-w-6xl px-4">
-        <SectionHeader title="Browse by Program" />
-        <ProgramCards />
-      </section>
-
-      {/* Trending */}
-      {/* Your own shortlist comes before anything we chose for you, and only
-          when there is one. A signed-out visitor and a signed-in one who has
-          saved nothing both see the page exactly as it was. */}
-      {favorites.length > 0 && (
-        <section className="container mx-auto max-w-6xl px-4">
-          <SectionHeader
-            title="Favorite tools"
-            description="Everything you have saved"
-            href="/me"
-            linkLabel="See all"
-          />
-          <Suspense fallback={<ToolGrid.Skeleton count={favorites.length} />}>
-            <ToolGrid tools={favorites} />
-          </Suspense>
-        </section>
-      )}
-
-      {/* Featured, above Popular and below the visitor's own saves.
-          Somebody opening the site for the first time has nothing saved, so
-          this is the first row they read, which is the point of it: Popular,
-          Rookie Friendly and Official are all things you would guess were
-          here, and none of them can say why one particular tool is worth the
-          click. Nothing is featured to begin with and the section renders
+      {/* Featured leads the page. Popular, Rookie Friendly and Official are all
+          rows a reader would guess were here, and none of them can say why one
+          particular tool is worth the click. This is the row that can, so it
+          goes first. Nothing is featured to begin with and the section renders
           nothing at all until something is, so an unset home page is the old
           home page rather than an empty shelf. No link out: it is a short list
           somebody chose, not a category you can browse. */}
@@ -135,6 +109,30 @@ export default async function HomePage() {
           </Suspense>
         </section>
       )}
+
+      {/* Then your own, and only when there is some. A signed-out visitor and a
+          signed-in one who has bookmarked nothing both see the page as it was.
+          Called Bookmarked because the control on every card is a bookmark;
+          it was "Favorite tools" next to a button that says bookmark. */}
+      {favorites.length > 0 && (
+        <section className="container mx-auto max-w-6xl px-4">
+          <SectionHeader
+            title="Bookmarked"
+            description="Everything you have bookmarked"
+            href="/me"
+            linkLabel="See all"
+          />
+          <Suspense fallback={<ToolGrid.Skeleton count={favorites.length} />}>
+            <ToolGrid tools={favorites} />
+          </Suspense>
+        </section>
+      )}
+
+      {/* Browse by program */}
+      <section className="container mx-auto max-w-6xl px-4">
+        <SectionHeader title="Browse by Program" />
+        <ProgramCards />
+      </section>
 
       <section className="container mx-auto max-w-6xl px-4">
         <SectionHeader

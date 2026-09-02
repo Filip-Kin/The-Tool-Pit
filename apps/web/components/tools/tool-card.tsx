@@ -111,7 +111,7 @@ export function ToolCard({ tool, voted = false, favorited = false, note, classNa
             entityType="tool"
             entityId={tool.id}
             initialFavorited={favorited}
-            reason="Sign in to save this tool to your home page"
+            reason="Sign in to bookmark this tool and find it again"
             className="relative z-10"
           />
           <VoteButton

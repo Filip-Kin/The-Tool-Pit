@@ -23,7 +23,7 @@ export interface SavedItem {
 }
 
 /**
- * A titled group of saved items.
+ * A titled group of bookmarked items.
  *
  * Renders NOTHING when the group is empty. The page decides what an entirely
  * empty account looks like, so an empty section here would only leave a hole

@@ -77,7 +77,7 @@ export function UserMenu() {
               voices in four items. The menu hangs off your own avatar and the
               tabs sit under your own header, so whose they are is already
               said. */}
-          <MenuLink href="/me">Saved</MenuLink>
+          <MenuLink href="/me">Bookmarks</MenuLink>
           <MenuLink href="/me/listings">Listings</MenuLink>
           <MenuLink href="/me/team">Teams</MenuLink>
           <MenuLink href="/me/notifications">Notifications</MenuLink>
