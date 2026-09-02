@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, integer, boolean, doublePrecision, date, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
 import type { AnyPgColumn } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import { users } from './accounts'
 
 // Enum-like value tuples live in ../event-enums (a zero-dependency module) so
@@ -196,6 +196,27 @@ export const eventListings = pgTable(
      *         so the claim page still reads their submission as evidence.
      */
     submitterOwns: boolean('submitter_owns'),
+
+    /**
+     * The fields a person has set by hand, so an automated pass leaves them be.
+     *
+     * Same column and same helpers as tools.human_edited_fields, deliberately:
+     * a second mechanism for one rule is how the rule ends up applying in one
+     * place and not the other.
+     *
+     * NOTHING OVERWRITES THESE TODAY, and that is exactly when to add it. The
+     * only automated writer to this table is scripts/sync-event-rosters.ts,
+     * which touches registeredTeamCount and teamCountUpdatedAt, and those are
+     * the machine's own numbers. The moment anything re-reads TBA into a
+     * listing, an organiser's corrected venue address gets replaced by TBA's
+     * with no way to stop it, and the fix has to exist BEFORE that job does.
+     *
+     * Empty is the normal state, and an untouched listing refreshes in full.
+     */
+    humanEditedFields: text('human_edited_fields')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
 
     publishedAt: timestamp('published_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

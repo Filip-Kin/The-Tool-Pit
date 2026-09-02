@@ -15,6 +15,7 @@ import {
 import { notifyEventPublished, notifyEventRejected } from '@/lib/notify/approvals'
 import { grantEventOwnership } from '@/lib/listings/submitter-ownership'
 import { eventPublishBlockers } from '@/lib/events/publish-bar'
+import { addHumanEdits, changedKeys, HUMAN_EDITABLE_EVENT_KEYS } from '@the-tool-pit/db/human-edited'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -184,7 +185,22 @@ export async function updateEvent(id: string, input: EventEditInput): Promise<{ 
   if (input.notes !== undefined) patch.notes = input.notes?.trim() || null
   if (input.tbaKey !== undefined) patch.tbaKey = input.tbaKey?.trim().toLowerCase() || null
 
-  await db.update(eventListings).set(patch).where(eq(eventListings.id, id))
+  // Record what the moderator actually MOVED, so a later refresh leaves it be.
+  // Earned by changing a value, never by pressing Save: marking every field on
+  // the form would freeze a venue nobody read out of a future TBA correction.
+  const [before] = await db
+    .select()
+    .from(eventListings)
+    .where(eq(eventListings.id, id))
+    .limit(1)
+
+  const claimed = changedKeys(patch, (before ?? {}) as Record<string, unknown>, HUMAN_EDITABLE_EVENT_KEYS)
+  const humanEditedFields = addHumanEdits(before?.humanEditedFields, claimed)
+
+  await db
+    .update(eventListings)
+    .set({ ...patch, ...(humanEditedFields ? { humanEditedFields } : {}) })
+    .where(eq(eventListings.id, id))
   revalidateAll()
   return {}
 }

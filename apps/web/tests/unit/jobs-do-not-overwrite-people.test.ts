@@ -19,10 +19,18 @@
 import { describe, it, expect } from 'bun:test'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { HUMAN_EDITABLE_TOOL_KEYS } from '@the-tool-pit/db'
+import {
+  HUMAN_EDITABLE_TOOL_KEYS,
+  HUMAN_EDITABLE_EVENT_KEYS,
+  MACHINE_OWNED_EVENT_KEYS,
+} from '@the-tool-pit/db'
 
 const REPO = join(import.meta.dir, '../../../..')
 const WORKER = join(REPO, 'apps/worker/src')
+// Off-season events are refreshed by a top-level script rather than a worker
+// job, and a script writing to a table is exactly as able to trample somebody's
+// typing as a queue is.
+const SCRIPTS = join(REPO, 'scripts')
 
 /**
  * Columns the machine owns outright. A person cannot set these and would not
@@ -81,13 +89,19 @@ function objectAt(source: string, open: number): string | null {
  * publish.ts builds `crawlSet` and spreads it, and that is where the property
  * actually lives.
  */
-function columnsWrittenToTools(source: string): Set<string> {
+/**
+ * `verb` matters. Only an UPDATE can overwrite what somebody typed; an INSERT
+ * creates the row and there is nothing there yet to trample. Checking both
+ * reported scripts/seed-offseason-events.ts for writing `program` on rows it
+ * was creating from a spreadsheet.
+ */
+function columnsWrittenTo(source: string, table: string, verb: 'update' | 'update|insert' = 'update|insert'): Set<string> {
   const written = new Set<string>()
   const blocks: string[] = []
   const names = new Set<string>()
 
-  for (const m of source.matchAll(/\.(?:update|insert)\(\s*(\w+)\s*\)/g)) {
-    if (m[1] !== 'tools') continue
+  for (const m of source.matchAll(new RegExp(`\\.(?:${verb})\\(\\s*(\\w+)\\s*\\)`, 'g'))) {
+    if (m[1] !== table) continue
 
     // The payload is chained onto this call, so look forward from it only.
     const rest = source.slice(m.index! + m[0].length, m.index! + m[0].length + 4000)
@@ -118,6 +132,8 @@ function columnsWrittenToTools(source: string): Set<string> {
   }
   return written
 }
+
+const columnsWrittenToTools = (source: string) => columnsWrittenTo(source, 'tools')
 
 describe('worker writes to tools', () => {
   const files = sourceFiles(WORKER)
@@ -195,6 +211,68 @@ describe('worker writes to tools', () => {
     // the editor would be a bug wearing the fix's clothes.
     for (const metric of ['githubStars', 'chiefDelphiLikes', 'popularityScore', 'confidenceScore']) {
       expect(HUMAN_EDITABLE_TOOL_KEYS as readonly string[]).not.toContain(metric)
+    }
+  })
+})
+
+describe('automated writes to event_listings', () => {
+  const files = [...sourceFiles(WORKER), ...sourceFiles(SCRIPTS)]
+
+  it('finds the writers', () => {
+    const writers = files.filter((f) => columnsWrittenTo(readFileSync(f, 'utf8'), 'eventListings', 'update').size > 0)
+    // scripts/sync-event-rosters.ts is the one today. If this goes to zero the
+    // scan has broken and everything below is checking nothing.
+    expect(writers.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('touch only the columns the machine owns', () => {
+    const machine = new Set<string>([...MACHINE_OWNED_EVENT_KEYS, 'updatedAt'])
+    const claimable = new Set<string>(HUMAN_EDITABLE_EVENT_KEYS)
+    const offenders: string[] = []
+
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8')
+      const columns = columnsWrittenTo(source, 'eventListings', 'update')
+      if (columns.size === 0) continue
+
+      const guarded = GUARD_CALLS.some((call) => source.includes(call))
+      for (const column of columns) {
+        if (machine.has(column)) continue
+        if (claimable.has(column) && guarded) continue
+        if (!claimable.has(column)) continue
+        offenders.push(
+          `${file.slice(REPO.length + 1)} writes ${column}, which an organiser can set, without checking human_edited_fields`,
+        )
+      }
+    }
+
+    expect(offenders).toEqual([])
+  })
+
+  it('keeps the two lists disjoint', () => {
+    // A column cannot be both the machine's and a person's. registeredTeamCount
+    // is a live count off TBA; the venue is the organiser's.
+    for (const key of MACHINE_OWNED_EVENT_KEYS) {
+      expect(HUMAN_EDITABLE_EVENT_KEYS as readonly string[]).not.toContain(key)
+    }
+  })
+
+  it('claims the fields TBA and an organiser can disagree about', () => {
+    // The contested ones. TBA is usually right about dates; an organiser who
+    // moved their event is more right, and a claim is what makes that stick.
+    for (const key of ['startDate', 'endDate', 'venueName', 'address', 'website', 'tbaKey']) {
+      expect(HUMAN_EDITABLE_EVENT_KEYS as readonly string[]).toContain(key)
+    }
+  })
+
+  it('records a claim on both edit paths', () => {
+    for (const file of [
+      'apps/web/app/admin/event-listings/actions.ts',
+      'apps/web/app/me/listings/actions.ts',
+    ]) {
+      const source = readFileSync(join(REPO, file), 'utf8')
+      expect(source).toContain('HUMAN_EDITABLE_EVENT_KEYS')
+      expect(source).toContain('addHumanEdits')
     }
   })
 })

@@ -1,0 +1,1 @@
+ALTER TABLE "event_listings" ADD COLUMN "human_edited_fields" text[] DEFAULT '{}'::text[] NOT NULL;

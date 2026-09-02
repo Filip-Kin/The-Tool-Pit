@@ -176,6 +176,13 @@
       "when": 1788302842157,
       "tag": "0024_stars_have_a_checked_at",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788322913073,
+      "tag": "0025_events_remember_human_edits",
+      "breakpoints": true
     }
   ]
 }

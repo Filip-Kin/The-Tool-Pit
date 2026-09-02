@@ -22,6 +22,7 @@ import {
   changedKeys,
   linkMarker,
   HUMAN_EDITABLE_TOOL_KEYS,
+  HUMAN_EDITABLE_EVENT_KEYS,
   type ClaimEvidence,
   type ListingEntityType,
   type ListingOwnerRole,
@@ -1054,9 +1055,22 @@ export async function saveEventListing(formData: FormData): Promise<OwnershipAct
   keepPinIfCleared(set)
 
   const db = getDb()
+
+  // The organiser's own corrections are claimed, same as an admin's. This is
+  // the case the column exists for: they moved the event to a different gym
+  // and TBA has not heard yet, so TBA is the one that is wrong.
+  const [before] = await db
+    .select()
+    .from(eventListings)
+    .where(eq(eventListings.id, step.entityId))
+    .limit(1)
+
+  const claimed = changedKeys(set, (before ?? {}) as Record<string, unknown>, HUMAN_EDITABLE_EVENT_KEYS)
+  const humanEditedFields = addHumanEdits(before?.humanEditedFields, claimed)
+
   await db
     .update(eventListings)
-    .set({ ...set, updatedAt: new Date() })
+    .set({ ...set, ...(humanEditedFields ? { humanEditedFields } : {}), updatedAt: new Date() })
     .where(eq(eventListings.id, step.entityId))
   revalidatePath('/me/listings')
   revalidatePath('/events')

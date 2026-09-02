@@ -199,3 +199,69 @@ export function sameValue(a: unknown, b: unknown): boolean {
 }
 
 // #endregion
+
+// #region events
+
+/**
+ * The event-listing fields a person owns, so no refresh may overwrite them.
+ *
+ * SPLIT BY WHO KNOWS BEST, not by who wrote last. An organiser moved their
+ * event to a different gym; TBA has not heard yet, and TBA is wrong. A roster
+ * count went up overnight; the organiser has not heard yet, and the organiser
+ * is wrong. The first list is the first case.
+ *
+ * NOT HERE, because the machine owns them outright: registeredTeamCount and
+ * teamCountUpdatedAt, which is a live count off TBA and the reason a refresh
+ * job exists at all. Also not here: status, source, rejectionReason,
+ * publishedAt and the submitter columns, which are the review system's own
+ * bookkeeping rather than anything an organiser types.
+ *
+ * CONTESTED, and deliberately claimable: startDate, endDate, website and
+ * tbaKey. TBA is usually right about dates, and an organiser who has moved
+ * their event is more right. Claiming means a hand-set date survives, and a
+ * disagreement with TBA becomes something to show a moderator rather than a
+ * silent overwrite.
+ */
+export const HUMAN_EDITABLE_EVENT_KEYS = [
+  'name',
+  'program',
+  'hostTeamNumber',
+  'latitude',
+  'longitude',
+  'venueName',
+  'address',
+  'city',
+  'region',
+  'country',
+  'seasonYear',
+  'startDate',
+  'endDate',
+  'days',
+  'parallelDivisions',
+  'capacity',
+  'costUsd',
+  'costNote',
+  'registrationStatus',
+  'registrationOpensAt',
+  'volunteerStatus',
+  'eventStatus',
+  'website',
+  'registrationUrl',
+  'volunteerUrl',
+  'chiefDelphiUrl',
+  'contactEmail',
+  'notes',
+  'tbaKey',
+] as const
+
+export type HumanEditableEventKey = (typeof HUMAN_EDITABLE_EVENT_KEYS)[number]
+
+/**
+ * Columns on event_listings that belong to the machine, whatever a person does.
+ *
+ * Written down so a refresh job can be checked against a list rather than
+ * against somebody's memory of this conversation.
+ */
+export const MACHINE_OWNED_EVENT_KEYS = ['registeredTeamCount', 'teamCountUpdatedAt'] as const
+
+// #endregion
