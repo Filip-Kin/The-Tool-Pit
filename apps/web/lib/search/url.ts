@@ -58,6 +58,26 @@ export function toSearchQuery(params: SearchUrlParams): Omit<SearchParams, 'page
   }
 }
 
+/**
+ * A stable string for one search.
+ *
+ * Two jobs, both about the appended results belonging to the search that asked
+ * for them. It keys the session cache, so a Back into a search for "swerve"
+ * cannot restore the results of a search for "scouting". And it keys the
+ * results list itself, so changing the sort remounts it: /search is one route,
+ * so React keeps the component and its already-loaded state across a sort
+ * change unless something tells it the list is a different list.
+ *
+ * Keys are sorted, because `?q=swerve&program=frc` and `?program=frc&q=swerve`
+ * are the same search.
+ */
+export function searchSignature(params: SearchUrlParams): string {
+  const entries = Object.entries(params)
+    .filter(([, value]) => Boolean(value))
+    .sort(([a], [b]) => a.localeCompare(b))
+  return new URLSearchParams(entries as [string, string][]).toString()
+}
+
 /** Rebuild the /search URL, dropping empties so a shared link has no dead parameters in it. */
 function searchHref(params: SearchUrlParams, overrides: Partial<Record<keyof SearchUrlParams, string | undefined>>): string {
   const next = new URLSearchParams()

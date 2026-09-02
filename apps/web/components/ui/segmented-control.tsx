@@ -112,7 +112,6 @@ export function SegmentedLinks<T extends string>({
           <Link
             key={option.value}
             href={option.href}
-            scroll={false}
             aria-current={active ? 'true' : undefined}
             className={itemClass(active, size)}
           >

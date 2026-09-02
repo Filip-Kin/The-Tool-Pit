@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { sql } from 'drizzle-orm'
 import { PgDialect } from 'drizzle-orm/pg-core'
-import { DEFAULT_SEARCH_SORT, SEARCH_SORTS, parseSearchSort, searchOrderBy } from '@/lib/search/sort'
+import { DEFAULT_SEARCH_SORT, SEARCH_SORTS, parseSearchSort } from '@/lib/search/sort'
+import { searchOrderBy } from '@/lib/search/order-by'
 import { sortHref, pageHref, toSearchQuery } from '@/lib/search/url'
 
 /**

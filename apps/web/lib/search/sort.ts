@@ -1,12 +1,9 @@
-import { desc, sql, type SQL } from 'drizzle-orm'
-import { tools } from '@the-tool-pit/db'
-
 /**
  * The sorts search actually implements.
  *
  * Narrower than the shared `SearchSort` type, which also lists 'newest'. Search
  * has never ordered by that, so offering it would be a control that changes the
- * URL and nothing else. The three here are the three the ORDER BY below knows.
+ * URL and nothing else. The three here are the three the ORDER BY in order-by.ts knows.
  */
 export type SearchSortOption = 'relevance' | 'popular' | 'updated'
 
@@ -42,28 +39,4 @@ export const SEARCH_SORTS: readonly SearchSortChoice[] = [
  */
 export function parseSearchSort(value: string | null | undefined): SearchSortOption {
   return SEARCH_SORTS.some((s) => s.value === value) ? (value as SearchSortOption) : DEFAULT_SEARCH_SORT
-}
-
-/**
- * The ORDER BY for a sort.
- *
- * `nulls last` on updated matters: 44% of published tools have no
- * last_activity_at at all, usually because there is no repo to read a commit
- * date from, and Postgres sorts nulls first on a descending order. Without it
- * the "recently updated" page would open on 478 tools with no known activity.
- *
- * Relevance is the fallback for the same reason it is the default. It is not a
- * no-op when there is no query either: ts_rank is 0 for every row, but the
- * seven other terms in the score are not, so a bare /search still opens on
- * WPILib and GradleRIO rather than on whatever the planner returns first.
- */
-export function searchOrderBy(sort: SearchSortOption, rankScore: SQL<number>): SQL {
-  switch (sort) {
-    case 'popular':
-      return desc(tools.popularityScore)
-    case 'updated':
-      return sql`${tools.lastActivityAt} desc nulls last`
-    case 'relevance':
-      return sql`${rankScore} desc`
-  }
 }
