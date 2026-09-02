@@ -21,6 +21,7 @@ import type { PublicEvent } from '@/lib/events/event-display'
 import { PinMap } from '@/components/fields/pin-map'
 import { approveEvent, suppressEvent, unsuppressEvent, deleteEvent, updateEvent, type EventEditInput } from './actions'
 import { ReasonButton } from '@/components/admin/reason-button'
+import { teamListStatus } from '@/lib/admin/team-list-status'
 
 /** The account behind a submission, when the submitter was signed in. Null is normal. */
 export interface SubmitterAccount {
@@ -46,6 +47,7 @@ export function EventAdminRow({ listing, account }: { listing: EventListing; acc
   const loc = eventLocation(pub)
   const cost = costLabel(pub)
   const hasCoords = listing.latitude != null && listing.longitude != null
+  const scrape = teamListStatus(listing)
 
   function run(fn: () => Promise<{ error?: string } | void>) {
     setMsg(null)
@@ -79,6 +81,16 @@ export function EventAdminRow({ listing, account }: { listing: EventListing; acc
             {cost && <span>{cost}</span>}
             {listing.tbaKey && <span className="text-primary">{listing.tbaKey}</span>}
             <span className={hasCoords ? 'text-rookie' : 'text-official'}>{hasCoords ? 'Pin set' : 'No pin yet'}</span>
+            <span
+              className={scrape.className}
+              title={
+                listing.teamListParserUpdatedAt
+                  ? `Team-list parser last updated ${listing.teamListParserUpdatedAt.toISOString()}`
+                  : undefined
+              }
+            >
+              {scrape.label}
+            </span>
           </div>
           {(listing.submitterName || listing.submitterContact) && (
             <div className="mt-1 text-xs text-muted-2">
