@@ -83,7 +83,11 @@ export function EventsExplorer({
   // already floats upcoming events to the top without deleting the rest.
   const [when, setWhen] = useState<When>('all')
   const [openOnly, setOpenOnly] = useState(false)
-  const [sortBy, setSortBy] = useState<SortBy>('date')
+  // Nearest by default, because almost nobody travels out of their region for
+  // an off-season event. It falls back to date ordering on its own until a
+  // location arrives, so a visitor who refuses the prompt sees the old
+  // behaviour rather than an empty-looking sort.
+  const [sortBy, setSortBy] = useState<SortBy>('distance')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
@@ -108,6 +112,11 @@ export function EventsExplorer({
 
   useEffect(() => {
     setUnit(unitFromLocale(typeof navigator !== 'undefined' ? navigator.language : undefined))
+    // Ask on mount, the same as the practice field map does. The browser owns
+    // the prompt and remembers the answer; this vertical is national now, and
+    // a Michigan team opening a list that starts in California has to scroll
+    // past six states to reach anything they can drive to.
+    locate()
   }, [])
 
   function open(id: string) {
@@ -161,7 +170,16 @@ export function EventsExplorer({
       }))
 
     rows.sort((a, b) => {
-      if (sortBy === 'distance' && userLoc) return (a.km ?? Infinity) - (b.km ?? Infinity)
+      // NEAREST, BUT STILL UPCOMING FIRST. A pure distance sort put an event
+      // that ran in July above one happening next weekend simply because it was
+      // closer, which is not what "nearest" means to somebody deciding where to
+      // go. Time buckets first, distance inside them.
+      if (sortBy === 'distance' && userLoc) {
+        const aGone = eventTiming(a.event, now) === 'past' ? 1 : 0
+        const bGone = eventTiming(b.event, now) === 'past' ? 1 : 0
+        if (aGone !== bGone) return aGone - bGone
+        return (a.km ?? Infinity) - (b.km ?? Infinity)
+      }
       // Past always below upcoming, then within each group by date: upcoming
       // soonest first, past most recent first.
       //
@@ -286,7 +304,13 @@ export function EventsExplorer({
           ) : (
             <>
               {when === 'upcoming' && ' upcoming'}
-              {sortBy === 'distance' && userLoc ? ' · nearest first' : when !== 'past' ? ' · soonest first' : ''}
+              {sortBy === 'distance' && userLoc
+                ? // Say both, because it is sorted by both: what is still to
+                  // come, nearest first.
+                  ' · upcoming, nearest first'
+                : when !== 'past'
+                  ? ' · soonest first'
+                  : ''}
             </>
           )}
         </p>
