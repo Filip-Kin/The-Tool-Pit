@@ -38,13 +38,17 @@ import {
   resolveClaimable,
 } from '@/lib/queries/listing-ownership'
 import {
+  EXTRA_LINKS_KEY,
+  EXTRA_LINK_TYPE,
   OWNER_LINK_TYPES,
   TOOL_TAG_KEYS,
   linkFieldKey,
   listingFormSpec,
   parseListingValues,
+  type ExtraLink,
   type ListingFormContext,
 } from '@/components/me/listing-fields'
+import { saveExtraToolLinks } from '@/lib/listings/tool-links'
 import {
   loadToolTaxonomy,
   saveToolTaxonomy,
@@ -799,6 +803,9 @@ export async function saveToolListing(formData: FormData): Promise<OwnershipActi
  * deleted and re-inserted when its URL actually moved. A type an owner clears
  * is deleted and not replaced, which is how you take a dead link down.
  *
+ * The owner's own links, the ones they name themselves, are held to exactly the
+ * same rule one function over: an unchanged row keeps its check history.
+ *
  * Returns the types that moved, so the caller can mark them as claimed.
  * CLEARING a link counts: it leaves no row behind to carry a flag, which is
  * exactly why the marker lives on tools rather than on tool_links.
@@ -815,6 +822,14 @@ async function saveToolLinks(toolId: string, values: Record<string, unknown>): P
     await db.delete(toolLinks).where(and(eq(toolLinks.toolId, toolId), eq(toolLinks.linkType, type)))
     if (next) await db.insert(toolLinks).values({ toolId, linkType: type, url: next })
     changed.push(type)
+  }
+
+  // parseListingValues has already refused a bad URL and anything past the cap,
+  // so an absent value here means the form did not carry the field at all
+  // rather than that the owner cleared the list.
+  const extra = values[EXTRA_LINKS_KEY]
+  if (Array.isArray(extra)) {
+    if (await saveExtraToolLinks(toolId, extra as ExtraLink[])) changed.push(EXTRA_LINK_TYPE)
   }
 
   return changed

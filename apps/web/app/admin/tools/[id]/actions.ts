@@ -25,6 +25,8 @@ import {
   HUMAN_EDITABLE_TOOL_KEYS,
 } from '@the-tool-pit/db'
 import type { EnrichJobPayload } from '@the-tool-pit/types'
+import { EXTRA_LINK_TYPE, parseExtraLinks } from '@/components/me/listing-fields'
+import { saveExtraToolLinks } from '@/lib/listings/tool-links'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -81,6 +83,17 @@ export async function saveTool(formData: FormData) {
   // Core fields
   const name = (formData.get('name') as string)?.trim()
   if (!name) return
+
+  // Read BEFORE anything is written, so a bad URL cannot leave half the form
+  // saved. The owner editor's parser, so the two pages accept the same thing.
+  //
+  // This one throws rather than returning early like the guards above it. The
+  // guards are for a form that did not post the field at all; this is an admin
+  // who typed something we will not store, and the whole reason Save Notes was
+  // broken for weeks is that an action that returns silently looks identical to
+  // one that worked.
+  const extraLinks = parseExtraLinks(formData)
+  if ('error' in extraLinks) throw new Error(extraLinks.error)
 
   const set = {
     name,
@@ -139,6 +152,14 @@ export async function saveTool(formData: FormData) {
     if (url) {
       await db.insert(toolLinks).values({ toolId, linkType, url })
     }
+  }
+
+  // The links a curator names themselves, through the same diffing writer the
+  // owner editor uses: a row whose label and URL did not move is left alone and
+  // keeps its is_broken and last_checked_at.
+  if (await saveExtraToolLinks(toolId, extraLinks.links)) {
+    claimed.push(linkMarker(EXTRA_LINK_TYPE))
+    changedLinkTypes.push(EXTRA_LINK_TYPE)
   }
 
   const humanEditedFields = addHumanEdits(before?.humanEditedFields, claimed)

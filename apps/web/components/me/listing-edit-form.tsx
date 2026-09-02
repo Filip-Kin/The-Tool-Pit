@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   listingFormSpec,
   LISTING_REVIEW_NOTE,
+  type ExtraLink,
   type ListingFieldSpec,
   type ListingGroup,
   type ToolTagKey,
 } from './listing-fields'
+import { ExtraLinksEditor } from './extra-links-editor'
 import { TagPicker } from './tag-picker'
 import { cn } from '@/lib/utils/cn'
 import type { EditableListing, ListingFormValues } from '@/lib/queries/listing-ownership'
@@ -73,10 +75,23 @@ function seedValues(listing: EditableListing): ListingFormValues {
   return out
 }
 
-function emptyValue(kind: ListingFieldSpec['kind']): string | boolean | string[] {
+function emptyValue(kind: ListingFieldSpec['kind']): string | boolean | string[] | ExtraLink[] {
   if (kind === 'checkbox') return false
-  if (kind === 'tags') return []
+  if (kind === 'tags' || kind === 'links') return []
   return ''
+}
+
+/**
+ * The link rows out of a form value.
+ *
+ * ListingFormValues holds a union, and string[] and ExtraLink[] are both
+ * arrays, so Array.isArray alone does not tell them apart. The caller has
+ * already branched on field.kind, which is what makes this safe; this only has
+ * to convince the compiler of it without an `any`.
+ */
+function asExtraLinks(value: ListingFormValues[string] | undefined): ExtraLink[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((v): v is ExtraLink => typeof v === 'object' && v !== null)
 }
 
 // #endregion
@@ -184,7 +199,7 @@ export function ListingEditForm({
     }, AUTOSAVE_DEBOUNCE_MS)
   }
 
-  function set(key: string, value: string | boolean | string[]) {
+  function set(key: string, value: string | boolean | string[] | ExtraLink[]) {
     setValues((prev) => ({ ...prev, [key]: value }))
     setStatus({ kind: 'idle', dirty: true })
     scheduleSave()
@@ -271,19 +286,25 @@ function Input({
   onChange,
 }: {
   field: ListingFieldSpec
-  value: string | boolean | string[] | undefined
+  value: ListingFormValues[string] | undefined
   options: readonly string[]
   /** kind 'tags' only: the slug and label pairs the picker shows. */
   tagOptions: readonly TagOption[]
-  onChange: (value: string | boolean | string[]) => void
+  onChange: (value: string | boolean | string[] | ExtraLink[]) => void
 }) {
+  if (field.kind === 'links') {
+    return (
+      <ExtraLinksEditor label={field.label} links={asExtraLinks(value)} onChange={onChange} />
+    )
+  }
+
   if (field.kind === 'tags') {
     return (
       <TagPicker
         name={field.key}
         label={field.label}
         options={tagOptions}
-        values={Array.isArray(value) ? value : []}
+        values={Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []}
         onChange={onChange}
       />
     )
@@ -396,28 +417,30 @@ function Field({ field, children }: { field: ListingFieldSpec; children: React.R
   // A tag picker is a group of buttons, not one control, so it cannot sit in a
   // <label>: a label may only name a single form element, and wrapping a dozen
   // of them makes every chip read as the same thing. It names itself with
-  // aria-label instead and this is a plain container.
-  const Wrapper = field.kind === 'tags' ? 'div' : 'label'
+  // aria-label instead and this is a plain container. The repeatable link list
+  // is the same case, with two inputs and a remove button per row.
+  const many = field.kind === 'tags' || field.kind === 'links'
+  const Wrapper = many ? 'div' : 'label'
   return (
     <Wrapper
       className={cn(
         'flex flex-col',
         field.wide && 'sm:col-span-2',
         // A chip row needs a little more air above it than a text box does,
-        // because the chips have a border and the label does not.
-        field.kind === 'tags' ? 'gap-2' : 'gap-1.5',
+        // because the chips have a border and the label does not. Same for a
+        // row of link boxes with a button beside them.
+        many ? 'gap-2' : 'gap-1.5',
       )}
     >
       {showLabel && <span className="text-sm font-medium text-foreground">{field.label}</span>}
-      {field.kind === 'tags' && field.hint && (
-        // Above the chips for a picker. Under them it sat below a wrapping row
-        // of buttons and read as a caption for the next field.
+      {many && field.hint && (
+        // Above the chips for a picker, and above the rows for the link list.
+        // Under them it sat below a wrapping row of buttons and read as a
+        // caption for the next field.
         <span className="-mt-0.5 text-xs text-muted-2">{field.hint}</span>
       )}
       {children}
-      {field.kind !== 'tags' && field.hint && (
-        <span className="text-xs text-muted-2">{field.hint}</span>
-      )}
+      {!many && field.hint && <span className="text-xs text-muted-2">{field.hint}</span>}
     </Wrapper>
   )
 }

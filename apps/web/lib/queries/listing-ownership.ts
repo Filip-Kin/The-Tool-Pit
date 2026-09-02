@@ -24,13 +24,16 @@ import {
   type ListingOwnerRole,
 } from '@the-tool-pit/db'
 import {
+  EXTRA_LINKS_KEY,
   OWNER_LINK_TYPES,
   linkFieldKey,
   listingFormSpec,
+  type ExtraLink,
   type ListingFieldSpec,
   type ListingFormContext,
   type OwnerLinkType,
 } from '@/components/me/listing-fields'
+import { loadExtraToolLinks } from '@/lib/listings/tool-links'
 import { loadToolTaxonomy, taxonomyOptions, type TaxonomyOptions } from '@/lib/listings/tool-taxonomy'
 import { displayEventName } from './albums'
 import { getCurrentUser } from '@/lib/auth/session'
@@ -689,10 +692,14 @@ async function submittedByThisUser(
 /**
  * One editable listing, flattened to what the form binds to.
  *
- * The array is the tag fields. They are the only values here that are not a
- * column on the listing's own table, and they arrive as taxonomy slugs.
+ * The two array members are the two fields that are not a column on the
+ * listing's own table. string[] is a tag field, and it holds taxonomy slugs.
+ * ExtraLink[] is the repeatable link list, which is a set of label and URL
+ * pairs and so cannot be flattened into either of the other members. The form
+ * narrows on field.kind before it touches a value, so nothing has to guess
+ * which one it is holding.
  */
-export type ListingFormValues = Record<string, string | boolean | string[]>
+export type ListingFormValues = Record<string, string | boolean | string[] | ExtraLink[]>
 
 export interface EditableListing {
   entityType: ListingEntityType
@@ -718,7 +725,8 @@ const EDIT_TABLES = {
  *
  * The single answer to "which keys may be read and written", shared by the
  * loader below and by the update set in app/me/listings/actions.ts. Link fields
- * live one table over and are handled separately; anything else the spec names
+ * live one table over and are handled separately, which is both the seven
+ * `link_*` boxes and the repeatable `links` list; anything else the spec names
  * that is not a column is dropped here rather than reaching a query, so a typo
  * in the spec costs a missing input and never a failed update.
  */
@@ -728,7 +736,11 @@ export function listingColumnFields(
 ): ListingFieldSpec[] {
   const table = EDIT_TABLES[entityType] as unknown as Record<string, unknown>
   return listingFormSpec(entityType, context).fields.filter(
-    (f) => !f.key.startsWith('link_') && f.kind !== 'tags' && Object.hasOwn(table, f.key),
+    (f) =>
+      !f.key.startsWith('link_') &&
+      f.kind !== 'tags' &&
+      f.kind !== 'links' &&
+      Object.hasOwn(table, f.key),
   )
 }
 
@@ -794,6 +806,7 @@ export async function loadListingForEdit(
     for (const [type, url] of Object.entries(await loadToolLinks(entityId))) {
       values[linkFieldKey(type as OwnerLinkType)] = url
     }
+    values[EXTRA_LINKS_KEY] = await loadExtraToolLinks(entityId)
     const [tags, options] = await Promise.all([loadToolTaxonomy(entityId), taxonomyOptions()])
     Object.assign(values, tags)
     tagOptions = options

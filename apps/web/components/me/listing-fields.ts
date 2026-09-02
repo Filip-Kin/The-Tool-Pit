@@ -64,6 +64,12 @@ export type ListingFieldKind =
    * path. See the tag fields on the tool form.
    */
   | 'tags'
+  /**
+   * A list of label and URL pairs the owner writes themselves, as many as they
+   * like up to a cap. Backed by tool_links rows rather than a column, like the
+   * fixed link boxes, so it is loaded and written on its own path.
+   */
+  | 'links'
 
 export interface ListingFieldSpec {
   /** FormData key, and the column it writes (link_* fields are the exception). */
@@ -160,6 +166,120 @@ const LINK_FIELDS: ListingFieldSpec[] = OWNER_LINK_TYPES.map((type) => ({
 }))
 
 /**
+ * Everything else an owner wants to link to.
+ *
+ * The seven types above keep their own boxes because each one MEANS something
+ * to the rest of the site: github feeds the star count, forum feeds the Chief
+ * Delphi likes, and both trigger a popularity re-read the moment they change.
+ * A Discord server, a YouTube channel, a store page or a second repository mean
+ * nothing to us and everything to the person looking at the listing, so they go
+ * in a list the owner writes the labels for.
+ *
+ * ON THE WIRE, and this is the part that has to be exact: two keys repeated
+ * once per row, in row order. The editor always renders BOTH inputs for a row,
+ * even when one is empty, so the two arrays stay index-aligned by construction
+ * and there is no row id to keep in step.
+ *
+ * IN THE DATABASE these are ordinary tool_links rows with link_type 'other' and
+ * the owner's words in `label`, which is a column that has existed since the
+ * table did and which nothing has ever written. No migration, no new column.
+ * components/tools/tool-detail.tsx already prefers a row's own label over the
+ * generic word for its type, so the display side needed nothing.
+ */
+export const EXTRA_LINKS_KEY = 'extraLinks'
+export const EXTRA_LINK_LABEL_KEY = 'extraLinkLabel'
+export const EXTRA_LINK_URL_KEY = 'extraLinkUrl'
+
+/** The link_type every owner-written link is filed under. */
+export const EXTRA_LINK_TYPE = 'other'
+
+/**
+ * The cap, and why there is one.
+ *
+ * "More links" is a row of chips under the description. Past a dozen it stops
+ * being a set of links and becomes a link farm, on a page whose whole job is to
+ * tell somebody in five seconds what a tool is. Twelve is more than any listing
+ * on the site has ever needed and few enough that the row still reads. The
+ * server refuses the thirteenth; the editor stops offering to add one.
+ */
+export const MAX_EXTRA_LINKS = 12
+
+/** Long enough for "Getting started video", short enough to stay on one chip. */
+export const EXTRA_LINK_LABEL_MAX = 80
+/** The same cap the seven fixed link boxes carry. */
+export const EXTRA_LINK_URL_MAX = 1000
+
+export interface ExtraLink {
+  /** The owner's words. Empty means the page falls back to plain "Link". */
+  label: string
+  url: string
+}
+
+const EXTRA_LINKS_FIELD: ListingFieldSpec = {
+  key: EXTRA_LINKS_KEY,
+  label: 'Anything else',
+  kind: 'links',
+  group: 'links',
+  wide: true,
+  hint: 'A Discord, a video, a store page, a second repository. Give each one a name people will recognise.',
+}
+
+/**
+ * Pull the owner-written links out of a posted form.
+ *
+ * Separate from parseListingValues' switch because it reads repeated keys
+ * rather than one, and because the admin tool editor calls it directly: that
+ * form is a plain submit with its own field set and no listing spec behind it.
+ * One parser, so the two editors cannot drift on what they accept.
+ *
+ * Every rule here is a rule about a HOSTILE post, not about the editor. The
+ * editor caps the rows and marks the input type=url; neither of those survives
+ * a hand-built request, so the cap and the scheme are checked again here.
+ */
+export function parseExtraLinks(form: FormData): { links: ExtraLink[] } | { error: string } {
+  const urls = form.getAll(EXTRA_LINK_URL_KEY)
+  const labels = form.getAll(EXTRA_LINK_LABEL_KEY)
+  const links: ExtraLink[] = []
+  const seen = new Set<string>()
+
+  for (let i = 0; i < urls.length; i++) {
+    const rawUrl = urls[i]
+    const rawLabel = labels[i]
+    const url = typeof rawUrl === 'string' ? rawUrl.trim() : ''
+    const label = typeof rawLabel === 'string' ? rawLabel.trim() : ''
+
+    // A row is a link once it has an address. Pressing Add puts an empty row on
+    // screen and the form autosaves on the next blur, so an empty row MUST post
+    // as nothing at all. A label typed with no URL yet is the same case: it
+    // stays on screen where the owner can finish it, and stores nothing.
+    if (url === '') continue
+
+    if (!isHttpUrl(url)) {
+      return {
+        error: label
+          ? `The link you named "${label}" has to start with http:// or https://.`
+          : 'Every extra link has to start with http:// or https://.',
+      }
+    }
+
+    // Two rows with the same name AND the same address are one link typed
+    // twice. Storing both puts the same chip on the page twice, so the second
+    // is dropped rather than refused: there is nothing for the owner to fix.
+    const pair = `${label}\u0000${url}`
+    if (seen.has(pair)) continue
+    seen.add(pair)
+
+    links.push({ label: label.slice(0, EXTRA_LINK_LABEL_MAX), url: url.slice(0, EXTRA_LINK_URL_MAX) })
+  }
+
+  if (links.length > MAX_EXTRA_LINKS) {
+    return { error: `You can add up to ${MAX_EXTRA_LINKS} extra links. Take one off to add another.` }
+  }
+
+  return { links }
+}
+
+/**
  * The three taxonomies a tool owner sets, and the form key each posts under.
  *
  * These are the only fields on any of these forms that are NOT a column on the
@@ -228,7 +348,11 @@ const TOOL_GROUPS: ListingGroup[] = [
     blurb:
       'Our crawler fills these three in from the tool’s own pages until you change one. A link you set, or clear, stays the way you left it.',
   },
-  { key: 'links', title: 'Other links' },
+  {
+    key: 'links',
+    title: 'Other links',
+    blurb: 'The four we know how to label, then as many of your own as you need.',
+  },
 ]
 
 const TOOL_ABOUT_FIELDS: ListingFieldSpec[] = [
@@ -305,13 +429,19 @@ const TOOL_ARCHIVE_FIELDS: ListingFieldSpec[] = [
 
 const TOOL_FORM: ListingFormSpec = {
   groups: TOOL_GROUPS,
-  fields: [...TOOL_ABOUT_FIELDS, ...TOOL_TAG_FIELDS, ...LINK_FIELDS],
+  fields: [...TOOL_ABOUT_FIELDS, ...TOOL_TAG_FIELDS, ...LINK_FIELDS, EXTRA_LINKS_FIELD],
 }
 
 /** The same form, plus the archive group, for a listing already in the archive. */
 const TOOL_ARCHIVE_FORM: ListingFormSpec = {
   groups: [TOOL_GROUPS[0], TOOL_ARCHIVE_GROUP, ...TOOL_GROUPS.slice(1)],
-  fields: [...TOOL_ABOUT_FIELDS, ...TOOL_ARCHIVE_FIELDS, ...TOOL_TAG_FIELDS, ...LINK_FIELDS],
+  fields: [
+    ...TOOL_ABOUT_FIELDS,
+    ...TOOL_ARCHIVE_FIELDS,
+    ...TOOL_TAG_FIELDS,
+    ...LINK_FIELDS,
+    EXTRA_LINKS_FIELD,
+  ],
 }
 
 // #endregion
@@ -768,6 +898,7 @@ export function listingFormSpec(
  *   - a number for int kinds, or null
  *   - a boolean for checkboxes, never null
  *   - an array of slugs for tags, possibly empty, never null
+ *   - an array of label and URL pairs for links, possibly empty, never null
  *   - undefined for a select left blank, meaning "do not write this column",
  *     because every select here backs a NOT NULL column with a default
  */
@@ -782,6 +913,16 @@ export function parseListingValues(
     if (field.kind === 'checkbox') {
       const raw = form.get(field.key)
       values[field.key] = raw === 'true' || raw === 'on' || raw === '1'
+      continue
+    }
+
+    if (field.kind === 'links') {
+      // Repeated keys rather than one, so it cannot go through the switch
+      // below. An error here is the owner's to fix, so it stops the whole save
+      // the same way a bad number does, instead of silently dropping a row.
+      const parsed = parseExtraLinks(form)
+      if ('error' in parsed) return parsed
+      values[field.key] = parsed.links
       continue
     }
 

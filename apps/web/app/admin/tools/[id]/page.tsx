@@ -9,6 +9,9 @@ import { getDb } from '@/lib/db'
 import { toolSources, toolUpdates } from '@the-tool-pit/db'
 import { eq, desc } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
+import { ExtraLinksField } from '@/components/me/extra-links-editor'
+import { loadExtraToolLinks } from '@/lib/listings/tool-links'
+import { EXTRA_LINK_TYPE } from '@/components/me/listing-fields'
 
 const TOOL_TYPES = [
   'web_app', 'desktop_app', 'mobile_app', 'calculator', 'spreadsheet',
@@ -21,6 +24,15 @@ const FRESHNESS_STATES = [
 ] as const
 
 const PROGRAMS = ['frc', 'ftc', 'fll'] as const
+
+/**
+ * The link types with a box of their own on this page.
+ *
+ * Named once because the read-only list below the boxes filters against it, and
+ * it used to name three of the four by hand: `forum` was missing, so the Chief
+ * Delphi thread rendered twice, once editable and once as "(read-only)".
+ */
+const PRIMARY_LINK_TYPES: readonly string[] = ['homepage', 'github', 'docs', 'forum']
 
 const AUDIENCE_ROLES = [
   { slug: 'student', label: 'Student' },
@@ -58,6 +70,9 @@ export default async function AdminToolEditPage({
   if (!tool) notFound()
 
   const db = getDb()
+  // Read in creation order rather than off tool.links, which has no ordering of
+  // its own, so the rows sit in the same order here as on the owner's form.
+  const extraLinks = await loadExtraToolLinks(id)
   const [sources, activityLog] = await Promise.all([
     db
       .select()
@@ -279,7 +294,7 @@ export default async function AdminToolEditPage({
         {/* Links */}
         <section className="flex flex-col gap-4 rounded-lg border border-border p-5">
           <h2 className="text-sm font-semibold text-foreground">Links</h2>
-          {(['homepage', 'github', 'docs', 'forum'] as const).map((type) => {
+          {PRIMARY_LINK_TYPES.map((type) => {
             const status = linkStatusByType[type]
             const typeLabel = type === 'forum' ? 'Chief Delphi Thread' : type.charAt(0).toUpperCase() + type.slice(1)
             return (
@@ -311,8 +326,19 @@ export default async function AdminToolEditPage({
               </div>
             )
           })}
-          {/* Other link types are read-only for now */}
-          {tool.links.filter((l) => !['homepage', 'github', 'docs'].includes(l.linkType)).map((l) => (
+          {/* The same repeatable list the owner gets, so a curator can fix or add
+              one without going near the database. */}
+          {/* Not <Field>, which is a <label>: a label may only name one form
+              element, and this is two inputs and a button per row. */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted">Other links</span>
+            <ExtraLinksField label="Other links" initial={extraLinks} />
+          </div>
+
+          {/* Whatever else the crawler has filed, read-only. The four boxes and
+              the list above cover everything editable here, so this is now only
+              the types nothing on this page owns. */}
+          {tool.links.filter((l) => !PRIMARY_LINK_TYPES.includes(l.linkType) && l.linkType !== EXTRA_LINK_TYPE).map((l) => (
             <div key={l.id} className="flex gap-2 items-center text-xs text-muted">
               <span className="w-20 shrink-0">{l.linkType}</span>
               <a href={l.url} target="_blank" rel="noopener noreferrer" className="hover:underline truncate">{l.url}</a>
