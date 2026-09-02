@@ -52,7 +52,16 @@ Return ONE JSON object. Every key is an object: {"value": ..., "quote": "..."}.
 - For a URL the quote may be the URL itself.
 
 Fields:
-  name              the event's own name
+  name              the event's own name AND NOTHING ELSE. Not the thread's title.
+                    Strip the year: the season is tracked separately, so "Bordie Blast 2026" is
+                    "Bordie Blast" and "The 2026 Red Stick Rumble" is "Red Stick Rumble".
+                    Strip everything the thread added around it: dates, a description, a call to
+                    action, the edition's theme.
+                      "NYC Robo Replay 2026 - two day offseason 10/10-11"  ->  "NYC Robo Replay"
+                      "CORI 2026 Registration Is Now Open! - Central Ohio Offseason Event" -> "CORI"
+                      "2026 SoCal Showdown Offseason Competition"  ->  "SoCal Showdown"
+                      "Bordie Blast 2026 - Bordie Through Time"  ->  "Bordie Blast"
+                    If the event's own site titles it differently from the thread, the site wins.
   program           one of ${EVENT_PROGRAMS.map((p) => `"${p}"`).join(', ')}
   hostTeamNumber    integer team number of the host, when one team runs it
   venueName         the building, e.g. "Capistrano Valley High School"

@@ -88,6 +88,37 @@ export function looksLikeRegistrationUrl(url: string): boolean {
   return REGISTRATION_URL_RE.test(url)
 }
 
+/**
+ * Hosts that are somebody else's product, never an event's own site.
+ *
+ * A Google Form, an Eventbrite page and a Discord invite are all things an
+ * event links to. None of them is its website, and putting one in that field
+ * tells a reader "this event has a site" and then sends them to a sign-up form.
+ */
+const NOT_A_WEBSITE_HOST =
+  /(?:docs\.google\.com|forms\.gle|drive\.google\.com|eventbrite\.|jotform\.|signupgenius\.|regfox\.|calendly\.|discord\.(?:gg|com)|facebook\.com|instagram\.com|twitter\.com|x\.com|chiefdelphi\.com|thebluealliance\.com|linktr\.ee)/i
+
+/**
+ * Whether a link is plausibly the event's OWN site.
+ *
+ * The old rule was "any link that is not the registration link", so the second
+ * form, a Discord invite or a sponsor became the website by being second in the
+ * list. An event with no site of its own should simply have no website, which
+ * is the honest answer and the one a reader can act on.
+ */
+export function looksLikeEventSite(url: string): boolean {
+  if (looksLikeRegistrationUrl(url)) return false
+  if (NOT_A_WEBSITE_HOST.test(url)) return false
+  try {
+    // A bare domain or a shallow path. A deep path is a page about something,
+    // and the site itself is what belongs in this field.
+    const parsed = new URL(url)
+    return parsed.pathname.split('/').filter(Boolean).length <= 2
+  } catch {
+    return false
+  }
+}
+
 // #region dates
 
 const MONTHS: Record<string, number> = {

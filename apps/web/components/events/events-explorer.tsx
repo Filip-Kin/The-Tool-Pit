@@ -78,10 +78,15 @@ export function EventsExplorer({
   const archiveView = scope === 'earlier'
   const [program, setProgram] = useState<EventProgram>('frc')
   const [q, setQ] = useState('')
-  // Show everything by default. The map is fed from the same filtered rows as
-  // the list, so hiding past events hid a third of the pins, and the sort
-  // already floats upcoming events to the top without deleting the rest.
-  const [when, setWhen] = useState<When>('all')
+  // Upcoming by default.
+  //
+  // This used to show everything, on the reasoning that the map is fed from the
+  // same rows as the list so hiding past events hides a third of the pins. That
+  // is true and it is the wrong trade: somebody opening this page is deciding
+  // where to go next, and an event that has already run is a distraction on the
+  // map as much as in the list. Past is one tap away and the archive link is
+  // still there.
+  const [when, setWhen] = useState<When>('upcoming')
   const [openOnly, setOpenOnly] = useState(false)
   // Nearest by default, because almost nobody travels out of their region for
   // an off-season event. It falls back to date ordering on its own until a

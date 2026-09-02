@@ -186,7 +186,7 @@ async function renderWithBrowser(url: string): Promise<PageContent | null> {
 
     const cleaned = text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_TEXT_LENGTH)
     if (!cleaned) return null
-    return { text: cleaned, links: sameSiteLinks(links, url) }
+    return { text: cleaned, links: relevantLinks(links, url) }
   } catch (err) {
     console.warn(`[render] browser could not read ${url}: ${String(err).split('\n')[0]}`)
     return null
@@ -215,20 +215,34 @@ async function fetchAsText(url: string): Promise<PageContent | null> {
         // A malformed href contributes nothing.
       }
     }
-    return { text, links: sameSiteLinks(links, url) }
+    return { text, links: relevantLinks(links, url) }
   } catch {
     return null
   }
 }
 
 /**
- * Links on the same site as the page they were found on, deduplicated.
+ * The links from a page that are worth showing the reader.
  *
- * Off-site links are dropped: a sponsor, a map and a social account are most of
- * what an event site links out to, and none of them answers what it costs. The
- * cap is generous because a site's page list is exactly what the reader needs.
+ * SAME SITE, PLUS THE FORMS. The first version kept same-host links only, which
+ * is exactly wrong for the thing this exists to find: a registration or
+ * volunteer form is almost never on the event's own host. NYC Robo Replay is a
+ * Google Sites page whose volunteer form is on docs.google.com, so the one link
+ * that answered "how do I volunteer" was dropped for being off-site, on a page
+ * hosted by the same company.
+ *
+ * So an off-site link is kept when it is plainly a sign-up: a known form or
+ * ticketing host, or a path that says register, volunteer, apply, tickets or
+ * pay. Everything else off-site goes, because a sponsor, a map and a social
+ * account are most of what an event site links out to and none of them says
+ * what it costs or how to enter.
  */
-function sameSiteLinks(links: string[], pageUrl: string): string[] {
+const FORM_HOST =
+  /(?:docs\.google\.com\/forms|forms\.gle|eventbrite\.|jotform\.|signupgenius\.|regfox\.|calendly\.|typeform\.|airtable\.com\/(?:shr|app))/i
+
+const SIGNUP_PATH = /(?:^|[/.\-_])(?:regist|signup|sign-up|apply|volunteer|ticket|pay|entry|enter)/i
+
+function relevantLinks(links: string[], pageUrl: string): string[] {
   let host: string
   try {
     host = new URL(pageUrl).host.replace(/^www\./, '')
@@ -246,7 +260,11 @@ function sameSiteLinks(links: string[], pageUrl: string): string[] {
     } catch {
       continue
     }
-    if (parsed.host.replace(/^www\./, '') !== host) continue
+
+    const sameSite = parsed.host.replace(/^www\./, '') === host
+    const isForm = FORM_HOST.test(url) || SIGNUP_PATH.test(parsed.pathname + parsed.search)
+    if (!sameSite && !isForm) continue
+
     const key = parsed.toString().replace(/#.*$/, '')
     if (seen.has(key)) continue
     seen.add(key)
@@ -256,13 +274,6 @@ function sameSiteLinks(links: string[], pageUrl: string): string[] {
   return out
 }
 
-/**
- * The visible text of a page, or null.
- *
- * A very short browser result counts as a failure worth retrying plainly: a
- * consent wall or a render that timed out mid-load returns a few words, and the
- * raw HTML behind it often holds the whole page.
- */
 export async function renderPage(url: string): Promise<PageContent | null> {
   const rendered = await renderWithBrowser(url)
   if (rendered && rendered.text.length > 200) return rendered

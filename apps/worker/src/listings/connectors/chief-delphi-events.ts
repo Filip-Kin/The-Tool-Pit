@@ -35,6 +35,7 @@ import {
   canonicalListingUrl,
   extractOutboundLinks,
   looksLikeRegistrationUrl,
+  looksLikeEventSite,
   matchedPhrases,
   parseExplicitDates,
   parseProgramFromTitle,
@@ -196,7 +197,11 @@ export class ChiefDelphiEventsConnector implements EventListingConnector {
 
         const links = extractOutboundLinks(postHtml || topic.blurb)
         const registrationUrl = links.find((l) => looksLikeRegistrationUrl(l))
-        const website = links.find((l) => l !== registrationUrl)
+        // NOT "whatever link is left". That made a second form, a Discord
+        // invite or a sponsor into the event's website by being second in the
+        // list, which promises a reader a site and hands them a sign-up form.
+        // An event with no site of its own gets no website.
+        const website = links.find((l) => looksLikeEventSite(l))
 
         // Title first: an announcement title carries the date far more often
         // than it carries a wrong one, and the body quotes past years.

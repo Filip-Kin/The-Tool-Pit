@@ -118,6 +118,11 @@ export function eventListingFromCandidate(
 
   return {
     name,
+    // The season is the calendar year the dates fall in, which is what makes
+    // the year redundant in the name. It was never set here, so every accepted
+    // candidate landed with a null season and the map's year filter could not
+    // see it.
+    seasonYear: start ? Number(start.slice(0, 4)) : null,
     program: program(ex.program, EVENT_PROGRAMS),
     hostTeamNumber: teamNumber(ex.hostTeamNumber),
     // Looked up from the venue during the read, so accepting puts the event on
