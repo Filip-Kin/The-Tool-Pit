@@ -13,6 +13,7 @@ import Link from 'next/link'
 import { ClickableRow } from '@/components/admin/clickable-row'
 import { StatusText } from '@/components/admin/status'
 import { assertAdmin } from '@/lib/admin/auth'
+import { getAdminQueueBacklog } from '@/lib/admin/queue-counts'
 
 async function getStats() {
   const db = getDb()
@@ -67,7 +68,7 @@ async function getStats() {
 
 export default async function AdminOverviewPage() {
   await assertAdmin()
-  const stats = await getStats()
+  const [stats, backlog] = await Promise.all([getStats(), getAdminQueueBacklog()])
 
   return (
     <div className="p-4 md:p-8 flex flex-col gap-8">
@@ -93,6 +94,47 @@ export default async function AdminOverviewPage() {
           href="/admin/practice-fields/candidates"
           highlight={stats.pendingFieldCandidates > 0}
         />
+      </div>
+
+      {/* Queue backlog: one row per review queue, so albums and grants, the two
+          largest and the ones the tiles above omit, are visible with how long
+          the oldest item has waited. */}
+      <div className="flex flex-col gap-4">
+        <h2 className="text-lg font-semibold text-foreground">Queue backlog</h2>
+        <div className="rounded-lg border border-border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-[28rem] w-full text-sm">
+              <thead className="bg-surface-2 text-muted text-xs">
+                <tr>
+                  <th className="px-4 py-2 text-left">Queue</th>
+                  <th className="px-4 py-2 text-right">Pending</th>
+                  <th className="px-4 py-2 text-right">Oldest waiting</th>
+                </tr>
+              </thead>
+              <tbody>
+                {backlog.map((row) => (
+                  <ClickableRow
+                    key={row.key}
+                    href={row.href}
+                    className={`border-t border-border-subtle hover:bg-surface ${row.count > 0 ? '' : 'text-muted'}`}
+                  >
+                    <td className="px-4 py-2 text-foreground">{row.label}</td>
+                    <td className="px-4 py-2 text-right font-mono">
+                      {row.count > 0 ? (
+                        <span className="font-semibold text-foreground">{row.count.toLocaleString()}</span>
+                      ) : (
+                        <span className="text-muted">0</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right text-xs text-muted">
+                      {row.oldestPendingAt ? new Date(row.oldestPendingAt).toLocaleDateString() : '—'}
+                    </td>
+                  </ClickableRow>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* Recent crawl jobs */}

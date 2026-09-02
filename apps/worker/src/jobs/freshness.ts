@@ -3,7 +3,7 @@
  * Re-fetches GitHub metadata for a tool and updates its internal freshness state.
  * The freshness state is then collapsed to Current/Stale/Deprecated/Inactive on the frontend.
  */
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import { tools, toolLinks, toolUpdates } from '@the-tool-pit/db'
 import { isHumanEdited } from '@the-tool-pit/db'
@@ -91,12 +91,26 @@ export async function processFreshnessJob(payload: FreshnessCheckPayload): Promi
         const pushDate = new Date(repoInfo.pushedAt)
         lastActivityAt = pushDate
 
-        await db.insert(toolUpdates).values({
-          toolId: tool.id,
-          signalType: 'github_push',
-          signalAt: pushDate,
-          rawData: { stars: repoInfo.stars, pushedAt: repoInfo.pushedAt, archived: repoInfo.archived },
-        })
+        // Dedupe on (tool_id, signal_at). The freshness pass runs daily, but a
+        // repo's pushedAt only moves when someone actually pushes, so most
+        // passes would file a row identical to the last one. This is what filled
+        // tool_updates with ten thousand duplicates growing hundreds a day.
+        // There is no unique index on (tool_id, signal_at), so the guard is an
+        // explicit check rather than ON CONFLICT DO NOTHING.
+        const [existing] = await db
+          .select({ id: toolUpdates.id })
+          .from(toolUpdates)
+          .where(and(eq(toolUpdates.toolId, tool.id), eq(toolUpdates.signalAt, pushDate)))
+          .limit(1)
+
+        if (!existing) {
+          await db.insert(toolUpdates).values({
+            toolId: tool.id,
+            signalType: 'github_push',
+            signalAt: pushDate,
+            rawData: { stars: repoInfo.stars, pushedAt: repoInfo.pushedAt, archived: repoInfo.archived },
+          })
+        }
       }
     }
   }

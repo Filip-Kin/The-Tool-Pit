@@ -28,6 +28,7 @@ import {
   type ListingOwnerRole,
 } from '@the-tool-pit/db'
 import { getCurrentUser } from '@/lib/auth/session'
+import { isAdmin } from '@/lib/admin/auth'
 import {
   canEditListing,
   countOwners,
@@ -548,8 +549,12 @@ export async function removeOwner(
 // #region admin
 
 /**
- * Admin resolves a pending claim. isAdmin is a DB-only flag (never a Firebase
- * claim), so this cannot be reached by a self-asserted admin.
+ * Admin resolves a pending claim. Admin identity is the same one the rest of
+ * the admin panel trusts: isAdmin() from lib/admin/auth, which reads the
+ * Authelia forward-auth group (Traefik overwrites any client-supplied header)
+ * and falls back to the break-glass ADMIN_SECRET cookie. A cookie- or
+ * Authelia-authenticated admin has no app user row, so decidedByUserId is left
+ * null in that case; it is an audit stamp, not an authorization gate.
  *
  * The note is OPTIONAL on an approval and REQUIRED on a rejection. Approving
  * explains itself: the claimant now manages the listing and can see that they
@@ -562,9 +567,11 @@ export async function adminResolveClaim(
   approve: boolean,
   note: string | null,
 ): Promise<OwnershipActionResult> {
+  if (!(await isAdmin())) return { error: 'Admins only.' }
+  // Optional: a cookie/Authelia admin authorizes the action but may carry no
+  // app user row, so this is nullable and used only as the decidedBy stamp.
   const user = await getCurrentUser()
-  if (!user) return { error: 'Your session expired. Sign in again and retry.' }
-  if (!user.isAdmin) return { error: 'Admins only.' }
+  const decidedByUserId = user?.id ?? null
   const cleanNote = note?.trim() || null
   if (!approve && !cleanNote) {
     return { error: 'Give a reason for turning the claim down. It is what the claimant is told.' }
@@ -586,7 +593,7 @@ export async function adminResolveClaim(
     .set({
       status: approve ? 'verified' : 'rejected',
       reviewerNote: cleanNote,
-      decidedByUserId: user.id,
+      decidedByUserId,
       decidedAt: new Date(),
     })
     .where(eq(listingClaims.id, claim.id))

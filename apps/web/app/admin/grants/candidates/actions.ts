@@ -6,7 +6,7 @@ import { eq, or } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
 import { grantCandidates, grantCycles, grantRequirements, grants, grantSources } from '@the-tool-pit/db'
-import { GRANT_REJECTION_KINDS, type GrantRejectionKind } from '@the-tool-pit/db'
+import { GRANT_REJECTION_KINDS, type GrantRejectionKind, type GrantSourceKind } from '@the-tool-pit/db'
 import { reviewRequirements } from '@/lib/admin/grant-review'
 import { enqueueGrantExtract } from '@/lib/admin/grant-queue'
 import {
@@ -28,6 +28,35 @@ const QUEUE_PATH = '/admin/grants/candidates'
  * through publishGrantCandidate() below, and that runs off a form a human has
  * just read and corrected. The other three actions are the ways of saying no.
  */
+
+/**
+ * The real discovery angle that found this candidate, as a grants.source value.
+ *
+ * The connector writes it to rawMetadata.discoveredVia as `<connector>:<detail>`
+ * (`web_search:...`, `team_sponsors:...`, `seed:...`, `chief_delphi:...`) or the
+ * bare `public submission`. sourceId is NOT this signal: a web_search find has
+ * no source row and a curated seed does, so keying the label off sourceId
+ * inverted it, labelling a crawler find 'admin' and a seed 'web_search'.
+ * Anything unrecognised was typed into the admin by hand, which is 'admin'.
+ */
+function discoverySourceKind(discoveredVia: string | null | undefined): GrantSourceKind {
+  const via = discoveredVia ?? ''
+  const connector = (via.includes(':') ? via.slice(0, via.indexOf(':')) : via).trim().toLowerCase()
+  switch (connector) {
+    case 'web_search':
+      return 'web_search'
+    case 'team_sponsors':
+      return 'team_sponsors'
+    case 'chief_delphi':
+      return 'chief_delphi'
+    case 'seed':
+      return 'seed'
+    case 'public submission':
+      return 'submission'
+    default:
+      return 'admin'
+  }
+}
 
 /** Look a grant up by uuid or slug. Admins paste either. */
 async function findGrant(ref: string) {
@@ -86,7 +115,7 @@ export async function publishGrantCandidate(
       slug,
       funderId,
       // Provenance: the discovery angle that found it, not the moderator.
-      source: candidate.sourceId ? 'web_search' : 'admin',
+      source: discoverySourceKind(candidate.rawMetadata?.discoveredVia),
       verifiedAt: now,
       verifiedBy: who,
       publishedAt: status === 'published' ? now : null,

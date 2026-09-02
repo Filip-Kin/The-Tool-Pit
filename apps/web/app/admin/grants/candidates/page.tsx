@@ -4,7 +4,12 @@ import { and, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
 import { grantCandidates, grantSources, grants } from '@the-tool-pit/db'
-import type { GrantClassification, RawGrantMetadata } from '@the-tool-pit/db'
+import type {
+  GrantClassification,
+  GrantExtraction,
+  GrantExtractionFields,
+  RawGrantMetadata,
+} from '@the-tool-pit/db'
 import { GrantCandidateActions } from './candidate-actions'
 
 /**
@@ -179,6 +184,7 @@ export default async function AdminGrantCandidatesPage({
                                       funder: {cls.funderName || meta.funderName}
                                     </p>
                                   )}
+                                  <ExtractedSignal extraction={(row.extraction ?? null) as GrantExtraction | null} />
                                   {grantSlug && (
                                     <p className="mt-1 text-[10px] text-muted-2">
                                       attached to{' '}
@@ -279,6 +285,62 @@ function Verdict({ cls, score }: { cls: GrantClassification; score: number | nul
       ) : (
         <p className="text-[10px] text-muted-2">No reasoning recorded. Read the page yourself before publishing.</p>
       )}
+    </div>
+  )
+}
+
+/** The amount a team could win, as extracted, in the funder's own words if it gave one. */
+function extractedAmount(fields: GrantExtractionFields): string | null {
+  const phrase = fields.awardPhrase?.value?.trim()
+  if (phrase) return phrase
+  const min = fields.awardMin?.value
+  const max = fields.awardMax?.value
+  const currency = fields.awardCurrency?.value?.trim() || 'USD'
+  const symbol = currency === 'USD' ? '$' : `${currency} `
+  const money = (n: number) => `${symbol}${n.toLocaleString()}`
+  if (min != null && max != null) return min === max ? money(max) : `${money(min)}–${money(max)}`
+  if (max != null) return `up to ${money(max)}`
+  if (min != null) return `from ${money(min)}`
+  return null
+}
+
+/** When the round closes, as a date, the funder's wording, or the cadence. */
+function extractedDeadline(fields: GrantExtractionFields): string | null {
+  const at = fields.deadlineAt?.value?.trim()
+  if (at) return at.slice(0, 10)
+  const note = fields.deadlineNote?.value?.trim()
+  if (note) return note
+  const type = fields.deadlineType?.value?.trim()
+  if (type && type !== 'unknown') return type
+  return null
+}
+
+/**
+ * The extraction pass output, compressed to what decides an approval at a
+ * glance: the amount, the deadline and a one-line summary. It lets a moderator
+ * say yes off the list row for a clean grant and only open the deck for the
+ * ones that need the quote behind each field.
+ */
+function ExtractedSignal({ extraction }: { extraction: GrantExtraction | null }) {
+  if (!extraction?.fields) return null
+  const fields = extraction.fields
+  const amount = extractedAmount(fields)
+  const deadline = extractedDeadline(fields)
+  const summary = fields.summary?.value?.trim()
+  if (!amount && !deadline && !summary) return null
+  return (
+    <div className="mt-1.5 flex flex-col gap-1">
+      {(amount || deadline) && (
+        <div className="flex flex-wrap gap-1">
+          {amount && (
+            <span className="rounded bg-rookie/15 px-1.5 py-0.5 text-[10px] font-medium text-rookie">{amount}</span>
+          )}
+          {deadline && (
+            <span className="rounded bg-surface-3 px-1.5 py-0.5 text-[10px] text-muted">due {deadline}</span>
+          )}
+        </div>
+      )}
+      {summary && <p className="line-clamp-2 text-[10px] leading-snug text-muted">{summary}</p>}
     </div>
   )
 }

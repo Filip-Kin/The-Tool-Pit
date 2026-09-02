@@ -86,3 +86,72 @@ export async function getAdminQueueCounts(): Promise<AdminQueueCounts> {
   }
   return counts
 }
+
+/** One backlog row for the dashboard: how much is waiting and since when. */
+export interface AdminQueueBacklogRow {
+  key: keyof AdminQueueCounts
+  /** Human label for the dashboard table. */
+  label: string
+  /** Where the row links, the same target the sidebar uses. */
+  href: string
+  /** Pending rows in this queue. */
+  count: number
+  /** created_at of the OLDEST pending row, or null when the queue is empty. */
+  oldestPendingAt: Date | null
+}
+
+/**
+ * The sidebar order, label and link for every queue, so the dashboard names and
+ * links each backlog the same way the nav does. Kept beside the count query on
+ * purpose: a queue added to one is added to the other here.
+ */
+const QUEUE_META: { key: keyof AdminQueueCounts; label: string; href: string }[] = [
+  { key: 'toolSubmissions', label: 'Tool submissions', href: '/admin/submissions?status=pending' },
+  { key: 'toolCandidates', label: 'Tool candidates', href: '/admin/candidates?status=pending' },
+  { key: 'albumCandidates', label: 'Album candidates', href: '/admin/album-candidates' },
+  { key: 'eventSubmissions', label: 'Event submissions', href: '/admin/event-listings' },
+  { key: 'eventCandidates', label: 'Event candidates', href: '/admin/event-listings/candidates' },
+  { key: 'eventEdits', label: 'Event suggested edits', href: '/admin/event-edits' },
+  { key: 'fieldSubmissions', label: 'Field submissions', href: '/admin/practice-fields' },
+  { key: 'fieldCandidates', label: 'Field candidates', href: '/admin/practice-fields/candidates' },
+  { key: 'fieldEdits', label: 'Field suggested edits', href: '/admin/field-edits' },
+  { key: 'grantCandidates', label: 'Grant candidates', href: '/admin/grants/candidates' },
+  { key: 'grantChanges', label: 'Grant changes', href: '/admin/grants/changes' },
+  { key: 'listingClaims', label: 'Listing claims', href: '/admin/claims' },
+]
+
+/**
+ * The dashboard view of every queue: count PLUS the age of the oldest pending
+ * row. The count query above is the sidebar's hot path and stays untouched;
+ * this one is a second UNION ALL that also reads min(created_at), so the
+ * overview can show the two largest queues (albums and grants) the badges omit
+ * without slowing the nav that renders on every page.
+ */
+export async function getAdminQueueBacklog(): Promise<AdminQueueBacklogRow[]> {
+  const db = getDb()
+
+  const rows = await db.execute<{ key: string; n: number; oldest: string | null }>(sql`
+    select 'toolSubmissions' as key, count(*)::int as n, min(created_at) as oldest from submissions where status = 'pending'
+    union all select 'toolCandidates', count(*)::int, min(created_at) from crawl_candidates where status = 'pending'
+    union all select 'albumCandidates', count(*)::int, min(created_at) from album_candidates where status = 'pending'
+    union all select 'eventSubmissions', count(*)::int, min(created_at) from event_listings where status = 'pending'
+    union all select 'eventCandidates', count(*)::int, min(created_at) from event_listing_candidates where status = 'pending'
+    union all select 'eventEdits', count(*)::int, min(created_at) from event_edit_proposals where status = 'pending'
+    union all select 'fieldSubmissions', count(*)::int, min(created_at) from practice_fields where status = 'pending'
+    union all select 'fieldCandidates', count(*)::int, min(created_at) from practice_field_candidates where status = 'pending'
+    union all select 'fieldEdits', count(*)::int, min(created_at) from field_edit_proposals where status = 'pending'
+    union all select 'grantCandidates', count(*)::int, min(created_at) from grant_candidates where status = 'pending'
+    union all select 'grantChanges', count(*)::int, min(created_at) from grant_changes where status = 'pending'
+    union all select 'listingClaims', count(*)::int, min(created_at) from listing_claims where status = 'pending'
+  `)
+
+  const byKey = new Map(rows.map((r) => [r.key, r]))
+  return QUEUE_META.map((meta) => {
+    const row = byKey.get(meta.key)
+    return {
+      ...meta,
+      count: row?.n ?? 0,
+      oldestPendingAt: row?.oldest ? new Date(row.oldest) : null,
+    }
+  })
+}

@@ -4,6 +4,15 @@
  * Run with: bun --env-file=../../.env src/index.ts
  */
 import { Worker } from 'bullmq'
+import { and, eq, lt } from 'drizzle-orm'
+import {
+  getDb,
+  crawlJobs,
+  eventListingCrawlJobs,
+  albumCrawlJobs,
+  grantCrawlJobs,
+  practiceFieldCrawlJobs,
+} from '@the-tool-pit/db'
 import { getRedis } from './redis.js'
 import { scheduleRecurringJobs, grantEnrichQueue, grantExtractQueue, grantMonitorQueue, readCandidatesQueue } from './queues.js'
 import { processCrawlJob } from './jobs/crawl.js'
@@ -41,6 +50,45 @@ import type { PopularityRefreshPayload } from './jobs/popularity.js'
 
 const connection = getRedis()
 const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY ?? '2', 10)
+
+// The instant this worker process started. Any crawl-job row still 'running'
+// with a started_at before this is an orphan a previous worker left behind when
+// it was killed mid-job (a deploy, a crash, an OOM); the stalled job was retried
+// into a fresh row and nothing ever marked the old one failed.
+const WORKER_STARTED_AT = new Date()
+
+/**
+ * Mark orphaned 'running' crawl-job rows failed, once, at boot.
+ *
+ * Runs before the workers pick anything up, and only touches rows started
+ * before this process did, so a job this worker is about to run can never be
+ * swept out from under itself. Idempotent: a second run finds nothing because
+ * the first already flipped every stale row to 'failed'.
+ */
+async function failOrphanedCrawlJobs(): Promise<void> {
+  const db = getDb()
+  const tables = [
+    { label: 'crawl_jobs', table: crawlJobs },
+    { label: 'event_listing_crawl_jobs', table: eventListingCrawlJobs },
+    { label: 'album_crawl_jobs', table: albumCrawlJobs },
+    { label: 'grant_crawl_jobs', table: grantCrawlJobs },
+    { label: 'practice_field_crawl_jobs', table: practiceFieldCrawlJobs },
+  ] as const
+
+  let total = 0
+  for (const { label, table } of tables) {
+    const swept = await db
+      .update(table)
+      .set({ status: 'failed', error: 'worker restarted', finishedAt: new Date() })
+      .where(and(eq(table.status, 'running'), lt(table.startedAt, WORKER_STARTED_AT)))
+      .returning({ id: table.id })
+    if (swept.length > 0) {
+      console.log(`[worker] swept ${swept.length} orphaned running ${label} row(s)`)
+      total += swept.length
+    }
+  }
+  console.log(`[worker] orphaned crawl-job sweep: ${total} row(s) marked failed`)
+}
 
 const crawlWorker = new Worker<CrawlJobPayload>(
   'crawl',
@@ -380,6 +428,11 @@ for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWork
     console.error('[worker] error:', err.message)
   })
 }
+
+// Fail any crawl-job rows a previous worker left 'running'. Once, at boot.
+failOrphanedCrawlJobs().catch((err) => {
+  console.error('[worker] orphaned crawl-job sweep failed:', err instanceof Error ? err.message : err)
+})
 
 // Schedule recurring jobs
 scheduleRecurringJobs().then(() => {

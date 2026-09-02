@@ -13,25 +13,36 @@
  *
  * The asymmetry with the tools pipeline is deliberate, so it is worth stating
  * plainly: ../jobs/enrich.ts publishes a tool by itself once confidence clears
- * 0.7. This job has NO publish threshold and never will. Every classified
- * grant candidate lands on 'pending' for a human, whatever the model said,
- * because a wrong deadline in front of a team that misses a real one is worse
- * than an empty directory. The tools vertical auto-published its crawl output
- * and filled with forum threads and bot walls, and grants exist downstream of
- * that lesson. grants.verifiedAt and grantCycles.verifiedAt are human
- * confirmations, and nothing in this file may set them.
+ * 0.7. This job has NO publish threshold and never will. A grant only ever goes
+ * PUBLIC through a human on the review deck, because a wrong deadline in front
+ * of a team that misses a real one is worse than an empty directory. The tools
+ * vertical auto-published its crawl output and filled with forum threads and
+ * bot walls, and grants exist downstream of that lesson. grants.verifiedAt and
+ * grantCycles.verifiedAt are human confirmations, and nothing in this file may
+ * set them.
  *
- * The single exception is the deterministic junk gate, which does auto-suppress.
- * That is safe because it never makes a judgement about funding: it only says
- * the fetch returned a bot wall, an error shell or an empty page, and the
- * reason is written to rejectionReason so an admin can see and reverse it.
+ * What this job MAY do is keep the human queue readable. The pending queue is a
+ * moderator's inbox, so it only holds rows a human still has to act on: a real
+ * grant to approve, or an aggregator list to route to a source. A page the
+ * classifier is sure is NOT a grant a team can apply for (a press release, an
+ * award announcement, a bill, a page merely about a grant) is a decision the
+ * machine already made. It is written 'suppressed' with a rejection_kind, not
+ * 'pending', so it leaves the inbox and teaches the suppression-feedback loop.
+ * A suppression is fully reversible from the admin, and it never publishes
+ * anything. See machineRejectionKind() below for the exact rule.
  *
- * The page-shape gate that runs after it is NOT an exception. It writes a
- * classification and stops there, exactly like the model would have, and the
- * candidate still reaches a human on 'pending'.
+ * The deterministic junk gate also auto-suppresses. That is safe because it
+ * never makes a judgement about funding: it only says the fetch returned a bot
+ * wall, an error shell or an empty page, and the reason is written to
+ * rejectionReason so an admin can see and reverse it.
  */
 import { getDb, grantCandidates, eq } from '@the-tool-pit/db'
-import type { GrantCandidate, RawGrantMetadata } from '@the-tool-pit/db'
+import type {
+  GrantCandidate,
+  GrantClassification,
+  GrantRejectionKind,
+  RawGrantMetadata,
+} from '@the-tool-pit/db'
 import { politeFetch } from '../connectors/base.js'
 import { stripToMainContent } from './strip.js'
 import {
@@ -124,6 +135,34 @@ export interface GrantEnrichOutcome {
   extract: boolean
 }
 
+/**
+ * Turn a machine verdict into a queue decision.
+ *
+ * The pending queue is a human's inbox, and it is only useful if every row on
+ * it is one a human still has to act on. Two verdicts are still open questions
+ * for a person and stay pending:
+ *
+ *   - isGrant: a real listing. Nothing here may publish it, so it waits for the
+ *     review deck.
+ *   - isAggregator: a list page. Not a listing, but not a rejection either. It
+ *     is a SOURCE to crawl, and a human routes it to grant_sources. Suppressing
+ *     it would lose that route, so it stays pending.
+ *
+ * Everything else the classifier is sure is NOT a grant a team can apply for (a
+ * press release, an award announcement, a bill, a page merely about a grant) is
+ * a decision the machine already made. Leaving it 'pending' buries the real
+ * grants under rows nobody needs to look at. It becomes 'suppressed' with a
+ * rejection_kind, which is the machine-readable half the suppression-feedback
+ * loop reads to teach the next classification run. Returns null when the row
+ * should stay pending.
+ */
+export function machineRejectionKind(classification: GrantClassification): GrantRejectionKind | null {
+  if (classification.isGrant) return null
+  if (classification.isAggregator) return null
+  if (classification.isAnnouncement) return 'announcement'
+  return 'not_a_grant'
+}
+
 export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promise<GrantEnrichOutcome> {
   const db = getDb()
   const { candidateId } = payload
@@ -191,24 +230,29 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
   //    "applicable grants" were one of those two, and none of them needed a
   //    paid call to be recognised.
   //
-  //    Unlike the junk gate this does NOT suppress. It writes the verdict and
-  //    leaves the row pending, so a human still routes the aggregator to
-  //    grant_sources, or publishes it anyway if the shape guard was wrong.
+  //    An aggregator_index shape stays pending, so a human still routes it to
+  //    grant_sources or publishes it if the shape guard was wrong. A
+  //    legislative_or_press shape is a page a team cannot apply on: it is
+  //    suppressed with its kind, so it leaves the human queue and teaches the
+  //    suppression-feedback loop instead of being rejected by hand every crawl.
   const shape = detectGrantPageShape(url)
   if (shape) {
     const shaped = shapeClassification(shape)
+    const rejectionKind = machineRejectionKind(shaped)
     await db
       .update(grantCandidates)
       .set({
         classification: shaped,
         confidenceScore: 0,
-        status: 'pending',
-        rejectionReason: null,
+        status: rejectionKind ? 'suppressed' : 'pending',
+        rejectionReason: rejectionKind ? (shaped.reasoning ?? null) : null,
+        rejectionKind,
         updatedAt: new Date(),
       })
       .where(eq(grantCandidates.id, candidateId))
     console.log(
-      `[grant-enrich] ${candidateId} decided by shape gate (${shape.shape}), no model call: ${url}`,
+      `[grant-enrich] ${candidateId} decided by shape gate (${shape.shape}), no model call, ` +
+        `${rejectionKind ? `suppressed (${rejectionKind})` : 'pending'}: ${url}`,
     )
     return { extract: false }
   }
@@ -249,16 +293,20 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
     throw err
   }
 
-  // 4. Write the verdict. Status is 'pending' either way: a rejected candidate
-  //    is still shown to a human, who suppresses it and thereby teaches the
-  //    source's rejectCount what a noisy source looks like.
+  // 4. Write the verdict. A real grant and an aggregator both stay pending for
+  //    a human (approve, or route to a source). A page the classifier is sure
+  //    is not a grant a team can apply for is suppressed with its kind, so the
+  //    pending queue stays the real grants a moderator can approve at a glance
+  //    and the suppression-feedback loop gets a labelled negative to learn from.
+  const rejectionKind = machineRejectionKind(classification)
   await db
     .update(grantCandidates)
     .set({
       classification,
       confidenceScore: classification.confidence ?? 0,
-      status: 'pending',
-      rejectionReason: null,
+      status: rejectionKind ? 'suppressed' : 'pending',
+      rejectionReason: rejectionKind ? (classification.reasoning ?? null) : null,
+      rejectionKind,
       updatedAt: new Date(),
     })
     .where(eq(grantCandidates.id, candidateId))
@@ -274,7 +322,7 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
         : 'not applicable'
 
   console.log(
-    `[grant-enrich] ${candidateId} pending review: ${verdict}, ` +
+    `[grant-enrich] ${candidateId} ${rejectionKind ? `suppressed (${rejectionKind})` : 'pending review'}: ${verdict}, ` +
       `confidence=${(classification.confidence ?? 0).toFixed(2)}` +
       `${fetched ? ' [page fetched]' : readThePage ? '' : ' [page NOT read]'} (${url})`,
   )

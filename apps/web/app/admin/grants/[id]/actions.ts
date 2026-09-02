@@ -80,6 +80,17 @@ export async function saveGrantForm(grantId: string, form: FormData): Promise<vo
   const funderId = parsed.funderName ? await resolveFunderByName(parsed.funderName) : null
   const status = parsed.values.status ?? existing.status
 
+  if (status === 'published') {
+    // The form's status select is a second door to publish, so it gets the
+    // same gate as setGrantStatusAction: an unverified grant cannot go public.
+    // Teams read the verified date as a promise, so publishing something nobody
+    // checked is the exact failure this vertical is built to avoid.
+    const [row] = await db.select({ verifiedAt: grants.verifiedAt }).from(grants).where(eq(grants.id, grantId)).limit(1)
+    if (!row?.verifiedAt) {
+      backWithError(grantId, 'Verify the listing before publishing it. Teams read the verified date as a promise.')
+    }
+  }
+
   await db
     .update(grants)
     .set({

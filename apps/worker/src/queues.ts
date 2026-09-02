@@ -313,11 +313,13 @@ export async function scheduleRecurringJobs() {
     data: { connector: 'fta_tools', jobId: 'scheduled' },
   })
 
-  // Re-crawl volunteer.systems every 12 hours
-  await crawlQueue.upsertJobScheduler('crawl-volunteer-systems', { every: 12 * 60 * 60 * 1000 }, {
-    name: 'crawl-volunteer-systems',
-    data: { connector: 'volunteer_systems', jobId: 'scheduled' },
-  })
+  // volunteer.systems is NOT scheduled. The connector is hard-disabled
+  // (connectors/volunteer-systems.ts), so a schedule only made it log "0 found"
+  // twice a day. Removing the upsert alone would not stop it: the scheduler key
+  // already lives in Redis and would keep firing, so it is torn down explicitly.
+  // removeJobScheduler is a no-op when the key is already gone, so this is safe
+  // on every boot. Re-add a scheduler here once the connector is switched on.
+  await crawlQueue.removeJobScheduler('crawl-volunteer-systems')
 
   // GitHub topics crawl — once per day (respects API rate limits)
   await crawlQueue.upsertJobScheduler('crawl-github-topics', { every: 24 * 60 * 60 * 1000 }, {
@@ -337,15 +339,22 @@ export async function scheduleRecurringJobs() {
     data: { connector: 'spectrum_cad', jobId: 'scheduled' },
   })
 
-  // Freshness pass every 24 hours — check all published tools
-  // (individual tool freshness jobs are spawned by this scheduler job)
-  await freshnessQueue.upsertJobScheduler('freshness-pass', { every: 24 * 60 * 60 * 1000 }, {
+  // Freshness pass — daily, check all published tools (this scheduler job spawns
+  // an individual freshness job per tool). A CRON PATTERN, not `every`: `every`
+  // counts from the upsert, which is worker startup, so an `every: 24h` sweep
+  // fired its full fan-out of GitHub requests on every single deploy. 22:15 UTC
+  // sits well clear of the 02:10-09:10 discovery/renewal block and the 07:20
+  // popularity sweep, so the two GitHub-heavy passes never overlap.
+  await freshnessQueue.upsertJobScheduler('freshness-pass', { pattern: '15 22 * * *' }, {
     name: 'freshness-pass-trigger',
     data: { toolId: '__all__' },
   })
 
-  // Dead-link check pass — once per week
-  await linkCheckQueue.upsertJobScheduler('link-check-pass', { every: 7 * 24 * 60 * 60 * 1000 }, {
+  // Dead-link check pass — weekly, for the same reason on a cron pattern rather
+  // than `every`. Sunday 01:45 UTC, a quiet hour clear of every other scheduled
+  // job, so a full crawl of every tool's links does not share the box with a
+  // discovery sweep.
+  await linkCheckQueue.upsertJobScheduler('link-check-pass', { pattern: '45 1 * * 0' }, {
     name: 'link-check-pass-trigger',
     data: { toolId: '__all__' },
   })
@@ -365,40 +374,46 @@ export async function scheduleRecurringJobs() {
   })
 
   // --- Photo album aggregator ---
+  // CRON PATTERNS, not `every`, for the reason spelled out above the grants
+  // block: `every` counts from the upsert, which is worker startup, so all six
+  // album syncs fired together on every deploy. Each is pinned to its own
+  // off-peak minute in the 22:00-01:30 UTC window, clear of the grants and
+  // listings discovery block, and no two share a minute so they do not pile onto
+  // the one album-ingest queue at once.
   const currentSeasonYear = new Date().getFullYear()
 
   // Sync FRC events + team rosters from TBA — once per day
-  await albumIngestQueue.upsertJobScheduler('album-sync-tba', { every: 24 * 60 * 60 * 1000 }, {
+  await albumIngestQueue.upsertJobScheduler('album-sync-tba', { pattern: '0 23 * * *' }, {
     name: 'album-sync-tba',
     data: { connector: 'tba_events', year: currentSeasonYear, jobId: 'scheduled' },
   })
 
   // Sync FTC events + team rosters from self-hosted TOA — once per day
-  await albumIngestQueue.upsertJobScheduler('album-sync-toa', { every: 24 * 60 * 60 * 1000 }, {
+  await albumIngestQueue.upsertJobScheduler('album-sync-toa', { pattern: '30 23 * * *' }, {
     name: 'album-sync-toa',
     data: { connector: 'toa_events', year: currentSeasonYear, jobId: 'scheduled' },
   })
 
-  // Scrape First in Michigan event photo links — every 12 hours
-  await albumIngestQueue.upsertJobScheduler('album-crawl-fim', { every: 12 * 60 * 60 * 1000 }, {
+  // Scrape First in Michigan event photo links — twice per day
+  await albumIngestQueue.upsertJobScheduler('album-crawl-fim', { pattern: '0 0,12 * * *' }, {
     name: 'album-crawl-fim',
     data: { connector: 'fim_albums', year: currentSeasonYear, jobId: 'scheduled' },
   })
 
   // Search Chief Delphi for album links - once per day
-  await albumIngestQueue.upsertJobScheduler('album-crawl-cd', { every: 24 * 60 * 60 * 1000 }, {
+  await albumIngestQueue.upsertJobScheduler('album-crawl-cd', { pattern: '30 0 * * *' }, {
     name: 'album-crawl-cd',
     data: { connector: 'chief_delphi_albums', year: currentSeasonYear, jobId: 'scheduled' },
   })
 
   // Scrape curated Flickr photographer accounts - once per day
-  await albumIngestQueue.upsertJobScheduler('album-crawl-flickr', { every: 24 * 60 * 60 * 1000 }, {
+  await albumIngestQueue.upsertJobScheduler('album-crawl-flickr', { pattern: '0 1 * * *' }, {
     name: 'album-crawl-flickr',
     data: { connector: 'flickr_albums', year: currentSeasonYear, jobId: 'scheduled' },
   })
 
   // Walk curated SmugMug photographer sites - once per day
-  await albumIngestQueue.upsertJobScheduler('album-crawl-smugmug', { every: 24 * 60 * 60 * 1000 }, {
+  await albumIngestQueue.upsertJobScheduler('album-crawl-smugmug', { pattern: '30 1 * * *' }, {
     name: 'album-crawl-smugmug',
     data: { connector: 'smugmug_albums', year: currentSeasonYear, jobId: 'scheduled' },
   })
