@@ -28,6 +28,7 @@ import {
 import { readEventCandidate } from './read-event.js'
 import { readFieldCandidate } from './read-field.js'
 import { fetchChiefDelphiTopic, parseChiefDelphiTopicId } from '../connectors/discourse.js'
+import { geocodeVenue, matchTbaEvent } from './locate.js'
 
 export interface ReadCandidatesPayload {
   /** 'event' or 'field'. Both when omitted. */
@@ -137,10 +138,47 @@ export async function processReadCandidatesJob(
         // the first pattern-matched pass had written it and "existing wins"
         // protected it, while the correct 30 October was thrown away each time.
         const rereading = Boolean(payload.force || payload.candidateId)
-        const merged = rereading
+        const merged: Record<string, unknown> = rereading
           ? { ...stripEmpty(existing), ...read.fields }
           : { ...read.fields, ...stripEmpty(existing) }
         const added = Object.keys(read.fields).filter((k) => !(k in stripEmpty(existing))).length
+
+        // A PIN AND A TBA CODE, both lookups rather than readings.
+        //
+        // A listing cannot go on the map without coordinates, and the venue and
+        // address are sitting right there: doing it here is the difference
+        // between a moderator pressing Accept and a moderator pressing Accept
+        // and then hunting for a school on a map. The TBA code matters for a
+        // different reason: it is what lets the roster refresh keep the
+        // registered team count current afterwards.
+        const located =
+          merged.latitude == null || merged.longitude == null
+            ? await geocodeVenue({
+                venueName: merged.venueName as string | undefined,
+                address: merged.address as string | undefined,
+                city: merged.city as string | undefined,
+                region: merged.region as string | undefined,
+                country: merged.country as string | undefined,
+              })
+            : null
+        if (located) {
+          merged.latitude = located.latitude
+          merged.longitude = located.longitude
+        }
+
+        const matched =
+          // `tbaKey` is a column on the events candidate table only, so it is
+          // read off the row through a narrow cast rather than by widening the
+          // union both tables share.
+          vertical === 'event' && !merged.tbaKey && !(row as { tbaKey?: string | null }).tbaKey
+            ? await matchTbaEvent({
+                name: String(merged.name ?? title),
+                startDate: merged.startDate as string | undefined,
+                city: merged.city as string | undefined,
+                region: merged.region as string | undefined,
+              })
+            : null
+        if (matched) merged.tbaKey = matched.tbaKey
 
         await db
           .update(table)
@@ -149,7 +187,15 @@ export async function processReadCandidatesJob(
             rawMetadata: {
               ...meta,
               readAt: new Date().toISOString(),
-              readEvidence: read.evidence,
+              readEvidence: {
+                ...read.evidence,
+                // The pin and the code carry their working, same as every
+                // value the model produced.
+                ...(located
+                  ? { latitude: { quote: located.resolved, source: `geocode: ${located.query}` } }
+                  : {}),
+                ...(matched ? { tbaKey: { quote: matched.why, source: 'the blue alliance' } } : {}),
+              },
               readPages: read.pagesRead,
               readRejected: read.rejected,
             },

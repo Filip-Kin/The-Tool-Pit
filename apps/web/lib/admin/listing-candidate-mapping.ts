@@ -53,6 +53,17 @@ function teamNumber(v: number | undefined | null): number | null {
   return typeof v === 'number' && Number.isInteger(v) && v > 0 && v < 100_000 ? v : null
 }
 
+/**
+ * A coordinate inside its real range, or null.
+ *
+ * A latitude of 200 is not a place. The bound is per-axis because swapping the
+ * two is the mistake this catches: a longitude in the latitude column reads as
+ * a valid number and puts the pin in the sea.
+ */
+function coordinate(v: number | undefined | null, max: number): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= max ? v : null
+}
+
 /** A whole number, or null. Anything else the reader offered is not a count. */
 function intOrNull(v: number | undefined | null): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null
@@ -97,6 +108,10 @@ export function eventListingFromCandidate(
     name,
     program: program(ex.program, EVENT_PROGRAMS),
     hostTeamNumber: teamNumber(ex.hostTeamNumber),
+    // Looked up from the venue during the read, so accepting puts the event on
+    // the map instead of handing the reviewer a school to find themselves.
+    latitude: coordinate(ex.latitude, 90),
+    longitude: coordinate(ex.longitude, 180),
     venueName: text(ex.venueName),
     address: text(ex.address),
     city: text(ex.city),
@@ -146,6 +161,8 @@ export function practiceFieldFromCandidate(
     name,
     teamNumber: teamNumber(ex.teamNumber ?? candidate.teamNumber),
     teamName: text(ex.teamName),
+    latitude: coordinate(ex.latitude, 90),
+    longitude: coordinate(ex.longitude, 180),
     program: program(ex.program, FIELD_PROGRAMS),
     address: text(ex.address),
     city: text(ex.city),

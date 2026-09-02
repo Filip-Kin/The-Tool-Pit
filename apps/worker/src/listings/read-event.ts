@@ -64,7 +64,11 @@ Fields:
   endDate           "YYYY-MM-DD", the LAST day. Null for a one-day event
   capacity          integer, how many teams can enter
   costUsd           integer US dollars per team to enter, so 250 for "$250 per team"
-  costNote          the fee in the source's own words when it is not a plain number
+  costNote          ONLY when the price is not one flat number: a discount for a second robot, a
+                    cheaper combined price for both days of a two-day event, a different rate for
+                    FTC than FRC, an early-bird deadline, or a fee charged on top. Do NOT restate
+                    costUsd here: "$300 registration fee" next to costUsd 300 is noise. If the
+                    price is a single figure, return null.
   registrationStatus  where team sign-ups have got to. These are four different things and the
                     difference matters to a team deciding whether to act today:
                       "not_open"  sign-ups have not started. "Save the date", "applications open in

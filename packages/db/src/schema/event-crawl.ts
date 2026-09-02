@@ -260,6 +260,17 @@ export interface ExtractedEventListingFields {
   // on the /pay page the thread links to.
   volunteerUrl?: string
   contactEmail?: string
+  /**
+   * Looked up from the venue and address, not read off a page.
+   *
+   * A listing needs a pin before it can go on the map, and "Capistrano Valley
+   * High School, Mission Viejo, CA" is a map search rather than a judgement.
+   * Only ever filled from a real address or a named venue with a town behind
+   * it: vague prose gets no pin, because a plausible marker in the wrong car
+   * park is worse than an empty map.
+   */
+  latitude?: number
+  longitude?: number
   capacity?: number
   costUsd?: number
   costNote?: string

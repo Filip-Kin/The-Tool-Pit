@@ -255,6 +255,9 @@ export interface ExtractedPracticeFieldFields {
   elements?: string
   hasFms?: boolean
   ceilingHeightFt?: number
+  /** Looked up from a real street address only. See the events note. */
+  latitude?: number
+  longitude?: number
   /** An email address or "ask for Dave in the FiM Discord". */
   contactInfo?: string
   notes?: string
