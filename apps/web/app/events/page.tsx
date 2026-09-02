@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getPublishedEvents, countArchivedEvents } from '@/lib/queries/event-listings'
+import { listingClaimStates } from '@/lib/queries/listing-ownership'
 import { currentOffseasonSeason } from '@the-tool-pit/db'
 import type { SeasonScope } from '@/lib/events/event-display'
 import { EventsExplorer } from '@/components/events/events-explorer'
@@ -42,6 +43,11 @@ export default async function EventsHomePage({
     countArchivedEvents(now),
   ])
 
+  // Claim state per event, computed here from the session the same way the
+  // fields page does. Without it the dialog fell back to its signed_out default
+  // and asked a signed-in reader to log in again to claim.
+  const claimStates = Object.fromEntries(await listingClaimStates('event', events.map((e) => e.id)))
+
   return (
     <div className="container mx-auto max-w-6xl px-4 py-6">
       <div className="mb-6 flex flex-col gap-2">
@@ -77,6 +83,7 @@ export default async function EventsHomePage({
           scope={scope}
           currentSeason={currentSeason}
           archivedCount={archivedCount}
+          claimStates={claimStates}
         />
       )}
     </div>

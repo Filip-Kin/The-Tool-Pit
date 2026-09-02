@@ -30,17 +30,19 @@ const FOOTER_LINK =
 export function EventDialog({
   event,
   now,
-  claimState = 'signed_out',
+  claimState,
   onClose,
 }: {
   event: PublicEvent | null
   now: Date
   /**
-   * Resolved on the server per event, like the field map does. Optional so the
-   * explorer can adopt it without this prop landing first; the default offers
-   * the claim as a sign-in, which is the honest thing for a signed-out reader.
+   * Resolved on the server per event, like the field dialog. REQUIRED, not
+   * defaulted: a permissive 'signed_out' default here once let the explorer
+   * render without ever passing a real state, so a signed-in reader was asked
+   * to log in again. The compiler now forces every caller to thread it, exactly
+   * as FieldDialog already did.
    */
-  claimState?: ListingClaimState
+  claimState: ListingClaimState
   onClose: () => void
 }) {
   const [editing, setEditing] = useState(false)

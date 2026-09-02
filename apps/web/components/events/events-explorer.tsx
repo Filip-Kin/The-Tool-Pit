@@ -8,6 +8,7 @@ import { ButtonLink } from '@/components/ui/button'
 import { cn } from '@/lib/utils/cn'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import type { PublicEvent, DistanceUnit, SeasonScope } from '@/lib/events/event-display'
+import type { ListingClaimState } from '@/lib/queries/listing-ownership'
 import {
   eventTiming,
   daysUntil,
@@ -65,6 +66,7 @@ export function EventsExplorer({
   scope = 'current',
   currentSeason,
   archivedCount = 0,
+  claimStates,
 }: {
   events: PublicEvent[]
   now: Date
@@ -74,6 +76,8 @@ export function EventsExplorer({
   currentSeason: number
   /** Published listings sitting in finished seasons, for the link's label. */
   archivedCount?: number
+  /** Claim state per event id, computed on the server from the session. */
+  claimStates: Record<string, ListingClaimState>
 }) {
   const archiveView = scope === 'earlier'
   const [program, setProgram] = useState<EventProgram>('frc')
@@ -347,7 +351,12 @@ export function EventsExplorer({
         )}
       </div>
 
-      <EventDialog event={events.find((e) => e.id === openId) ?? null} now={now} onClose={() => setOpenId(null)} />
+      <EventDialog
+        event={events.find((e) => e.id === openId) ?? null}
+        now={now}
+        claimState={(openId && claimStates[openId]) || 'signed_out'}
+        onClose={() => setOpenId(null)}
+      />
     </div>
   )
 }
