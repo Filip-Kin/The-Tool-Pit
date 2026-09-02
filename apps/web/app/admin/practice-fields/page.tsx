@@ -65,7 +65,7 @@ export default async function PracticeFieldsAdminPage({
       <h1 className="text-xl font-semibold text-foreground">Practice Fields</h1>
       <p className="mt-1 text-sm text-muted">Review submitted practice fields, place their pin, and publish to the map.</p>
 
-      <div className="mt-4 flex gap-1 border-b border-border-subtle">
+      <div className="mt-4 flex flex-wrap gap-x-1 border-b border-border-subtle">
         {TABS.map((t) => (
           <Link
             key={t}

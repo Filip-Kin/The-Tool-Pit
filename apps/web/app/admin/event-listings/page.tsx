@@ -49,7 +49,7 @@ export default async function EventListingsAdminPage({
       <h1 className="text-xl font-semibold text-foreground">Off-Season Events</h1>
       <p className="mt-1 text-sm text-muted">Review submitted events, place their pin, and publish to the map.</p>
 
-      <div className="mt-4 flex gap-1 border-b border-border-subtle">
+      <div className="mt-4 flex flex-wrap gap-x-1 border-b border-border-subtle">
         {TABS.map((t) => (
           <Link
             key={t}

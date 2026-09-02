@@ -101,7 +101,7 @@ export default async function AdminAlbumCandidatesPage({
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-4 md:p-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Album Candidates</h1>
         <p className="text-sm text-muted">{total.toLocaleString()} {TAB_LABELS[status]}</p>
@@ -129,7 +129,7 @@ export default async function AdminAlbumCandidatesPage({
         )}
       </form>
 
-      <div className="flex gap-1 border-b border-border-subtle">
+      <div className="flex flex-wrap gap-x-1 border-b border-border-subtle">
         {STATUS_TABS.map((s) => (
           <Link
             key={s}

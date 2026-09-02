@@ -26,7 +26,7 @@ export default async function AdminAlbumSourcesPage() {
   ])
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-4 md:p-8">
       <h1 className="text-2xl font-bold text-foreground">Album Sources</h1>
 
       <div className="grid grid-cols-3 gap-4">

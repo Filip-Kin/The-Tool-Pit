@@ -89,7 +89,7 @@ export default async function AdminGrantEditorPage({
   }))
 
   return (
-    <div className="flex max-w-5xl flex-col gap-6 p-8">
+    <div className="flex max-w-5xl flex-col gap-6 p-4 md:p-8">
       {/* #region header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>

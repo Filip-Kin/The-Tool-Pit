@@ -72,7 +72,7 @@ export default async function AdminCandidatesPage({
       </div>
 
       {/* Status tabs */}
-      <div className="flex gap-1 border-b border-border-subtle">
+      <div className="flex flex-wrap gap-x-1 border-b border-border-subtle">
         {STATUS_TABS.map((s) => (
           <Link
             key={s}

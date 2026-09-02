@@ -82,7 +82,7 @@ export default async function AdminGrantCandidatesPage({
     new URLSearchParams({ status, ...(q ? { q } : {}), ...Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, String(v)])) }).toString()
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-4 md:p-8">
       <div className="flex items-center justify-between">
         <div>
           <Link href="/admin/grants" className="text-xs text-muted hover:text-foreground">
@@ -120,7 +120,7 @@ export default async function AdminGrantCandidatesPage({
         )}
       </form>
 
-      <div className="flex gap-1 border-b border-border-subtle">
+      <div className="flex flex-wrap gap-x-1 border-b border-border-subtle">
         {STATUS_TABS.map((s) => (
           <Link
             key={s}

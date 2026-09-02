@@ -92,7 +92,7 @@ export default async function AdminGrantChangesPage({
   const truncated = rows.length === MAX_CHANGES
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-4 md:p-8">
       <div className="flex items-center justify-between">
         <div>
           <Link href="/admin/grants" className="text-xs text-muted hover:text-foreground">
@@ -109,7 +109,7 @@ export default async function AdminGrantChangesPage({
         dismiss with a note rather than applying something that is probably right.
       </p>
 
-      <div className="flex gap-1 border-b border-border-subtle">
+      <div className="flex flex-wrap gap-x-1 border-b border-border-subtle">
         {STATUS_TABS.map((s) => (
           <Link
             key={s}

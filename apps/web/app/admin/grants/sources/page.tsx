@@ -49,7 +49,7 @@ export default async function AdminGrantSourcesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-4 md:p-8">
       <div>
         <Link href="/admin/grants" className="text-xs text-muted hover:text-foreground">
           ← Grants

@@ -68,7 +68,7 @@ export default async function AdminGrantsPage({
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-4 md:p-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Grants</h1>
         <p className="text-sm text-muted">{total.toLocaleString()} {status}</p>
@@ -99,7 +99,7 @@ export default async function AdminGrantsPage({
         )}
       </form>
 
-      <div className="flex gap-1 border-b border-border-subtle">
+      <div className="flex flex-wrap gap-x-1 border-b border-border-subtle">
         {STATUS_TABS.map((s) => (
           <Link
             key={s}

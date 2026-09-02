@@ -235,18 +235,36 @@ export function StatusTabs({
   labels?: Record<string, string>
 }) {
   return (
-    <div className="flex gap-1 overflow-x-auto border-b border-border-subtle">
+    // WRAPS on a phone, scrolls on nothing.
+    //
+    // These were one horizontally-scrolling row, so on a 390px screen the last
+    // two statuses sat off the right edge with nothing to say they were there:
+    // a queue you cannot see is a queue nobody works. Six short words wrap onto
+    // two lines and every one of them is reachable without a drag.
+    //
+    // The inactive tabs were text-muted, which on this background is a caption
+    // grey. They are links, and one of them is where the reviewer is going
+    // next.
+    <div className="flex flex-wrap gap-x-1 gap-y-0 border-b border-border-subtle">
       {statuses.map((s) => (
         <Link
           key={s}
           href={`${basePath}?status=${s}`}
-          className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm capitalize transition-colors ${
-            active === s ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'
+          className={`-mb-px flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm capitalize transition-colors ${
+            active === s
+              ? 'border-primary font-medium text-primary'
+              : 'border-transparent text-foreground/80 hover:border-border hover:text-foreground'
           }`}
         >
           {labels?.[s] ?? s}
-          {counts[s] != null && (
-            <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] text-muted">{counts[s]}</span>
+          {counts[s] != null && counts[s] > 0 && (
+            <span
+              className={`rounded-full px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${
+                active === s ? 'bg-primary/20 text-primary' : 'bg-surface-3 text-foreground'
+              }`}
+            >
+              {counts[s]}
+            </span>
           )}
         </Link>
       ))}
