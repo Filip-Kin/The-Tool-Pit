@@ -38,6 +38,42 @@ export function parseGitHubUrl(url: string): { owner: string; repo: string } | n
 }
 
 /**
+ * One GitHub API request, retried anonymously when an organisation refuses our
+ * token.
+ *
+ * FIRSTinMI and the-orange-alliance both answer 403 to the deploy token: "the
+ * organization forbids access via a fine-grained personal access token if the
+ * token's lifetime is greater than 366 days". That is a policy about the token,
+ * not about the repo. All five repos are public and any signed-out visitor can
+ * read them, so the popularity pass was holding FTA Buddy and four TOA listings
+ * at zero stars over an org setting we do not control.
+ *
+ * Retried once, only on a 403 that is not a rate limit, and only when a token
+ * was actually sent. Anonymous requests get 60 an hour against 5000, so this is
+ * the fallback for the handful of repos an org blocks and never the default.
+ *
+ * The caller is told which request answered, because the two budgets must not
+ * be confused. The anonymous limit is always below the sweep's floor of 100, so
+ * reporting it as the token's remaining budget would stop the whole pass on the
+ * first blocked repo.
+ */
+async function githubApiFetch(
+  url: string,
+  accept: string,
+): Promise<{ res: Response; anonymous: boolean }> {
+  const token = process.env.GITHUB_TOKEN
+  const headers: Record<string, string> = { Accept: accept }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const res = await politeFetch(url, { headers })
+  if (!token || res.status !== 403 || isRateLimited(res.status, res.headers)) {
+    return { res, anonymous: false }
+  }
+
+  return { res: await politeFetch(url, { headers: { Accept: accept } }), anonymous: true }
+}
+
+/**
  * Fetch a repo's README as raw text, in whatever markup it is written in.
  *
  * raw.githubusercontent.com is a CDN and is not metered against the API rate limit, so the
@@ -55,12 +91,11 @@ export async function fetchGitHubReadme(owner: string, repo: string): Promise<st
     // Fall through to the API, which answers for every other spelling anyway.
   }
 
-  const headers: Record<string, string> = { Accept: 'application/vnd.github.raw' }
-  const token = process.env.GITHUB_TOKEN
-  if (token) headers['Authorization'] = `Bearer ${token}`
-
   try {
-    const res = await politeFetch(`https://api.github.com/repos/${owner}/${repo}/readme`, { headers })
+    const { res } = await githubApiFetch(
+      `https://api.github.com/repos/${owner}/${repo}/readme`,
+      'application/vnd.github.raw',
+    )
     if (!res.ok) return null
     return (await res.text()).slice(0, cap)
   } catch (err) {
@@ -127,14 +162,8 @@ export async function fetchGitHubRepoOutcome(url: string): Promise<GitHubFetchOu
   const { owner, repo } = parsed
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}`
 
-  const token = process.env.GITHUB_TOKEN
-  const headers: Record<string, string> = {
-    Accept: 'application/vnd.github.v3+json',
-  }
-  if (token) headers['Authorization'] = `Bearer ${token}`
-
   try {
-    const res = await politeFetch(apiUrl, { headers })
+    const { res, anonymous } = await githubApiFetch(apiUrl, 'application/vnd.github.v3+json')
     if (res.status === 404) return { kind: 'gone' }
     if (isRateLimited(res.status, res.headers)) {
       return { kind: 'rate-limited', resetAt: readRateLimit(res.headers).resetAt }
@@ -147,7 +176,9 @@ export async function fetchGitHubRepoOutcome(url: string): Promise<GitHubFetchOu
 
     return {
       kind: 'ok',
-      rateLimitRemaining: readRateLimit(res.headers).remaining,
+      // Null for an answer that came back anonymously: 60-an-hour is not the
+      // token's budget and must not be read as the sweep running out of room.
+      rateLimitRemaining: anonymous ? null : readRateLimit(res.headers).remaining,
       repo: {
         fullName: data.full_name as string,
         description: (data.description as string | null) ?? null,
