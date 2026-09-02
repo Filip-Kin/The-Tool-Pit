@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { cardClass } from '@/components/ui/card'
 import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
 import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
+import { SubmitConfirmation } from '@/components/ui/submit-confirmation'
 import { cn } from '@/lib/utils/cn'
 // The pin-drop map and its Nominatim geocode proxy are vertical-neutral, so we
 // reuse the fields ones rather than duplicate ~200 lines and a second API route.
@@ -65,6 +66,7 @@ interface FormState {
   eventStatus: string
   website: string
   registrationUrl: string
+  teamListUrl: string
   volunteerUrl: string
   chiefDelphiUrl: string
   contactEmail: string
@@ -128,6 +130,7 @@ const INITIAL: FormState = {
   eventStatus: 'confirmed',
   website: '',
   registrationUrl: '',
+  teamListUrl: '',
   volunteerUrl: '',
   chiefDelphiUrl: '',
   contactEmail: '',
@@ -198,6 +201,10 @@ function fromEvent(ev: PublicEvent): FormState {
     eventStatus: ev.eventStatus,
     website: s(ev.website),
     registrationUrl: s(ev.registrationUrl),
+    // Read defensively: the field lives client-side here until the shared
+    // PublicEvent type carries it, so it prefills empty rather than failing to
+    // typecheck against the current type.
+    teamListUrl: s((ev as { teamListUrl?: string | null }).teamListUrl ?? null),
     volunteerUrl: s(ev.volunteerUrl),
     chiefDelphiUrl: s(ev.chiefDelphiUrl),
     contactEmail: s(ev.contactEmail),
@@ -369,6 +376,28 @@ export function EventSubmitForm({
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // A successful submit replaces the whole form with a terminal confirmation, so
+  // there is no re-enabled button and no re-solved Turnstile to fire the same
+  // event or edit twice. The dialog-hosted edit flow leaves out "Submit another"
+  // and relies on the dialog close; a create page gets a way back to a blank one.
+  if (result?.ok) {
+    return (
+      <SubmitConfirmation
+        message={result.message}
+        title={editing ? 'Thanks — your edit is in for review' : undefined}
+        onSubmitAnother={
+          editing
+            ? undefined
+            : () => {
+                setForm({ ...INITIAL, submitterName: form.submitterName, submitterContact: form.submitterContact })
+                setCoords(null)
+                setResult(null)
+              }
+        }
+      />
+    )
   }
 
   return (
@@ -544,6 +573,9 @@ export function EventSubmitForm({
             </Field>
           </div>
         </div>
+        <Field label="Team list page" hint="Link to the event's own registered-teams list, if it has one.">
+          <input type="url" value={form.teamListUrl} onChange={(e) => set('teamListUrl', e.target.value)} placeholder="https://…" className="input" />
+        </Field>
         <Field label="Volunteer sign-up link" hint="Where volunteers apply, when that is a separate form.">
           <input type="url" value={form.volunteerUrl} onChange={(e) => set('volunteerUrl', e.target.value)} placeholder="https://…" className="input" />
         </Field>

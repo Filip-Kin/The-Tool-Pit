@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
 import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { SubmitConfirmation } from '@/components/ui/submit-confirmation'
 
 // Cloudflare Turnstile API injected by their script (shared shape with the tools form).
 declare global {
@@ -203,6 +204,12 @@ export function AlbumSubmitForm() {
   }
 
   const locOf = (o: EventOption) => [o.city, o.stateProv].filter(Boolean).join(', ')
+
+  // A successful submit clears every field above, so "Submit another" only has
+  // to drop the confirmation to bring the blank form back.
+  if (result?.ok) {
+    return <SubmitConfirmation message={result.message} onSubmitAnother={() => setResult(null)} />
+  }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">

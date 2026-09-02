@@ -6,6 +6,7 @@ import { cardClass } from '@/components/ui/card'
 import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
 import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { SubmitConfirmation } from '@/components/ui/submit-confirmation'
 // Value tuples come from the zero-dependency enum subpaths (NOT the barrel),
 // so the DB client / postgres never lands in the client bundle. FIELD_PROGRAMS
 // is the shared three-program tuple, same slugs as the `programs` table.
@@ -78,7 +79,9 @@ export function RobotCodeSubmitForm() {
   const [submitting, setSubmitting] = useState(false)
   // Unticked, like every other submit form. See lib/listings/passing-along.ts.
   const [passingAlong, setPassingAlong] = useState(PASSING_ALONG_DEFAULT.robot_code)
-  const [result, setResult] = useState<{ ok?: boolean; message: string } | null>(null)
+  // `status` distinguishes a real new submission ('pending') from a duplicate,
+  // which is a 200 but must NOT flip to the terminal thank-you.
+  const [result, setResult] = useState<{ ok?: boolean; message: string; status?: string } | null>(null)
 
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
   const turnstileRef = useRef<HTMLDivElement>(null)
@@ -167,7 +170,7 @@ export function RobotCodeSubmitForm() {
       const res = await fetch('/api/robot-code/submit', { method: 'POST', body: fd })
       const data = (await res.json()) as { message?: string; error?: string; status?: string }
       if (res.ok) {
-        setResult({ ok: true, message: data.message ?? 'Submitted.' })
+        setResult({ ok: true, message: data.message ?? 'Submitted.', status: data.status })
         // A duplicate is not a failure, but it is also not a new submission, so
         // leave what they typed on screen rather than clearing it. Anything
         // accepted clears back to a blank form, since the next thing a team
@@ -183,6 +186,21 @@ export function RobotCodeSubmitForm() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // A real new submission ('pending') replaces the form with a terminal
+  // confirmation, so there is nothing left to resubmit. A duplicate stays on the
+  // filled form with the small line below, since it is not a new submission.
+  if (result?.ok && result.status === 'pending') {
+    return (
+      <SubmitConfirmation
+        message={result.message}
+        onSubmitAnother={() => {
+          setForm(initialState())
+          setResult(null)
+        }}
+      />
+    )
   }
 
   return (

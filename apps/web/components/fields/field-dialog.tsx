@@ -73,7 +73,13 @@ export function FieldDialog({
                   <ArrowLeft className="h-4 w-4" /> Back to details
                 </button>
                 <h2 className="text-lg font-semibold text-foreground">Suggest an edit</h2>
-                <FieldSubmitForm edit={{ field }} onSubmitted={() => { /* keep the confirmation visible */ }} />
+                {/* The form has already swapped itself for the green-check
+                    confirmation by the time this fires. Give it a beat on screen,
+                    then close the dialog so the reader lands back on the map. */}
+                <FieldSubmitForm
+                  edit={{ field }}
+                  onSubmitted={() => setTimeout(() => { setEditing(false); onClose() }, 1500)}
+                />
               </div>
             ) : (
               <div className="flex flex-col gap-5">

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { cardClass } from '@/components/ui/card'
 import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
 import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
+import { SubmitConfirmation } from '@/components/ui/submit-confirmation'
 import { X, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { PinMap } from './pin-map'
@@ -285,6 +286,29 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
   }
 
   const noun = editing ? 'edit' : 'submission'
+
+  // A successful submit replaces the whole form with a terminal confirmation, so
+  // there is no re-enabled button and no re-solved Turnstile to fire the same
+  // field or edit twice. The dialog-hosted edit flow leaves out "Submit another"
+  // and relies on the dialog close; a create page gets a way back to a blank one.
+  if (result?.ok) {
+    return (
+      <SubmitConfirmation
+        message={result.message}
+        title={editing ? 'Thanks — your edit is in for review' : undefined}
+        onSubmitAnother={
+          editing
+            ? undefined
+            : () => {
+                setForm({ ...INITIAL, ...submitterDefaults(user) })
+                setCoords(null)
+                setNewPhotos([])
+                setResult(null)
+              }
+        }
+      />
+    )
+  }
 
   return (
     <>

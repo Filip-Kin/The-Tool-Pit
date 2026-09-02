@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { cardClass } from '@/components/ui/card'
 import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
 import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
+import { SubmitConfirmation } from '@/components/ui/submit-confirmation'
 import { useSession, type SessionUser } from '@/components/auth/session-provider'
 
 declare global {
@@ -73,7 +74,9 @@ export function GrantSubmitForm() {
   const [submitting, setSubmitting] = useState(false)
   // Unticked, like every other submit form. See lib/listings/passing-along.ts.
   const [passingAlong, setPassingAlong] = useState(PASSING_ALONG_DEFAULT.grant)
-  const [result, setResult] = useState<{ ok?: boolean; message: string; slug?: string } | null>(null)
+  // `status` distinguishes a real new submission ('pending') from a duplicate,
+  // which is a 200 but must NOT flip to the terminal thank-you.
+  const [result, setResult] = useState<{ ok?: boolean; message: string; slug?: string; status?: string } | null>(null)
 
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
   const turnstileRef = useRef<HTMLDivElement>(null)
@@ -166,7 +169,7 @@ export function GrantSubmitForm() {
       const res = await fetch('/api/grants/submit', { method: 'POST', body: fd })
       const data = (await res.json()) as { message?: string; error?: string; status?: string; slug?: string }
       if (res.ok) {
-        setResult({ ok: true, message: data.message ?? 'Submitted.', slug: data.slug })
+        setResult({ ok: true, message: data.message ?? 'Submitted.', slug: data.slug, status: data.status })
         // A duplicate is not a failure, but it is also not a new submission, so
         // leave what they typed on screen rather than clearing it.
         if (data.status === 'pending') {
@@ -182,6 +185,29 @@ export function GrantSubmitForm() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // A real new submission ('pending') replaces the form with a terminal
+  // confirmation, so there is nothing left to resubmit. A duplicate stays on the
+  // filled form with the small line below, since it is not a new submission.
+  if (result?.ok && result.status === 'pending') {
+    return (
+      <SubmitConfirmation
+        message={result.message}
+        onSubmitAnother={() => {
+          setForm({ ...INITIAL, ...submitterDefaults(user) })
+          setResult(null)
+        }}
+      >
+        {result.slug && (
+          <p className="text-sm text-muted">
+            <a href={`/grants/${result.slug}`} className="underline underline-offset-2 hover:text-foreground">
+              Open the listing
+            </a>
+          </p>
+        )}
+      </SubmitConfirmation>
+    )
   }
 
   return (

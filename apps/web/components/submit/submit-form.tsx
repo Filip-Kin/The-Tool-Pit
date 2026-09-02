@@ -3,8 +3,9 @@
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
 import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
-import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { SubmitConfirmation } from '@/components/ui/submit-confirmation'
 import Link from 'next/link'
 
 // Extend Window to hold the Turnstile API injected by Cloudflare's script
@@ -127,22 +128,25 @@ export function SubmitForm() {
 
   if (result && result.status !== 'rejected') {
     return (
-      <div className="flex flex-col gap-3">
-        <div className="flex items-start gap-3 rounded-lg border border-rookie/30 bg-rookie/10 p-4">
-          <CheckCircle className="h-5 w-5 shrink-0 text-rookie mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-foreground">Submitted!</p>
-            <p className="text-sm text-muted mt-0.5">{result.message}</p>
-          </div>
-        </div>
+      <SubmitConfirmation
+        message={result.message}
+        onSubmitAnother={() => {
+          setResult(null)
+          setError(null)
+          if (window.turnstile && widgetIdRef.current) {
+            window.turnstile.reset(widgetIdRef.current)
+            setTurnstileToken(null)
+          }
+        }}
+      >
         {result.submissionId && (
-          <p className="text-xs text-muted text-center">
+          <p className="text-xs text-muted">
             <Link href={`/submissions/${result.submissionId}`} className="underline hover:text-foreground">
               Check submission status →
             </Link>
           </p>
         )}
-      </div>
+      </SubmitConfirmation>
     )
   }
 
