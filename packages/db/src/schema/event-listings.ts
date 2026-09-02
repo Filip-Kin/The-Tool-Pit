@@ -198,6 +198,20 @@ export const eventListings = pgTable(
     submitterOwns: boolean('submitter_owns'),
 
     /**
+     * The page on the event's own site that lists the teams attending.
+     *
+     * TBA holds a roster once an event is CODED there, and plenty of off-season
+     * events never are: they publish a team list on their own site and nowhere
+     * else. That page is the only machine-readable record those events have of
+     * who is coming, and the count is the thing a team looks at to decide
+     * whether there is still room.
+     *
+     * Read off the site rather than guessed, and a roster scraped from it lands
+     * as a PENDING snapshot for review, unlike TBA's, which is authoritative.
+     */
+    teamListUrl: text('team_list_url'),
+
+    /**
      * The fields a person has set by hand, so an automated pass leaves them be.
      *
      * Same column and same helpers as tools.human_edited_fields, deliberately:

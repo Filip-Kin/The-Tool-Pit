@@ -13,6 +13,7 @@
  * they will not think to ask.
  */
 import { EVENT_PROGRAMS, REGISTRATION_STATUSES, VOLUNTEER_STATUSES } from '@the-tool-pit/db/event-enums'
+import { cleanEventName } from '@the-tool-pit/db/event-name'
 import {
   FIELD_PROGRAMS,
   FIELD_COVERAGE,
@@ -117,7 +118,11 @@ export function eventListingFromCandidate(
   const days = ex.days === 1 || ex.days === 2 ? ex.days : spanned === 1 ? 1 : null
 
   return {
-    name,
+    // Cleaned even when the reader already did it, because a candidate read
+    // before that instruction existed still carries the whole thread title,
+    // and re-reading fifty events to fix punctuation is not a good use of a
+    // model budget.
+    name: cleanEventName(name),
     // The season is the calendar year the dates fall in, which is what makes
     // the year redundant in the name. It was never set here, so every accepted
     // candidate landed with a null season and the map's year filter could not
@@ -152,6 +157,7 @@ export function eventListingFromCandidate(
     website: url(ex.website),
     registrationUrl: url(ex.registrationUrl),
     volunteerUrl: url(ex.volunteerUrl),
+    teamListUrl: url(ex.teamListUrl),
     chiefDelphiUrl: url(ex.chiefDelphiUrl) ?? cdFallback,
     tbaKey: text(ex.tbaKey ?? candidate.tbaKey)?.toLowerCase() ?? null,
     source: 'scrape',

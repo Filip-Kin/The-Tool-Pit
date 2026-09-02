@@ -64,6 +64,10 @@
     "./geocode": {
       "bun": "./src/geocode.ts",
       "default": "./dist/geocode.js"
+    },
+    "./event-name": {
+      "bun": "./src/event-name.ts",
+      "default": "./dist/event-name.js"
     }
   },
   "main": "./dist/index.js",

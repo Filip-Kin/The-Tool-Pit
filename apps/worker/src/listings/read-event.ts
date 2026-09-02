@@ -102,8 +102,16 @@ Fields:
                     Never answer "closed" for an event whose sign-ups have not opened yet.
   volunteerStatus     one of ${VOLUNTEER_STATUSES.map((s) => `"${s}"`).join(', ')}, same distinction:
                     "not_open" is a sign-up that has not started, not one that has finished
-  registrationUrl   where a team signs up
-  volunteerUrl      where a volunteer signs up
+  registrationUrl   where a team signs up. NOT the event's website. If there is no sign-up open,
+                    or the page you found is just the site's front page, return null.
+  volunteerUrl      where a volunteer signs up. Same rule: null when there is no volunteer sign-up,
+                    which is normal for an event that has already happened. Do not fall back to
+                    the website; a reader who clicks "volunteer" and lands on a home page has been
+                    told this event takes volunteers when nothing said so.
+  teamListUrl       the page listing the TEAMS ATTENDING, when the site has one. Often called
+                    "Teams", "Team List" or "Registered Teams". This is how the site tells people
+                    who is coming, and it is the only such record for an event that is not on The
+                    Blue Alliance.
   website           the event's own site
   contactEmail      an email address for the organisers
   notes             the source's OWN sentence that a reader would want and no other field holds,
@@ -119,12 +127,24 @@ const ENUMS: Record<string, readonly string[]> = {
   volunteerStatus: VOLUNTEER_STATUSES,
 }
 
-const URL_FIELDS = new Set(['registrationUrl', 'volunteerUrl', 'website'])
+const URL_FIELDS = new Set(['registrationUrl', 'volunteerUrl', 'website', 'teamListUrl'])
 const INT_FIELDS = new Set(['hostTeamNumber', 'capacity', 'costUsd', 'days'])
 const DATE_FIELDS = new Set(['startDate', 'endDate'])
 const TEXT_MAX: Record<string, number> = {
   name: 160, venueName: 160, address: 200, city: 120, region: 60, country: 8,
   costNote: 200, contactEmail: 200, notes: 400,
+}
+
+/** A URL with the parts that differ between two spellings of it removed. */
+function bareUrl(value: string | undefined): string | null {
+  if (typeof value !== 'string' || !value) return null
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/+$/, '')
+    .replace(/\?.*$/, '')
 }
 
 export interface EventRead {
@@ -210,6 +230,30 @@ export function validateEventRead(
     }
 
     kept[key] = { quote: quoteText.slice(0, 300), source }
+  }
+
+  // A SPECIFIC LINK HAS TO BE MORE SPECIFIC THAN THE SITE.
+  //
+  // With no volunteer sign-up on a past event, the answer came back as the
+  // event's own home page, which tells a reader this event takes volunteers
+  // when nothing on it said so. A registration, volunteer or team-list link
+  // that is just the website is not one of those things.
+  const site = bareUrl(fields.website as string | undefined)
+  for (const key of ['registrationUrl', 'volunteerUrl', 'teamListUrl'] as const) {
+    const value = bareUrl(fields[key] as string | undefined)
+    if (!value) continue
+    if (site && value === site) {
+      rejected.push(`${key}: that is the website, not a ${key === 'teamListUrl' ? 'team list' : 'sign-up'}`)
+      delete fields[key]
+      delete kept[key]
+      continue
+    }
+    // A bare host with no path is a front page whatever the field says.
+    if (!value.includes('/')) {
+      rejected.push(`${key}: "${String(fields[key])}" is a site root, not a page for that`)
+      delete fields[key]
+      delete kept[key]
+    }
   }
 
   // Competition days is 1 or 2 by definition of the column. Anything else is

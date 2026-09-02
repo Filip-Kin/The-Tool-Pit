@@ -259,6 +259,8 @@ export interface ExtractedEventListingFields {
   // Mission Viejo, California" is a venue, a city and a state, and the cost is
   // on the /pay page the thread links to.
   volunteerUrl?: string
+  /** The page on the event's own site listing the teams attending. */
+  teamListUrl?: string
   contactEmail?: string
   /**
    * Looked up from the venue and address, not read off a page.

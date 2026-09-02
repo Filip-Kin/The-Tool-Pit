@@ -183,6 +183,13 @@
       "when": 1788322913073,
       "tag": "0025_events_remember_human_edits",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788372359209,
+      "tag": "0026_events_remember_their_team_list",
+      "breakpoints": true
     }
   ]
 }

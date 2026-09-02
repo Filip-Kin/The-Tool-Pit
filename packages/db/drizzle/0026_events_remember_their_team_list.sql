@@ -1,0 +1,1 @@
+ALTER TABLE "event_listings" ADD COLUMN "team_list_url" text;
