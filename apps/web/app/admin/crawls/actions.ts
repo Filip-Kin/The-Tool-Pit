@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm'
 import { getRedis } from '@/lib/redis'
 import { getDb } from '@/lib/db'
 import { crawlCandidates, submissions } from '@the-tool-pit/db'
+import { CRAWL_CONNECTOR_KEYS } from '@the-tool-pit/db/crawl-connectors'
 import type {
   CrawlJobPayload,
   EnrichJobPayload,
@@ -31,16 +32,10 @@ function getQueue<T>(name: string) {
 export async function triggerCrawl(connector: string): Promise<{ error?: string }> {
   await assertAdmin()
 
-  const VALID_CONNECTORS = [
-    'fta_tools',
-    'volunteer_systems',
-    'github_topics',
-    'awesome_list',
-    'chief_delphi',
-    'tba_teams',
-  ] as const
-
-  if (!VALID_CONNECTORS.includes(connector as (typeof VALID_CONNECTORS)[number])) {
+  // From the shared list, not typed out again. This allowlist was two short and
+  // the two it missed are the biggest sources in the catalogue, so pressing
+  // their buttons answered "Unknown connector".
+  if (!CRAWL_CONNECTOR_KEYS.includes(connector)) {
     return { error: `Unknown connector: ${connector}` }
   }
 

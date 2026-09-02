@@ -4,60 +4,25 @@ import { eq, desc, sql } from 'drizzle-orm'
 import Link from 'next/link'
 import { SourceTriggerButton } from './source-triggers'
 import { assertAdmin } from '@/lib/admin/auth'
+import {
+  CRAWL_CONNECTORS,
+  CRAWL_CONNECTOR_KEYS,
+  NON_CONNECTOR_SOURCE_TYPES,
+} from '@the-tool-pit/db/crawl-connectors'
 
-const SOURCE_DEFS = [
-  {
-    key: 'chief_delphi',
-    label: 'Chief Delphi',
-    description: 'Tools discovered via CD forum GitHub links',
-    connectors: [{ key: 'chief_delphi', label: 'Chief Delphi' }],
-  },
-  {
-    key: 'github',
-    label: 'GitHub',
-    description: 'Repos tagged with frc/ftc/fll topics and awesome-list entries',
-    connectors: [
-      { key: 'github_topics', label: 'GitHub Topics' },
-      { key: 'awesome_list', label: 'Awesome List' },
-    ],
-  },
-  {
-    key: 'fta_tools',
-    label: 'FTA Tools',
-    description: 'Scraped from fta.tools',
-    connectors: [{ key: 'fta_tools', label: 'FTA Tools' }],
-  },
-  {
-    key: 'volunteer_systems',
-    label: 'Volunteer Systems',
-    description: 'Volunteer-facing tools from official channels',
-    connectors: [{ key: 'volunteer_systems', label: 'Volunteer Systems' }],
-  },
-  {
-    key: 'tba',
-    label: 'The Blue Alliance',
-    description: 'Team GitHub orgs discovered via TBA',
-    connectors: [{ key: 'tba_teams', label: 'TBA Teams' }],
-  },
-  {
-    key: 'submission',
-    label: 'User Submissions',
-    description: 'Tools submitted by the community',
-    connectors: [],
-  },
-  {
-    key: 'official_first',
-    label: 'Official FIRST',
-    description: 'Tools from official FIRST sources',
-    connectors: [],
-  },
-  {
-    key: 'manual',
-    label: 'Manual',
-    description: 'Manually added by admins',
-    connectors: [],
-  },
-] as const
+/**
+ * One card per source type, and the key IS the value stored in
+ * tool_sources.source_type.
+ *
+ * It used to be a hand-written grouping under names like `github`, `tba`,
+ * `submission` and `official_first`. Nothing has ever written any of those to
+ * the column, so those cards read 0 for good, and the two largest real sources
+ * had no card and no button at all. The screen accounted for 299 of 1229 rows.
+ *
+ * A connector card carries its trigger button. A non-connector card (manual, a
+ * public submission) does not, because there is nothing to run.
+ */
+const SOURCE_DEFS = [...CRAWL_CONNECTORS, ...NON_CONNECTOR_SOURCE_TYPES]
 
 async function getSourceStats() {
   const db = getDb()
@@ -122,11 +87,14 @@ export default async function SourcesPage() {
                 )}
               </div>
 
-              {src.connectors.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-1 border-t border-border-subtle">
-                  {src.connectors.map((c) => (
-                    <SourceTriggerButton key={c.key} connector={c.key} label={c.label} />
-                  ))}
+              {CRAWL_CONNECTOR_KEYS.includes(src.key) && (
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border-subtle">
+                  <SourceTriggerButton connector={src.key} label={`Run ${src.label}`} />
+                  {!src.scheduled && (
+                    // Says why there is no schedule, rather than leaving a
+                    // reader to wonder whether it is broken.
+                    <span className="text-xs text-muted-2">by hand only</span>
+                  )}
                 </div>
               )}
             </div>

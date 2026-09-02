@@ -52,6 +52,10 @@
     "./audience-enums": {
       "bun": "./src/audience-enums.ts",
       "default": "./dist/audience-enums.js"
+    },
+    "./crawl-connectors": {
+      "bun": "./src/crawl-connectors.ts",
+      "default": "./dist/crawl-connectors.js"
     }
   },
   "main": "./dist/index.js",

@@ -4,6 +4,7 @@ export * from './notifications'
 export * from './album-url'
 export * from './human-edited'
 export * from './listing-identity'
+export * from './crawl-connectors'
 export * from './popularity-score'
 
 // Re-export common drizzle operators so consumers (and top-level scripts that

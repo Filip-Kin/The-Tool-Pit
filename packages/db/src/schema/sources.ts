@@ -14,8 +14,14 @@ export const toolSources = pgTable(
       .notNull()
       .references(() => tools.id, { onDelete: 'cascade' }),
     /**
-     * fta_tools | volunteer_systems | github | chief_delphi | tba |
-     * submission | official_first | manual
+     * A connector key from CRAWL_CONNECTORS, or one of
+     * NON_CONNECTOR_SOURCE_TYPES. See ../crawl-connectors.
+     *
+     * This comment used to carry its own list, and it was a fourth spelling of
+     * the vocabulary: it named `github`, `tba` and `official_first`, none of
+     * which has ever been written to this column, and it omitted spectrum_cad
+     * and github_team_code, which between them are more than half the rows. A
+     * doc comment nobody can run is the copy that rots quietest.
      */
     sourceType: text('source_type').notNull(),
     sourceUrl: text('source_url'),

@@ -1,6 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
-import { crawlCandidates, submissions, toolLinks, tools } from '@the-tool-pit/db'
+import { crawlCandidates, crawlJobs, submissions, toolLinks, tools } from '@the-tool-pit/db'
 import { isHumanEdited } from '@the-tool-pit/db'
 import type { PipelineLogEntry, CandidateClassification } from '@the-tool-pit/db'
 import { classifyCandidate } from '../pipeline/classify.js'
@@ -240,7 +240,7 @@ async function resolveSubmission(
 
 export async function processEnrichJob(payload: EnrichJobPayload): Promise<void> {
   const db = getDb()
-  const { candidateId, submissionId, sourceType } = payload
+  const { candidateId, submissionId } = payload
 
   const [candidate] = await db
     .select()
@@ -252,6 +252,32 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
     console.warn(`[enrich] candidate ${candidateId} not found`)
     return
   }
+
+  // WHERE THE CANDIDATE CAME FROM, READ OFF THE CANDIDATE.
+  //
+  // This used to come from the job payload, and four of the five places that
+  // enqueue an enrich never set it: the submission pipeline, the admin
+  // re-classify button and both admin crawl actions. So the four branches below
+  // that depend on it silently took the wrong path on every job but one.
+  //
+  // The forum confidence bar had literally never fired. Not once: zero
+  // candidates in production carry its rejection text, against 5720 rejected at
+  // the plain bar and 271 chief_delphi rows. And "re-queue all published" would
+  // have stripped the deterministic team-code classification off 671 spectrum
+  // and github_team_code candidates and handed them to a model that the code
+  // right below says has nothing to add.
+  //
+  // The candidate's own crawl job knows the answer and cannot be forgotten by a
+  // caller. The payload is still honoured when there is no job row behind the
+  // candidate, which is the case for a direct submission.
+  const [job] = candidate.jobId
+    ? await db
+        .select({ connector: crawlJobs.connector })
+        .from(crawlJobs)
+        .where(eq(crawlJobs.id, candidate.jobId))
+        .limit(1)
+    : []
+  const sourceType = job?.connector ?? payload.sourceType
 
   let metadata = (candidate.rawMetadata ?? {}) as Record<string, unknown>
   const url = candidate.canonicalUrl ?? candidate.sourceUrl
