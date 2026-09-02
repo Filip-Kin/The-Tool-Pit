@@ -68,6 +68,24 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
 }
 
 /**
+ * "Not dead", as a value rather than a phrase copied per query.
+ *
+ * The home page recommends. Popular excluded inactive and archived listings
+ * from the day it was written, and Rookie Friendly did not, because the
+ * exclusion was three lines of inline SQL inside one query and nothing carried
+ * it to the next one. Rookie Friendly opened with an inactive Java tutorial and
+ * an archived RobotPy example, which is the worst possible audience to hand a
+ * dead link to: a rookie has no way to tell that the tool stopped and we do.
+ *
+ * Unknown passes. It means there is no repo to read a commit date from, not
+ * that nothing is happening, and it covers 478 of the 1094 published listings.
+ *
+ * Kept in one place and asserted by tests/unit/recommendations-exclude-dead-tools.test.ts,
+ * so a section added later either uses it or the test says which one does not.
+ */
+export const ALIVE_ENOUGH_TO_RECOMMEND = sql`coalesce(${tools.freshnessState}, 'unknown') not in ('inactive', 'archived')`
+
+/**
  * The home page's "Trending" row.
  *
  * There is no first-party traffic data yet, so this is popularity (GitHub
@@ -105,9 +123,8 @@ export async function getTrendingTools(limit = 6): Promise<SearchResultRow[]> {
     .where(
       and(
         eq(tools.status, 'published'),
-        // A dead tool is not trending by any definition. Unknown freshness is
-        // kept: it means we have not checked, not that it is dead.
-        sql`coalesce(${tools.freshnessState}, 'unknown') not in ('inactive', 'archived')`,
+        // A dead tool is not trending by any definition.
+        ALIVE_ENOUGH_TO_RECOMMEND,
         // FIRST's own resources have their own section directly below this one,
         // and they are popular by construction: everybody uses WPILib because
         // there is no alternative, not because the community picked it. Leaving
@@ -137,7 +154,15 @@ export async function getRookieFriendlyTools(limit = 6): Promise<SearchResultRow
   const rows = await db
     .select()
     .from(tools)
-    .where(and(eq(tools.status, 'published'), eq(tools.isRookieFriendly, true)))
+    .where(
+      and(
+        eq(tools.status, 'published'),
+        eq(tools.isRookieFriendly, true),
+        // A rookie cannot tell a dead tool from a live one, and this row is us
+        // telling them where to start.
+        ALIVE_ENOUGH_TO_RECOMMEND,
+      ),
+    )
     .orderBy(desc(tools.popularityScore))
     .limit(limit)
   return enrichTools(rows)
