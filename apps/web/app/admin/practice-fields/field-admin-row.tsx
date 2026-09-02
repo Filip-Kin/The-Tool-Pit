@@ -102,7 +102,10 @@ export function FieldAdminRow({
           <Button variant="secondary" size="sm" onClick={() => setEditing((v) => !v)} disabled={pending}>
             <Pencil className="h-3 w-3" /> Edit
           </Button>
-          {field.status !== 'published' && (
+          {/* Hidden while the editor is open: the editor has its own Save and
+              publish, and a Publish up here would ignore everything typed
+              below it. */}
+          {field.status !== 'published' && !editing && (
             <Button size="sm" onClick={() => run(() => approveField(field.id))} disabled={pending}>
               <Check className="h-3 w-3" /> Publish
             </Button>
@@ -183,6 +186,31 @@ function Editor({ field, photos, onDone, onError }: { field: PracticeField; phot
     })
   }
 
+  /**
+   * Save, then publish, in one press.
+   *
+   * Publish reads the SAVED row, so with the editor open it could not see the
+   * pin just dropped on the map and answered "Add a pin location" about a pin
+   * on the screen. Two buttons in a fixed order is a sequence to memorise, and
+   * getting it wrong produces an error that blames the data.
+   */
+  function saveAndPublish() {
+    startTransition(async () => {
+      const saved = await updateField(field.id, {
+        ...form,
+        latitude: coords?.lat ?? null,
+        longitude: coords?.lng ?? null,
+      })
+      if (saved.error) {
+        onError(saved.error)
+        return
+      }
+      const published = await approveField(field.id)
+      if (published.error) onError(published.error)
+      else onDone()
+    })
+  }
+
   return (
     <div className="mt-4 flex flex-col gap-3 border-t border-border-subtle pt-4">
       <PinMap value={coords} onChange={setCoords} height={260} />
@@ -217,10 +245,15 @@ function Editor({ field, photos, onDone, onError }: { field: PracticeField; phot
 
       <PhotoManager fieldId={field.id} photos={photos} onError={onError} />
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button onClick={save} disabled={pending}>
           {pending ? 'Saving…' : 'Save changes'}
         </Button>
+        {field.status !== 'published' && (
+          <Button variant="secondary" onClick={saveAndPublish} disabled={pending}>
+            <Check className="h-3 w-3" /> Save and publish
+          </Button>
+        )}
         <Button variant="secondary" onClick={onDone} disabled={pending}>
           Cancel
         </Button>
