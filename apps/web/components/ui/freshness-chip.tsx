@@ -7,8 +7,17 @@ interface FreshnessChipProps {
   className?: string
 }
 
+// Colour is for the exception, not the rule.
+//
+// Current is the answer on most of the catalogue, so a green word on every card
+// in every grid was the loudest thing on the page and it was saying the least:
+// green everywhere carries no information and competes with the tool's own
+// name. The word goes quiet and the dot stays green, which is enough to tell
+// Current from Inactive at a glance without shouting the normal case.
+//
+// Stale keeps its amber. That one IS the exception and is worth a look.
 const labelConfig = {
-  Current: { dot: 'bg-fresh', text: 'text-fresh' },
+  Current: { dot: 'bg-fresh', text: 'text-muted' },
   Stale: { dot: 'bg-stale', text: 'text-stale' },
   // Both share the quiet grey because both mean "not moving". They differ in
   // the one thing that matters to a reader deciding whether to use it.
