@@ -139,7 +139,7 @@ export default async function HomePage() {
       <section className="container mx-auto max-w-6xl px-4">
         <SectionHeader
           title="Popular"
-          description="Widely used and still maintained"
+          description="What teams reach for most"
           href="/search?sort=popular"
           linkLabel="See all"
         />

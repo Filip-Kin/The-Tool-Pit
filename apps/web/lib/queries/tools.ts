@@ -108,6 +108,12 @@ export async function getTrendingTools(limit = 6): Promise<SearchResultRow[]> {
         // A dead tool is not trending by any definition. Unknown freshness is
         // kept: it means we have not checked, not that it is dead.
         sql`coalesce(${tools.freshnessState}, 'unknown') not in ('inactive', 'archived')`,
+        // FIRST's own resources have their own section directly below this one,
+        // and they are popular by construction: everybody uses WPILib because
+        // there is no alternative, not because the community picked it. Leaving
+        // them in meant Popular repeated Official and spent its best rows on
+        // things a reader had already been shown.
+        sql`${tools.isOfficial} is not true`,
       ),
     )
     .orderBy(desc(sql`${seasonalDecaySql} * coalesce(${tools.popularityScore}, 0)`))
