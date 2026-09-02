@@ -6,18 +6,13 @@ import { SaveButton } from './save-button'
 import { ReClassifyButton } from './re-classify-button'
 import { Button, buttonClass } from '@/components/ui/button'
 import { getDb } from '@/lib/db'
-import { toolSources, toolUpdates } from '@the-tool-pit/db'
+import { toolSources, toolUpdates, TOOL_TYPES } from '@the-tool-pit/db'
 import { eq, desc } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { ExtraLinksField } from '@/components/me/extra-links-editor'
 import { loadExtraToolLinks } from '@/lib/listings/tool-links'
 import { EXTRA_LINK_TYPE } from '@/components/me/listing-fields'
 
-const TOOL_TYPES = [
-  'web_app', 'desktop_app', 'mobile_app', 'calculator', 'spreadsheet',
-  'github_project', 'browser_extension', 'api', 'resource', 'vendor_website',
-  'offseason_event', 'other',
-] as const
 
 const FRESHNESS_STATES = [
   'active', 'stale', 'inactive', 'evergreen', 'seasonal', 'archived', 'unknown',

@@ -11,15 +11,15 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { anthropic } from '../anthropic.js'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
+import { TOOL_TYPES } from '@the-tool-pit/db'
 import { renderPage } from '../connectors/playwright-render.js'
 import { parseGitHubUrl } from '../connectors/github.js'
 import { isYouTubeUrl } from './extract.js'
 
-const VALID_TOOL_TYPES = new Set([
-  'web_app', 'desktop_app', 'mobile_app', 'calculator', 'spreadsheet',
-  'github_project', 'browser_extension', 'api', 'resource', 'vendor_website',
-  'offseason_event', 'other',
-])
+// Read from the schema, not retyped. This list and the schema's disagreed for
+// as long as both existed, which is how 'offseason_event' outlived its removal
+// everywhere else.
+const VALID_TOOL_TYPES = new Set<string>(TOOL_TYPES)
 const VALID_PROGRAMS = new Set(['frc', 'ftc', 'fll'])
 const VALID_AUDIENCE_ROLES = new Set([
   'student', 'mentor', 'volunteer', 'parent_newcomer', 'organizer_staff',
@@ -107,8 +107,11 @@ CRITICAL — set confidence=0.0 immediately for ANY of the following (these are 
   meeting trackers, internal training docs, team budget spreadsheets, team management docs created
   for one specific team's internal use. Ask: "Would a completely different team benefit from this?"
   If the answer is no, confidence=0.0.
-- Registration forms or sign-up pages for a single competition event (e.g. "2025 Clash in the Corn:
-  FRC Team Registration"). These are transient and team-external.
+- ANY page about an off-season competition, including the event's own website (clashinthecorn.com,
+  a team's BunnyBots page, a ROBOTICON site), its registration or sign-up form, its schedule, and its
+  results. Off-season events are a separate vertical on this site with their own dates, venue, cost
+  and registration state; an event page in the tools catalogue is the same event described twice and
+  without any of that. An event is never a tool, however useful its site is.
 - Redirect pages, "you will be redirected" pages, error pages, parked domains, login walls
   with no real content about a tool.
 - A team's build thread or competition debrief post on Chief Delphi — unless the post links to
@@ -132,17 +135,13 @@ CRITICAL — set confidence=0.0 immediately for ANY of the following (these are 
   page ("Installation", "State Observers", "Getting Started with Romi") is NOT its own tool.
 
 Once you have enough information, output a JSON object with these fields:
-- toolType: one of "web_app", "desktop_app", "mobile_app", "calculator", "spreadsheet",
-  "github_project", "browser_extension", "api", "resource", "vendor_website", "offseason_event", "other"
+- toolType: one of ${TOOL_TYPES.map((t) => `"${t}"`).join(', ')}
   IMPORTANT type distinctions:
   - "vendor_website": use when isVendor=true AND the site is a product page, store, or marketing/documentation
     site for hardware or software sold commercially to robotics teams (e.g. motor controllers, sensors, cameras,
     game-piece suppliers). These are sites users browse or purchase from, not interactive applications.
   - "web_app": ONLY for interactive web applications where users perform tasks in-browser (scouting dashboards,
     pit display apps, field timers, match schedule tools). Do NOT use for product pages or vendor sites.
-  - "offseason_event": an independently organized off-season FRC/FTC/FLL competition (not run by FIRST).
-    Use for the event's own main website/page — NOT for registration forms or individual match results.
-    Example: clashinthecorn.com (the event site itself), NOT a form link to register for it.
   - If isVendor=true and the site primarily lists, markets, or sells products → use "vendor_website", not "web_app".
 - programs: array of "frc", "ftc", "fll" (can be multiple, or empty if unknown)
 - audienceRoles: array from ["student", "mentor", "volunteer", "parent_newcomer", "organizer_staff"]

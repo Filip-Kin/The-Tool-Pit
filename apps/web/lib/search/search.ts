@@ -1,6 +1,6 @@
 import { sql, and, eq, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { tools, toolPrograms, toolLinks, toolVotes, programs } from '@the-tool-pit/db'
+import { tools, toolPrograms, toolLinks, toolVotes, programs, TOOL_TYPE_WEIGHTS } from '@the-tool-pit/db'
 import type { SearchParams } from '@the-tool-pit/types'
 import { parseSearchSort } from './sort'
 import { searchOrderBy } from './order-by'
@@ -182,13 +182,20 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
   // ln(1300), the current maximum, so the best tool scores about 1.
   const popularityNorm = sql<number>`least(ln(1 + greatest(${tools.popularityScore}, 0)) / 7.2, 1.0) * 0.35`
 
-  // Type weight boost — preferred tool types rank higher
-  const typeWeightExpr = sql<number>`case ${tools.toolType}
-    when 'web_app' then 1.0 when 'calculator' then 1.0
-    when 'desktop_app' then 0.9 when 'github_project' then 0.85
-    when 'browser_extension' then 0.8 when 'mobile_app' then 0.8
-    when 'api' then 0.7 when 'spreadsheet' then 0.4
-    when 'resource' then 0.35 else 0.5 end * 0.15`
+  // Type weight boost — preferred tool types rank higher.
+  //
+  // Built from TOOL_TYPE_WEIGHTS rather than typed out again. This was a second
+  // hand-written copy of that map and the two had already drifted: the map gave
+  // an off-season event 0.3 and this CASE had no arm for it, so it took the 0.5
+  // default and outranked every 'resource' in the catalogue.
+  //
+  // The values are our own constants, never anything a visitor sends.
+  const typeWeightExpr = sql<number>`case ${tools.toolType} ${sql.join(
+    Object.entries(TOOL_TYPE_WEIGHTS).map(
+      ([type, weight]) => sql`when ${type} then ${weight}`,
+    ),
+    sql` `,
+  )} else 0.5 end * 0.15`
 
   // Team-artifact penalty — demotes team code AND team CAD in general browsing without zeroing
   // them. Disabled whenever the caller is explicitly after team artifacts (a team filter, or a
