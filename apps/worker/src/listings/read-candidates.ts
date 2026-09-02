@@ -125,12 +125,21 @@ export async function processReadCandidatesJob(
           continue
         }
 
-        // WHAT DISCOVERY WROTE WINS ON A FIELD IT FILLED. TBA's dates and venue
-        // come from a structured feed and are not a reading of prose, so a
-        // model's answer does not get to replace one. Everything TBA leaves
-        // empty, which is cost, capacity, registration state and contact, is
-        // exactly what the read is for.
-        const merged = { ...read.fields, ...stripEmpty(existing) }
+        // WHAT DISCOVERY WROTE WINS ON A FIELD IT FILLED, on an ordinary pass.
+        // TBA's dates and venue come from a structured feed rather than a
+        // reading of prose, so a model's answer does not replace one. What TBA
+        // leaves empty, which is cost, capacity, registration state and
+        // contact, is what the read is for.
+        //
+        // EXCEPT ON A RE-READ, where that rule is backwards. Asking for a
+        // candidate to be read again means the reading it has is wrong: Beach
+        // Blitz kept a start date of 1 November through two re-reads, because
+        // the first pattern-matched pass had written it and "existing wins"
+        // protected it, while the correct 30 October was thrown away each time.
+        const rereading = Boolean(payload.force || payload.candidateId)
+        const merged = rereading
+          ? { ...stripEmpty(existing), ...read.fields }
+          : { ...read.fields, ...stripEmpty(existing) }
         const added = Object.keys(read.fields).filter((k) => !(k in stripEmpty(existing))).length
 
         await db
