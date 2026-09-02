@@ -137,8 +137,9 @@ describe('a team list read off a page', () => {
   })
 })
 
-describe('teamListUrl is the event own page', () => {
+describe('teamListUrl is the event own page, but need not be a deeper one', () => {
   const sources = [{ source: 'thread', text: 'Chezy Champs at https://chezychamps.com this year' }]
+
   it('drops a Blue Alliance link', () => {
     const { fields, rejected } = validateEventRead(
       {
@@ -149,6 +150,25 @@ describe('teamListUrl is the event own page', () => {
     )
     expect(fields.teamListUrl).toBeUndefined()
     expect(rejected.join(' ')).toContain('Blue Alliance')
+  })
+
+  it('accepts the website itself, unlike registrationUrl and volunteerUrl', () => {
+    // CORI publishes its team list on its own home page, worbots4145.org/cori,
+    // which IS the website. It is never shown to a visitor as a link, only
+    // used to re-read the roster, so it does not need to be a deeper page the
+    // way a sign-up link does.
+    const { fields, rejected } = validateEventRead(
+      {
+        website: { value: 'https://www.worbots4145.org/cori', quote: 'https://www.worbots4145.org/cori' },
+        teamListUrl: { value: 'https://www.worbots4145.org/cori', quote: 'https://www.worbots4145.org/cori' },
+        volunteerUrl: { value: 'https://www.worbots4145.org/cori', quote: 'https://www.worbots4145.org/cori' },
+      },
+      [{ source: 'thread', text: 'CORI at https://www.worbots4145.org/cori' }],
+    )
+    expect(fields.teamListUrl).toBe('https://www.worbots4145.org/cori')
+    // volunteerUrl still has to be more specific than the site.
+    expect(fields.volunteerUrl).toBeUndefined()
+    expect(rejected.join(' ')).toContain('volunteerUrl: that is the website')
   })
 })
 

@@ -8,6 +8,9 @@ import { eventListingCandidates, eventListings } from '@the-tool-pit/db'
 import { bumpListingSourceCounter, eventListingFromCandidate } from '@/lib/admin/listing-discovery'
 import { eventPublishBlockers } from '@/lib/events/publish-bar'
 import { geocodeVenue } from '@the-tool-pit/db/geocode'
+import { addHumanEdits, changedKeys, HUMAN_EDITABLE_EVENT_KEYS } from '@the-tool-pit/db/human-edited'
+import { diffEventFields, type EventMergeField } from '@/lib/admin/event-merge'
+import type { ExtractedEventListingFields } from '@the-tool-pit/db'
 
 const QUEUE_PATH = '/admin/event-listings/candidates'
 
@@ -170,6 +173,84 @@ export async function attachEventCandidate(candidateId: string, listingRef: stri
   await getDb()
     .update(eventListingCandidates)
     .set({ status: 'matched', matchedListingId: listing.id, rejectionReason: null, updatedAt: new Date() })
+    .where(eq(eventListingCandidates.id, candidateId))
+  await bumpListingSourceCounter('event', candidate.sourceId, 'yield')
+
+  revalidateAll()
+  return {}
+}
+
+/**
+ * What the candidate found, next to what the listing already says.
+ *
+ * Read by the merge dialog before it asks a reviewer to decide anything, so
+ * the decision is made on real values rather than on the reviewer's memory of
+ * both pages.
+ */
+export async function compareEventCandidateToListing(
+  candidateId: string,
+  listingRef: string,
+): Promise<{ error?: string; listingName?: string; fields?: EventMergeField[] }> {
+  await assertAdmin()
+  const candidate = await loadCandidate(candidateId)
+  if (!candidate) return { error: 'Candidate not found.' }
+
+  const ref = await findListing(listingRef)
+  if (!ref) return { error: `No listing found for "${listingRef}".` }
+
+  const db = getDb()
+  const [listing] = await db.select().from(eventListings).where(eq(eventListings.id, ref.id)).limit(1)
+  if (!listing) return { error: 'Listing not found.' }
+
+  const extracted = (candidate.extracted ?? {}) as ExtractedEventListingFields
+  return { listingName: listing.name, fields: diffEventFields(listing, extracted) }
+}
+
+/**
+ * Attach a candidate AND apply whichever fields the reviewer chose to take
+ * from it.
+ *
+ * The values the reviewer picked are CLAIMED on the listing, the same as
+ * typing them into the edit form. A reviewer choosing "detected" over
+ * "existing" in the dialog is exactly as much a human decision as fixing a
+ * date in the form is, and it needs the same protection: an automated refresh
+ * must not silently put the old value back.
+ */
+export async function applyEventCandidateMerge(
+  candidateId: string,
+  listingId: string,
+  chosen: Record<string, string>,
+): Promise<{ error?: string }> {
+  await assertAdmin()
+  const candidate = await loadCandidate(candidateId)
+  if (!candidate) return { error: 'Candidate not found.' }
+
+  const db = getDb()
+  const [listing] = await db.select().from(eventListings).where(eq(eventListings.id, listingId)).limit(1)
+  if (!listing) return { error: 'Listing not found.' }
+
+  const extracted = (candidate.extracted ?? {}) as ExtractedEventListingFields
+  const patch: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(chosen)) {
+    if (value !== 'detected') continue
+    // costUsd / capacity / days are numeric columns; everything else here is
+    // text. Passing a number through unchanged and everything else as-is
+    // matches how extracted stores them.
+    patch[key] = (extracted as Record<string, unknown>)[key]
+  }
+
+  if (Object.keys(patch).length > 0) {
+    const claimed = changedKeys(patch, listing as unknown as Record<string, unknown>, HUMAN_EDITABLE_EVENT_KEYS)
+    const humanEditedFields = addHumanEdits(listing.humanEditedFields, claimed)
+    await db
+      .update(eventListings)
+      .set({ ...patch, ...(humanEditedFields ? { humanEditedFields } : {}), updatedAt: new Date() })
+      .where(eq(eventListings.id, listingId))
+  }
+
+  await db
+    .update(eventListingCandidates)
+    .set({ status: 'matched', matchedListingId: listingId, rejectionReason: null, updatedAt: new Date() })
     .where(eq(eventListingCandidates.id, candidateId))
   await bumpListingSourceCounter('event', candidate.sourceId, 'yield')
 

@@ -20,6 +20,8 @@ import { ListingCandidateActions } from '../../_listing/candidate-actions'
 import {
   acceptEventCandidate,
   attachEventCandidate,
+  applyEventCandidateMerge,
+  compareEventCandidateToListing,
   markEventCandidateDuplicate,
   reopenEventCandidate,
   suppressEventCandidate,
@@ -189,7 +191,8 @@ export default async function EventCandidatesPage({
                   <DuplicateBanner
                     candidateId={row.id}
                     match={dupeByCandidate.get(row.id)!}
-                    attach={attachEventCandidate}
+                    compare={compareEventCandidateToListing}
+                    applyMerge={applyEventCandidateMerge}
                   />
                 )}
 

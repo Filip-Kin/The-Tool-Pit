@@ -239,11 +239,11 @@ export function validateEventRead(
   // when nothing on it said so. A registration, volunteer or team-list link
   // that is just the website is not one of those things.
   const site = bareUrl(fields.website as string | undefined)
-  for (const key of ['registrationUrl', 'volunteerUrl', 'teamListUrl'] as const) {
+  for (const key of ['registrationUrl', 'volunteerUrl'] as const) {
     const value = bareUrl(fields[key] as string | undefined)
     if (!value) continue
     if (site && value === site) {
-      rejected.push(`${key}: that is the website, not a ${key === 'teamListUrl' ? 'team list' : 'sign-up'}`)
+      rejected.push(`${key}: that is the website, not a sign-up`)
       delete fields[key]
       delete kept[key]
       continue
@@ -253,16 +253,22 @@ export function validateEventRead(
       rejected.push(`${key}: "${String(fields[key])}" is a site root, not a page for that`)
       delete fields[key]
       delete kept[key]
-      continue
     }
-    // A team list is on the EVENT's own site. The Blue Alliance and Chief
-    // Delphi are where the roster comes from by other means, and one leaked
-    // into teamListUrl as if it were the event's own page.
-    if (key === 'teamListUrl' && /(?:thebluealliance\.com|chiefdelphi\.com)/i.test(value)) {
-      rejected.push(`${key}: that is The Blue Alliance, not the event's own team page`)
-      delete fields[key]
-      delete kept[key]
-    }
+  }
+
+  // teamListUrl is NOT held to the "must be more specific than the site" rule
+  // above. It is never shown to a visitor as a link, only used to re-read the
+  // roster later, and some events publish the team list right on their home
+  // page (CORI's is worbots4145.org/cori itself). So a bare host is fine here.
+  // What it must not be is a page that is somebody ELSE's record of the roster:
+  // The Blue Alliance and Chief Delphi are where the roster comes from by other
+  // means, and either leaking in here would point the refresh at the wrong
+  // kind of page.
+  const teamList = bareUrl(fields.teamListUrl as string | undefined)
+  if (teamList && /(?:thebluealliance\.com|chiefdelphi\.com)/i.test(teamList)) {
+    rejected.push('teamListUrl: that is The Blue Alliance, not the event\'s own team page')
+    delete fields.teamListUrl
+    delete kept.teamListUrl
   }
 
   // A cost note that only restates the notes, or the price, is noise. "Free and
