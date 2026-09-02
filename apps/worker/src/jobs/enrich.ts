@@ -8,6 +8,7 @@ import { resolveListingTitle, titleIsRepoDerived } from '../pipeline/title.js'
 import { fetchGitHubReadme, fetchGitHubRepo, parseGitHubUrl } from '../connectors/github.js'
 import type { GitHubRepoInfo } from '../connectors/github.js'
 import { publishCandidate } from '../pipeline/publish.js'
+import { checkDuplicateByName } from '../pipeline/deduplicate.js'
 import { extractMetadata } from '../pipeline/extract.js'
 import { notifySubmissionAutoPublished } from '../notifications/submissions.js'
 import type { EnrichJobPayload } from '@the-tool-pit/types'
@@ -530,6 +531,33 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
 
   // 4. Auto-publish if confidence is sufficient
   if (meetsBar) {
+    // Name dedup, AGAIN, on the name that will actually be written.
+    //
+    // Crawl-time dedup ran on the raw page title. For a GitHub repo that is the
+    // slug ("the-blue-alliance-ios"), and the resolver above has since turned it
+    // into the real display name ("The Blue Alliance") — the name publish.ts is
+    // about to store. So the crawl check could not have seen the collision that
+    // matters. Re-run it here, on enrichedMetadata.title, before a NEW listing is
+    // created. checkDuplicateByName also honours a prior human suppression of that
+    // name, so an import cannot republish over a listing a moderator hid.
+    //
+    // Only for a candidate that would CREATE a tool. One already bound to a tool
+    // (matchedToolId) is an update of that same row, not a new duplicate.
+    const finalName = ((enrichedMetadata.title as string | undefined) ?? '').trim()
+    if (!candidate.matchedToolId && finalName) {
+      const nameDupe = await checkDuplicateByName(finalName)
+      if (nameDupe.isDuplicate) {
+        const reason = `Duplicate of an existing ${nameDupe.matchedStatus ?? 'published'} tool by resolved name "${finalName}"`
+        await db
+          .update(crawlCandidates)
+          .set({ status: 'suppressed', rejectionReason: reason, updatedAt: new Date() })
+          .where(eq(crawlCandidates.id, candidateId))
+        console.log(`[enrich] candidate ${candidateId}: not published — ${reason} (tool ${nameDupe.matchedToolId})`)
+        if (submissionId) await resolveSubmission(submissionId, 'needs_review', nameDupe.matchedToolId, reason)
+        return
+      }
+    }
+
     const result = await publishCandidate(candidateId, sourceType)
     console.log(
       `[enrich] candidate ${candidateId}: ${result.action}` +

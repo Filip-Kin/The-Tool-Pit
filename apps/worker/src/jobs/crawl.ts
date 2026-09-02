@@ -1,6 +1,6 @@
 import { getDb } from '@the-tool-pit/db'
 import { crawlJobs, crawlCandidates, toolLinks } from '@the-tool-pit/db'
-import { eq, and } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { FtaToolsConnector } from '../connectors/fta-tools.js'
 import { VolunteerSystemsConnector } from '../connectors/volunteer-systems.js'
 import { GitHubTopicsConnector } from '../connectors/github-topics.js'
@@ -10,7 +10,7 @@ import { TbaTeamsConnector } from '../connectors/tba-teams.js'
 import { SpectrumCadConnector } from '../connectors/spectrum-cad.js'
 import { GitHubTeamCodeConnector } from '../connectors/github-team-code.js'
 import { extractMetadata, canonicalizeUrl } from '../pipeline/extract.js'
-import { checkDuplicateByUrl, checkDuplicateByName } from '../pipeline/deduplicate.js'
+import { checkDuplicateByUrl, checkDuplicateByName, toolHasLink } from '../pipeline/deduplicate.js'
 import { enrichQueue } from '../queues.js'
 import { delay } from '../connectors/base.js'
 import { sendApprovalNotice, reviewQueueUrl } from '@the-tool-pit/types'
@@ -83,17 +83,10 @@ export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {
           // associate the thread URL as a forum link if not already present.
           if (urlDupe.matchedToolId && candidate.sourceUrl?.includes('chiefdelphi.com')) {
             const db = getDb()
-            const [existingForumLink] = await db
-              .select({ id: toolLinks.id })
-              .from(toolLinks)
-              .where(
-                and(
-                  eq(toolLinks.toolId, urlDupe.matchedToolId),
-                  eq(toolLinks.url, candidate.sourceUrl),
-                ),
-              )
-              .limit(1)
-            if (!existingForumLink) {
+            // Compare by dedupe key, not raw string: an http/https or trailing-slash
+            // variant of a thread already linked is the same thread, not a second row.
+            const alreadyLinked = await toolHasLink(urlDupe.matchedToolId, candidate.sourceUrl)
+            if (!alreadyLinked) {
               await db.insert(toolLinks).values({
                 toolId: urlDupe.matchedToolId,
                 linkType: 'forum',

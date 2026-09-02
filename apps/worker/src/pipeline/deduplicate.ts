@@ -3,13 +3,14 @@
  * Checks if a candidate already exists in the database as a tool or prior candidate.
  * Strategy: URL normalization first, then name similarity check.
  */
-import { and, eq, isNotNull, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import { tools, toolLinks, crawlCandidates } from '@the-tool-pit/db'
 import {
   DUPLICATE_NAME_SIMILARITY,
   definitelyDifferentListings,
   identityFromName,
+  isHumanEdited,
 } from '@the-tool-pit/db'
 
 export interface DedupeResult {
@@ -18,6 +19,8 @@ export interface DedupeResult {
   matchedCandidateId?: string
   matchedUrl?: string
   method?: 'url_exact' | 'url_hostname' | 'name_similarity'
+  /** The status of the tool a name match landed on, so a caller can log why it blocked. */
+  matchedStatus?: 'published' | 'suppressed'
 }
 
 /** Steps 1-3: exact URL match in tool_links, exact URL in crawlCandidates, hostname soft match */
@@ -36,6 +39,29 @@ export function urlDedupeKey(raw: string): string {
   } catch {
     return raw.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '')
   }
+}
+
+/**
+ * Two link URLs that point at the same page, ignoring scheme / www / trailing slash.
+ * The store-time counterpart to the tool_links prefilter below: it stops one tool from
+ * holding both an http and an https row for the same link.
+ */
+export function sameLinkUrl(a: string, b: string): boolean {
+  return urlDedupeKey(a) === urlDedupeKey(b)
+}
+
+/**
+ * Does this tool already hold a link at this URL, comparing by dedupe key rather than raw
+ * string? Used before inserting a link so a re-crawl that carries http where the row holds
+ * https, or vice versa, adds nothing. Existing rows are never rewritten, only not doubled.
+ */
+export async function toolHasLink(toolId: string, url: string): Promise<boolean> {
+  const db = getDb()
+  const rows = await db
+    .select({ url: toolLinks.url })
+    .from(toolLinks)
+    .where(eq(toolLinks.toolId, toolId))
+  return rows.some((r) => sameLinkUrl(r.url, url))
 }
 
 export async function checkDuplicateByUrl(canonicalUrl: string): Promise<DedupeResult> {
@@ -98,6 +124,25 @@ export async function checkDuplicateByUrl(canonicalUrl: string): Promise<DedupeR
 }
 
 /**
+ * May a tool with this status and edit history block a new listing of the same name?
+ *
+ * A published tool always blocks. A suppressed tool blocks only when a human set the
+ * status (its human_edited_fields carries 'status', the same marker suppressMatchedTool
+ * reads before it dares overwrite a moderator). Auto-suppressed spam never blocks, which
+ * is the "22 names behind the curtain" bug we do not want back. A draft never blocks.
+ *
+ * Pure, so the rule can be tested without a database and cannot drift from the intent.
+ */
+export function suppressionBlocksName(
+  status: string,
+  humanEditedFields: readonly string[] | null | undefined,
+): boolean {
+  if (status === 'published') return true
+  if (status === 'suppressed') return isHumanEdited(humanEditedFields, 'status')
+  return false
+}
+
+/**
  * Step 4: a name close enough to something we already hold.
  *
  * THIS STEP DELETES WORK. A hit here drops the candidate before it is ever
@@ -110,7 +155,12 @@ export async function checkDuplicateByUrl(canonicalUrl: string): Promise<DedupeR
  *
  * The status filter was missing, so 22 published names were being blocked by
  * SUPPRESSED rows: spam that was rejected once went on rejecting real listings
- * from behind the curtain.
+ * from behind the curtain. But a human who suppresses a listing has made a
+ * decision, and re-importing the same name and PUBLISHING it walked straight
+ * over that decision (docs.wpilib.org came back as a "...-1" slug the day after
+ * a moderator hid it). So a suppressed row blocks again when, and only when, a
+ * human set that status. Auto-suppressed spam still steps aside. See
+ * suppressionBlocksName.
  *
  * And the archive is meant to hold every season of a team's code and CAD.
  * "1511 2023 Robot Code" against "1511 2026 Robot Code" scores 0.826, as does
@@ -127,19 +177,35 @@ export async function checkDuplicateByName(title: string): Promise<DedupeResult>
   // Several, not one. The closest name by score is often not the one that
   // shares a team and a season, and taking only the top row would call a
   // different season a duplicate of it.
+  //
+  // Both published and suppressed rows are fetched; suppressionBlocksName decides
+  // which of the suppressed ones actually count, in JS where it is testable. The
+  // limit is 10 rather than 5 so a cluster of auto-suppressed spam cannot crowd the
+  // one published (or human-suppressed) row that should have blocked out of the window.
   const similar = await db
-    .select({ id: tools.id, name: tools.name, teamNumber: tools.teamNumber, seasonYear: tools.seasonYear })
+    .select({
+      id: tools.id,
+      name: tools.name,
+      teamNumber: tools.teamNumber,
+      seasonYear: tools.seasonYear,
+      status: tools.status,
+      humanEditedFields: tools.humanEditedFields,
+    })
     .from(tools)
     .where(
       and(
-        eq(tools.status, 'published'),
+        inArray(tools.status, ['published', 'suppressed']),
         sql`similarity(${tools.name}, ${title}) > ${DUPLICATE_NAME_SIMILARITY}`,
       ),
     )
     .orderBy(sql`similarity(${tools.name}, ${title}) desc`)
-    .limit(5)
+    .limit(10)
 
   for (const candidate of similar) {
+    // A suppressed row only blocks when a human suppressed it. Spam that the
+    // pipeline auto-hid must not go on rejecting real listings.
+    if (!suppressionBlocksName(candidate.status, candidate.humanEditedFields)) continue
+
     // The stored row's own columns first: the classifier filled them and a
     // human may have corrected them, so they beat anything parsed from a name.
     // Fall back to the name for the few rows that carry neither.
@@ -150,7 +216,12 @@ export async function checkDuplicateByName(title: string): Promise<DedupeResult>
     }
     if (definitelyDifferentListings(incoming, stored)) continue
 
-    return { isDuplicate: true, matchedToolId: candidate.id, method: 'name_similarity' }
+    return {
+      isDuplicate: true,
+      matchedToolId: candidate.id,
+      method: 'name_similarity',
+      matchedStatus: candidate.status === 'suppressed' ? 'suppressed' : 'published',
+    }
   }
 
   return { isDuplicate: false }

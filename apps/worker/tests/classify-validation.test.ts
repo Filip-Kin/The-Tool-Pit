@@ -87,9 +87,15 @@ describe('validateClassificationOutput', () => {
       expect(result.teamNumber).toBeNull()
     })
 
-    it('does not touch teamNumber when isTeamCode=false', () => {
+    it('drops teamNumber when neither isTeamCode nor isTeamCad is set', () => {
+      // A team number only means something on a team's own code or CAD. Carried on a
+      // general tool it stamps the team into the name and slug and splits the listing
+      // from its own earlier row, which is how a dupe slipped past name dedup.
       const result = validateClassificationOutput({ isTeamCode: false, teamNumber: 254 })
-      expect(result.teamNumber).toBe(254)
+      if (result.teamNumber !== null) {
+        throw new Error(`non-team tool kept teamNumber ${result.teamNumber}; expected null`)
+      }
+      expect(result.teamNumber).toBeNull()
     })
 
     it('preserves null teamNumber as-is', () => {
@@ -109,9 +115,19 @@ describe('validateClassificationOutput', () => {
       expect(result.seasonYear).toBeNull()
     })
 
-    it('does not touch seasonYear when isTeamCode=false', () => {
-      const result = validateClassificationOutput({ isTeamCode: false, seasonYear: 1999 })
-      expect(result.seasonYear).toBe(1999)
+    it('drops seasonYear when neither isTeamCode nor isTeamCad is set', () => {
+      // "FRC Cycle Times" must never become "FRC 2026 Cycle Times": a season on a
+      // non-team tool poisons the name/slug and dodges name-similarity dedup.
+      const result = validateClassificationOutput({ isTeamCode: false, seasonYear: 2026 })
+      if (result.seasonYear !== null) {
+        throw new Error(`non-team tool kept seasonYear ${result.seasonYear}; expected null`)
+      }
+      expect(result.seasonYear).toBeNull()
+    })
+
+    it('keeps seasonYear on a team CAD listing (isTeamCad=true)', () => {
+      const result = validateClassificationOutput({ isTeamCad: true, seasonYear: 2024 })
+      expect(result.seasonYear).toBe(2024)
     })
   })
 
