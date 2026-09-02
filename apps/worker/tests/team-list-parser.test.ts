@@ -106,3 +106,22 @@ describe('suspectRosterChange', () => {
     expect(suspectRosterChange([], teams(503, 247)).suspect).toBe(false)
   })
 })
+
+describe('slotIndicesLeaked catches non-step-1 leaks', () => {
+  const t = (nums: number[]) => nums.map((number) => ({ number }))
+  it('catches the CORI even-slot leak', () => {
+    // Real teams plus the even slots 16..32 the prod parser once leaked.
+    const teams = t([16, 18, 20, 22, 24, 26, 28, 30, 32, 48, 144, 379, 4145, 10011])
+    expect(slotIndicesLeaked(teams)).not.toBeNull()
+  })
+  it('does not flag a real CORI roster', () => {
+    expect(slotIndicesLeaked(t([48, 144, 379, 1317, 3814, 4121, 4145, 4269, 4611, 6964, 10011]))).toBeNull()
+  })
+  it('does not flag RiverRage', () => {
+    expect(slotIndicesLeaked(t([88, 131, 151, 166, 190, 238, 246, 319, 501, 811, 1058]))).toBeNull()
+  })
+  it('does not flag a handful of real low-numbered teams', () => {
+    // 16, 27, 33, 45 are all real active teams; they are not an even run.
+    expect(slotIndicesLeaked(t([16, 27, 33, 45, 254, 1114]))).toBeNull()
+  })
+})

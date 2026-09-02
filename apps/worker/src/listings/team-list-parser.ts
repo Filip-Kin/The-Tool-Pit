@@ -330,33 +330,39 @@ export async function generateTeamListParser(input: {
  */
 export function slotIndicesLeaked(teams: RosterTeam[]): string | null {
   const sorted = [...new Set(teams.map((t) => t.number))].sort((a, b) => a - b)
-  if (sorted.length === 0) return null
+  if (sorted.length < 5) return null
 
-  // The longest run of consecutive integers among the distinct numbers.
-  let bestStart = sorted[0]
-  let bestLen = 1
-  let runStart = sorted[0]
-  let runLen = 1
-  for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i] === sorted[i - 1] + 1) runLen++
-    else {
-      runStart = sorted[i]
-      runLen = 1
+  // Slot and row columns leak as an ARITHMETIC RUN, not always a step of one.
+  // CORI's parser once returned 16, 18, 20, ... 32: the even slots, a step of
+  // two, which a "consecutive integers" check walked straight past. A real
+  // roster is never five or more team numbers in an even progression, whatever
+  // the step, so the longest such run over a few small steps is the tell.
+  for (const step of [1, 2]) {
+    let bestStart = sorted[0]
+    let bestLen = 1
+    let runStart = sorted[0]
+    let runLen = 1
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] === sorted[i - 1] + step) runLen++
+      else {
+        runStart = sorted[i]
+        runLen = 1
+      }
+      if (runLen > bestLen) {
+        bestLen = runLen
+        bestStart = runStart
+      }
     }
-    if (runLen > bestLen) {
-      bestLen = runLen
-      bestStart = runStart
-    }
+    const bestEnd = bestStart + (bestLen - 1) * step
+    // A run FROM 1, whatever the step, is a slot or row column; five is enough.
+    // A long run is a slot column, a row index, or a year archive: a real
+    // roster never lines up this way. Step 1 keeps the plain wording; a wider
+    // step names itself so the repair hint can point the model at it.
+    if (bestLen >= 5) return step === 1 ? `${bestStart} through ${bestEnd}` : `${bestStart} through ${bestEnd} (step ${step})`
   }
-  const bestEnd = bestStart + bestLen - 1
-
-  // A run FROM 1 is a slot or row column; five is enough to be sure.
-  if (bestStart === 1 && bestLen >= 5) return `1 through ${bestEnd}`
-  // A long consecutive run anywhere else is a year archive or an index column
-  // that does not start at one. A real roster is never six numbers in a row.
-  if (bestLen >= 6) return `${bestStart} through ${bestEnd}`
   return null
 }
+
 
 function extractFunctionSource(text: string): string | null {
   const at = text.indexOf('function extractTeams')
