@@ -138,3 +138,65 @@ describe('tool type vocabulary', () => {
  * Kept explicit so the guard stays noisy rather than being widened by a regex.
  */
 const ENUM_ALLOWED = new Set<string>([])
+
+/**
+ * Objects keyed BY tool type, which the array scan above cannot see.
+ *
+ * This is the hole the guard shipped with. TOOL_TYPE_WEIGHTS and a dead second
+ * copy of it in lib/search/search.ts both use unquoted object keys, so the
+ * scanner walked straight past them, and the drift they carried (one type
+ * weighted 0.3 in the map and 0.5 in the SQL) was invisible to the very test
+ * written for it.
+ *
+ * A map keyed by tool type must be TOTAL. A missing key is not a shorter list,
+ * it is a silent default: the dead copy was missing vendor_website, so 17
+ * published tools would have scored whatever the fallback happened to be.
+ */
+function toolTypeKeyedMaps(source: string): Array<{ name: string; keys: string[] }> {
+  const maps: Array<{ name: string; keys: string[] }> = []
+  for (const m of source.matchAll(/(?:const|export const)\s+(\w+)\s*:\s*Record<[^>]*>\s*=\s*\{/g)) {
+    const open = source.indexOf('{', m.index! + m[0].length - 1)
+    let depth = 0
+    let close = -1
+    for (let i = open; i < source.length; i++) {
+      if (source[i] === '{') depth++
+      else if (source[i] === '}') {
+        depth--
+        if (depth === 0) { close = i; break }
+      }
+    }
+    if (close === -1) continue
+    const body = source.slice(open, close + 1)
+    const keys = [...body.matchAll(/(?:^|[{,\s])([a-z][a-z0-9_]*)\s*:/gm)].map((k) => k[1])
+    maps.push({ name: m[1], keys })
+  }
+  return maps
+}
+
+describe('objects keyed by tool type', () => {
+  const files = ROOTS.flatMap((root) => sourceFiles(root))
+
+  it('cover every type, with no key the schema does not have', () => {
+    const valid = new Set<string>(TOOL_TYPES)
+    const offenders: string[] = []
+
+    for (const file of files) {
+      if (file.endsWith('tool-type-vocabulary.test.ts')) continue
+      for (const map of toolTypeKeyedMaps(readFileSync(file, 'utf8'))) {
+        const known = map.keys.filter((k) => valid.has(k))
+        // Same test as above: is this keyed by tool type, or by something else?
+        if (known.length < 2 || known.length / map.keys.length < 0.6) continue
+
+        const relative = file.slice(REPO.length + 1)
+        for (const key of map.keys) {
+          if (!valid.has(key)) offenders.push(`${relative}: ${map.name} has a key "${key}" the schema does not`)
+        }
+        for (const type of TOOL_TYPES) {
+          if (!map.keys.includes(type)) offenders.push(`${relative}: ${map.name} is missing "${type}"`)
+        }
+      }
+    }
+
+    expect(offenders).toEqual([])
+  })
+})

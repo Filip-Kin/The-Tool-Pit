@@ -6,7 +6,13 @@ import { SaveButton } from './save-button'
 import { ReClassifyButton } from './re-classify-button'
 import { Button, buttonClass } from '@/components/ui/button'
 import { getDb } from '@/lib/db'
-import { toolSources, toolUpdates, TOOL_TYPES } from '@the-tool-pit/db'
+import {
+  toolSources,
+  toolUpdates,
+  TOOL_TYPES,
+  AUDIENCE_PRIMARY_ROLES,
+  AUDIENCE_FUNCTION_TERMS,
+} from '@the-tool-pit/db'
 import { eq, desc } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { ExtraLinksField } from '@/components/me/extra-links-editor'
@@ -29,30 +35,9 @@ const PROGRAMS = ['frc', 'ftc', 'fll'] as const
  */
 const PRIMARY_LINK_TYPES: readonly string[] = ['homepage', 'github', 'docs', 'forum']
 
-const AUDIENCE_ROLES = [
-  { slug: 'student', label: 'Student' },
-  { slug: 'mentor', label: 'Mentor' },
-  { slug: 'volunteer', label: 'Volunteer' },
-  { slug: 'parent_newcomer', label: 'Parent / Newcomer' },
-  { slug: 'organizer_staff', label: 'Organizer / Staff' },
-]
+const AUDIENCE_ROLES = AUDIENCE_PRIMARY_ROLES
 
-const AUDIENCE_FUNCTIONS = [
-  { slug: 'programmer', label: 'Programmer' },
-  { slug: 'scouter', label: 'Scouter' },
-  { slug: 'strategist', label: 'Strategist' },
-  { slug: 'cad', label: 'CAD' },
-  { slug: 'mechanical', label: 'Mechanical' },
-  { slug: 'electrical', label: 'Electrical' },
-  { slug: 'drive_team', label: 'Drive Team' },
-  { slug: 'awards', label: 'Awards' },
-  { slug: 'outreach', label: 'Outreach' },
-  { slug: 'team_management', label: 'Team Management' },
-  { slug: 'event_ops', label: 'Event Ops' },
-  { slug: 'field_technical', label: 'Field Technical' },
-  { slug: 'inspection', label: 'Inspection' },
-  { slug: 'judging', label: 'Judging' },
-]
+const AUDIENCE_FUNCTIONS = AUDIENCE_FUNCTION_TERMS
 
 export default async function AdminToolEditPage({
   params,

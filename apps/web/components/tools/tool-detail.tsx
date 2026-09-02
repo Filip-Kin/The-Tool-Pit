@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { buttonClass } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { FreshnessChip } from '@/components/ui/freshness-chip'
+import { AUDIENCE_LABELS } from '@the-tool-pit/db/audience-enums'
 import { VoteButton } from '@/components/tools/vote-button'
 import { ClaimListingButton } from '@/components/auth/claim-listing-button'
 import { FavoriteButton } from '@/components/auth/favorite-button'
@@ -15,17 +16,10 @@ import { cn } from '@/lib/utils/cn'
 import type { ToolDetailData } from '@/lib/queries/tools'
 
 const PROGRAM_LABELS: Record<string, string> = { frc: 'FRC', ftc: 'FTC', fll: 'FLL' }
-const ROLE_LABELS: Record<string, string> = {
-  student: 'Student', mentor: 'Mentor', volunteer: 'Volunteer',
-  parent_newcomer: 'Parent / Newcomer', organizer_staff: 'Organizer / Staff',
-}
-const FUNCTION_LABELS: Record<string, string> = {
-  programmer: 'Programmer', scouter: 'Scouter', strategist: 'Strategist',
-  cad: 'CAD', mechanical: 'Mechanical', electrical: 'Electrical',
-  drive_team: 'Drive Team', awards: 'Awards', outreach: 'Outreach',
-  team_management: 'Team Management', event_ops: 'Event Ops',
-  field_technical: 'Field Technical', inspection: 'Inspection', judging: 'Judging',
-}
+// One label per slug, from the vocabulary that seeds the tables. These were
+// two more hand-written copies.
+const ROLE_LABELS = AUDIENCE_LABELS
+const FUNCTION_LABELS = AUDIENCE_LABELS
 
 const LINK_CONFIG: Record<string, { icon: React.ElementType; label: string; prominent?: boolean }> = {
   github: { icon: Github, label: 'GitHub', prominent: true },

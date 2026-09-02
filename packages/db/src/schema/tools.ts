@@ -276,39 +276,12 @@ export type NewTool = typeof tools.$inferInsert
 export type ToolLink = typeof toolLinks.$inferSelect
 export type NewToolLink = typeof toolLinks.$inferInsert
 
-/**
- * What a listing in the tools catalogue can be.
- *
- * NO 'offseason_event'. An off-season competition is a row in event_listings,
- * with a date, a venue, a cost, a capacity and a registration state, and the
- * events vertical is built to show exactly that. A tool row is a page ABOUT an
- * event and carries none of it, so the two were the same competition described
- * twice, worse the second time.
- *
- * It also put things in front of readers that are not tools at all. BUNNYBOTS
- * led Rookie Friendly on the home page, and "Duel on the Delaware 2010" sat in
- * the catalogue as a listing. The classifier was being asked to sort event
- * pages out of the crawl and offered a bucket to put them in, in the same
- * prompt, so it used it.
- *
- * This list is the single vocabulary. The admin editor and the classifier both
- * import it, and tests/unit/tool-type-vocabulary.test.ts fails if a fourth copy
- * appears.
- */
-export const TOOL_TYPES = [
-  'web_app',
-  'desktop_app',
-  'mobile_app',
-  'calculator',
-  'spreadsheet',
-  'github_project',
-  'browser_extension',
-  'api',
-  'resource',
-  'vendor_website',
-  'other',
-] as const
-export type ToolType = (typeof TOOL_TYPES)[number]
+
+// Tool types, their labels and their ranking weights live in ../tool-enums,
+// which imports nothing, so a client component can read them without the
+// postgres client coming with them. Re-exported because every server-side
+// caller already reaches for them here.
+export * from '../tool-enums'
 
 export const TOOL_STATUSES = ['draft', 'published', 'suppressed'] as const
 export type ToolStatus = (typeof TOOL_STATUSES)[number]
@@ -348,17 +321,3 @@ export function toPublicFreshnessLabel(state: FreshnessState | null | undefined)
   }
 }
 
-/** Content-type ranking weight (0–1). */
-export const TOOL_TYPE_WEIGHTS: Record<ToolType, number> = {
-  web_app: 1.0,
-  calculator: 1.0,
-  desktop_app: 0.9,
-  github_project: 0.85,
-  browser_extension: 0.8,
-  mobile_app: 0.8,
-  api: 0.7,
-  spreadsheet: 0.4,
-  resource: 0.35,
-  vendor_website: 0.5,
-  other: 0.5,
-}

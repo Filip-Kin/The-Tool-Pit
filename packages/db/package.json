@@ -44,6 +44,14 @@
     "./client": {
       "bun": "./src/client.ts",
       "default": "./dist/client.js"
+    },
+    "./tool-enums": {
+      "bun": "./src/tool-enums.ts",
+      "default": "./dist/tool-enums.js"
+    },
+    "./audience-enums": {
+      "bun": "./src/audience-enums.ts",
+      "default": "./dist/audience-enums.js"
     }
   },
   "main": "./dist/index.js",

@@ -3,7 +3,13 @@
  * Run with: npx tsx src/seed.ts
  */
 import { getDb } from './client'
-import { programs, audiencePrimaryRoles, audienceFunctions } from './schema/index'
+import {
+  programs,
+  audiencePrimaryRoles,
+  audienceFunctions,
+  AUDIENCE_PRIMARY_ROLES,
+  AUDIENCE_FUNCTION_TERMS,
+} from './schema/index'
 
 async function seed() {
   const db = getDb()
@@ -21,34 +27,13 @@ async function seed() {
   console.log('Seeding audience primary roles...')
   await db
     .insert(audiencePrimaryRoles)
-    .values([
-      { slug: 'student', label: 'Student' },
-      { slug: 'mentor', label: 'Mentor' },
-      { slug: 'volunteer', label: 'Volunteer' },
-      { slug: 'parent_newcomer', label: 'Parent / Newcomer' },
-      { slug: 'organizer_staff', label: 'Organizer / Staff' },
-    ])
+    .values([...AUDIENCE_PRIMARY_ROLES])
     .onConflictDoNothing()
 
   console.log('Seeding audience functions...')
   await db
     .insert(audienceFunctions)
-    .values([
-      { slug: 'programmer', label: 'Programmer' },
-      { slug: 'scouter', label: 'Scouter' },
-      { slug: 'strategist', label: 'Strategist' },
-      { slug: 'cad', label: 'CAD' },
-      { slug: 'mechanical', label: 'Mechanical' },
-      { slug: 'electrical', label: 'Electrical' },
-      { slug: 'drive_team', label: 'Drive Team' },
-      { slug: 'awards', label: 'Awards' },
-      { slug: 'outreach', label: 'Outreach' },
-      { slug: 'team_management', label: 'Team Management' },
-      { slug: 'event_ops', label: 'Event Ops' },
-      { slug: 'field_technical', label: 'Field Technical' },
-      { slug: 'inspection', label: 'Inspection' },
-      { slug: 'judging', label: 'Judging' },
-    ])
+    .values([...AUDIENCE_FUNCTION_TERMS])
     .onConflictDoNothing()
 
   console.log('Seed complete.')

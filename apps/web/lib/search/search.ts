@@ -5,20 +5,6 @@ import type { SearchParams } from '@the-tool-pit/types'
 import { parseSearchSort } from './sort'
 import { searchOrderBy } from './order-by'
 
-// Content-type weights for ranking boost
-const TYPE_WEIGHTS: Record<string, number> = {
-  web_app: 1.0,
-  calculator: 1.0,
-  desktop_app: 0.9,
-  github_project: 0.85,
-  browser_extension: 0.8,
-  mobile_app: 0.8,
-  api: 0.7,
-  spreadsheet: 0.4,
-  resource: 0.35,
-  other: 0.5,
-}
-
 export interface SearchResultRow {
   id: string
   slug: string

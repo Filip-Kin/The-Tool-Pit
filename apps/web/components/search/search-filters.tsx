@@ -3,6 +3,12 @@
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { cn } from '@/lib/utils/cn'
+// The import-free subpaths, not the package barrel. This is a client
+// component: reaching through '@the-tool-pit/db' pulls the postgres client into
+// the browser bundle and the build refuses it, which is the same reason
+// human-edited and the other enum modules are published this way.
+import { AUDIENCE_PRIMARY_ROLES, AUDIENCE_FUNCTION_TERMS } from '@the-tool-pit/db/audience-enums'
+import { TOOL_TYPES as SCHEMA_TOOL_TYPES, TOOL_TYPE_LABELS } from '@the-tool-pit/db/tool-enums'
 
 interface SearchFiltersProps {
   program?: string
@@ -19,36 +25,32 @@ const PROGRAMS = [
   { value: 'fll', label: 'FLL', color: 'var(--color-fll)' },
 ]
 
-const TOOL_TYPES = [
-  { value: 'web_app', label: 'Web App' },
-  { value: 'calculator', label: 'Calculator' },
-  { value: 'desktop_app', label: 'Desktop' },
-  { value: 'github_project', label: 'GitHub Project' },
-  { value: 'spreadsheet', label: 'Spreadsheet' },
-  { value: 'resource', label: 'Resource' },
-  { value: 'vendor_website', label: 'Vendor Site' },
-]
+/**
+ * Types with no chip of their own, and why.
+ *
+ * The row is allowed to be shorter than the vocabulary. What it is not allowed
+ * to be is short by accident: mobile_app, browser_extension and api were
+ * missing along with these, and 29 published tools could not be filtered to at
+ * all. Anything left out now has to be named here.
+ */
+const OMITTED_TOOL_TYPES: Record<string, string> = {
+  other: 'a chip labelled Other filters to nothing anybody was looking for',
+}
 
-const AUDIENCE_ROLES = [
-  { value: 'student', label: 'Student' },
-  { value: 'mentor', label: 'Mentor' },
-  { value: 'volunteer', label: 'Volunteer' },
-  { value: 'parent_newcomer', label: 'Parent / Newcomer' },
-  { value: 'organizer_staff', label: 'Organizer / Staff' },
-]
+const TOOL_TYPES = SCHEMA_TOOL_TYPES.filter((t) => !(t in OMITTED_TOOL_TYPES)).map((t) => ({
+  value: t,
+  label: TOOL_TYPE_LABELS[t],
+}))
 
-const AUDIENCE_FUNCTIONS = [
-  { value: 'programmer', label: 'Programmer' },
-  { value: 'scouter', label: 'Scouter' },
-  { value: 'strategist', label: 'Strategist' },
-  { value: 'cad', label: 'CAD' },
-  { value: 'mechanical', label: 'Mechanical' },
-  { value: 'electrical', label: 'Electrical' },
-  { value: 'drive_team', label: 'Drive Team' },
-  { value: 'awards', label: 'Awards' },
-  { value: 'outreach', label: 'Outreach' },
-  { value: 'team_management', label: 'Team Mgmt' },
-]
+// Read from the shared vocabulary, not typed out again.
+//
+// This row used to hold its own copy and it was four values short:
+// event_ops, field_technical, inspection and judging were missing, so 46
+// published tools carried a function no chip could select and 34 of them could
+// not be reached by any "For:" chip at all. team_management also read "Team
+// Mgmt" here and "Team Management" on every other screen.
+const AUDIENCE_ROLES = AUDIENCE_PRIMARY_ROLES.map((t) => ({ value: t.slug, label: t.label }))
+const AUDIENCE_FUNCTIONS = AUDIENCE_FUNCTION_TERMS.map((t) => ({ value: t.slug, label: t.label }))
 
 export function SearchFilters({ program, toolType, isOfficial, isRookieFriendly, audienceRole, audienceFunction }: SearchFiltersProps) {
   const router = useRouter()
