@@ -286,38 +286,5 @@ export * from '../tool-enums'
 export const TOOL_STATUSES = ['draft', 'published', 'suppressed'] as const
 export type ToolStatus = (typeof TOOL_STATUSES)[number]
 
-export const FRESHNESS_STATES = [
-  'active',
-  'stale',
-  'inactive',
-  'evergreen',
-  'seasonal',
-  'archived',
-  'unknown',
-] as const
-export type FreshnessState = (typeof FRESHNESS_STATES)[number]
 
-/** Maps internal freshness state to user-facing label. Never shows "Unknown". */
-export function toPublicFreshnessLabel(state: FreshnessState | null | undefined): 'Current' | 'Stale' | 'Deprecated' | 'Inactive' | null {
-  switch (state) {
-    case 'active':
-    case 'evergreen':
-    case 'seasonal':
-      return 'Current'
-    case 'stale':
-      return 'Stale'
-    // Archived is a maintainer deliberately closing a repo, which in FRC
-    // usually means superseded or folded into something else. Inactive is the
-    // plain fact of nothing happening. Neither is "Abandoned", which claimed
-    // somebody gave up and was wrong about PathWeaver, an official WPILib tool
-    // that still ships.
-    case 'archived':
-      return 'Deprecated'
-    case 'inactive':
-      return 'Inactive'
-    case 'unknown':
-    default:
-      return null // don't show anything if we genuinely don't know
-  }
-}
 

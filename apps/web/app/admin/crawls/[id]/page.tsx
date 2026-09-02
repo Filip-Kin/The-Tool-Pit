@@ -8,8 +8,10 @@ import { eq, desc, and, sql } from 'drizzle-orm'
 import type { CrawlJobStats } from '@the-tool-pit/types'
 import type { CandidateClassification, RawCandidateMetadata } from '@the-tool-pit/db'
 import { assertAdmin } from '@/lib/admin/auth'
+import { CANDIDATE_STATUSES as SCHEMA_CANDIDATE_STATUSES } from '@the-tool-pit/db'
 
-const CANDIDATE_STATUSES = ['all', 'pending', 'matched', 'merged', 'published', 'suppressed', 'duplicate'] as const
+// 'all' is this screen's own tab, not a status. The rest come from the schema.
+const CANDIDATE_STATUSES = ['all', ...SCHEMA_CANDIDATE_STATUSES] as const
 type CandidateStatus = (typeof CANDIDATE_STATUSES)[number]
 const PAGE_SIZE = 50
 

@@ -72,6 +72,17 @@ export const HUMAN_EDITABLE_TOOL_KEYS = [
   // with no history anywhere.
   'status',
   'adminNotes',
+  // A curator saying "this one does not go stale".
+  //
+  // The state is computed from the last commit date, and for a repo that is the
+  // right answer. It is the wrong answer for a reference that is finished: a
+  // rulebook summary or a wiring diagram is not decaying because nobody pushed
+  // to it this year. That is what 'evergreen' and 'seasonal' are FOR, and until
+  // now nothing could produce them. computeFreshnessState returns five states
+  // and neither of those two is among them, so the admin dropdown offered a
+  // choice that the nightly pass reverted within a day, and production holds
+  // zero rows of either.
+  'freshnessState',
 ] as const
 
 export type HumanEditableToolKey = (typeof HUMAN_EDITABLE_TOOL_KEYS)[number]

@@ -33,7 +33,6 @@ const MACHINE_OWNED: Record<string, string> = {
   chiefDelphiLikes: 'a count read off the forum thread',
   popularityScore: 'derived from the two counts above plus votes; see popularity-score.ts',
   confidenceScore: "the classifier's own certainty about its answer",
-  freshnessState: 'computed from the last commit date',
   lastActivityAt: 'the last commit date itself',
   starsCheckedAt: 'when the star count was last read from GitHub',
   updatedAt: 'a row timestamp, written by every path that touches the row',
@@ -169,11 +168,10 @@ describe('worker writes to tools', () => {
   it('keeps the machine-owned list pinned and explained', () => {
     // The easy way past the check above is to declare a column machine-owned.
     // Changing this count is a decision; drifting into it is not.
-    expect(Object.keys(MACHINE_OWNED)).toHaveLength(Object.keys(MACHINE_OWNED).length)
+    expect(Object.keys(MACHINE_OWNED)).toHaveLength(10)
     expect(Object.keys(MACHINE_OWNED).sort()).toEqual([
       'chiefDelphiLikes',
       'confidenceScore',
-      'freshnessState',
       'githubStars',
       'humanEditedFields',
       'lastActivityAt',

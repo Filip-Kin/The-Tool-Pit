@@ -6,6 +6,7 @@
 import { eq, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import { tools, toolLinks, toolUpdates } from '@the-tool-pit/db'
+import { isHumanEdited } from '@the-tool-pit/db'
 import { fetchGitHubRepo } from '../connectors/github.js'
 import { differenceInDays } from 'date-fns'
 import type { FreshnessCheckPayload } from '@the-tool-pit/types'
@@ -110,14 +111,24 @@ export async function processFreshnessJob(payload: FreshnessCheckPayload): Promi
   // with no votes in it, so this pass silently erased every upvote cast in the
   // preceding day. jobs/popularity.ts owns both columns now and writes the sum
   // that vote.ts also writes.
+  // A curator's answer stands. lastActivityAt is a measurement and keeps
+  // refreshing either way; the STATE is the judgement, and 'evergreen' on a
+  // finished reference is a judgement this function cannot make, because it
+  // only knows when the last commit was.
+  const claimed = isHumanEdited(tool.humanEditedFields, 'freshnessState')
+
   await db
     .update(tools)
     .set({
-      freshnessState: newState,
+      ...(claimed ? {} : { freshnessState: newState }),
       lastActivityAt: lastActivityAt ?? tool.lastActivityAt,
       updatedAt: new Date(),
     })
     .where(eq(tools.id, tool.id))
 
-  console.log(`[freshness] ${tool.slug}: ${tool.freshnessState} → ${newState}`)
+  console.log(
+    claimed
+      ? `[freshness] ${tool.slug}: keeping ${tool.freshnessState}, set by hand (would have been ${newState})`
+      : `[freshness] ${tool.slug}: ${tool.freshnessState} → ${newState}`,
+  )
 }

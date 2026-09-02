@@ -1,3 +1,4 @@
+import { toPublicFreshnessLabel, type FreshnessState } from '@the-tool-pit/db/tool-enums'
 import { formatDistanceToNow, differenceInDays } from 'date-fns'
 
 export function formatRelativeTime(date: Date | string | null | undefined): string | null {
@@ -11,31 +12,12 @@ export function getFreshnessLabel(
   freshnessState: string | null | undefined,
   lastActivityAt: Date | string | null | undefined,
 ): 'Current' | 'Stale' | 'Deprecated' | 'Inactive' | null {
-  // Use DB-stored state as primary signal
-  switch (freshnessState) {
-    case 'active':
-    case 'evergreen':
-    case 'seasonal':
-      return 'Current'
-    case 'stale':
-      return 'Stale'
-    // Two facts, two words, and neither is a verdict.
-    //
-    // "Abandoned" carried a connotation we cannot support. It says someone gave
-    // up, when all we know is that a repo stopped moving. wpilibsuite/PathWeaver
-    // reports archived: true on GitHub, and it still ships with WPILib and is
-    // still used, so calling it abandoned told rookies to avoid an official
-    // tool.
-    //
-    // Deprecated is what an archived repo usually means in FRC: superseded, or
-    // finished and folded into something else. Inactive is the plain fact for
-    // the rest: nothing has happened in a long time, which is worth knowing and
-    // is not an accusation.
-    case 'archived':
-      return 'Deprecated'
-    case 'inactive':
-      return 'Inactive'
-  }
+  // The state-to-label mapping lives in packages/db and this used to repeat it
+  // word for word, including the reasoning about "Deprecated" and "Inactive".
+  // The copy in packages/db had no callers at all, so the shared one was the
+  // dead one and the duplicate was what shipped.
+  const fromState = toPublicFreshnessLabel(freshnessState as FreshnessState | null | undefined)
+  if (fromState) return fromState
 
   // Fall back to date-based heuristic
   if (lastActivityAt) {

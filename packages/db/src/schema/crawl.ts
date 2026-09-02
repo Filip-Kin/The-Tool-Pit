@@ -49,9 +49,7 @@ export const crawlCandidates = pgTable(
     /** Output from AI classification stage */
     classification: jsonb('classification').$type<CandidateClassification>(),
     confidenceScore: real('confidence_score'),
-    /**
-     * pending | matched | merged | published | suppressed | duplicate
-     */
+    /** One of CANDIDATE_STATUSES. */
     status: text('status').notNull().default('pending'),
     /** Admin-recorded reason when suppressing a candidate (e.g. "spam", "duplicate of X"). */
     rejectionReason: text('rejection_reason'),
@@ -133,3 +131,25 @@ export interface CandidateClassification {
   confidence?: number
   reasoning?: string
 }
+
+/**
+ * What a crawl candidate's status can be.
+ *
+ * Was a doc comment plus two hand-written arrays on two admin screens, and all
+ * three differed. /admin/candidates listed pending, suppressed and duplicate,
+ * so it had no tab for the 1203 PUBLISHED candidates and a duplicate tab that
+ * can never have contents, because nothing writes that status for tools. The
+ * crawl detail page had all six plus 'all'.
+ *
+ * The tuple is the vocabulary. A screen may show a subset, but it has to pick
+ * from here.
+ */
+export const CANDIDATE_STATUSES = [
+  'pending',
+  'matched',
+  'merged',
+  'published',
+  'suppressed',
+  'duplicate',
+] as const
+export type CandidateStatus = (typeof CANDIDATE_STATUSES)[number]

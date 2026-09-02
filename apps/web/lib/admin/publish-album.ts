@@ -6,12 +6,40 @@
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { albums, albumSources, albumCandidates, albumCrawlJobs, albumSubmissions, events } from '@the-tool-pit/db'
-import type { NewAlbum, AlbumCandidateMetadata } from '@the-tool-pit/db'
+import type { NewAlbum, AlbumCandidateMetadata, AlbumSourceType } from '@the-tool-pit/db'
+import { ALBUM_SOURCE_TYPES } from '@the-tool-pit/db'
 
-const CONNECTOR_SOURCE_TYPE: Record<string, string> = {
+/**
+ * Every album connector, and the source type it means.
+ *
+ * It covered three of the seven. flickr_albums, smugmug_albums, toa_events and
+ * reanalyze_candidates all fell through to the candidate's PROVIDER, which
+ * answers a different question: provider is who hosts the photos, source type
+ * is how we found them. The two tuples share six values, so the mistake mostly
+ * produced a right-looking answer and occasionally wrote a value that is not a
+ * source type at all.
+ */
+const CONNECTOR_SOURCE_TYPE: Record<string, AlbumSourceType> = {
   fim_albums: 'firstinmichigan',
   chief_delphi_albums: 'chief_delphi',
+  flickr_albums: 'flickr',
+  smugmug_albums: 'smugmug',
   tba_events: 'tba',
+  toa_events: 'toa',
+  // Not a discovery source. It re-reads candidates we already hold, so the
+  // provider fallback below is the right answer for one of these.
+}
+
+/**
+ * The provider, but only when it is also a source type.
+ *
+ * The fallback used to be `candidate.provider || 'manual'` with no check, so a
+ * Google Drive album was published with source_type 'google_drive', a value no
+ * screen filters on and no tuple contains.
+ */
+function sourceTypeFromProvider(provider: string | null): AlbumSourceType {
+  const valid = ALBUM_SOURCE_TYPES as readonly string[]
+  return provider && valid.includes(provider) ? (provider as AlbumSourceType) : 'manual'
 }
 
 export async function adminPublishAlbum(
@@ -36,7 +64,7 @@ export async function adminPublishAlbum(
     .limit(1)
 
   // Determine discovery source type.
-  let sourceType = 'manual'
+  let sourceType: AlbumSourceType = 'manual'
   if (candidate.submissionId) {
     sourceType = 'manual'
   } else if (candidate.jobId) {
@@ -45,9 +73,9 @@ export async function adminPublishAlbum(
       .from(albumCrawlJobs)
       .where(eq(albumCrawlJobs.id, candidate.jobId))
       .limit(1)
-    sourceType = (job && CONNECTOR_SOURCE_TYPE[job.connector]) || candidate.provider || 'manual'
+    sourceType = (job && CONNECTOR_SOURCE_TYPE[job.connector]) || sourceTypeFromProvider(candidate.provider)
   } else {
-    sourceType = candidate.provider || 'manual'
+    sourceType = sourceTypeFromProvider(candidate.provider)
   }
 
   const meta = (candidate.rawMetadata ?? {}) as AlbumCandidateMetadata

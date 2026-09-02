@@ -9,8 +9,17 @@ import { ClickableRow } from '@/components/admin/clickable-row'
 import { Badge } from '@/components/ui/badge'
 import { confidenceFill } from '@/components/admin/status'
 import { assertAdmin } from '@/lib/admin/auth'
+import { CANDIDATE_STATUSES } from '@the-tool-pit/db'
 
-const STATUS_TABS = ['pending', 'suppressed', 'duplicate'] as const
+/**
+ * One tab per status the candidates table can actually hold.
+ *
+ * It used to list pending, suppressed and duplicate. Nothing writes 'duplicate'
+ * for a tool candidate, so that tab could never fill, and there was no tab at
+ * all for the 1203 PUBLISHED candidates, which is the pile a moderator most
+ * often wants to look back through.
+ */
+const STATUS_TABS = CANDIDATE_STATUSES
 type TabStatus = (typeof STATUS_TABS)[number]
 
 const PAGE_SIZE = 30

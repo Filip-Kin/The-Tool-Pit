@@ -28,6 +28,19 @@ export const ALBUM_PROVIDERS = [
 ] as const
 export type AlbumProvider = (typeof ALBUM_PROVIDERS)[number]
 
+/**
+ * HOW an album reached us, which is not the same question as who hosts it.
+ *
+ * ALBUM_PROVIDERS above answers the hosting question, and the two tuples share
+ * six values, which is why they got confused: the publish path fell back to the
+ * provider whenever it had no mapping for the connector, and wrote whatever it
+ * found. `google_drive` is a provider and not a source type, and production
+ * holds one album with source_type = 'google_drive' today, with 30 more
+ * google_drive candidates, one dropbox and four `other` queued behind it.
+ *
+ * Adding 'toa' because The Orange Alliance is a real connector that had no
+ * source type at all, so its albums took the provider fallback too.
+ */
 export const ALBUM_SOURCE_TYPES = [
   'firstinmichigan',
   'chief_delphi',
@@ -37,6 +50,7 @@ export const ALBUM_SOURCE_TYPES = [
   'pixieset',
   'manual',
   'tba',
+  'toa',
 ] as const
 export type AlbumSourceType = (typeof ALBUM_SOURCE_TYPES)[number]
 

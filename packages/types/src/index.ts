@@ -41,27 +41,13 @@ export interface SearchParams {
   pageSize?: number
 }
 
-export interface SearchResult {
-  id: string
-  slug: string
-  name: string
-  summary: string | null
-  toolType: string
-  isOfficial: boolean
-  isVendor: boolean
-  isRookieFriendly: boolean
-  isTeamCode: boolean
-  teamNumber: number | null
-  seasonYear: number | null
-  programs: string[] // program slugs
-  githubUrl: string | null
-  publicFreshnessLabel: 'Current' | 'Stale' | 'Deprecated' | 'Inactive' | null
-  lastActivityAt: string | null
-  popularityScore: number
-  voteCount: number
-  /** Ranking score (higher = better) - not exposed to UI */
-  _score?: number
-}
+/**
+ * There was a `SearchResult` here with a publicFreshnessLabel on it, and
+ * nothing ever imported it. The shape search actually returns is
+ * SearchResultRow in apps/web/lib/search/search.ts, which hands the raw
+ * freshnessState to the chip. A shared type that no caller uses does not keep
+ * anything in step; it just reads like it does.
+ */
 
 // ---------------------------------------------------------------------------
 // Vote
