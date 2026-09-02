@@ -5,12 +5,18 @@ import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
 import {
   FIELD_CANDIDATE_STATUSES,
+  FIELD_PROGRAMS,
+  FIELD_COVERAGE,
+  FIELD_PERIMETER,
+  FIELD_ELEMENTS,
+  FIELD_AVAILABILITY,
   practiceFieldCandidates,
   practiceFieldCrawlSources,
   practiceFields,
 } from '@the-tool-pit/db'
 import type { FieldCandidateStatus, ExtractedPracticeFieldFields, RawPracticeFieldMetadata } from '@the-tool-pit/db'
 import { ExtractedList, EvidencePanel, StatusTabs } from '../../_listing/candidate-evidence'
+import { CandidateEditor } from '../../_listing/candidate-editor'
 import { ListingCandidateActions } from '../../_listing/candidate-actions'
 import {
   acceptFieldCandidate,
@@ -126,6 +132,7 @@ export default async function FieldCandidatesPage({
             const ex = (row.extracted ?? {}) as ExtractedPracticeFieldFields
             const title = ex.name || meta.title || row.canonicalUrl || row.sourceUrl
             const place = [ex.city, ex.region, ex.country].filter(Boolean).join(', ') || null
+            const ev = meta.readEvidence ?? {}
 
             return (
               <article key={row.id} className="rounded-lg border border-border bg-surface p-4">
@@ -139,61 +146,73 @@ export default async function FieldCandidatesPage({
 
                 {row.rejectionReason && <p className="mt-1 text-xs text-frc">{row.rejectionReason}</p>}
 
-                <div className="mt-3 grid gap-5 md:grid-cols-2">
-                  <ExtractedList
-                    rows={[
-                      ['name', ex.name],
-                      ['team', ex.teamNumber ?? row.teamNumber],
-                      ['team name', ex.teamName],
-                      ['program', ex.program],
-                      ['address', ex.address],
-                      ['place', place],
-                      ['hours', ex.hours],
-                      ['availability', ex.availability],
-                      ['coverage', ex.coverage],
-                      ['perimeter', ex.perimeter],
-                      ['elements', ex.elements],
-                      ['FMS', ex.hasFms === undefined ? null : ex.hasFms ? 'yes' : 'no'],
-                      ['ceiling', ex.ceilingHeightFt ? `${ex.ceilingHeightFt} ft` : null],
-                      ['contact', ex.contactInfo],
-                      ['contact form', ex.contactUrl],
-                      ['website', ex.website],
-                      ['notes', ex.notes],
-                    ]}
-                    evidence={meta.readEvidence}
-                    keys={{
-                      team: 'teamNumber',
-                      'team name': 'teamName',
-                      place: 'city',
-                      FMS: 'hasFms',
-                      ceiling: 'ceilingHeightFt',
-                      contact: 'contactInfo',
-                      'contact form': 'contactUrl',
-                    }}
-                  />
-                  <EvidencePanel
-                    sourceUrl={row.sourceUrl}
-                    canonicalUrl={row.canonicalUrl}
-                    description={meta.description}
-                    discoveredVia={meta.discoveredVia}
-                    evidence={meta.evidence}
-                    signals={meta.signals}
-                    links={meta.links}
-                    readPages={meta.readPages}
-                    readRejected={meta.readRejected}
-                    readAt={meta.readAt}
-                  />
+                <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
+                  <div className="min-w-0 flex-1">
+                    {row.status === 'pending' ? (
+                      <CandidateEditor
+                        candidateId={row.id}
+                        accept={acceptFieldCandidate}
+                        acceptLabel="Accept and publish"
+                        note="Publishes straight away when it has a pin and a way to get in touch. The reader never guesses coordinates, so most of these need the pin from you."
+                        fields={[
+                          { name: 'name', label: 'Name', value: ex.name ?? meta.title ?? '', wide: true, evidence: ev.name },
+                          { name: 'teamNumber', label: 'Team', type: 'number', value: ex.teamNumber ?? row.teamNumber, evidence: ev.teamNumber },
+                          { name: 'teamName', label: 'Team name', value: ex.teamName, evidence: ev.teamName },
+                          { name: 'program', label: 'Program', type: 'select', options: FIELD_PROGRAMS, value: ex.program, evidence: ev.program },
+                          { name: 'address', label: 'Address', value: ex.address, wide: true, evidence: ev.address },
+                          { name: 'city', label: 'City', value: ex.city, evidence: ev.city },
+                          { name: 'region', label: 'State', value: ex.region, evidence: ev.region },
+                          { name: 'country', label: 'Country', value: ex.country, evidence: ev.country },
+                          { name: 'hours', label: 'Hours', value: ex.hours, wide: true, evidence: ev.hours },
+                          { name: 'availability', label: 'Availability', type: 'select', options: FIELD_AVAILABILITY, value: ex.availability, evidence: ev.availability },
+                          { name: 'coverage', label: 'Coverage', type: 'select', options: FIELD_COVERAGE, value: ex.coverage, evidence: ev.coverage },
+                          { name: 'perimeter', label: 'Perimeter', type: 'select', options: FIELD_PERIMETER, value: ex.perimeter, evidence: ev.perimeter },
+                          { name: 'elements', label: 'Elements', type: 'select', options: FIELD_ELEMENTS, value: ex.elements, evidence: ev.elements },
+                          { name: 'hasFms', label: 'Has an FMS', type: 'checkbox', value: ex.hasFms, evidence: ev.hasFms },
+                          { name: 'ceilingHeightFt', label: 'Ceiling (ft)', type: 'number', value: ex.ceilingHeightFt, evidence: ev.ceilingHeightFt },
+                          { name: 'contactInfo', label: 'Contact', value: ex.contactInfo, wide: true, evidence: ev.contactInfo },
+                          { name: 'contactUrl', label: 'Booking link', value: ex.contactUrl, wide: true, evidence: ev.contactUrl },
+                          { name: 'website', label: 'Website', value: ex.website, wide: true, evidence: ev.website },
+                          { name: 'notes', label: 'Notes', type: 'textarea', value: ex.notes, wide: true, evidence: ev.notes },
+                        ]}
+                      />
+                    ) : (
+                      <ExtractedList
+                        rows={[
+                          ['name', ex.name],
+                          ['team', ex.teamNumber ?? row.teamNumber],
+                          ['place', place],
+                          ['hours', ex.hours],
+                          ['contact', ex.contactInfo],
+                        ]}
+                        evidence={meta.readEvidence}
+                        keys={{ team: 'teamNumber', place: 'city', contact: 'contactInfo' }}
+                      />
+                    )}
+                  </div>
+
+                  <div className="min-w-0 lg:w-80 lg:shrink-0">
+                    <EvidencePanel
+                      sourceUrl={row.sourceUrl}
+                      canonicalUrl={row.canonicalUrl}
+                      description={meta.description}
+                      discoveredVia={meta.discoveredVia}
+                      evidence={meta.evidence}
+                      signals={meta.signals}
+                      links={meta.links}
+                      readPages={meta.readPages}
+                      readRejected={meta.readRejected}
+                      readAt={meta.readAt}
+                    />
+                  </div>
                 </div>
 
                 <div className="mt-4 border-t border-border-subtle pt-3">
                   <ListingCandidateActions
                     candidateId={row.id}
                     status={row.status}
-                    defaultName={ex.name || meta.title || ''}
                     matchedLabel={fieldId ? `field: ${fieldName ?? fieldId} (${fieldStatus ?? 'unknown'})` : null}
                     refPlaceholder="field id or team number"
-                    acceptedNote="Creates a pending field. Coverage, perimeter, elements and FMS land on their defaults and are not read from the thread, so set them before publishing."
-                    accept={acceptFieldCandidate}
                     attach={attachFieldCandidate}
                     suppress={suppressFieldCandidate}
                     markDuplicate={markFieldCandidateDuplicate}

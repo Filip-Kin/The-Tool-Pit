@@ -6,6 +6,7 @@ import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
 import { practiceFieldCandidates, practiceFields } from '@the-tool-pit/db'
 import { bumpListingSourceCounter, practiceFieldFromCandidate } from '@/lib/admin/listing-discovery'
+import { fieldPublishBlockers } from '@/lib/fields/publish-bar'
 
 const QUEUE_PATH = '/admin/practice-fields/candidates'
 
@@ -64,7 +65,14 @@ async function findField(ref: string) {
  * of the thread, so a reviewer sets coverage, perimeter, elements and FMS
  * before this can be published.
  */
-export async function acceptFieldCandidate(candidateId: string, name: string): Promise<{ error?: string; fieldId?: string }> {
+/**
+ * Accept a candidate, with whatever the reviewer corrected on the way through.
+ * Same contract as the events queue: what they post wins, a cleared box clears.
+ */
+export async function acceptFieldCandidate(
+  candidateId: string,
+  values: Record<string, string>,
+): Promise<{ error?: string; fieldId?: string; pending?: string }> {
   await assertAdmin()
   const db = getDb()
 
@@ -72,12 +80,33 @@ export async function acceptFieldCandidate(candidateId: string, name: string): P
   if (!candidate) return { error: 'Candidate not found.' }
   if (candidate.matchedFieldId) return { error: 'This candidate is already attached to a field.' }
 
-  const clean = name.trim()
+  const clean = (values.name ?? '').trim()
   if (!clean) return { error: 'Give the field a name before accepting it.' }
+
+  const corrected = { ...(candidate.extracted ?? {}), ...parseFieldValues(values) }
+  candidate.extracted = corrected as typeof candidate.extracted
+
+  // ACCEPT MEANS PUBLISH, the same as it does for an event. The pending queue
+  // is for what the public submitted and nobody has read; a moderator who has
+  // just read this candidate and its quotes should not have to review it again
+  // on another screen.
+  //
+  // The publish bar still applies. A practice field needs a pin and a way to
+  // get in touch, and the reader deliberately does not guess coordinates, so in
+  // practice most of these land as pending with one thing missing. Saying which
+  // is the point.
+  const row = practiceFieldFromCandidate(candidate, clean)
+  const missing = fieldPublishBlockers({
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
+    contactInfo: row.contactInfo ?? null,
+    contactUrl: row.contactUrl ?? null,
+    website: row.website ?? null,
+  })
 
   const [created] = await db
     .insert(practiceFields)
-    .values(practiceFieldFromCandidate(candidate, clean))
+    .values(missing.length === 0 ? { ...row, status: 'published', publishedAt: new Date() } : row)
     .returning({ id: practiceFields.id })
   if (!created) return { error: 'The field was not written. Nothing has changed.' }
 
@@ -88,7 +117,10 @@ export async function acceptFieldCandidate(candidateId: string, name: string): P
   await bumpListingSourceCounter('field', candidate.sourceId, 'yield')
 
   revalidateAll()
-  return { fieldId: created.id }
+  return {
+    fieldId: created.id,
+    pending: missing.length > 0 ? `Saved, not published yet. Add ${missing.join(', and ')}.` : undefined,
+  }
 }
 
 /**
@@ -180,4 +212,30 @@ export async function reopenFieldCandidate(candidateId: string): Promise<{ error
 
   revalidateAll()
   return {}
+}
+
+/** Form strings back into the shape `extracted` holds. An empty box clears. */
+function parseFieldValues(values: Record<string, string>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  const numbers = new Set(['teamNumber', 'ceilingHeightFt'])
+  const booleans = new Set(['hasFms'])
+
+  for (const [key, raw] of Object.entries(values)) {
+    const value = raw.trim()
+    if (booleans.has(key)) {
+      out[key] = value === 'true'
+      continue
+    }
+    if (value === '') {
+      out[key] = undefined
+      continue
+    }
+    if (numbers.has(key)) {
+      const n = Number(value.replace(/[^0-9.]/g, ''))
+      out[key] = Number.isFinite(n) ? Math.round(n) : undefined
+      continue
+    }
+    out[key] = value
+  }
+  return out
 }

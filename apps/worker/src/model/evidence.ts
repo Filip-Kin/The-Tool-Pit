@@ -79,13 +79,59 @@ export function urlSource<S extends string>(
   url: string,
   sources: ReadonlyArray<NamedText<S>>,
 ): S | null {
-  const bare = (u: string) =>
-    u.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '')
-  const needle = bare(url)
+  return urlAsWritten(url, sources)?.source ?? null
+}
+
+/** Every absolute URL in a block of text, in the order it appears. */
+function urlsIn(text: string): string[] {
+  return text.match(/https?:\/\/[^\s"'<>)\]]+/gi) ?? []
+}
+
+const bareUrl = (u: string) =>
+  u.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '')
+
+/**
+ * Where a URL came from, AND how that page actually wrote it.
+ *
+ * The comparison is deliberately loose about scheme, www and a trailing slash,
+ * because those differ between how a page writes a link and how a model copies
+ * it back. That looseness lets a PREFIX through: a model answering
+ * "beachblitz.org/volunteer" matches a page whose link is
+ * "beachblitz.org/volunteer/index.html", and the shorter one is what got
+ * stored. It usually redirects, and "usually" is not good enough for a link a
+ * team is going to click.
+ *
+ * So when the evidence contains a longer URL that starts with the answer, the
+ * evidence wins. The page is the authority on its own links.
+ */
+export function urlAsWritten<S extends string>(
+  url: string,
+  sources: ReadonlyArray<NamedText<S>>,
+): { source: S; url: string } | null {
+  const needle = bareUrl(url)
   if (!needle) return null
+
   for (const { source, text } of sources) {
-    if (text && bare(text).includes(needle)) return source
+    if (!text) continue
+
+    // An exact link on the page, preferred over anything else.
+    const written = urlsIn(text)
+    const exact = written.find((w) => bareUrl(w) === needle)
+    if (exact) return { source, url: exact }
+
+    // A longer link the answer is a prefix of. Shortest such link wins, so
+    // "/volunteer" resolves to "/volunteer/index.html" and not to a page three
+    // levels deeper that happens to share the path.
+    const extensions = written
+      .filter((w) => bareUrl(w).startsWith(needle))
+      .sort((a, b) => bareUrl(a).length - bareUrl(b).length)
+    if (extensions.length > 0) return { source, url: extensions[0] }
+
+    // Present in the prose but not as a link we could isolate. The answer
+    // stands as the model gave it.
+    if (bareUrl(text).includes(needle)) return { source, url }
   }
+
   return null
 }
 

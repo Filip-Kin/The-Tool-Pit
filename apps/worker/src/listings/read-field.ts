@@ -30,7 +30,7 @@ import {
   type ExtractedPracticeFieldFields,
 } from '@the-tool-pit/db'
 import { askWithPages } from '../model/page-reader.js'
-import { parseJsonObject, quoteSource, urlSource, type NamedText } from '../model/evidence.js'
+import { parseJsonObject, quoteSource, urlAsWritten, type NamedText } from '../model/evidence.js'
 
 const SYSTEM_PROMPT = `You are reading one Chief Delphi thread in which a FIRST Robotics team offers other teams the use of their practice field, and writing down the details for a directory.
 
@@ -62,7 +62,8 @@ Fields:
   contactInfo    how to get in touch: an email, or "message @user on the FiM Discord"
   contactUrl     a booking or sign-up form
   website        the team's own site
-  notes          one or two sentences a visiting team would want that no other field holds
+  notes          the poster's OWN sentence that a visiting team would want and no other field
+                 holds, quoted, not summarised. Do not write your own description of the thread.
 
 Do not guess coordinates. Return only the JSON object.`
 
@@ -103,11 +104,20 @@ export function validateFieldRead(
     if (value === null || value === undefined || value === '') continue
 
     const quoteText = typeof quote === 'string' ? quote : ''
-    const source = URL_FIELDS.has(key)
-      ? typeof value === 'string'
-        ? urlSource(value, sources)
-        : null
-      : quoteSource(quoteText, sources, 10)
+
+    // A URL is taken as the page wrote it, not as the model typed it back: an
+    // answer of "/volunteer" against a page linking "/volunteer/index.html" is
+    // a link that usually redirects, and usually is not good enough for a link
+    // somebody is about to click.
+    let checked = value
+    let source: string | null
+    if (URL_FIELDS.has(key)) {
+      const written = typeof value === 'string' ? urlAsWritten(value, sources) : null
+      source = written?.source ?? null
+      if (written) checked = written.url
+    } else {
+      source = quoteSource(quoteText, sources, 10)
+    }
 
     if (!source) {
       rejected.push(`${key}: nothing that was read contains that`)
@@ -134,11 +144,11 @@ export function validateFieldRead(
       }
       fields[key] = Math.round(n)
     } else if (URL_FIELDS.has(key)) {
-      if (typeof value !== 'string' || !/^https?:\/\//i.test(value)) {
-        rejected.push(`${key}: "${String(value)}" is not an absolute URL`)
+      if (typeof checked !== 'string' || !/^https?:\/\//i.test(checked)) {
+        rejected.push(`${key}: "${String(checked)}" is not an absolute URL`)
         continue
       }
-      fields[key] = value
+      fields[key] = checked
     } else {
       if (typeof value !== 'string') {
         rejected.push(`${key}: expected text`)

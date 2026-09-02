@@ -5,12 +5,16 @@ import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
 import {
   EVENT_LISTING_CANDIDATE_STATUSES,
+  EVENT_PROGRAMS,
+  REGISTRATION_STATUSES,
+  VOLUNTEER_STATUSES,
   eventListingCandidates,
   eventListingCrawlSources,
   eventListings,
 } from '@the-tool-pit/db'
 import type { EventListingCandidateStatus, ExtractedEventListingFields, RawEventListingMetadata } from '@the-tool-pit/db'
 import { ExtractedList, EvidencePanel, StatusTabs } from '../../_listing/candidate-evidence'
+import { CandidateEditor } from '../../_listing/candidate-editor'
 import { ListingCandidateActions } from '../../_listing/candidate-actions'
 import {
   acceptEventCandidate,
@@ -127,6 +131,7 @@ export default async function EventCandidatesPage({
             const title = ex.name || meta.title || row.canonicalUrl || row.sourceUrl
             const dates = ex.startDate ? (ex.endDate && ex.endDate !== ex.startDate ? `${ex.startDate} to ${ex.endDate}` : ex.startDate) : null
             const place = [ex.city, ex.region, ex.country].filter(Boolean).join(', ') || null
+            const ev = meta.readEvidence ?? {}
             const cost =
               ex.costUsd !== undefined && ex.costUsd !== null
                 ? `$${ex.costUsd}${ex.costNote ? ` (${ex.costNote})` : ''}`
@@ -144,66 +149,77 @@ export default async function EventCandidatesPage({
 
                 {row.rejectionReason && <p className="mt-1 text-xs text-frc">{row.rejectionReason}</p>}
 
-                <div className="mt-3 grid gap-5 md:grid-cols-2">
-                  <ExtractedList
-                    rows={[
-                      ['name', ex.name],
-                      ['program', ex.program],
-                      ['dates', dates],
-                      ['days', ex.days],
-                      ['venue', ex.venueName],
-                      ['address', ex.address],
-                      ['place', place],
-                      ['host team', ex.hostTeamNumber],
-                      ['capacity', ex.capacity],
-                      ['cost', cost],
-                      ['registration', ex.registrationStatus],
-                      ['volunteers', ex.volunteerStatus],
-                      ['website', ex.website],
-                      ['sign up', ex.registrationUrl],
-                      ['volunteer at', ex.volunteerUrl],
-                      ['contact', ex.contactEmail],
-                      ['notes', ex.notes],
-                      ['TBA key', ex.tbaKey ?? row.tbaKey],
-                    ]}
-                    evidence={meta.readEvidence}
-                    keys={{
-                      dates: 'startDate',
-                      place: 'city',
-                      venue: 'venueName',
-                      'host team': 'hostTeamNumber',
-                      cost: 'costUsd',
-                      registration: 'registrationStatus',
-                      volunteers: 'volunteerStatus',
-                      'sign up': 'registrationUrl',
-                      'volunteer at': 'volunteerUrl',
-                      contact: 'contactEmail',
-                    }}
-                  />
-                  <EvidencePanel
-                    sourceUrl={row.sourceUrl}
-                    canonicalUrl={row.canonicalUrl}
-                    description={meta.description}
-                    discoveredVia={meta.discoveredVia}
-                    evidence={meta.evidence}
-                    links={meta.links}
-                    readPages={meta.readPages}
-                    readRejected={meta.readRejected}
-                    readAt={meta.readAt}
-                  />
+                <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
+                  <div className="min-w-0 flex-1">
+                    {row.status === 'pending' ? (
+                      <CandidateEditor
+                        candidateId={row.id}
+                        accept={acceptEventCandidate}
+                        acceptLabel="Accept and publish"
+                        note="Publishes straight away when it has a pin, a date, a venue, an address, a program and a registration state. Anything short of that is saved and the missing field is named."
+                        fields={[
+                          { name: 'name', label: 'Name', value: ex.name ?? meta.title ?? '', wide: true, evidence: ev.name },
+                          { name: 'program', label: 'Program', type: 'select', options: EVENT_PROGRAMS, value: ex.program, evidence: ev.program },
+                          { name: 'hostTeamNumber', label: 'Host team', type: 'number', value: ex.hostTeamNumber, evidence: ev.hostTeamNumber },
+                          { name: 'startDate', label: 'First day', type: 'date', value: ex.startDate, evidence: ev.startDate },
+                          { name: 'endDate', label: 'Last day', type: 'date', value: ex.endDate, evidence: ev.endDate },
+                          { name: 'venueName', label: 'Venue', value: ex.venueName, wide: true, evidence: ev.venueName },
+                          { name: 'address', label: 'Address', value: ex.address, wide: true, evidence: ev.address },
+                          { name: 'city', label: 'City', value: ex.city, evidence: ev.city },
+                          { name: 'region', label: 'State', value: ex.region, evidence: ev.region },
+                          { name: 'country', label: 'Country', value: ex.country, evidence: ev.country },
+                          { name: 'capacity', label: 'Capacity', type: 'number', value: ex.capacity, evidence: ev.capacity },
+                          { name: 'costUsd', label: 'Cost (USD)', type: 'number', value: ex.costUsd, evidence: ev.costUsd },
+                          { name: 'costNote', label: 'Cost note', value: ex.costNote, evidence: ev.costNote },
+                          { name: 'registrationStatus', label: 'Registration', type: 'select', options: REGISTRATION_STATUSES, value: ex.registrationStatus, evidence: ev.registrationStatus },
+                          { name: 'volunteerStatus', label: 'Volunteers', type: 'select', options: VOLUNTEER_STATUSES, value: ex.volunteerStatus, evidence: ev.volunteerStatus },
+                          { name: 'website', label: 'Website', value: ex.website, wide: true, evidence: ev.website },
+                          { name: 'registrationUrl', label: 'Sign-up link', value: ex.registrationUrl, wide: true, evidence: ev.registrationUrl },
+                          { name: 'volunteerUrl', label: 'Volunteer link', value: ex.volunteerUrl, wide: true, evidence: ev.volunteerUrl },
+                          { name: 'contactEmail', label: 'Contact email', value: ex.contactEmail, wide: true, evidence: ev.contactEmail },
+                          { name: 'notes', label: 'Notes', type: 'textarea', value: ex.notes, wide: true, evidence: ev.notes },
+                          { name: 'tbaKey', label: 'TBA key', value: ex.tbaKey ?? row.tbaKey, evidence: ev.tbaKey },
+                        ]}
+                      />
+                    ) : (
+                      <ExtractedList
+                        rows={[
+                          ['name', ex.name],
+                          ['dates', dates],
+                          ['venue', ex.venueName],
+                          ['place', place],
+                          ['cost', cost],
+                          ['registration', ex.registrationStatus],
+                        ]}
+                        evidence={meta.readEvidence}
+                        keys={{ dates: 'startDate', venue: 'venueName', place: 'city', cost: 'costUsd', registration: 'registrationStatus' }}
+                      />
+                    )}
+                  </div>
+
+                  <div className="min-w-0 lg:w-80 lg:shrink-0">
+                    <EvidencePanel
+                      sourceUrl={row.sourceUrl}
+                      canonicalUrl={row.canonicalUrl}
+                      description={meta.description}
+                      discoveredVia={meta.discoveredVia}
+                      evidence={meta.evidence}
+                      links={meta.links}
+                      readPages={meta.readPages}
+                      readRejected={meta.readRejected}
+                      readAt={meta.readAt}
+                    />
+                  </div>
                 </div>
 
                 <div className="mt-4 border-t border-border-subtle pt-3">
                   <ListingCandidateActions
                     candidateId={row.id}
                     status={row.status}
-                    defaultName={ex.name || meta.title || ''}
                     matchedLabel={
                       listingId ? `listing: ${listingName ?? listingId} (${listingStatus ?? 'unknown'})` : null
                     }
                     refPlaceholder="listing id or TBA key"
-                    acceptedNote="Creates a pending listing. Cost, capacity, registration state and the map pin are still yours to fill in."
-                    accept={acceptEventCandidate}
                     attach={attachEventCandidate}
                     suppress={suppressEventCandidate}
                     markDuplicate={markEventCandidateDuplicate}

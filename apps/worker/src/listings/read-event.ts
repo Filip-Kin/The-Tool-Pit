@@ -33,7 +33,7 @@ import {
   type EventFieldEvidence,
 } from '@the-tool-pit/db'
 import { askWithPages } from '../model/page-reader.js'
-import { parseJsonObject, quoteSource, urlSource, type NamedText } from '../model/evidence.js'
+import { parseJsonObject, quoteSource, urlAsWritten, type NamedText } from '../model/evidence.js'
 
 const SYSTEM_PROMPT = `You are reading one off-season FIRST Robotics competition and writing down its details for a directory.
 
@@ -61,13 +61,26 @@ Fields:
   capacity          integer, how many teams can enter
   costUsd           integer US dollars per team to enter, so 250 for "$250 per team"
   costNote          the fee in the source's own words when it is not a plain number
-  registrationStatus  one of ${REGISTRATION_STATUSES.map((s) => `"${s}"`).join(', ')}
-  volunteerStatus     one of ${VOLUNTEER_STATUSES.map((s) => `"${s}"`).join(', ')}
+  registrationStatus  where team sign-ups have got to. These are four different things and the
+                    difference matters to a team deciding whether to act today:
+                      "not_open"  sign-ups have not started. "Save the date", "applications open in
+                                  a couple of weeks", "registration opens 1 September"
+                      "open"      a team can sign up right now
+                      "waitlist"  full, but still taking names
+                      "closed"    sign-ups have ENDED, or the field is full and no list is being kept.
+                                  "Applications closed", "accepted teams were notified in August"
+                      "unknown"   nothing you read says
+                    Never answer "closed" for an event whose sign-ups have not opened yet.
+  volunteerStatus     one of ${VOLUNTEER_STATUSES.map((s) => `"${s}"`).join(', ')}, same distinction:
+                    "not_open" is a sign-up that has not started, not one that has finished
   registrationUrl   where a team signs up
   volunteerUrl      where a volunteer signs up
   website           the event's own site
   contactEmail      an email address for the organisers
-  notes             one or two sentences a reader would want that no other field holds
+  notes             the source's OWN sentence that a reader would want and no other field holds,
+                    quoted, not summarised. If the thread says "More information and registration
+                    will arrive soon, so be sure to bookmark this thread", that IS the note. Do not
+                    write your own description of what the thread did or did not say.
 
 Return only the JSON object.`
 
@@ -114,11 +127,20 @@ export function validateEventRead(
     if (value === null || value === undefined || value === '') continue
 
     const quoteText = typeof quote === 'string' ? quote : ''
-    const source = URL_FIELDS.has(key)
-      ? typeof value === 'string'
-        ? urlSource(value, sources)
-        : null
-      : quoteSource(quoteText, sources, 10)
+
+    // A URL is taken as the page wrote it, not as the model typed it back: an
+    // answer of "/volunteer" against a page linking "/volunteer/index.html" is
+    // a link that usually redirects, and usually is not good enough for a link
+    // somebody is about to click.
+    let checked = value
+    let source: string | null
+    if (URL_FIELDS.has(key)) {
+      const written = typeof value === 'string' ? urlAsWritten(value, sources) : null
+      source = written?.source ?? null
+      if (written) checked = written.url
+    } else {
+      source = quoteSource(quoteText, sources, 10)
+    }
 
     if (!source) {
       rejected.push(`${key}: nothing that was read contains that`)
@@ -145,11 +167,11 @@ export function validateEventRead(
       }
       fields[key] = value
     } else if (URL_FIELDS.has(key)) {
-      if (typeof value !== 'string' || !/^https?:\/\//i.test(value)) {
-        rejected.push(`${key}: "${String(value)}" is not an absolute URL`)
+      if (typeof checked !== 'string' || !/^https?:\/\//i.test(checked)) {
+        rejected.push(`${key}: "${String(checked)}" is not an absolute URL`)
         continue
       }
-      fields[key] = value
+      fields[key] = checked
     } else {
       if (typeof value !== 'string') {
         rejected.push(`${key}: expected text`)

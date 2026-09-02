@@ -4,16 +4,16 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
 /**
- * The ways a discovered lead leaves the queue, for both listing verticals.
+ * The ways a lead leaves the queue OTHER than being accepted.
  *
- * Off-season events and practice fields moderate identically, so the buttons
- * are one component and the two routes pass their own server actions in. The
- * copy differs only where the verticals genuinely differ, which is what a
- * reference to an existing row looks like.
+ * Accepting lives in CandidateEditor, because accepting now means correcting
+ * the values first and then publishing, and that needs the whole record on
+ * screen rather than one name box. What is left here is the three ways a lead
+ * leaves without becoming a listing of its own: attach it to something we
+ * already have, mark it a duplicate, or suppress it.
  *
- * Accept writes a PENDING row, never a published one. The name sits in a box
- * because both target tables have a NOT NULL name and a connector that could
- * not read one leaves it blank rather than inventing it.
+ * Off-season events and practice fields moderate identically, so this is one
+ * component and the two routes pass their own server actions in.
  */
 
 type Decision = (candidateId: string, arg: string) => Promise<{ error?: string }>
@@ -21,11 +21,8 @@ type Decision = (candidateId: string, arg: string) => Promise<{ error?: string }
 export function ListingCandidateActions({
   candidateId,
   status,
-  defaultName,
   matchedLabel,
   refPlaceholder,
-  acceptedNote,
-  accept,
   attach,
   suppress,
   markDuplicate,
@@ -33,14 +30,9 @@ export function ListingCandidateActions({
 }: {
   candidateId: string
   status: string
-  /** Prefills the name box: the extracted name, or the page title behind it. */
-  defaultName: string
   /** What this candidate ended up as, shown once it has been accepted or attached. */
   matchedLabel: string | null
   refPlaceholder: string
-  /** One line telling the reviewer what accepting does not fill in. */
-  acceptedNote: string
-  accept: Decision
   attach: Decision
   suppress: Decision
   markDuplicate: Decision
@@ -49,7 +41,6 @@ export function ListingCandidateActions({
   const router = useRouter()
   const [pending, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const [name, setName] = useState(defaultName)
   const [ref, setRef] = useState('')
   const [reason, setReason] = useState('')
 
@@ -62,33 +53,11 @@ export function ListingCandidateActions({
     })
   }
 
-  const open = status === 'pending'
+  // `open` was only used by the accept block, which now lives in CandidateEditor.
   const decided = status === 'suppressed' || status === 'duplicate'
 
   return (
     <div className="flex w-full flex-col gap-2">
-      {open && (
-        <>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Name for the listing"
-              className="min-w-0 flex-1 rounded border border-border bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
-            />
-            <button
-              disabled={pending || !name.trim()}
-              title={name.trim() ? 'Create a pending row from this lead' : 'It needs a name first'}
-              onClick={() => run(() => accept(candidateId, name))}
-              className="rounded bg-primary/20 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/35 disabled:opacity-40"
-            >
-              {pending ? '…' : 'Accept into listing'}
-            </button>
-          </div>
-          <p className="text-[10px] text-muted-2">{acceptedNote}</p>
-        </>
-      )}
-
       {matchedLabel && <p className="text-xs text-rookie">{matchedLabel}</p>}
 
       {status !== 'published' && (

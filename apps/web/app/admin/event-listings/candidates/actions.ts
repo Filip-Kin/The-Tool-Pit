@@ -6,6 +6,7 @@ import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
 import { eventListingCandidates, eventListings } from '@the-tool-pit/db'
 import { bumpListingSourceCounter, eventListingFromCandidate } from '@/lib/admin/listing-discovery'
+import { eventPublishBlockers } from '@/lib/events/publish-bar'
 
 const QUEUE_PATH = '/admin/event-listings/candidates'
 
@@ -59,7 +60,18 @@ async function findListing(ref: string) {
  * inventing one. The reviewer confirms it; everything else is copied off
  * `extracted` verbatim.
  */
-export async function acceptEventCandidate(candidateId: string, name: string): Promise<{ error?: string; listingId?: string }> {
+/**
+ * Accept a candidate, with whatever the reviewer corrected on the way through.
+ *
+ * The values come off the review form, so a wrong venue is fixed by typing in
+ * the box next to the quote that produced it, not by accepting a listing and
+ * then hunting for it on another screen. What the reviewer posts wins over what
+ * the reader found; a field they cleared is cleared.
+ */
+export async function acceptEventCandidate(
+  candidateId: string,
+  values: Record<string, string>,
+): Promise<{ error?: string; listingId?: string; pending?: string }> {
   await assertAdmin()
   const db = getDb()
 
@@ -67,12 +79,39 @@ export async function acceptEventCandidate(candidateId: string, name: string): P
   if (!candidate) return { error: 'Candidate not found.' }
   if (candidate.matchedListingId) return { error: 'This candidate is already attached to a listing.' }
 
-  const clean = name.trim()
+  const clean = (values.name ?? '').trim()
   if (!clean) return { error: 'Give the event a name before accepting it.' }
+
+  // The reviewer's edits, folded onto the candidate before it is mapped.
+  const corrected = { ...(candidate.extracted ?? {}), ...parseEventValues(values) }
+  candidate.extracted = corrected as typeof candidate.extracted
+
+  // ACCEPT MEANS PUBLISH. A moderator reading the candidate, checking the
+  // quotes and pressing Accept IS the review, and sending it to the pending
+  // queue afterwards asked them to review the same event twice. That queue is
+  // for listings the public submitted, which nobody has looked at yet.
+  //
+  // The publish bar still applies, because it is what stops a half-filled row
+  // reaching the map. A candidate that does not clear it is written as pending
+  // and the reviewer is told exactly which field is missing.
+  const row = eventListingFromCandidate(candidate, clean)
+  const missing = eventPublishBlockers({
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
+    startDate: row.startDate ?? null,
+    venueName: row.venueName ?? null,
+    address: row.address ?? null,
+    program: row.program ?? null,
+    registrationStatus: row.registrationStatus ?? null,
+  })
 
   const [created] = await db
     .insert(eventListings)
-    .values(eventListingFromCandidate(candidate, clean))
+    .values(
+      missing.length === 0
+        ? { ...row, status: 'published', publishedAt: new Date() }
+        : row,
+    )
     .returning({ id: eventListings.id })
   if (!created) return { error: 'The listing was not written. Nothing has changed.' }
 
@@ -83,7 +122,12 @@ export async function acceptEventCandidate(candidateId: string, name: string): P
   await bumpListingSourceCounter('event', candidate.sourceId, 'yield')
 
   revalidateAll()
-  return { listingId: created.id }
+  return {
+    listingId: created.id,
+    // Not an error: the listing exists either way. This is the difference
+    // between "it is on the map" and "it needs one more thing from you".
+    pending: missing.length > 0 ? `Saved, not published yet. Add ${missing.join(', and ')}.` : undefined,
+  }
 }
 
 /**
@@ -180,4 +224,31 @@ export async function reopenEventCandidate(candidateId: string): Promise<{ error
 
   revalidateAll()
   return {}
+}
+
+/**
+ * Form strings back into the shape `extracted` holds.
+ *
+ * An empty box means "cleared", so it becomes undefined and the mapping leaves
+ * the column null. That is the difference between a reviewer deleting a wrong
+ * venue and a reviewer never touching it.
+ */
+function parseEventValues(values: Record<string, string>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  const numbers = new Set(['hostTeamNumber', 'capacity', 'costUsd', 'days'])
+
+  for (const [key, raw] of Object.entries(values)) {
+    const value = raw.trim()
+    if (value === '') {
+      out[key] = undefined
+      continue
+    }
+    if (numbers.has(key)) {
+      const n = Number(value.replace(/[^0-9.]/g, ''))
+      out[key] = Number.isFinite(n) ? Math.round(n) : undefined
+      continue
+    }
+    out[key] = value
+  }
+  return out
 }

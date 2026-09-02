@@ -12,8 +12,14 @@
  * because a blank is a question a reviewer will answer and a wrong value is one
  * they will not think to ask.
  */
-import { EVENT_PROGRAMS } from '@the-tool-pit/db/event-enums'
-import { FIELD_PROGRAMS } from '@the-tool-pit/db/field-enums'
+import { EVENT_PROGRAMS, REGISTRATION_STATUSES, VOLUNTEER_STATUSES } from '@the-tool-pit/db/event-enums'
+import {
+  FIELD_PROGRAMS,
+  FIELD_COVERAGE,
+  FIELD_PERIMETER,
+  FIELD_ELEMENTS,
+  FIELD_AVAILABILITY,
+} from '@the-tool-pit/db/field-enums'
 import type {
   EventListingCandidate,
   ExtractedEventListingFields,
@@ -47,6 +53,16 @@ function teamNumber(v: number | undefined | null): number | null {
   return typeof v === 'number' && Number.isInteger(v) && v > 0 && v < 100_000 ? v : null
 }
 
+/** A whole number, or null. Anything else the reader offered is not a count. */
+function intOrNull(v: number | undefined | null): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null
+}
+
+/** A value that is in the tuple, or undefined so the column default applies. */
+function inEnum(v: string | undefined | null, allowed: readonly string[]): string | undefined {
+  return v && allowed.includes(v) ? v : undefined
+}
+
 function program(v: string | undefined, allowed: readonly string[]): string {
   return v && allowed.includes(v) ? v : 'frc'
 }
@@ -69,7 +85,13 @@ export function eventListingFromCandidate(
   // not read a chiefDelphiUrl out of the post, because the thread IS the only
   // pointer a lot of these events have.
   const cdFallback = /^https?:\/\/(www\.)?chiefdelphi\.com\//i.test(candidate.sourceUrl) ? candidate.sourceUrl : null
-  const days = ex.days === 1 || ex.days === 2 ? ex.days : null
+
+  // Days from the dates when the source did not say. A two-day event whose
+  // listing says nothing reads as a one-day event to anybody scanning the map.
+  const start = isoDate(ex.startDate)
+  const end = isoDate(ex.endDate)
+  const spanned = start && end ? Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000) + 1 : null
+  const days = ex.days === 1 || ex.days === 2 ? ex.days : spanned === 1 || spanned === 2 ? spanned : null
 
   return {
     name,
@@ -80,11 +102,24 @@ export function eventListingFromCandidate(
     city: text(ex.city),
     region: text(ex.region),
     country: text(ex.country),
-    startDate: isoDate(ex.startDate),
-    endDate: isoDate(ex.endDate),
+    startDate: start,
+    endDate: end,
     days,
+    // EVERYTHING THE READER FOUND, not a subset. This mapping listed eleven
+    // fields and was written when `extracted` had eleven. The reader fills
+    // twenty, so accepting a candidate quietly threw away the cost, the
+    // capacity, the registration state, the volunteer link and the contact,
+    // which are exactly the fields a person would otherwise retype by hand.
+    capacity: intOrNull(ex.capacity),
+    costUsd: intOrNull(ex.costUsd),
+    costNote: text(ex.costNote),
+    registrationStatus: inEnum(ex.registrationStatus, REGISTRATION_STATUSES) ?? 'unknown',
+    volunteerStatus: inEnum(ex.volunteerStatus, VOLUNTEER_STATUSES) ?? 'unknown',
+    contactEmail: text(ex.contactEmail),
+    notes: text(ex.notes),
     website: url(ex.website),
     registrationUrl: url(ex.registrationUrl),
+    volunteerUrl: url(ex.volunteerUrl),
     chiefDelphiUrl: url(ex.chiefDelphiUrl) ?? cdFallback,
     tbaKey: text(ex.tbaKey ?? candidate.tbaKey)?.toLowerCase() ?? null,
     source: 'scrape',
@@ -112,9 +147,24 @@ export function practiceFieldFromCandidate(
     teamNumber: teamNumber(ex.teamNumber ?? candidate.teamNumber),
     teamName: text(ex.teamName),
     program: program(ex.program, FIELD_PROGRAMS),
+    address: text(ex.address),
     city: text(ex.city),
     region: text(ex.region),
     country: text(ex.country),
+    // The spec, WHEN THE READER FOUND IT WITH A QUOTE BEHIND IT. The comment
+    // above used to say these are never set, and it was right about a regex:
+    // "full field" in a thread may be what the poster wants. It is not right
+    // about a reader that quotes the sentence, and a reviewer sees that
+    // sentence next to the value before publishing.
+    coverage: inEnum(ex.coverage, FIELD_COVERAGE) ?? undefined,
+    perimeter: inEnum(ex.perimeter, FIELD_PERIMETER) ?? undefined,
+    elements: inEnum(ex.elements, FIELD_ELEMENTS) ?? undefined,
+    availability: inEnum(ex.availability, FIELD_AVAILABILITY) ?? undefined,
+    hasFms: typeof ex.hasFms === 'boolean' ? ex.hasFms : undefined,
+    ceilingHeightFt: intOrNull(ex.ceilingHeightFt),
+    hours: text(ex.hours),
+    contactInfo: text(ex.contactInfo),
+    notes: text(ex.notes),
     website: url(ex.website),
     contactUrl: url(ex.contactUrl),
     source: 'scrape',
