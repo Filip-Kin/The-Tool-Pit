@@ -50,6 +50,7 @@ import {
   type GrantTriState,
 } from '@the-tool-pit/db'
 import { parseLooseDate } from './extract.js'
+import { GRANT_AWARD_MAX } from '@the-tool-pit/db/grant-enums'
 
 /** Bumped when the field set changes, so an old row reads as old. */
 export const GRANT_EXTRACTION_VERSION = 1
@@ -285,7 +286,7 @@ export function awardIntegersFromPhrase(phrase: string): AwardPhraseRead {
 // #region value validation
 
 /** Above this it is a phone number or a page id, not an award. */
-const MAX_AWARD = 100_000_000
+const MAX_AWARD = GRANT_AWARD_MAX
 
 function yearWindow(): { min: number; max: number } {
   const now = new Date().getUTCFullYear()
@@ -671,12 +672,12 @@ FIELDS
   awardCurrency             ISO code, e.g. "USD", "CAD"
   awardPhrase               the funder's OWN WORDS about the amount, verbatim and short: "varies", "up to $5,000 in kind", "typically $500 to $2,000 per team". Fill this even when there is no number at all. This is the field a team reads.
   renewable                 yes/no/unknown: can a team apply again in a later cycle
-  effortLevel               "low", "medium", "high" or "unknown": how big the application is
-  geoScope                  "international", "national", "state", "region" or "local"
+  effortLevel               ${GRANT_EFFORT_LEVELS.map((v) => `"${v}"`).join(', ')}: how big the application is
+  geoScope                  ${GRANT_GEO_SCOPES.map((v) => `"${v}"`).join(', ')}
   countries                 ISO 3166-1 alpha-2 codes, e.g. ["US","CA"]
   regions                   state or province codes, e.g. ["MI","OH"]
   localityNote              a county or metro that has no code
-  deadlineType              "fixed", "annual_window", "rolling" or "unknown"
+  deadlineType              ${GRANT_DEADLINE_TYPES.map((v) => `"${v}"`).join(', ')}
   cycleYear                 integer, the calendar year the round CLOSES in
   opensAt                   "YYYY-MM-DD" when applications open
   deadlineAt                "YYYY-MM-DD", or a full instant WITH an offset ("2027-03-01T23:59:00-05:00") ONLY when the text gives both a time and a named timezone

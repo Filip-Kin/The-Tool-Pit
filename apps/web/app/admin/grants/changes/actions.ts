@@ -52,6 +52,15 @@ export async function applyGrantChange(changeId: string, confirmed: boolean): Pr
   }
   const { target, cycleYear } = resolved
 
+  // An advisory change has no column to write. It is a prompt to go and read
+  // something, not a value to apply, and saying so is more useful than the old
+  // "fix the extractor", which blamed the one part that was working.
+  if (target.advisory) {
+    return {
+      error: `${target.label} changed on the funder's page. There is no field to apply it to: open the grant's requirements, check them against the new wording, then dismiss this.`,
+    }
+  }
+
   if (target.priority === 0 && !confirmed) {
     return { error: 'Tick the confirmation first. This one moves a date that teams plan around.' }
   }

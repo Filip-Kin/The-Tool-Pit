@@ -144,7 +144,17 @@ export const ALERT_CHANNELS = ['email', 'push'] as const
 export type AlertChannel = (typeof ALERT_CHANNELS)[number]
 
 /** Why we are pinging someone. */
-export const ALERT_KINDS = ['new_match', 'deadline', 'grant_change', 'watch_update', 'digest'] as const
+/**
+ * NO 'digest'. Nothing queued one and nothing rendered one, so a digest alert
+ * would have reached the outbox and parked there with "no email body for kind
+ * 'digest'". A value in an enum that no producer writes and no consumer handles
+ * is not a feature waiting to be finished, it is a runtime error waiting for a
+ * caller. Add it back when something sends one.
+ *
+ * 'watch_update' is the other way round and stays: it has a renderer and no
+ * producer yet, which fails safely.
+ */
+export const ALERT_KINDS = ['new_match', 'deadline', 'grant_change', 'watch_update'] as const
 export type AlertKind = (typeof ALERT_KINDS)[number]
 
 /**
@@ -233,3 +243,19 @@ export const GRANT_REJECTION_KIND_LABELS: Record<GrantRejectionKind, string> = {
   duplicate: 'Already in the directory',
   out_of_scope: 'Real funding, but not for youth STEM teams',
 }
+
+/**
+ * What a team grant can plausibly be worth, in whole currency units.
+ *
+ * ONE PAIR OF BOUNDS, because there were two. The candidate extractor and the
+ * classifier accepted anything up to 100,000,000 while the monitor's re-read of
+ * the same page dropped anything over 5,000,000, so an award the first pass
+ * recorded could vanish on the second with nothing logged. Producer and
+ * consumer disagreeing by a factor of twenty.
+ *
+ * 5,000,000 is the honest ceiling for this directory: past that it is a capital
+ * campaign total or a typo, not something a FIRST team applies for. 50 is the
+ * floor, below which a number on a funder's page is a fee or a page number.
+ */
+export const GRANT_AWARD_MIN = 50
+export const GRANT_AWARD_MAX = 5_000_000

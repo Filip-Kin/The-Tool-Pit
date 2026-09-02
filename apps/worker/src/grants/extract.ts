@@ -19,6 +19,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { anthropic } from '../anthropic.js'
 import type { ExtractedGrantFields } from '@the-tool-pit/db'
+import { GRANT_AWARD_MIN, GRANT_AWARD_MAX } from '@the-tool-pit/db/grant-enums'
 
 /** Cheapest model that reliably returns clean JSON. Same one classify.ts uses. */
 const EXTRACT_MODEL = 'claude-haiku-4-5-20251001'
@@ -312,7 +313,7 @@ function parseAmount(raw: string, suffix?: string): number | null {
       ? base * 1_000_000
       : base
   // Anything past this is a capital campaign total or a typo, not a team grant.
-  if (value < 50 || value > 5_000_000) return null
+  if (value < GRANT_AWARD_MIN || value > GRANT_AWARD_MAX) return null
   return Math.round(value)
 }
 
@@ -542,7 +543,7 @@ function clampAmount(value: unknown): number | null | undefined {
   if (value === null) return null
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
   const rounded = Math.round(value)
-  return rounded >= 50 && rounded <= 5_000_000 ? rounded : undefined
+  return rounded >= GRANT_AWARD_MIN && rounded <= GRANT_AWARD_MAX ? rounded : undefined
 }
 
 /** Accept a date only if it parses and lands in the plausible window. */

@@ -298,6 +298,18 @@ export interface ChangeTarget {
    * summary.
    */
   priority: 0 | 1 | 2
+  /**
+   * A change with no column behind it.
+   *
+   * The monitor files an `eligibilityText` change when a funder's eligibility
+   * wording moves. That is worth a human's attention and there is nowhere to
+   * write it: eligibility is not a grant column, it is rows in
+   * grant_requirements. The field was absent from this map entirely, so the
+   * screen told the reviewer "not a field this screen knows how to apply,
+   * dismiss it and fix the extractor" for a change the extractor was right to
+   * file. Producer and consumer disagreed, and the message blamed the producer.
+   */
+  advisory?: true
 }
 
 const GRANT_CHANGE_TARGETS: Record<string, ChangeTarget> = {
@@ -318,6 +330,16 @@ const GRANT_CHANGE_TARGETS: Record<string, ChangeTarget> = {
   regions: { table: 'grant', column: 'regions', type: 'string_array', label: 'Regions', priority: 1 },
   localityNote: { table: 'grant', column: 'localityNote', type: 'text', label: 'Locality note', priority: 2 },
   programs: { table: 'grant', column: 'programs', type: 'string_array', label: 'Programs', priority: 1 },
+  eligibilityText: {
+    table: 'grant',
+    // No column. See `advisory` above: the reviewer re-reads the requirements
+    // and edits those rows, and this change is then dismissed.
+    column: '',
+    type: 'text',
+    label: 'Eligibility wording',
+    priority: 1,
+    advisory: true,
+  },
 }
 
 const CYCLE_CHANGE_TARGETS: Record<string, ChangeTarget> = {

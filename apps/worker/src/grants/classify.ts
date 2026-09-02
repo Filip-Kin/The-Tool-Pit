@@ -29,6 +29,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { anthropic } from '../anthropic.js'
 import type { SuppressionExample } from './suppression-feedback.js'
 import { formatSuppressionExamples } from './suppression-feedback.js'
+import { GRANT_AWARD_MAX } from '@the-tool-pit/db/grant-enums'
 import {
   GRANT_PROGRAMS,
   GRANT_GEO_SCOPES,
@@ -350,7 +351,7 @@ Return a JSON object with these fields:
 - regions: array of state or province codes, e.g. ["MI","OH"]. REQUIRED whenever geoScope is narrower than national. Empty if the page does not say.
 - awardMin: integer or null - smallest award in the page's currency, digits only
 - awardMax: integer or null - largest award, digits only. If a single figure is given, put it in awardMax and leave awardMin null.
-- deadlineType: one of "fixed","annual_window","rolling","unknown". Use "unknown" freely, never guess.
+- deadlineType: one of ${GRANT_DEADLINE_TYPES.map((v) => `"${v}"`).join(', ')}. Use "unknown" freely, never guess.
 - confidence: 0.0 to 1.0, how sure you are that a team could apply for this
 - reasoning: one or two sentences naming the evidence you used, including the rejection rule number when you rejected
 
@@ -408,7 +409,7 @@ const VALID_GEO_SCOPES = new Set<string>(GRANT_GEO_SCOPES)
 const VALID_DEADLINE_TYPES = new Set<string>(GRANT_DEADLINE_TYPES)
 
 /** A plausible award figure. Above this it is a phone number or a page ID. */
-const MAX_AWARD = 100_000_000
+const MAX_AWARD = GRANT_AWARD_MAX
 
 /** Ceiling applied to a rejection that came back with a high confidence. */
 const CONTRADICTORY_CONFIDENCE_CAP = 0.5
