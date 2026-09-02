@@ -33,7 +33,7 @@ const LINK_CONFIG: Record<string, { icon: React.ElementType; label: string; prom
   docs: { icon: BookOpen, label: 'Documentation' },
   issues: { icon: Bug, label: 'Issue Tracker' },
   changelog: { icon: FileText, label: 'Changelog' },
-  forum: { icon: MessageCircle, label: 'Chief Delphi' },
+  forum: { icon: MessageCircle, label: 'Chief Delphi', prominent: true },
   other: { icon: ExternalLink, label: 'Link' },
   source: { icon: ExternalLink, label: 'Source' },
 }
@@ -68,11 +68,21 @@ export function ToolDetail({ tool, voted = false, favorited = false, claimState 
   // than in the database keeps the roles the crawler found while showing each
   // destination once.
   const seen = new Set<string>()
-  // github is considered first so a repo that is also the homepage keeps the
-  // "View source" button rather than becoming a generic homepage link.
+  // The three places a reader actually goes: the source, the project's own
+  // page, and the Chief Delphi thread where it was announced and argued about.
+  // The forum link used to sit below with the odds and ends, which buried the
+  // one link that tells you whether anyone liked the thing.
+  //
+  // Ordered, not sorted by chance: github first so a repo that is also the
+  // homepage keeps the "View source" treatment rather than becoming a generic
+  // homepage link, then homepage, then forum.
+  const PROMINENT_ORDER = ['github', 'homepage', 'forum'] as const
+  const isProminent = (t: string): t is (typeof PROMINENT_ORDER)[number] =>
+    (PROMINENT_ORDER as readonly string[]).includes(t)
+
   const prominentLinks = tool.links
-    .filter((l) => !l.isBroken && (l.linkType === 'github' || l.linkType === 'homepage'))
-    .sort((a, b) => (a.linkType === 'github' ? -1 : b.linkType === 'github' ? 1 : 0))
+    .filter((l) => !l.isBroken && isProminent(l.linkType))
+    .sort((a, b) => PROMINENT_ORDER.indexOf(a.linkType as never) - PROMINENT_ORDER.indexOf(b.linkType as never))
     .filter((l) => {
       const key = normalizeUrl(l.url)
       if (seen.has(key)) return false
@@ -81,7 +91,7 @@ export function ToolDetail({ tool, voted = false, favorited = false, claimState 
     })
   const otherLinks = tool.links.filter((l) => {
     if (l.isBroken) return false
-    if (l.linkType === 'github' || l.linkType === 'homepage') return false
+    if (isProminent(l.linkType)) return false
     const key = normalizeUrl(l.url)
     if (seen.has(key)) return false
     seen.add(key)
