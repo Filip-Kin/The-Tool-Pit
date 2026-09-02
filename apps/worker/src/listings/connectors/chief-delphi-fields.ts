@@ -35,6 +35,7 @@ import {
   extractOutboundLinks,
   looksLikeRegistrationUrl,
   matchedPhrases,
+  phrasesInSameSentence,
   parseProgramFromTitle,
   parseTeamNumberFromTitle,
   withinRecencyWindow,
@@ -73,11 +74,27 @@ const FIELD_WORDS = [
   'open field', 'practice facility', 'field available', 'our field',
 ]
 
-/** And it has to be OFFERING one. */
+/**
+ * And it has to be OFFERING one, in words that mean an offer.
+ *
+ * This list used to hold 'available', 'welcome', 'reach out', 'let us know' and
+ * 'any team' as bare words, which appear in most forum threads ever written.
+ * Combined with a field word anywhere else in the same search blurb, that let
+ * through a blog post about algae, a thread about team churn rate by region and
+ * a discussion of how the California districts went. Two of nine candidates in
+ * the first live run were real.
+ *
+ * Phrases now, not words, and they have to sit NEXT TO the field phrase. See
+ * phrasesNear in shared.ts.
+ */
 const OFFER_WORDS = [
-  'available', 'open to', 'welcome', 'come practice', 'offering', 'happy to host',
-  'hosting', 'invite', 'use our', 'sign up', 'free to use', 'reach out',
-  'let us know', 'any team',
+  'is available', 'are available', 'available to any', 'available to teams',
+  'available for teams', 'available to other', 'open to any', 'open to teams',
+  'open to other', 'open house', 'come practice', 'come and practice',
+  'offering', 'happy to host', 'happy to share', 'hosting a practice',
+  'welcome to use', 'welcome to come', 'you can use our', 'use our field',
+  'use our practice', 'free to use', 'sign up for a slot', 'sign up for time',
+  'booking', 'reserve a time', 'reach out if you want to practice',
 ]
 
 /**
@@ -130,6 +147,7 @@ export class ChiefDelphiFieldsConnector implements PracticeFieldConnector {
     let topicFetchesWanted = 0
     let tooOld = 0
     let looksLikeRequest = 0
+    let notAnOffer = 0
 
     for (const query of queries) {
       const outcome = await searchChiefDelphi(query)
@@ -155,11 +173,9 @@ export class ChiefDelphiFieldsConnector implements PracticeFieldConnector {
           skipped++
           continue
         }
+        // Cheap gate on the search blurb, only to decide whether the post is
+        // worth fetching. The real test is below, against the post itself.
         if (matchedPhrases(haystack, FIELD_WORDS).length === 0) {
-          skipped++
-          continue
-        }
-        if (matchedPhrases(haystack, OFFER_WORDS).length === 0) {
           skipped++
           continue
         }
@@ -181,6 +197,20 @@ export class ChiefDelphiFieldsConnector implements PracticeFieldConnector {
         const fullText = `${topic.title} ${postText}`.toLowerCase()
         if (NEGATIVE_PHRASES.some((p) => fullText.includes(p))) {
           looksLikeRequest++
+          skipped++
+          continue
+        }
+
+        // THE REAL GATE. A field phrase and an offer phrase in the SAME
+        // SENTENCE, in the post rather than in a search blurb. Matching them
+        // anywhere in the same document is what filed a blog post about algae.
+        const offer = phrasesInSameSentence(fullText, FIELD_WORDS, OFFER_WORDS)
+        if (!offer) {
+          // Includes the case where the fetch budget ran out and there is no
+          // post text to read. Skipping is the right way to be wrong: a missed
+          // field is one a person can still add, and a queue full of noise is
+          // how a reviewer stops opening the queue.
+          notAnOffer++
           skipped++
           continue
         }
@@ -232,6 +262,11 @@ export class ChiefDelphiFieldsConnector implements PracticeFieldConnector {
     if (looksLikeRequest > 0) {
       limits.push(
         `${looksLikeRequest} threads read as asking FOR a field rather than offering one and were dropped; that filter is a phrase list, so it will be wrong in both directions sometimes`,
+      )
+    }
+    if (notAnOffer > 0) {
+      limits.push(
+        `${notAnOffer} threads mentioned a field but never offered one in the same sentence, and were dropped; some of those are real offers phrased in a way this phrase list does not know`,
       )
     }
 

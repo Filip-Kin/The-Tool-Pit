@@ -264,3 +264,42 @@ export function matchedPhrases(haystack: string, phrases: string[]): string[] {
   const lower = haystack.toLowerCase()
   return phrases.filter((p) => lower.includes(p))
 }
+
+/**
+ * Two phrase lists that both match IN THE SAME SENTENCE.
+ *
+ * "Somewhere in this thread there is the word field, and somewhere else there
+ * is the word available" is not evidence of anything. The first live run of the
+ * practice-field connector filed nine candidates and two were real. The seven
+ * that were not included a blog post about algae, a thread on team churn rate
+ * by region, and a discussion of how the California districts went. Every one
+ * mentions a field somewhere and something like "available" somewhere else.
+ *
+ * A SENTENCE, not a character window. I tried 120 characters first and it still
+ * accepted "...mentioned their practice field briefly. On a separate note the
+ * new sensor is available to any team...", which is 58 characters apart and two
+ * unrelated thoughts. Tightening the number would eventually exclude it and
+ * would start excluding real offers at the same rate, because the thing that
+ * makes it wrong is the full stop, not the distance.
+ *
+ * Returns the matched pair, for the reviewer's evidence list.
+ */
+export function phrasesInSameSentence(
+  haystack: string,
+  subjects: string[],
+  qualifiers: string[],
+): { subject: string; qualifier: string; sentence: string } | null {
+  // Newlines split too: forum posts put separate thoughts on separate lines far
+  // more often than they punctuate them.
+  const sentences = haystack.toLowerCase().split(/[.!?;\n\r]+/)
+
+  for (const sentence of sentences) {
+    const subject = subjects.find((p) => sentence.includes(p))
+    if (!subject) continue
+    const qualifier = qualifiers.find((p) => sentence.includes(p))
+    if (!qualifier) continue
+    return { subject, qualifier, sentence: sentence.trim() }
+  }
+
+  return null
+}
