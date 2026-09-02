@@ -62,6 +62,13 @@ Fields:
   country           two-letter code, "US" or "CA"
   startDate         "YYYY-MM-DD", the FIRST day. "October 30 - November 1" starts on 30 October
   endDate           "YYYY-MM-DD", the LAST day. Null for a one-day event
+  days              1 or 2: how many days of COMPETITION there are, which is not the same as how
+                    many days the event spans. Off-season events very often open with a day of
+                    load-in, move-in, setup, pit hours, inspection or practice matches only, and
+                    that day does not count. "Friday, October 30 - Sunday, November 1 (Friday
+                    load-in and practice matches in the late afternoon)" is TWO days of
+                    competition, not three. If the source does not distinguish, count the days
+                    that have qualification or elimination matches on them.
   capacity          integer, how many teams can enter
   costUsd           integer US dollars per team to enter, so 250 for "$250 per team"
   costNote          ONLY when the price is not one flat number: a discount for a second robot, a
@@ -99,7 +106,7 @@ const ENUMS: Record<string, readonly string[]> = {
 }
 
 const URL_FIELDS = new Set(['registrationUrl', 'volunteerUrl', 'website'])
-const INT_FIELDS = new Set(['hostTeamNumber', 'capacity', 'costUsd'])
+const INT_FIELDS = new Set(['hostTeamNumber', 'capacity', 'costUsd', 'days'])
 const DATE_FIELDS = new Set(['startDate', 'endDate'])
 const TEXT_MAX: Record<string, number> = {
   name: 160, venueName: 160, address: 200, city: 120, region: 60, country: 8,
@@ -189,6 +196,13 @@ export function validateEventRead(
     }
 
     kept[key] = { quote: quoteText.slice(0, 300), source }
+  }
+
+  // Competition days is 1 or 2 by definition of the column. Anything else is
+  // the span being counted instead, which is the mistake the prompt spells out.
+  if (typeof fields.days === 'number' && fields.days !== 1 && fields.days !== 2) {
+    rejected.push(`days: ${fields.days} is not 1 or 2, so it is counting the span rather than the competition`)
+    delete fields.days
   }
 
   // An end before a start is a misread, and days would come out negative.

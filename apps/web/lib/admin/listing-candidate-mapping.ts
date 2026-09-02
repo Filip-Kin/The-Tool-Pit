@@ -97,8 +97,16 @@ export function eventListingFromCandidate(
   // pointer a lot of these events have.
   const cdFallback = /^https?:\/\/(www\.)?chiefdelphi\.com\//i.test(candidate.sourceUrl) ? candidate.sourceUrl : null
 
-  // Days from the dates when the source did not say. A two-day event whose
-  // listing says nothing reads as a one-day event to anybody scanning the map.
+  // COMPETITION days, which is not the span.
+  //
+  // Off-season events routinely open with a day of load-in, setup, pit hours
+  // and practice matches, and that day is not a day of competition. Beach
+  // Blitz runs Friday to Sunday and is a two-day event. So the reader is asked
+  // for this directly and its answer wins.
+  //
+  // The span is only a fallback, and only when it is already 1 or 2: a span of
+  // three says nothing on its own, because whether it is two competition days
+  // plus a load-in or something else is exactly the question.
   const start = isoDate(ex.startDate)
   const end = isoDate(ex.endDate)
   const spanned = start && end ? Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000) + 1 : null
