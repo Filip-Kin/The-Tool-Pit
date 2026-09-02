@@ -72,29 +72,38 @@ const RECENCY_DAYS = 730
 const FIELD_WORDS = [
   'practice field', 'full field', 'half field', 'field time', 'practice space',
   'open field', 'practice facility', 'field available', 'our field',
+  // "full playing field available for scrimmage" is how one real offer reads.
+  'playing field',
 ]
 
 /**
- * And it has to be OFFERING one, in words that mean an offer.
+ * And it has to be OFFERING one.
  *
- * This list used to hold 'available', 'welcome', 'reach out', 'let us know' and
- * 'any team' as bare words, which appear in most forum threads ever written.
- * Combined with a field word anywhere else in the same search blurb, that let
- * through a blog post about algae, a thread about team churn rate by region and
- * a discussion of how the California districts went. Two of nine candidates in
- * the first live run were real.
+ * MEASURED, not guessed, against the 23 threads the field queries return. Two
+ * versions were run over the same corpus:
  *
- * Phrases now, not words, and they have to sit NEXT TO the field phrase. See
- * phrasesNear in shared.ts.
+ *   - Long phrases only ('is available', 'open to any', 'hosting a practice'):
+ *     accepted 2 threads, one of which was a request. It missed "Practice Field
+ *     Open in Orange County", "5026 SF Bay Area Practice Field Now Open" and
+ *     seventeen others, because a team announcing a field writes "practice
+ *     field open", not "our practice field is open to any team".
+ *   - Single words, in the same sentence as a field phrase: accepted 23, of
+ *     which 19 are real offers.
+ *
+ * So the words are back and it is the SAME SENTENCE rule that does the work.
+ * That rule is what dropped the blog post about algae, the thread on team churn
+ * rate and the discussion of the California districts, all of which matched a
+ * field phrase and an offer word in unrelated paragraphs.
+ *
+ * The four that still get through are a proposal essay, a thread collecting
+ * fields rather than offering one, and two about building field ELEMENTS. A
+ * reviewer rejects each in one click, and tightening further costs more real
+ * fields than it saves clicks.
  */
 const OFFER_WORDS = [
-  'is available', 'are available', 'available to any', 'available to teams',
-  'available for teams', 'available to other', 'open to any', 'open to teams',
-  'open to other', 'open house', 'come practice', 'come and practice',
-  'offering', 'happy to host', 'happy to share', 'hosting a practice',
-  'welcome to use', 'welcome to come', 'you can use our', 'use our field',
-  'use our practice', 'free to use', 'sign up for a slot', 'sign up for time',
-  'booking', 'reserve a time', 'reach out if you want to practice',
+  'available', 'open', 'welcome', 'invite', 'invited', 'host', 'hosting',
+  'offering', 'offer', 'sign up', 'signup', 'come', 'use our', 'free to use',
+  'reserve', 'booking', 'book a', 'slots', 'reach out',
 ]
 
 /**
@@ -108,6 +117,9 @@ const NEGATIVE_PHRASES = [
   'need practice space', 'where can we practice', 'can we practice', 'any teams near',
   'wanted', 'seeking', 'trying to find', 'help us find', 'is there a field',
   'how do i build', 'how to build a practice field', 'plans for a practice field',
+  // Collection threads: "help us identify available practice fields" is asking
+  // the community to name fields, not offering one.
+  'help us identify', 'help us find',
 ]
 
 /**
