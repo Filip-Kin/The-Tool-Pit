@@ -282,13 +282,23 @@ function fail(message: string): void {
   g.console?.error(message)
 }
 
-/** The environment variable the webhook still lives under. See the file header. */
-export const APPROVAL_WEBHOOK_ENV = 'FIELD_SUBMISSION_DISCORD_WEBHOOK'
+/**
+ * The webhook env var. There is ONE Discord channel and ONE webhook for the whole
+ * platform (it started life as the practice-field one), so the honest name is
+ * DISCORD_WEBHOOK. The old FIELD_SUBMISSION_DISCORD_WEBHOOK is read as a fallback
+ * so a half-updated Coolify environment still posts, but DISCORD_WEBHOOK is the one
+ * to set going forward — on BOTH the web and worker services (the worker had neither,
+ * which is why team-list-parser failures logged "unset" instead of pinging).
+ */
+export const DISCORD_WEBHOOK_ENV = 'DISCORD_WEBHOOK'
+export const APPROVAL_WEBHOOK_ENV_LEGACY = 'FIELD_SUBMISSION_DISCORD_WEBHOOK'
+/** @deprecated use DISCORD_WEBHOOK_ENV. Kept as an alias so existing imports compile. */
+export const APPROVAL_WEBHOOK_ENV = DISCORD_WEBHOOK_ENV
 
 export type PostOutcome = 'sent' | 'skipped' | 'failed'
 
 function webhookUrl(): string | undefined {
-  return g.process?.env?.[APPROVAL_WEBHOOK_ENV]
+  return g.process?.env?.[DISCORD_WEBHOOK_ENV] ?? g.process?.env?.[APPROVAL_WEBHOOK_ENV_LEGACY]
 }
 
 /**

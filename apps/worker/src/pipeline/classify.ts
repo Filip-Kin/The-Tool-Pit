@@ -64,6 +64,14 @@ export function validateClassificationOutput(
     if (y !== null && y !== undefined && (!Number.isInteger(y) || y < 2000 || y > now + 1)) {
       out.seasonYear = null
     }
+  } else {
+    // Season and team number only mean something for a team's seasonal code or CAD.
+    // A general tool that merely mentions a year is not "the 2026 edition" of itself:
+    // carrying a season here stamps "2026" into the name and slug and splits it from
+    // its own earlier listing (FRC Cycle Times vs FRC 2026 Cycle Times, which then
+    // dodged the name-similarity dedup). Non-team tools carry neither.
+    out.seasonYear = null
+    out.teamNumber = null
   }
   // Team websites are never indexable — override confidence to 0.0 regardless of what the AI said
   if (out.isTeamWebsite) {

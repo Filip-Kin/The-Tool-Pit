@@ -21,18 +21,43 @@ export interface DedupeResult {
 }
 
 /** Steps 1-3: exact URL match in tool_links, exact URL in crawlCandidates, hostname soft match */
+/**
+ * The comparison key for a URL. Two links point at the same page when they differ
+ * only by scheme, a leading www, or a trailing slash: http://lopreiato.me/frc-cycle-times
+ * and https://lopreiato.me/frc-cycle-times are one tool, and a raw string match filed
+ * them twice. Host is lowercased, www and the trailing slash dropped, path kept as-is.
+ */
+export function urlDedupeKey(raw: string): string {
+  try {
+    const u = new URL(raw)
+    const host = u.hostname.toLowerCase().replace(/^www\./, '')
+    const path = u.pathname.replace(/\/+$/, '')
+    return host + path + u.search
+  } catch {
+    return raw.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '')
+  }
+}
+
 export async function checkDuplicateByUrl(canonicalUrl: string): Promise<DedupeResult> {
   const db = getDb()
+  const key = urlDedupeKey(canonicalUrl)
 
-  // 1. Exact URL match in tool_links
-  const [existingLink] = await db
-    .select({ toolId: toolLinks.toolId, url: toolLinks.url })
-    .from(toolLinks)
-    .where(eq(toolLinks.url, canonicalUrl))
-    .limit(1)
-
-  if (existingLink) {
-    return { isDuplicate: true, matchedToolId: existingLink.toolId, matchedUrl: existingLink.url, method: 'url_exact' }
+  // 1. Same URL in tool_links, ignoring scheme / www / trailing slash. Prefilter by
+  //    hostname in SQL (cheap, indexable-ish), then match the normalized key in JS so
+  //    http vs https and a stray slash no longer split one tool into two.
+  let host = ''
+  try {
+    host = new URL(canonicalUrl).hostname.replace(/^www\./, '')
+  } catch {}
+  if (host) {
+    const links = await db
+      .select({ toolId: toolLinks.toolId, url: toolLinks.url })
+      .from(toolLinks)
+      .where(sql`${toolLinks.url} like ${'%' + host + '%'}`)
+    const existingLink = links.find((l) => urlDedupeKey(l.url) === key)
+    if (existingLink) {
+      return { isDuplicate: true, matchedToolId: existingLink.toolId, matchedUrl: existingLink.url, method: 'url_exact' }
+    }
   }
 
   // 2. Existing candidate with same URL that was actually published (has a matchedToolId).
