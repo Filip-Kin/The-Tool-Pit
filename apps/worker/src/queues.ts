@@ -11,6 +11,7 @@ import type { GrantMonitorPayload } from './grants/monitor.js'
 import type { GrantMatchJobPayload } from './grants/matcher.js'
 import type { ListingDiscoverPayload } from './listings/discover.js'
 import type { ReadCandidatesPayload } from './listings/read-candidates.js'
+import type { RosterRefreshPayload } from './listings/roster-refresh.js'
 import type { PopularityRefreshPayload } from './jobs/popularity.js'
 // The offseason season rule and the renewal date live beside the column they
 // describe, so the schedule below and the migration that backfills the season
@@ -269,6 +270,22 @@ export const readCandidatesQueue = new Queue<ReadCandidatesPayload>('read-candid
 })
 
 /**
+ * The registered team count on each off-season event, from TBA.
+ *
+ * The one number on these listings that moves week to week, and the only thing
+ * about an event that the machine knows better than the organiser.
+ */
+export const rosterRefreshQueue = new Queue<RosterRefreshPayload>('roster-refresh', {
+  connection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 60000 },
+    removeOnComplete: { count: 50 },
+    removeOnFail: { count: 100 },
+  },
+})
+
+/**
  * The yearly "are you running it again" ask for last season's event listings.
  *
  * attempts: 1, the same reasoning as grant-alert-drain. The retry story lives
@@ -486,6 +503,14 @@ export async function scheduleRecurringJobs() {
   // and a candidate added by hand from the admin is picked up the same way.
   await readCandidatesQueue.upsertJobScheduler('read-candidates-sweep', { pattern: '20 3,15 * * *' }, {
     name: 'read-candidates-sweep',
+    data: {},
+  })
+
+  // Rosters, daily. A count that is a week old is worse than none during the
+  // fortnight before an event, which is exactly when a team is deciding whether
+  // there is still room. One request per listing with a TBA key, paced.
+  await rosterRefreshQueue.upsertJobScheduler('roster-refresh-daily', { pattern: '50 5 * * *' }, {
+    name: 'roster-refresh-daily',
     data: {},
   })
 

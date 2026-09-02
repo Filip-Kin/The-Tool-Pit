@@ -26,6 +26,8 @@ import { enqueueDueGrantMonitors } from './grants/cadence.js'
 import { sendApprovalNotice, reviewQueueUrl } from '@the-tool-pit/types'
 import { processListingDiscoverJob } from './listings/discover.js'
 import { processReadCandidatesJob } from './listings/read-candidates.js'
+import { processRosterRefreshJob } from './listings/roster-refresh.js'
+import type { RosterRefreshPayload } from './listings/roster-refresh.js'
 import { closeBrowser } from './connectors/playwright-render.js'
 import type { ReadCandidatesPayload } from './listings/read-candidates.js'
 import { processSeasonRenewalJob } from './listings/season-renewal.js'
@@ -345,6 +347,15 @@ const readCandidatesWorker = new Worker<ReadCandidatesPayload>(
   { connection, concurrency: 1 },
 )
 
+const rosterRefreshWorker = new Worker<RosterRefreshPayload>(
+  'roster-refresh',
+  async (job) => {
+    console.log(`[roster-refresh] processing job ${job.id}`)
+    return processRosterRefreshJob(job.data)
+  },
+  { connection, concurrency: 1 },
+)
+
 const seasonRenewalWorker = new Worker(
   'event-season-renewal',
   async () => {
@@ -361,7 +372,7 @@ const seasonRenewalWorker = new Worker(
 // #endregion
 
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, readCandidatesWorker, seasonRenewalWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, readCandidatesWorker, rosterRefreshWorker, seasonRenewalWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -399,6 +410,7 @@ async function shutdown() {
     grantDeadlineWorker.close(),
     listingDiscoverWorker.close(),
     readCandidatesWorker.close(),
+    rosterRefreshWorker.close(),
     seasonRenewalWorker.close(),
   ])
   // The shared browser outlives any single job, so it is closed here rather
