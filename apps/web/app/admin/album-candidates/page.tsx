@@ -5,15 +5,19 @@ import { getDb } from '@/lib/db'
 import { albumCandidates, albums, events } from '@the-tool-pit/db'
 import type { AlbumCandidateMetadata, AlbumEventMatch } from '@the-tool-pit/db'
 import { AlbumCandidateActions } from './candidate-actions'
+import { BulkSuppressUnmatched } from './bulk-suppress-unmatched'
 import { assertAdmin } from '@/lib/admin/auth'
 
-// Real candidate statuses plus two views: "submitted" = candidates from public
+// Real candidate statuses plus three views: "unmatched" = crawled pending rows
+// the machine could not tie to an event (the stuck backlog - split out from
+// genuinely-actionable pending), "submitted" = candidates from public
 // submissions (any status), and "no_cover" = published albums missing a cover
 // image (Drive/Dropbox/blocked-Flickr that couldn't be OG-scraped).
-const STATUS_TABS = ['pending', 'submitted', 'matched', 'no_cover', 'suppressed', 'duplicate', 'published'] as const
+const STATUS_TABS = ['pending', 'unmatched', 'submitted', 'matched', 'no_cover', 'suppressed', 'duplicate', 'published'] as const
 type TabStatus = (typeof STATUS_TABS)[number]
 const TAB_LABELS: Record<TabStatus, string> = {
   pending: 'pending',
+  unmatched: 'needs event',
   submitted: 'submitted',
   matched: 'matched',
   no_cover: 'no cover',
@@ -22,6 +26,16 @@ const TAB_LABELS: Record<TabStatus, string> = {
   published: 'published',
 }
 const PAGE_SIZE = 30
+
+// The candidate's `classification` jsonb: the schema's AlbumEventMatch plus the
+// machine's best-guess event (written by album-enrich even below the auto-match
+// bar) so the queue can show it by name + score for one-click confirmation.
+type AlbumCandidateClassification = Partial<AlbumEventMatch> & {
+  guessEventId?: string | null
+  guessEventCode?: string | null
+  guessEventName?: string | null
+  guessConfidence?: number
+}
 
 export default async function AdminAlbumCandidatesPage({
   searchParams,
@@ -38,13 +52,21 @@ export default async function AdminAlbumCandidatesPage({
   const db = getDb()
 
   // "no_cover" = published rows whose album has no cover image; "submitted" =
-  // candidates that came from a public submission (any status).
+  // candidates that came from a public submission (any status); "unmatched" =
+  // crawled pending rows with no event (the machine gave up - the stuck backlog).
+  const unmatchedFilter: SQL = and(
+    eq(albumCandidates.status, 'pending'),
+    isNull(albumCandidates.matchedEventId),
+    isNull(albumCandidates.submissionId),
+  )!
   const statusFilter: SQL =
     status === 'no_cover'
       ? and(eq(albumCandidates.status, 'published'), isNull(albums.coverImageUrl))!
       : status === 'submitted'
         ? isNotNull(albumCandidates.submissionId)
-        : eq(albumCandidates.status, status)
+        : status === 'unmatched'
+          ? unmatchedFilter
+          : eq(albumCandidates.status, status)
 
   const searchFilter: SQL | undefined = q
     ? or(
@@ -57,7 +79,7 @@ export default async function AdminAlbumCandidatesPage({
     : undefined
   const where = searchFilter ? and(statusFilter, searchFilter)! : statusFilter
 
-  const [rows, [{ total }], counts, [{ noCover }], submittedCount] = await Promise.all([
+  const [rows, [{ total }], counts, [{ noCover }], submittedCount, [unmatchedAgg]] = await Promise.all([
     db
       .select({
         candidate: albumCandidates,
@@ -93,11 +115,25 @@ export default async function AdminAlbumCandidatesPage({
       .select({ submitted: sql<number>`count(*)::int` })
       .from(albumCandidates)
       .where(isNotNull(albumCandidates.submissionId)),
+    db
+      .select({
+        count: sql<number>`count(*)::int`,
+        oldest: sql<string | null>`min(${albumCandidates.createdAt})`,
+      })
+      .from(albumCandidates)
+      .where(unmatchedFilter),
   ])
 
   const countMap: Record<string, number> = Object.fromEntries(counts.map((r) => [r.status, r.count]))
   countMap.no_cover = noCover
   countMap.submitted = submittedCount[0]?.submitted ?? 0
+  const unmatchedCount = unmatchedAgg?.count ?? 0
+  countMap.unmatched = unmatchedCount
+  // Days since the oldest stuck candidate, for the "queue is N days stale" note.
+  const oldestUnmatched = unmatchedAgg?.oldest ? new Date(unmatchedAgg.oldest) : null
+  const staleDays = oldestUnmatched
+    ? Math.floor((Date.now() - oldestUnmatched.getTime()) / 86_400_000)
+    : 0
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   return (
@@ -146,13 +182,25 @@ export default async function AdminAlbumCandidatesPage({
         ))}
       </div>
 
+      {status === 'unmatched' && unmatchedCount > 0 && (
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted">
+            {unmatchedCount.toLocaleString()} crawled album{unmatchedCount === 1 ? '' : 's'} the matcher could not tie to an event
+            {staleDays > 0 && <>, oldest <span className="font-medium text-foreground">{staleDays} days</span> old</>}.
+            Set an event to publish one, or clear the backlog.
+          </p>
+          <BulkSuppressUnmatched count={unmatchedCount} />
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <p className="text-sm text-muted">{q ? `No matches for "${q}".` : `No ${TAB_LABELS[status]} candidates.`}</p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <div className="overflow-x-auto">
-            <table className="min-w-[36rem] w-full text-sm">
-                        <thead className="bg-surface-2 text-xs text-muted">
+          {/* No inner horizontal scroll: on a phone each row STACKS (flex-col) so
+              the Event control is reachable; md+ is a normal table. */}
+          <table className="w-full text-sm">
+                        <thead className="hidden bg-surface-2 text-xs text-muted md:table-header-group">
                           <tr>
                             <th className="px-4 py-2 text-left">Album</th>
                             <th className="px-4 py-2 text-left">Event</th>
@@ -163,15 +211,17 @@ export default async function AdminAlbumCandidatesPage({
                         <tbody>
                           {rows.map(({ candidate: row, eventName, eventCode, eventYear }) => {
                             const meta = (row.rawMetadata ?? {}) as AlbumCandidateMetadata
-                            const cls = (row.classification ?? {}) as Partial<AlbumEventMatch>
+                            const cls = (row.classification ?? {}) as AlbumCandidateClassification
                             const displayUrl = row.canonicalUrl ?? row.sourceUrl
+                            const guessPct = cls.guessConfidence != null ? Math.round(cls.guessConfidence * 100) : null
+                            const program = meta.targetProgram === 'ftc' ? 'ftc' : 'frc'
                             return (
                               <tr
                                 key={row.id}
                                 id={`album-${row.id}`}
-                                className="border-t border-border-subtle align-top scroll-mt-6 hover:bg-surface"
+                                className="flex flex-col gap-2 border-t border-border-subtle p-3 hover:bg-surface md:table-row md:gap-0 md:p-0 md:align-top md:scroll-mt-6"
                               >
-                                <td className="max-w-xs px-4 py-3">
+                                <td className="block md:table-cell md:max-w-xs md:px-4 md:py-3">
                                   <span className="line-clamp-1 text-xs font-medium text-foreground">
                                     {meta.title ?? displayUrl}
                                   </span>
@@ -187,7 +237,7 @@ export default async function AdminAlbumCandidatesPage({
                                     {[row.provider, meta.photographer, meta.dateText].filter(Boolean).join(' · ')}
                                   </p>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="block md:table-cell md:px-4 md:py-3">
                                   {eventName ? (
                                     <span className="flex items-center gap-2 text-xs">
                                       <span className="rounded bg-primary/15 px-1.5 py-0.5 font-mono text-sm font-bold text-primary">
@@ -195,6 +245,19 @@ export default async function AdminAlbumCandidatesPage({
                                       </span>
                                       <span className="text-foreground">
                                         {eventName} <span className="font-mono text-muted-2">({eventCode})</span>
+                                      </span>
+                                    </span>
+                                  ) : cls.guessEventName ? (
+                                    // Machine's best guess, shown by NAME + score so a moderator can
+                                    // eyeball it and confirm below without researching a code.
+                                    <span className="flex flex-col gap-0.5 text-xs">
+                                      <span className="text-[10px] uppercase tracking-wide text-muted-2">best guess</span>
+                                      <span className="text-foreground">
+                                        {cls.guessEventName}
+                                        {cls.guessEventCode && (
+                                          <span className="ml-1 font-mono text-muted-2">({cls.guessEventCode})</span>
+                                        )}
+                                        {guessPct != null && <span className="ml-1 text-muted-2">· {guessPct}%</span>}
                                       </span>
                                     </span>
                                   ) : (
@@ -205,17 +268,20 @@ export default async function AdminAlbumCandidatesPage({
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="block md:table-cell md:px-4 md:py-3">
                                   <span className="text-[10px] text-muted-2">{cls.method ?? '-'}</span>
                                 </td>
-                                <td className="px-4 py-3 text-right">
+                                <td className="block md:table-cell md:px-4 md:py-3 md:text-right">
                                   <AlbumCandidateActions
                                     candidateId={row.id}
                                     status={row.status}
                                     hasEvent={Boolean(row.matchedEventId)}
+                                    program={program}
                                     targetEventCode={row.targetEventCode}
                                     targetEventYear={row.targetEventYear}
                                     matchedEventKey={eventCode && eventYear ? `${eventYear}${eventCode}` : null}
+                                    guessEventKey={cls.guessEventCode ?? null}
+                                    guessEventName={cls.guessEventName ?? null}
                                     albumTitle={meta.title ?? ''}
                                   />
                                 </td>
@@ -224,7 +290,6 @@ export default async function AdminAlbumCandidatesPage({
                           })}
                         </tbody>
                       </table>
-          </div>
         </div>
       )}
 

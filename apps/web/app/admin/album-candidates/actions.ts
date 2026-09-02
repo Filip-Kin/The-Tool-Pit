@@ -3,7 +3,7 @@
 import { isAdmin } from '@/lib/admin/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { eq } from 'drizzle-orm'
+import { eq, and, isNull, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { albumCandidates, albums, albumSources, albumCovers, events } from '@the-tool-pit/db'
 import type { AlbumCandidateMetadata } from '@the-tool-pit/db'
@@ -231,6 +231,53 @@ export async function suppressAlbumCandidate(
   await notifyAlbumCandidateRejected(candidateId, before.status === 'published', clean)
   revalidatePath('/admin/album-candidates')
   return {}
+}
+
+/** FLL albums can't be tied to one event; they clear to this distinct reason. */
+const FLL_NO_EVENT_REASON = 'fll_no_event_mapping'
+/** Reason a crawled album with no event match is retired from the queue. */
+const NO_MATCH_REASON = 'no event match after crawl'
+
+/**
+ * Clear the "no event matched" backlog in one action. These are crawled albums
+ * (no submitter) the machine could not tie to an event: they sit in 'pending'
+ * forever with nothing to revisit them. Suppress them all so the queue only
+ * holds rows a human can actually act on. FLL rows carry the distinct
+ * 'fll_no_event_mapping' reason (they can never map to an event); the rest carry
+ * "no event match after crawl". Nothing is deleted - both are filterable under
+ * the suppressed tab and can be re-analyzed or re-matched later.
+ *
+ * No email is sent: these have no submissionId, so there is no submitter to tell.
+ */
+export async function suppressUnmatchedBacklog(): Promise<{ error?: string; count?: number }> {
+  await assertAdmin()
+  const db = getDb()
+
+  // Only crawled (submissionId null), pending, no matched event: the machine
+  // gave up. A public submission stays actionable and is never touched here.
+  const unmatched = and(
+    eq(albumCandidates.status, 'pending'),
+    isNull(albumCandidates.matchedEventId),
+    isNull(albumCandidates.submissionId),
+  )!
+
+  const fllOnly = sql`${albumCandidates.rawMetadata}->>'targetProgram' = 'fll'`
+  const notFll = sql`(${albumCandidates.rawMetadata}->>'targetProgram' is distinct from 'fll')`
+
+  const fll = await db
+    .update(albumCandidates)
+    .set({ status: 'suppressed', rejectionReason: FLL_NO_EVENT_REASON, updatedAt: new Date() })
+    .where(and(unmatched, fllOnly))
+    .returning({ id: albumCandidates.id })
+
+  const rest = await db
+    .update(albumCandidates)
+    .set({ status: 'suppressed', rejectionReason: NO_MATCH_REASON, updatedAt: new Date() })
+    .where(and(unmatched, notFll))
+    .returning({ id: albumCandidates.id })
+
+  revalidatePath('/admin/album-candidates')
+  return { count: fll.length + rest.length }
 }
 
 /**

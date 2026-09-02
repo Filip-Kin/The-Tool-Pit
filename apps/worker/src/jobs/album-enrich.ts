@@ -21,6 +21,24 @@ interface OgMetadata {
   siteName?: string
 }
 
+/**
+ * What we store in the candidate's `classification` jsonb. It is the schema's
+ * AlbumEventMatch plus a "best guess" the machine keeps even when it was not
+ * confident enough to match: the admin queue shows this guess by name and score
+ * so a moderator can eyeball "yes that's it" and confirm in one click instead of
+ * researching a code. Extra keys live inside the existing jsonb column - no new
+ * DB column - and a wider object is still assignable to AlbumEventMatch.
+ */
+interface AlbumClassification extends AlbumEventMatch {
+  guessEventId?: string | null
+  guessEventCode?: string | null
+  guessEventName?: string | null
+  guessConfidence?: number
+}
+
+/** The rejection reason FLL albums carry: they cannot be tied to one event. */
+const FLL_NO_EVENT_REASON = 'fll_no_event_mapping'
+
 /** Pull a plausible FRC season year (1992-2099) from free text, or null. */
 function detectYear(text: string): number | null {
   const m = text.match(/\b(19\d{2}|20\d{2})\b/)
@@ -124,6 +142,25 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
   meta.photographer = meta.photographer ?? extractPhotographer(canonicalUrl, cand.provider, ogSiteName)
   meta.dateText = meta.dateText ?? extractDate(meta.title, meta.description)
 
+  // FLL albums cannot be tied to a specific event (there is no per-event FLL
+  // schedule to match against), so they must never sit in the actionable queue.
+  // Suppress them to a distinct, filterable reason and stop - no matching work,
+  // no pending row a moderator has to triage.
+  if (meta.targetProgram === 'fll') {
+    await db
+      .update(albumCandidates)
+      .set({ status: 'suppressed', rawMetadata: meta, rejectionReason: FLL_NO_EVENT_REASON, updatedAt: new Date() })
+      .where(eq(albumCandidates.id, cand.id))
+    if (cand.submissionId) {
+      await db
+        .update(albumSubmissions)
+        .set({ status: 'needs_review', updatedAt: new Date() })
+        .where(eq(albumSubmissions.id, cand.submissionId))
+    }
+    console.log(`[album-enrich] candidate ${cand.id} → suppressed (${FLL_NO_EVENT_REASON})`)
+    return
+  }
+
   // The year identifies an event (codes/names repeat every season): use the
   // connector-supplied year, else read one from the album or thread title. Never
   // default to the current season, or historical albums mis-match.
@@ -143,7 +180,7 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
   // 2. Resolve the event.
   let matchedEventId: string | null = null
   let confidence = 0
-  const classification: AlbumEventMatch = { eventCode: cand.targetEventCode ?? null, method: 'none' }
+  const classification: AlbumClassification = { eventCode: cand.targetEventCode ?? null, method: 'none' }
 
   if (cand.targetEventCode && year != null) {
     const [ev] = await db
@@ -191,6 +228,8 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
       .select({
         id: events.id,
         eventCode: events.eventCode,
+        name: events.name,
+        year: events.year,
         wsim: sql<number>`word_similarity(${matchText}, ${events.name})`,
       })
       .from(events)
@@ -199,6 +238,12 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
       .limit(1)
     if (top) {
       topWsim = top.wsim
+      // Keep the single best guess even when it is below the auto-match bar, so
+      // the admin queue can show it by name + score for one-click confirmation.
+      classification.guessEventId = top.id
+      classification.guessEventCode = `${top.year}${top.eventCode}`
+      classification.guessEventName = top.name
+      classification.guessConfidence = top.wsim
       if (top.wsim >= NAME_MATCH_THRESHOLD) {
         matchedEventId = top.id
         confidence = top.wsim

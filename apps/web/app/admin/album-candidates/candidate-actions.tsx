@@ -13,32 +13,44 @@ import {
 } from './actions'
 import { buttonClass } from '@/components/ui/button'
 import { ReasonButton } from '@/components/admin/reason-button'
+import { EventTypeahead } from './event-typeahead'
 
 export function AlbumCandidateActions({
   candidateId,
   status,
   hasEvent,
+  program,
   targetEventCode,
   targetEventYear,
   matchedEventKey,
+  guessEventKey,
+  guessEventName,
   albumTitle,
 }: {
   candidateId: string
   status: string
   hasEvent: boolean
+  program: 'frc' | 'ftc'
   targetEventCode: string | null
   targetEventYear: number | null
   matchedEventKey: string | null
+  guessEventKey: string | null
+  guessEventName: string | null
   albumTitle: string
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  // Pre-fill the full TBA key (year + code) - matched/published show the current
-  // event so it can be corrected; unmatched show the connector's best guess.
+  // The full TBA key (year + code) the Set/Change button will apply. Matched or
+  // published start from the current event; unmatched start from the machine's
+  // best guess, then the connector hint, so the common case is a one-click
+  // confirm rather than typing a key.
   const [code, setCode] = useState(
-    matchedEventKey ?? (targetEventCode ? `${targetEventYear ?? ''}${targetEventCode}` : ''),
+    matchedEventKey ?? guessEventKey ?? (targetEventCode ? `${targetEventYear ?? ''}${targetEventCode}` : ''),
   )
+  // What the name search box shows on first render.
+  const initialEventText =
+    matchedEventKey ?? guessEventName ?? (targetEventCode ? `${targetEventYear ?? ''}${targetEventCode}` : '')
   const [title, setTitle] = useState(albumTitle)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -149,18 +161,32 @@ async function shrinkImage(file: File): Promise<File> {
       )}
       {status === 'published' && <span className="text-xs text-official">published</span>}
 
-      <div className="flex gap-1">
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder=""
-          className="w-28 rounded border border-border bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+      {/* One-click confirm of the machine's best guess: no typing, no research. */}
+      {!hasEvent && guessEventKey && guessEventName && (
+        <button
+          disabled={pending}
+          title={`Publish to ${guessEventName}`}
+          onClick={() => run(() => setAlbumEventMatch(candidateId, guessEventKey))}
+          className={buttonClass({ variant: 'none', size: 'sm', className: 'bg-rookie/90 text-background hover:opacity-90' })}
+        >
+          {pending ? '…' : `Confirm ${guessEventName}`}
+        </button>
+      )}
+
+      <div className="flex w-full flex-col gap-1 sm:w-56">
+        {/* Search the event by NAME (same endpoint as the public submit form) and
+            pick from the list; typing a raw key still works. */}
+        <EventTypeahead
+          program={program}
+          initialText={initialEventText}
+          onKeyChange={setCode}
+          disabled={pending}
         />
         <button
           disabled={pending || !code.trim()}
           title={hasEvent ? 'Change the matched event' : 'Set the event and publish this album'}
           onClick={() => run(() => setAlbumEventMatch(candidateId, code))}
-          className="rounded border border-border px-2 py-1 text-xs text-muted hover:text-foreground disabled:opacity-40"
+          className="self-end rounded border border-border px-2 py-1 text-xs text-muted hover:text-foreground disabled:opacity-40"
         >
           {hasEvent ? 'Change event' : 'Set & publish'}
         </button>
