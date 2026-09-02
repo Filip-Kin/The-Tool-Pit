@@ -7,6 +7,17 @@ import { EventCard } from './event-card'
 import { loadMoreEvents } from '@/app/photos/actions'
 
 const STORAGE_KEY = 'photopit:home:v1'
+
+/**
+ * Whether this component has already been mounted in this document.
+ *
+ * Module scope on purpose, because that is exactly the lifetime the restore
+ * needs: it survives a client-side navigation away and back, and it does not
+ * survive a reload or a fresh load. See the long note at the restore itself
+ * for why the navigation type alone could not do this job.
+ */
+let mountedBefore = false
+
 /** Cap how much feed state we persist so sessionStorage stays small. */
 const MAX_PERSIST = 600
 
@@ -88,15 +99,30 @@ export function InfiniteEventList({
     const lastY = { current: window.scrollY }
     let restoring = true
 
-    // Only restore the saved feed + scroll on a back/forward navigation. On a
-    // fresh load or reload we keep the server-fresh `initial` (which reflects
-    // just-approved albums / cover changes), so admin edits show up immediately.
+    // Restore the saved feed and scroll only when the reader is COMING BACK. On
+    // a fresh load or a reload we keep the server-fresh `initial`, which
+    // reflects just-approved albums and cover changes, so admin edits show up
+    // immediately.
+    //
+    // The navigation type alone cannot tell those apart, and relying on it made
+    // this restore dead code. Opening an album from the feed is a client-side
+    // navigation, so the document never reloads and `performance` still reports
+    // the ORIGINAL load as a plain 'navigate'. The back_forward check therefore
+    // never fired for the ordinary case: a reader who had scrolled to 60 events
+    // came back to 20, at the top, which is the exact thing this cache exists to
+    // prevent. Measured in the search feed, which was copied from this file.
+    //
+    // The module flag has the lifetime we actually want. It survives a soft
+    // navigation away and back, and it does not survive a reload or a fresh
+    // load. back_forward is kept as well, for a real browser Back after a hard
+    // load.
     const navType = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type
-    const isBackForward = navType === 'back_forward'
+    const returning = mountedBefore || navType === 'back_forward'
+    mountedBefore = true
 
     try {
-      const raw = isBackForward ? sessionStorage.getItem(STORAGE_KEY) : null
-      if (!isBackForward) sessionStorage.removeItem(STORAGE_KEY)
+      const raw = returning ? sessionStorage.getItem(STORAGE_KEY) : null
+      if (!returning) sessionStorage.removeItem(STORAGE_KEY)
       if (raw) {
         const saved = JSON.parse(raw) as Persisted
         if (saved.events?.length && saved.scrollY > 0) {
