@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   notificationDedupeKey,
   queueNotification,
@@ -159,19 +159,19 @@ describe('queueNotification', () => {
   })
 })
 
+// No fake clock here. These ran under vitest, and bun's vitest shim has no
+// setSystemTime, so both tests threw on the frozen-time call and the suite
+// carried two red tests that said nothing about the code. The default is
+// "now", and "now" is checked as a window rather than an exact instant.
 describe('queueNotification defaults', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-09-01T10:00:00Z'))
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
   it('sends as soon as the next drain runs unless told otherwise', async () => {
     const { writer, writes } = fakeWriter()
+    const before = Date.now()
     await queueNotification(BASE, writer)
-    expect(writes[0].row.sendAfter).toEqual(new Date('2026-09-01T10:00:00Z'))
+    const sendAfter = writes[0].row.sendAfter as Date
+
+    expect(sendAfter.getTime()).toBeGreaterThanOrEqual(before)
+    expect(sendAfter.getTime()).toBeLessThanOrEqual(Date.now())
   })
 
   it('honours a delayed send time', async () => {
