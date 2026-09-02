@@ -1,7 +1,8 @@
-import { sql, and, eq, inArray, desc } from 'drizzle-orm'
+import { sql, and, eq, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { tools, toolPrograms, toolLinks, toolVotes, programs } from '@the-tool-pit/db'
 import type { SearchParams } from '@the-tool-pit/types'
+import { parseSearchSort, searchOrderBy } from './sort'
 
 // Content-type weights for ranking boost
 const TYPE_WEIGHTS: Record<string, number> = {
@@ -261,13 +262,9 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
 
   const where = and(...conditions)
 
-  // Build ORDER BY based on sort param
-  const orderBy =
-    sort === 'popular'
-      ? desc(tools.popularityScore)
-      : sort === 'updated'
-        ? sql`${tools.lastActivityAt} desc nulls last`
-        : sql`${rankScore} desc`
+  // Parsed here as well as at the page, so no caller can put a value the ORDER
+  // BY does not know into a query. lib/search/sort.ts owns both halves.
+  const orderBy = searchOrderBy(parseSearchSort(sort), rankScore)
 
   // Main query — fetch tool IDs ranked by score
   const rankedRows = await db
