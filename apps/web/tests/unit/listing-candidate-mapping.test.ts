@@ -22,10 +22,12 @@ describe('eventListingFromCandidate', () => {
     expect(row.status).toBe('pending')
     expect(row.source).toBe('scrape')
     expect(row.name).toBe('Kettering Kickoff')
-    // No coordinates: approveEvent() refuses to publish without them, which is
-    // the half of the gate a crawler must not be able to satisfy.
-    expect(row.latitude).toBeUndefined()
-    expect(row.longitude).toBeUndefined()
+    // No coordinates. The gate still refuses to publish without them; what
+    // changed is that a candidate can now ARRIVE with a pin, because the read
+    // geocodes a venue it has an address for. An empty extract has neither, so
+    // this row gets an explicit null rather than a value nobody looked up.
+    expect(row.latitude).toBeNull()
+    expect(row.longitude).toBeNull()
     expect(row.publishedAt).toBeUndefined()
   })
 
@@ -106,14 +108,15 @@ describe('practiceFieldFromCandidate', () => {
     const row = practiceFieldFromCandidate({ ...base, extracted: {} }, 'Team 3538 field')
     expect(row.status).toBe('pending')
     expect(row.source).toBe('scrape')
-    // Coverage, perimeter, elements and FMS are left to their column defaults
-    // on purpose: a thread saying "full field" may be describing the field the
-    // poster wants, not the one on offer.
+    // Nothing was read, so nothing is set: coverage, perimeter, elements and
+    // FMS fall to their column defaults. These ARE filled now when the reader
+    // found them with a quote behind them, which a regex could never justify,
+    // but an empty extract still yields an empty row.
     expect(row.coverage).toBeUndefined()
     expect(row.perimeter).toBeUndefined()
     expect(row.elements).toBeUndefined()
     expect(row.hasFms).toBeUndefined()
-    expect(row.latitude).toBeUndefined()
+    expect(row.latitude).toBeNull()
   })
 
   it('takes the team number off the candidate column when the extract has none', () => {
@@ -128,5 +131,34 @@ describe('practiceFieldFromCandidate', () => {
     )
     expect(row.contactUrl).toBeNull()
     expect(row.website).toBe('https://team3538.example')
+  })
+})
+
+describe('a pin that was looked up', () => {
+  it('reaches the listing, so accepting can publish', () => {
+    // The whole reason the read geocodes: a moderator pressing Accept should
+    // not then have to find a school on a map themselves.
+    const row = eventListingFromCandidate(
+      {
+        sourceUrl: 'https://www.chiefdelphi.com/t/beach-blitz-2026/521638',
+        tbaKey: null,
+        extracted: { latitude: 33.5422403, longitude: -117.669712, venueName: 'Capistrano Valley High School' },
+      },
+      'Beach Blitz 2026',
+    )
+    expect(row.latitude).toBe(33.5422403)
+    expect(row.longitude).toBe(-117.669712)
+  })
+
+  it('refuses a coordinate that is not one', () => {
+    // Per axis, because swapping the two is the mistake worth catching: a
+    // longitude of 140 in the latitude column is a valid-looking number that
+    // puts the pin in the sea.
+    const row = eventListingFromCandidate(
+      { sourceUrl: 'https://example.org', tbaKey: null, extracted: { latitude: 140, longitude: -117 } },
+      'Somewhere',
+    )
+    expect(row.latitude).toBeNull()
+    expect(row.longitude).toBe(-117)
   })
 })
