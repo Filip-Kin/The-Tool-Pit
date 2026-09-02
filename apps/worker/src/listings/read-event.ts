@@ -39,6 +39,10 @@ const SYSTEM_PROMPT = `You are reading one off-season FIRST Robotics competition
 
 You get a Chief Delphi thread. It usually links to the event's own website. OPEN IT, then open only the few pages it links to that carry what you still need: registration, sign-up, apply, pay, cost, tickets, volunteer, schedule, contact. The entry fee is very often on a pay or registration page and almost never in the thread.
 
+FOLLOW THE LINKS YOU ARE SHOWN. Every page comes back with the links on it. Open the ones whose text or path says they carry what you need, and do NOT invent a path: guessing "/registration" on a site whose page is called "/bordie-through-time-2026" wastes a load on a 404 and misses the page with the venue and the cost on it.
+
+MIND THE YEAR. These sites keep every past event up, so the same site has a registration page for this year and for three previous ones. Work out which pages belong to the event in the thread, and take nothing from a past event: last year's price on this year's listing is worse than no price.
+
 Be economical. You have a small number of page loads. Do not open a sitemap, a sponsor, a venue's Wikipedia article, or anything on another site: none of them can tell you what this event charges. When you have enough, answer.
 
 Return ONE JSON object. Every key is an object: {"value": ..., "quote": "..."}.
@@ -232,7 +236,9 @@ export async function readEventCandidate(input: {
   // against. The thread first, so a fact in both is credited to the thread.
   const sources: NamedText<string>[] = [
     { source: 'thread', text: `${input.title}\n${input.threadText}\n${input.threadUrl}\n${input.website ?? ''}` },
-    ...answer.pages.map((p) => ({ source: p.url, text: p.text })),
+    // The links are part of what was read, so a URL the reader took off a
+    // button verifies against the page that carried it.
+    ...answer.pages.map((p) => ({ source: p.url, text: `${p.text}\n${p.links.join('\n')}` })),
   ]
 
   const checked = validateEventRead(raw, sources)

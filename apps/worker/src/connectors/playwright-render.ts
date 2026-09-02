@@ -27,6 +27,22 @@ const MAX_TEXT_LENGTH = 25_000
 /** Tags whose contents are never prose. */
 const DROP_TAGS = /<(script|style|noscript|svg|head|nav|footer)[\s\S]*?<\/\1>/gi
 
+/**
+ * A page's visible text AND the links on it.
+ *
+ * THE LINKS ARE THE POINT. innerText carries no hrefs, so a reader handed only
+ * the text has no way to know what a page links to and starts guessing paths.
+ * That is not hypothetical: reading Bordie Blast, it guessed
+ * /registration and /schedule, both of which 404, and never found
+ * /bordie-through-time-2026, which is the actual event page with the venue and
+ * the cost on it. The home page linked it the whole time.
+ */
+export interface PageContent {
+  text: string
+  /** Same-site links, as `label → url`, in document order. */
+  links: string[]
+}
+
 /** Visible text out of raw HTML, for the no-browser path. */
 export function htmlToText(html: string): string {
   return html
@@ -93,7 +109,7 @@ export async function closeBrowser(): Promise<void> {
   await browser?.close().catch(() => {})
 }
 
-async function renderWithBrowser(url: string): Promise<string | null> {
+async function renderWithBrowser(url: string): Promise<PageContent | null> {
   const browser = await getBrowser()
   if (!browser) return null
 
@@ -119,12 +135,58 @@ async function renderWithBrowser(url: string): Promise<string | null> {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: TIMEOUT_MS })
     await page.waitForLoadState('networkidle', { timeout: SETTLE_MS }).catch(() => {})
 
+    // Links BEFORE the strip, because nav and footer are exactly where a site
+    // keeps its page list, and they are removed for the text.
+    //
+    // NOT JUST ANCHORS. On Wix, Squarespace and Google Sites a "button" is
+    // frequently a div with a role, or a real button that routes in
+    // JavaScript, and the destination hides in a data attribute. Reading only
+    // a[href] on those sites returns a nav bar with nothing in it, which is
+    // the state that has the reader guessing paths.
+    const links = (await page.evaluate(`
+      (() => {
+        const out = [];
+        const seen = new Set();
+        const add = (label, href) => {
+          if (!href) return;
+          const key = label + '|' + href;
+          if (seen.has(key)) return;
+          seen.add(key);
+          out.push((label || '').replace(/\\s+/g, ' ').trim() + ' \u2192 ' + href);
+        };
+
+        for (const a of document.querySelectorAll('a[href]')) {
+          add(a.textContent, a.href);
+        }
+
+        // Anything that behaves like a button, with a destination stored
+        // somewhere a script would read it from.
+        for (const el of document.querySelectorAll('button, [role="button"], [role="link"], [onclick]')) {
+          const raw =
+            el.getAttribute('data-href') ||
+            el.getAttribute('data-url') ||
+            el.getAttribute('data-link') ||
+            el.getAttribute('formaction') ||
+            (el.getAttribute('onclick') || '').match(/https?:\\/\\/[^'"\\s)]+/)?.[0] ||
+            '';
+          if (!raw) continue;
+          try {
+            add(el.textContent, new URL(raw, location.href).toString());
+          } catch {}
+        }
+
+        return out;
+      })()
+    `)) as string[]
+
     const text = (await page.evaluate(`
       document.querySelectorAll('script,style,noscript,svg,iframe,nav,footer').forEach(el => el.remove());
       document.body ? document.body.innerText : '';
     `)) as string
 
-    return text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_TEXT_LENGTH) || null
+    const cleaned = text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_TEXT_LENGTH)
+    if (!cleaned) return null
+    return { text: cleaned, links: sameSiteLinks(links, url) }
   } catch (err) {
     console.warn(`[render] browser could not read ${url}: ${String(err).split('\n')[0]}`)
     return null
@@ -133,16 +195,65 @@ async function renderWithBrowser(url: string): Promise<string | null> {
   }
 }
 
-async function fetchAsText(url: string): Promise<string | null> {
+async function fetchAsText(url: string): Promise<PageContent | null> {
   try {
     const res = await politeFetch(url)
     if (!res.ok) return null
     const type = res.headers.get('content-type') ?? ''
     if (!type.includes('html') && !type.includes('text')) return null
-    return htmlToText(await res.text()).slice(0, MAX_TEXT_LENGTH) || null
+    const html = await res.text()
+    const text = htmlToText(html).slice(0, MAX_TEXT_LENGTH)
+    if (!text) return null
+
+    const links: string[] = []
+    for (const m of html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+      try {
+        const absolute = new URL(m[1], url).toString()
+        const label = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+        links.push(`${label} \u2192 ${absolute}`)
+      } catch {
+        // A malformed href contributes nothing.
+      }
+    }
+    return { text, links: sameSiteLinks(links, url) }
   } catch {
     return null
   }
+}
+
+/**
+ * Links on the same site as the page they were found on, deduplicated.
+ *
+ * Off-site links are dropped: a sponsor, a map and a social account are most of
+ * what an event site links out to, and none of them answers what it costs. The
+ * cap is generous because a site's page list is exactly what the reader needs.
+ */
+function sameSiteLinks(links: string[], pageUrl: string): string[] {
+  let host: string
+  try {
+    host = new URL(pageUrl).host.replace(/^www\./, '')
+  } catch {
+    return []
+  }
+
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const link of links) {
+    const url = link.slice(link.lastIndexOf('\u2192 ') + 2)
+    let parsed: URL
+    try {
+      parsed = new URL(url)
+    } catch {
+      continue
+    }
+    if (parsed.host.replace(/^www\./, '') !== host) continue
+    const key = parsed.toString().replace(/#.*$/, '')
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(link.trim())
+    if (out.length >= 60) break
+  }
+  return out
 }
 
 /**
@@ -152,11 +263,11 @@ async function fetchAsText(url: string): Promise<string | null> {
  * consent wall or a render that timed out mid-load returns a few words, and the
  * raw HTML behind it often holds the whole page.
  */
-export async function renderPage(url: string): Promise<string | null> {
+export async function renderPage(url: string): Promise<PageContent | null> {
   const rendered = await renderWithBrowser(url)
-  if (rendered && rendered.length > 200) return rendered
+  if (rendered && rendered.text.length > 200) return rendered
 
   const fetched = await fetchAsText(url)
-  if (fetched && (!rendered || fetched.length > rendered.length)) return fetched
+  if (fetched && (!rendered || fetched.text.length > rendered.text.length)) return fetched
   return rendered ?? fetched
 }

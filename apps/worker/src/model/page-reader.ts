@@ -14,7 +14,7 @@
  */
 import Anthropic from '@anthropic-ai/sdk'
 import { anthropic } from '../anthropic.js'
-import { renderPage } from '../connectors/playwright-render.js'
+import { renderPage, type PageContent } from '../connectors/playwright-render.js'
 
 export const PAGE_TOOL: Anthropic.Tool = {
   name: 'render_with_playwright',
@@ -32,7 +32,7 @@ export interface PageReadResult {
   /** The model's final text, for the caller to parse. */
   text: string
   /** Every page opened, in order, with its text. The evidence for verification. */
-  pages: Array<{ url: string; text: string }>
+  pages: Array<{ url: string; text: string; links: string[] }>
   /** Pages it asked for that would not load. */
   failed: string[]
 }
@@ -71,7 +71,7 @@ export async function askWithPages(opts: {
   logPrefix: string
 }): Promise<PageReadResult | null> {
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: opts.user }]
-  const pages: Array<{ url: string; text: string }> = []
+  const pages: Array<{ url: string; text: string; links: string[] }> = []
   const failed: string[] = []
   const tools = opts.offerPageTool === false ? [] : [PAGE_TOOL]
 
@@ -128,22 +128,32 @@ export async function askWithPages(opts: {
           continue
         }
 
-        let rendered: string | null = null
+        let rendered: PageContent | null = null
         if (url && !pages.some((p) => p.url === url)) {
           console.log(`${opts.logPrefix} opening ${url}`)
           rendered = await renderPage(url)
-          if (rendered) pages.push({ url, text: rendered })
+          if (rendered) pages.push({ url, text: rendered.text, links: rendered.links })
           else failed.push(url)
         } else if (url) {
           // Already read this turn. Hand back what we have rather than paying
           // for a second render of the same page.
-          rendered = pages.find((p) => p.url === url)?.text ?? null
+          const held = pages.find((p) => p.url === url)
+          rendered = held ? { text: held.text, links: held.links } : null
         }
 
         results.push({
           type: 'tool_result',
           tool_use_id: toolUse.id,
-          content: rendered ? `Page content:\n${rendered}` : 'That page did not load or had no readable content.',
+          content: rendered
+            ? // THE LINKS MATTER AS MUCH AS THE TEXT. Without them the reader
+              // is guessing paths: on one event site it guessed /registration
+              // and /schedule, both 404, and never found the page carrying the
+              // venue and the cost, which the home page linked to all along.
+              `Page content:\n${rendered.text}` +
+              (rendered.links.length > 0
+                ? `\n\nLinks on this page:\n${rendered.links.join('\n')}`
+                : '')
+            : 'That page did not load or had no readable content.',
         })
       }
 

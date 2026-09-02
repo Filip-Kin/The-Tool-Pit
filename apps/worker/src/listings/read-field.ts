@@ -34,7 +34,7 @@ import { parseJsonObject, quoteSource, urlAsWritten, type NamedText } from '../m
 
 const SYSTEM_PROMPT = `You are reading one Chief Delphi thread in which a FIRST Robotics team offers other teams the use of their practice field, and writing down the details for a directory.
 
-If the thread links to a sign-up form, a booking page or the team's site, OPEN IT: the address and the hours are often there and not in the post.
+If the thread links to a sign-up form, a booking page or the team's site, OPEN IT: the address and the hours are often there and not in the post. Every page comes back with the links on it, so follow the ones that look right rather than guessing a path.
 
 Return ONE JSON object. Every key is an object: {"value": ..., "quote": "..."}.
 
@@ -199,7 +199,9 @@ export async function readFieldCandidate(input: {
 
   const sources: NamedText<string>[] = [
     { source: 'thread', text: `${input.title}\n${input.threadText}\n${(input.links ?? []).join('\n')}` },
-    ...answer.pages.map((p) => ({ source: p.url, text: p.text })),
+    // The links are part of what was read, so a URL the reader took off a
+    // button verifies against the page that carried it.
+    ...answer.pages.map((p) => ({ source: p.url, text: `${p.text}\n${p.links.join('\n')}` })),
   ]
 
   const checked = validateFieldRead(raw, sources)
