@@ -153,6 +153,39 @@ export function AdminNav({ counts }: { counts: AdminQueueCounts }) {
 
   const waiting = (item: NavItem) => (item.queue ? counts[item.queue] : 0)
 
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  // The label of the page you are on, shown next to the hamburger so a shut
+  // menu still tells you where you are.
+  const activeLabel =
+    NAV_GROUPS.flatMap((g) => g.items).find((i) => i.href === active)?.label ?? 'Overview'
+
+  const totalWaiting = NAV_GROUPS.reduce(
+    (sum, group) => sum + group.items.reduce((n, item) => n + (item.queue ? counts[item.queue] : 0), 0),
+    0,
+  )
+
+  // Shut the panel on a route change, so tapping a link does not leave it open
+  // over the page it just opened.
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [pathname, search])
+
+  // Escape closes it, and the page behind does not scroll while it is open.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previous
+    }
+  }, [menuOpen])
+
   // Null until the browser has been read, so the first render matches the
   // server's and hydration does not complain.
   const [openState, setOpenState] = useState<Record<string, boolean> | null>(null)
@@ -186,23 +219,80 @@ export function AdminNav({ counts }: { counts: AdminQueueCounts }) {
 
   return (
     <>
-      {/* Mobile: one horizontally-scrolling row. Collapsible groups would cost
-          a tap and a row of chrome to hide four links, so the groups are only
-          labels here. */}
-      <nav className="flex items-center gap-0.5 overflow-x-auto border-t border-border-subtle p-2 md:hidden">
-        {NAV_GROUPS.map((group) => (
-          <div key={group.label ?? 'root'} className="flex items-center gap-0.5">
-            {group.label && (
-              <span className="whitespace-nowrap pl-2 pr-1 text-[10px] uppercase tracking-wide text-muted-2">
-                {group.label}
-              </span>
-            )}
-            {group.items.map((item) => (
-              <NavLink key={item.href} item={item} active={item.href === active} count={waiting(item)} />
-            ))}
-          </div>
-        ))}
-      </nav>
+      {/* Mobile: a hamburger and a panel.
+          
+          It was one horizontally-scrolling row of every link in the admin,
+          about thirty of them, so reaching the practice-field queue meant
+          dragging sideways through four verticals at 10px labels. A row that
+          scrolls also hides how much is in it: there is no way to tell from
+          looking whether anything is off to the right. */}
+      <div className="flex items-center gap-2 border-t border-border-subtle px-2 py-2 md:hidden">
+        <button
+          type="button"
+          aria-expanded={menuOpen}
+          aria-controls="admin-mobile-nav"
+          onClick={() => setMenuOpen(true)}
+          className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-2"
+        >
+          <span aria-hidden className="flex flex-col gap-[3px]">
+            <span className="block h-0.5 w-4 rounded-full bg-current" />
+            <span className="block h-0.5 w-4 rounded-full bg-current" />
+            <span className="block h-0.5 w-4 rounded-full bg-current" />
+          </span>
+          Menu
+          {/* The total, so a closed menu never hides work. */}
+          <QueueBadge count={totalWaiting} tone="loud" />
+        </button>
+
+        {/* Where you are, since the panel is shut. */}
+        <span className="min-w-0 flex-1 truncate text-sm text-muted">{activeLabel}</span>
+      </div>
+
+      {menuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" id="admin-mobile-nav">
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={() => setMenuOpen(false)}
+            className="absolute inset-0 bg-black/60"
+          />
+
+          <nav className="absolute inset-y-0 left-0 flex w-[86%] max-w-xs flex-col overflow-y-auto border-r border-border bg-surface shadow-xl">
+            <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
+              <span className="text-sm font-semibold text-foreground">Admin</span>
+              <button
+                type="button"
+                onClick={() => setMenuOpen(false)}
+                className="rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-4 p-3">
+              {NAV_GROUPS.map((group) => (
+                <div key={group.label ?? 'root'} className="flex flex-col gap-0.5">
+                  {group.label && (
+                    <span className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                      {group.label}
+                    </span>
+                  )}
+                  {group.items.map((item) => (
+                    <NavLink
+                      key={item.href}
+                      item={item}
+                      active={item.href === active}
+                      count={waiting(item)}
+                      onNavigate={() => setMenuOpen(false)}
+                      big
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </nav>
+        </div>
+      )}
 
       {/* Desktop: a collapsible group per vertical. */}
       <nav className="hidden flex-1 flex-col p-2 md:flex">
@@ -256,21 +346,34 @@ function NavLink({
   active,
   count,
   indent,
+  big,
+  onNavigate,
 }: {
   item: NavItem
   active: boolean
   count: number
   indent?: boolean
+  /** Touch-sized row for the mobile panel. */
+  big?: boolean
+  onNavigate?: () => void
 }) {
   return (
     <Link
       href={item.href}
-      className={`flex items-center gap-2 whitespace-nowrap rounded-md py-2 text-sm transition-colors ${
-        indent ? 'pl-5 pr-3' : 'px-3'
-      } ${active ? 'bg-surface-2 font-medium text-foreground' : 'text-muted hover:bg-surface-2 hover:text-foreground'}`}
+      onClick={onNavigate}
+      className={`flex items-center gap-2 whitespace-nowrap rounded-md transition-colors ${
+        big ? 'px-3 py-3 text-[15px]' : 'py-2 text-sm'
+      } ${indent ? 'pl-5 pr-3' : big ? '' : 'px-3'} ${
+        active
+          ? 'bg-primary/15 font-semibold text-primary'
+          : // text-foreground, not text-muted. The old muted grey on the panel
+            // background is the poor contrast: it is a navigation label, not a
+            // caption, and it has to be readable on a phone in daylight.
+            'text-foreground hover:bg-surface-2'
+      }`}
     >
       {item.label}
-      <QueueBadge count={count} />
+      <QueueBadge count={count} tone={active ? 'loud' : undefined} />
     </Link>
   )
 }
@@ -279,10 +382,14 @@ function NavLink({
  * Nothing at all below one. Pushed right with ml-auto so the numbers line up
  * down the sidebar instead of trailing each label at a different indent.
  */
-function QueueBadge({ count }: { count: number }) {
+function QueueBadge({ count, tone }: { count: number; tone?: 'loud' }) {
   if (count < 1) return null
   return (
-    <span className="ml-auto shrink-0 rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted">
+    <span
+      className={`ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+        tone === 'loud' ? 'bg-primary/25 text-primary' : 'bg-surface-3 text-foreground'
+      }`}
+    >
       {count > 999 ? '999+' : count}
       <span className="sr-only"> waiting</span>
     </span>

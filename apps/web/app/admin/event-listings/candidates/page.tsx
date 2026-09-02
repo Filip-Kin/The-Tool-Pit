@@ -97,9 +97,10 @@ export default async function EventCandidatesPage({
       </div>
 
       <p className="max-w-3xl text-xs text-muted-2">
-        Accept writes a pending listing with no pin, so it lands in the same queue a submitted event
-        does. TBA leads carry dates and a venue and never carry cost, capacity or registration state.
-        Forum leads carry whatever the thread said.
+        Every value here was read off the thread and the event&apos;s own site, and carries the
+        sentence it came from. Correct anything wrong in the box next to its quote. Accept publishes
+        the event when it has a pin, a date, a venue, an address, a program and a registration
+        state; short of that it is saved and the missing field is named.
       </p>
 
       <StatusTabs

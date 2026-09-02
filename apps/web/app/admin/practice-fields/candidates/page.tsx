@@ -100,8 +100,10 @@ export default async function FieldCandidatesPage({
 
       <p className="max-w-3xl text-xs text-muted-2">
         Read the quoted post before you accept. A thread that mentions a practice field is as likely
-        to be someone looking for one as someone offering one, and the connector cannot tell them
-        apart. Accept writes a pending field with no pin and no spec.
+        to be someone looking for one as someone offering one. Every value below carries the
+        sentence it came from, so check the words rather than the label, and correct anything wrong
+        in the box beside its quote. Accept publishes when the field has a pin and a way to get in
+        touch; coordinates are never guessed, so the pin is usually yours to place.
       </p>
 
       <StatusTabs

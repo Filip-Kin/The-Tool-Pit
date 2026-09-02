@@ -27,8 +27,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      {/* Sidebar on desktop; a sticky top bar with a horizontally-scrolling nav on mobile. */}
-      <aside className="shrink-0 border-b border-border-subtle bg-surface md:w-56 md:border-b-0 md:border-r">
+      {/* Sticky on mobile, so the menu button is reachable without scrolling
+          back to the top of a long queue. */}
+      <aside className="sticky top-0 z-40 shrink-0 border-b border-border-subtle bg-surface md:static md:w-56 md:border-b-0 md:border-r">
         {/* The toggle sits at the trailing edge of the top bar, the same place
             it sits in every public header. The admin has no header to put it
             in, and an admin whose machine is set to light opening a dashboard
