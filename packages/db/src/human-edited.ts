@@ -62,6 +62,16 @@ export const HUMAN_EDITABLE_TOOL_KEYS = [
   'programs',
   'audienceRoles',
   'audienceFunctions',
+  // A moderator's verdict and their reason for it.
+  //
+  // These are not written by the re-publish, which is why they were missing.
+  // They are written by apps/worker/src/jobs/enrich.ts, which suppresses a tool
+  // on re-classification and REPLACES adminNotes with its own line. 215 tools
+  // carry a hand-written note today. An admin who un-suppresses a listing and
+  // writes down why loses both the decision and the reason on the next pass,
+  // with no history anywhere.
+  'status',
+  'adminNotes',
 ] as const
 
 export type HumanEditableToolKey = (typeof HUMAN_EDITABLE_TOOL_KEYS)[number]

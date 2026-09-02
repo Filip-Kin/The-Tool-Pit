@@ -1,6 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import { crawlCandidates, submissions, toolLinks, tools } from '@the-tool-pit/db'
+import { isHumanEdited } from '@the-tool-pit/db'
 import type { PipelineLogEntry, CandidateClassification } from '@the-tool-pit/db'
 import { classifyCandidate } from '../pipeline/classify.js'
 import { resolveListingTitle, titleIsRepoDerived } from '../pipeline/title.js'
@@ -159,12 +160,46 @@ async function findPublishedToolForRepo(
  * When a re-classification decides a candidate should be suppressed, also suppress the
  * tool it was previously linked to (so it disappears from the public directory).
  * Only acts if matchedToolId is set — i.e. this candidate was the one that created the tool.
+ *
+ * A HUMAN'S VERDICT OUTRANKS THIS. It used to write `status` and `adminNotes`
+ * flat, with no check, which is the one thing the human_edited_fields column
+ * exists to prevent. An admin who looked at a listing, decided it belonged on
+ * the site, un-suppressed it and wrote down why got overruled by the next
+ * re-classify, and their reason was overwritten by this function's own line. In
+ * that order, so there was nothing left to say it had happened.
+ *
+ * The note is APPENDED, never replaced. A machine adding a line is fine. A
+ * machine deleting somebody's sentence is not, and 215 tools carry one.
  */
 async function suppressMatchedTool(matchedToolId: string, reason: string): Promise<void> {
   const db = getDb()
+
+  const [before] = await db
+    .select({
+      status: tools.status,
+      adminNotes: tools.adminNotes,
+      humanEditedFields: tools.humanEditedFields,
+    })
+    .from(tools)
+    .where(eq(tools.id, matchedToolId))
+    .limit(1)
+  if (!before) return
+
+  if (isHumanEdited(before.humanEditedFields, 'status')) {
+    console.log(
+      `[enrich] leaving tool ${matchedToolId} alone: a moderator set its status by hand (would have suppressed: ${reason})`,
+    )
+    return
+  }
+
+  const line = `Auto-suppressed on re-classification: ${reason}`
+  const notes = isHumanEdited(before.humanEditedFields, 'adminNotes') && before.adminNotes
+    ? `${before.adminNotes}\n${line}`
+    : line
+
   await db
     .update(tools)
-    .set({ status: 'suppressed', adminNotes: `Auto-suppressed on re-classification: ${reason}`, updatedAt: new Date() })
+    .set({ status: 'suppressed', adminNotes: notes, updatedAt: new Date() })
     .where(eq(tools.id, matchedToolId))
   console.log(`[enrich] suppressed tool ${matchedToolId}: ${reason}`)
 }

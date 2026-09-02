@@ -1,6 +1,6 @@
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { toolVotes, tools } from '@the-tool-pit/db'
+import { toolVotes, tools, popularityScoreSql } from '@the-tool-pit/db'
 import type { VoteResponse } from '@the-tool-pit/types'
 
 interface ToggleVoteInput {
@@ -52,21 +52,15 @@ export async function toggleVote(input: ToggleVoteInput): Promise<VoteResponse> 
     .from(toolVotes)
     .where(sql`${toolVotes.toolId} = ${toolId}::uuid`)
 
-  // Fetch external upvotes (GitHub stars + ChiefDelphi likes)
-  const [toolRow] = await db
-    .select({ githubStars: tools.githubStars, chiefDelphiLikes: tools.chiefDelphiLikes })
-    .from(tools)
-    .where(sql`${tools.id} = ${toolId}::uuid`)
-    .limit(1)
-
-  const externalUpvotes = (toolRow?.githubStars ?? 0) + (toolRow?.chiefDelphiLikes ?? 0)
-  const combinedScore = count + externalUpvotes
-
-  // Denormalize popularity score (vote count + external upvotes + click events contribute separately)
-  await db
+  // Denormalise the score off the row itself, using the one expression every
+  // writer shares. This used to add the vote count to stars and likes read a
+  // moment earlier, which is the same sum written a second way, and the two
+  // spellings are exactly how the column drifted before.
+  const [updated] = await db
     .update(tools)
-    .set({ popularityScore: combinedScore, updatedAt: new Date() })
+    .set({ popularityScore: popularityScoreSql, updatedAt: new Date() })
     .where(sql`${tools.id} = ${toolId}::uuid`)
+    .returning({ popularityScore: tools.popularityScore })
 
-  return { voted, voteCount: combinedScore }
+  return { voted, voteCount: updated?.popularityScore ?? count }
 }

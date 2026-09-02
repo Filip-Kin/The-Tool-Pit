@@ -55,8 +55,11 @@ async function assertAdmin() {
  * that guard would have been worse: saveTool builds its update from every field
  * on the main form, so a notes-only post would have blanked the lot.
  *
- * Notes are a moderator's private record and no crawl writes them, so there is
- * nothing here about human_edited_fields.
+ * THE NOTES ARE CLAIMED. They were not, on the reasoning that no crawl writes
+ * them. One does: apps/worker/src/jobs/enrich.ts suppresses a tool on
+ * re-classification and REPLACES this field with its own line, so a moderator
+ * who un-suppressed a listing and wrote down why lost both the decision and the
+ * reason on the next pass. 215 tools carry a hand-written note.
  */
 export async function saveAdminNotes(formData: FormData) {
   await assertAdmin()
@@ -67,7 +70,25 @@ export async function saveAdminNotes(formData: FormData) {
   const notes = (formData.get('adminNotes') as string)?.trim() || null
 
   const db = getDb()
-  await db.update(tools).set({ adminNotes: notes, updatedAt: new Date() }).where(eq(tools.id, toolId))
+  const [before] = await db
+    .select({ adminNotes: tools.adminNotes, humanEditedFields: tools.humanEditedFields })
+    .from(tools)
+    .where(eq(tools.id, toolId))
+    .limit(1)
+
+  // Earned by changing the value, not by pressing Save. Opening the page and
+  // saving an untouched note must not freeze the field.
+  const claimed = changedKeys({ adminNotes: notes }, (before ?? {}) as Record<string, unknown>, ['adminNotes'])
+  const humanEditedFields = addHumanEdits(before?.humanEditedFields, claimed)
+
+  await db
+    .update(tools)
+    .set({
+      adminNotes: notes,
+      ...(humanEditedFields ? { humanEditedFields } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(tools.id, toolId))
 
   revalidatePath(`/admin/tools/${toolId}`)
 }
@@ -274,13 +295,31 @@ async function loadAdminLinks(toolId: string): Promise<Record<string, string>> {
   return out
 }
 
+/**
+ * A moderator deciding whether a listing is on the site.
+ *
+ * The decision is CLAIMED, so the enrich pass stops overruling it. Re-running
+ * classification on a tool an admin deliberately un-suppressed used to put it
+ * straight back in the bin, and the only trace was the note it wrote over the
+ * admin's own.
+ */
 export async function setToolStatus(toolId: string, status: 'published' | 'suppressed' | 'draft') {
   await assertAdmin()
   const db = getDb()
+  const [before] = await db
+    .select({ status: tools.status, humanEditedFields: tools.humanEditedFields })
+    .from(tools)
+    .where(eq(tools.id, toolId))
+    .limit(1)
+
+  const claimed = changedKeys({ status }, (before ?? {}) as Record<string, unknown>, ['status'])
+  const humanEditedFields = addHumanEdits(before?.humanEditedFields, claimed)
+
   await db
     .update(tools)
     .set({
       status,
+      ...(humanEditedFields ? { humanEditedFields } : {}),
       publishedAt: status === 'published' ? new Date() : undefined,
       updatedAt: new Date(),
     })

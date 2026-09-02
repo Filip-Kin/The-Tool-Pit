@@ -41,7 +41,17 @@ export async function POST(req: NextRequest) {
   let updated = 0
   for (const c of covers) {
     if (!c.id || !c.coverImageUrl || !/^https?:\/\//.test(c.coverImageUrl)) continue
-    await db.update(albums).set({ coverImageUrl: c.coverImageUrl, updatedAt: new Date() }).where(eq(albums.id, c.id))
+    // Only fill a cover that is still empty, which is the same condition the
+    // GET above selects on. The two are minutes apart: the cron sleeps between
+    // albums and works through up to 500 of them, and an owner who uploads a
+    // cover inside that window had it replaced by a scraped Flickr URL, with
+    // their uploaded image left orphaned in album_covers.
+    const done = await db
+      .update(albums)
+      .set({ coverImageUrl: c.coverImageUrl, updatedAt: new Date() })
+      .where(and(eq(albums.id, c.id), isNull(albums.coverImageUrl)))
+      .returning({ id: albums.id })
+    if (done.length === 0) continue
     updated++
   }
   return NextResponse.json({ updated })

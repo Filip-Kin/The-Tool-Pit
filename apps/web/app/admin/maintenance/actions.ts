@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache'
 import { eq, sql, and, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import {
+  DUPLICATE_NAME_SIMILARITY,
   tools,
   toolLinks,
   toolPrograms,
@@ -76,12 +77,24 @@ export async function scanDuplicates(): Promise<{ error?: string; groups?: DupeG
     const urlClusters: string[][] = [...byUrl.values()].filter((ids) => ids.length > 1)
 
     // ── Name duplicates: pairwise similarity, then cluster transitively ──
+    //
+    // Same threshold as the ingest pipeline, from the same constant. They used
+    // to be 0.85 here and 0.7 there, so the crawler silently discarded
+    // candidates this screen would never have shown anybody.
+    //
+    // A different team or a different season is a different listing, and the
+    // archive wants every season. Without this the panel proposes merging
+    // "1511 2023 Robot Code" into "1511 2026 Robot Code", which is the thing
+    // the archive exists to keep apart. Compared on the stored columns, so a
+    // moderator's correction counts.
     const namePairs = await db.execute<{ tool_id_a: string; tool_id_b: string }>(sql`
       SELECT a.id AS tool_id_a, b.id AS tool_id_b
       FROM tools a
       JOIN tools b
-        ON similarity(a.name, b.name) > 0.85
+        ON similarity(a.name, b.name) > ${DUPLICATE_NAME_SIMILARITY}
        AND a.id < b.id
+       AND (a.team_number IS NULL OR b.team_number IS NULL OR a.team_number = b.team_number)
+       AND (a.season_year IS NULL OR b.season_year IS NULL OR a.season_year = b.season_year)
       WHERE a.status = 'published'
         AND b.status = 'published'
     `)

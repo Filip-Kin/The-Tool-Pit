@@ -21,7 +21,7 @@
  */
 import { and, eq, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
-import { tools, toolLinks } from '@the-tool-pit/db'
+import { tools, toolLinks, popularityScoreSql } from '@the-tool-pit/db'
 import { fetchGitHubRepoOutcome } from '../connectors/github.js'
 import { fetchChiefDelphiTopic, parseChiefDelphiTopicId } from '../connectors/discourse.js'
 import { delay } from '../connectors/base.js'
@@ -325,11 +325,7 @@ export async function processPopularityRefreshJob(
 
   const rewritten = await db
     .update(tools)
-    .set({
-      popularityScore: sql`${tools.githubStars} + ${tools.chiefDelphiLikes} + coalesce((
-        select count(*) from tool_votes tv where tv.tool_id = ${tools.id}
-      ), 0)`,
-    })
+    .set({ popularityScore: popularityScoreSql })
     .where(and(eq(tools.status, 'published'), ...(onlyTool ? [eq(tools.id, onlyTool)] : [])))
     .returning({ id: tools.id })
   stats.scoresRewritten = rewritten.length

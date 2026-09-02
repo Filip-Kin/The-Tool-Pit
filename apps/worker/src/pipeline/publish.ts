@@ -17,7 +17,7 @@ import {
   audienceFunctions,
 } from '@the-tool-pit/db'
 import type { NewTool } from '@the-tool-pit/db'
-import { isHumanEdited, isHumanEditedLink } from '@the-tool-pit/db'
+import { isHumanEdited, isHumanEditedLink, popularityScoreSql } from '@the-tool-pit/db'
 
 /** Confidence threshold to auto-publish (0.0–1.0) */
 const PUBLISH_THRESHOLD = 0.7
@@ -195,15 +195,31 @@ export async function publishCandidate(candidateId: string, sourceType = 'manual
         teamNumber: typeof classification.teamNumber === 'number' ? classification.teamNumber : null,
         seasonYear: typeof classification.seasonYear === 'number' ? classification.seasonYear : null,
         githubStars: typeof meta.githubStars === 'number' ? meta.githubStars : 0,
-        chiefDelphiLikes: typeof meta.chiefDelphiLikes === 'number' ? meta.chiefDelphiLikes : 0,
-        popularityScore: (typeof meta.githubStars === 'number' ? meta.githubStars : 0) +
-                         (typeof meta.chiefDelphiLikes === 'number' ? meta.chiefDelphiLikes : 0),
+        // NOT chiefDelphiLikes, and NOT popularityScore.
+        //
+        // This wrote both, from `meta.chiefDelphiLikes`, a metadata key that
+        // nothing in the repo has ever written. So a re-publish set the likes
+        // to zero and then wrote a score to match. 134 of the 138 listings that
+        // carry likes were exposed, 2192 likes between them, and 353
+        // re-publishes ran in a single day. It looked harmless only because the
+        // 07:20 popularity pass rebuilt the column every morning.
+        //
+        // The likes belong to jobs/popularity.ts, which reads them from the
+        // forum. The score is recomputed below from the row's own columns.
         confidenceScore: confidence,
       }
 
       await tx
         .update(tools)
         .set({ ...withoutHumanEdits(crawlSet, humanEdited), updatedAt: new Date() })
+        .where(eq(tools.id, existingToolId))
+
+      // A second statement, deliberately. Postgres evaluates a SET list against
+      // the row as it was before the UPDATE, so folding this into the one above
+      // would score the listing on the star count it held a moment ago.
+      await tx
+        .update(tools)
+        .set({ popularityScore: popularityScoreSql })
         .where(eq(tools.id, existingToolId))
 
       // Sync links: delete auto-managed types and re-insert. A type someone set
@@ -309,9 +325,11 @@ export async function publishCandidate(candidateId: string, sourceType = 'manual
     teamNumber: typeof classification.teamNumber === 'number' ? classification.teamNumber : null,
     seasonYear: typeof classification.seasonYear === 'number' ? classification.seasonYear : null,
     githubStars: typeof meta.githubStars === 'number' ? meta.githubStars : 0,
-    chiefDelphiLikes: typeof meta.chiefDelphiLikes === 'number' ? meta.chiefDelphiLikes : 0,
-    popularityScore: (typeof meta.githubStars === 'number' ? meta.githubStars : 0) +
-                     (typeof meta.chiefDelphiLikes === 'number' ? meta.chiefDelphiLikes : 0),
+    // A brand new row has no votes and no forum likes yet, so its score is its
+    // stars and the daily pass fills the rest in. chiefDelphiLikes is left at
+    // the column default rather than written from `meta.chiefDelphiLikes`,
+    // which nothing has ever populated.
+    popularityScore: typeof meta.githubStars === 'number' ? meta.githubStars : 0,
     confidenceScore: confidence,
     freshnessState: 'unknown',
     publishedAt: new Date(),

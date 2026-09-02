@@ -6,6 +6,11 @@
 import { and, eq, isNotNull, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import { tools, toolLinks, crawlCandidates } from '@the-tool-pit/db'
+import {
+  DUPLICATE_NAME_SIMILARITY,
+  definitelyDifferentListings,
+  identityFromName,
+} from '@the-tool-pit/db'
 
 export interface DedupeResult {
   isDuplicate: boolean
@@ -67,19 +72,60 @@ export async function checkDuplicateByUrl(canonicalUrl: string): Promise<DedupeR
   return { isDuplicate: false }
 }
 
-/** Step 4: pg_trgm similarity(tools.name, title) > 0.7 */
+/**
+ * Step 4: a name close enough to something we already hold.
+ *
+ * THIS STEP DELETES WORK. A hit here drops the candidate before it is ever
+ * written down, so a false positive is a listing nobody knows is missing. It
+ * had two of them.
+ *
+ * The threshold was 0.7 here and 0.85 in the admin duplicate panel, so anything
+ * scoring between them was discarded by the crawler and invisible to the
+ * screen built to review exactly this. One constant now, and it is the panel's.
+ *
+ * The status filter was missing, so 22 published names were being blocked by
+ * SUPPRESSED rows: spam that was rejected once went on rejecting real listings
+ * from behind the curtain.
+ *
+ * And the archive is meant to hold every season of a team's code and CAD.
+ * "1511 2023 Robot Code" against "1511 2026 Robot Code" scores 0.826, as does
+ * "3407 2023" against "3405 2023", which is two different teams. Similarity
+ * cannot see the only part of those names that carries meaning, so the team and
+ * the season are checked directly and they overrule it.
+ */
 export async function checkDuplicateByName(title: string): Promise<DedupeResult> {
   if (!title || title.length < 3) return { isDuplicate: false }
 
   const db = getDb()
-  const [similarTool] = await db
-    .select({ id: tools.id })
-    .from(tools)
-    .where(sql`similarity(${tools.name}, ${title}) > 0.7`)
-    .limit(1)
+  const incoming = identityFromName(title)
 
-  if (similarTool) {
-    return { isDuplicate: true, matchedToolId: similarTool.id, method: 'name_similarity' }
+  // Several, not one. The closest name by score is often not the one that
+  // shares a team and a season, and taking only the top row would call a
+  // different season a duplicate of it.
+  const similar = await db
+    .select({ id: tools.id, name: tools.name, teamNumber: tools.teamNumber, seasonYear: tools.seasonYear })
+    .from(tools)
+    .where(
+      and(
+        eq(tools.status, 'published'),
+        sql`similarity(${tools.name}, ${title}) > ${DUPLICATE_NAME_SIMILARITY}`,
+      ),
+    )
+    .orderBy(sql`similarity(${tools.name}, ${title}) desc`)
+    .limit(5)
+
+  for (const candidate of similar) {
+    // The stored row's own columns first: the classifier filled them and a
+    // human may have corrected them, so they beat anything parsed from a name.
+    // Fall back to the name for the few rows that carry neither.
+    const parsed = identityFromName(candidate.name)
+    const stored = {
+      teamNumber: candidate.teamNumber ?? parsed.teamNumber,
+      seasonYear: candidate.seasonYear ?? parsed.seasonYear,
+    }
+    if (definitelyDifferentListings(incoming, stored)) continue
+
+    return { isDuplicate: true, matchedToolId: candidate.id, method: 'name_similarity' }
   }
 
   return { isDuplicate: false }
