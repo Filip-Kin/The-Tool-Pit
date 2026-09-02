@@ -9,6 +9,7 @@ import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELE
 import { readPhotoFiles } from '@/lib/fields/form-parse'
 import { notifyFieldPublished, notifyFieldRejected } from '@/lib/notify/approvals'
 import { grantFieldOwnership } from '@/lib/listings/submitter-ownership'
+import { fieldPublishBlockers } from '@/lib/fields/publish-bar'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -19,18 +20,28 @@ function revalidateAll() {
   revalidatePath('/fields')
 }
 
-/** Publish a field. Requires coordinates so it can actually be placed on the map. */
+/** Publish a field, if it clears the bar above. */
 export async function approveField(id: string): Promise<{ error?: string }> {
   await assertAdmin()
   const db = getDb()
   const [f] = await db
-    .select({ latitude: practiceFields.latitude, longitude: practiceFields.longitude })
+    .select({
+      latitude: practiceFields.latitude,
+      longitude: practiceFields.longitude,
+      contactInfo: practiceFields.contactInfo,
+      contactUrl: practiceFields.contactUrl,
+      website: practiceFields.website,
+    })
     .from(practiceFields)
     .where(eq(practiceFields.id, id))
     .limit(1)
   if (!f) return { error: 'Field not found' }
-  if (f.latitude == null || f.longitude == null) {
-    return { error: 'Set a pin location before publishing - it needs coordinates for the map.' }
+
+  const missing = fieldPublishBlockers(f)
+  if (missing.length > 0) {
+    // Name what is missing. "Cannot publish" with no reason is how a reviewer
+    // ends up guessing, or editing the wrong field until the button works.
+    return { error: `Not ready to publish. Add ${missing.join(', and ')}.` }
   }
   await db
     .update(practiceFields)

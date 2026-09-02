@@ -134,6 +134,7 @@ export class TbaOffseasonEventsConnector implements EventListingConnector {
             // the Orange Alliance sync, which is a different connector.
             program: 'frc',
             venueName: event.venue ?? undefined,
+            address: event.address ?? undefined,
             city: event.city ?? undefined,
             region: event.stateProv ?? undefined,
             country: event.country ?? undefined,

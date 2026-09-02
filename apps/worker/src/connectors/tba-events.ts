@@ -28,6 +28,14 @@ export interface TbaEventUpsert {
   stateProv: string | null
   country: string | null
   venue: string | null
+  /**
+   * Street address, which TBA fills on every off-season event it lists.
+   *
+   * It was declared nowhere and mapped nowhere, so a discovered event reached a
+   * reviewer with a venue name and no address, and finding the place to put a
+   * map pin on became the reviewer's problem. TBA had it the whole time.
+   */
+  address: string | null
   website: string | null
 }
 
@@ -53,6 +61,7 @@ interface TbaEvent {
   state_prov: string | null
   country: string | null
   location_name: string | null
+  address: string | null
   website: string | null
 }
 
@@ -99,6 +108,7 @@ export class TbaEventsConnector {
       stateProv: e.state_prov,
       country: e.country,
       venue: e.location_name,
+      address: e.address,
       website: e.website,
     }))
 

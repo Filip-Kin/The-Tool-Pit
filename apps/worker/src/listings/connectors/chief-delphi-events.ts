@@ -79,8 +79,19 @@ const MAX_TOPIC_FETCHES = 40
  * runs, and the thread dies. Anything older than this window is last year's
  * event, and listing last year's event as upcoming is the exact failure the
  * whole review gate exists to prevent.
+ *
+ * 200, down from 400. The queries were run against live Chief Delphi before
+ * this connector had ever fired: 400 days let two of last year's events through
+ * (Clipper Clash, September 2025, and Mississippi Mayhem, November 2025) into a
+ * set of 15 survivors. A window that admits the exact thing the comment above
+ * says it exists to exclude is not a window.
+ *
+ * 200 still reaches an event announced in March for an October date, which is
+ * the longest real announcement-to-event gap in the FRC off-season. The cost of
+ * being wrong in this direction is one missed candidate a human can add by
+ * hand. The cost in the other direction is last year's event on the front page.
  */
-const RECENCY_DAYS = 400
+const RECENCY_DAYS = 200
 
 /** The thread has to be ABOUT an event. */
 const EVENT_WORDS = [
