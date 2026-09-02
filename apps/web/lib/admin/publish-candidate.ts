@@ -18,6 +18,7 @@ import {
   audienceFunctions,
 } from '@the-tool-pit/db'
 import type { NewTool } from '@the-tool-pit/db'
+import { buildSlug } from '@the-tool-pit/db/slug'
 
 export async function adminPublishCandidate(candidateId: string): Promise<{ toolId: string } | { error: string }> {
   const db = getDb()
@@ -33,13 +34,11 @@ export async function adminPublishCandidate(candidateId: string): Promise<{ tool
   const classification = (candidate.classification ?? {}) as Record<string, unknown>
   const meta = (candidate.rawMetadata ?? {}) as Record<string, unknown>
 
-  // Build slug from canonical URL hostname or title
-  const titleBase = ((meta.title as string) ?? 'tool')
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .slice(0, 80)
+  // The same slug builder the worker publishes with. This used to re-inline it
+  // and drop the final trim, so a title ending in punctuation produced a slug
+  // with a trailing hyphen, and the test that pins that trim was pointed at the
+  // other copy.
+  const titleBase = buildSlug((meta.title as string) ?? 'tool')
 
   let slug = titleBase
   let attempt = 0
@@ -87,6 +86,13 @@ export async function adminPublishCandidate(candidateId: string): Promise<{ tool
   const githubUrl = meta.githubUrl as string | undefined
   if (githubUrl) {
     await db.insert(toolLinks).values({ toolId, linkType: 'github', url: githubUrl })
+  }
+  // The Chief Delphi thread, which the worker's publish path inserts and this
+  // one did not. Without it an admin-approved forum tool has no thread link, so
+  // the popularity pass has nothing to read and the listing can never accrue a
+  // single like.
+  if (candidate.sourceUrl?.includes('chiefdelphi.com')) {
+    await db.insert(toolLinks).values({ toolId, linkType: 'forum', url: candidate.sourceUrl })
   }
 
   // Programs

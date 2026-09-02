@@ -22,16 +22,12 @@ import { isHumanEdited, isHumanEditedLink, popularityScoreSql } from '@the-tool-
 /** Confidence threshold to auto-publish (0.0–1.0) */
 const PUBLISH_THRESHOLD = 0.7
 
-/** Build a URL-safe slug from a raw title string. Pure function — does not check uniqueness. */
-export function buildSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .slice(0, 80)
-    .replace(/^-+|-+$/g, '')
-}
+// Imported AND re-exported: the file uses it below, and existing importers and
+// tests reach for it here. The function itself moved to packages/db so the
+// admin publish button can use the same one instead of re-inlining it, which is
+// how that copy lost the trailing-hyphen trim.
+import { buildSlug } from '@the-tool-pit/db/slug'
+export { buildSlug }
 
 export interface PublishResult {
   toolId: string

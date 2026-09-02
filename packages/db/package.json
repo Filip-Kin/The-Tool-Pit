@@ -56,6 +56,10 @@
     "./crawl-connectors": {
       "bun": "./src/crawl-connectors.ts",
       "default": "./dist/crawl-connectors.js"
+    },
+    "./slug": {
+      "bun": "./src/slug.ts",
+      "default": "./dist/slug.js"
     }
   },
   "main": "./dist/index.js",
