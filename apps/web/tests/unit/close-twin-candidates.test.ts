@@ -12,11 +12,11 @@
  * it at the just-published listing, and only ever touch rows still pending so a
  * second publish is a no-op.
  */
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const REPO = join(import.meta.dir, '../../../..')
+const REPO = join(__dirname, '../../../..')
 const FILE = 'apps/web/app/admin/event-listings/candidates/actions.ts'
 
 function read(file: string): string {
