@@ -9,6 +9,7 @@ import type { ListingClaimState } from '@/lib/queries/listing-ownership'
 import { cn } from '@/lib/utils/cn'
 import { ClaimListingButton } from '@/components/auth/claim-listing-button'
 import { EventDetail } from './event-card'
+import { EventRosterTable } from './event-roster-table'
 import { EventSubmitForm } from './event-submit-form'
 
 // A quiet footer link, matching ClaimListingButton's weight so the whole row
@@ -88,6 +89,7 @@ export function EventDialog({
             ) : (
               <div className="flex flex-col gap-5">
                 <EventDetail event={event} now={now} />
+                <EventRosterTable eventId={event.id} />
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border-subtle pt-4">
                   <ClaimListingButton entityType="event" entityId={event.id} state={claimState} />
                   {/* Just the words: "suggest" already says it is a proposal that
