@@ -36,6 +36,7 @@ export interface CreateEventEditInput {
   eventStatus?: string
   website?: string
   registrationUrl?: string
+  teamListUrl?: string
   volunteerUrl?: string
   chiefDelphiUrl?: string
   contactEmail?: string
@@ -106,7 +107,11 @@ export async function createEventEditProposal(
       : null
   const registrationStatus = pickEnum(input.registrationStatus, REGISTRATION_STATUSES, 'unknown')
 
-  const proposed: EventEditProposalData = {
+  // teamListUrl rides in the proposed jsonb alongside the typed fields. The
+  // EventEditProposalData type lives in packages/db and does not name it yet,
+  // so the value is captured here with a local widening. It reaches the
+  // listing once event-edits applies it (see the report note).
+  const proposed: EventEditProposalData & { teamListUrl?: string | null } = {
     name,
     program: pickEnum(input.program, EVENT_PROGRAMS, 'frc'),
     hostTeamNumber,
@@ -131,6 +136,7 @@ export async function createEventEditProposal(
     eventStatus: pickEnum(input.eventStatus, EVENT_STATUSES, 'confirmed'),
     website: input.website?.trim() || null,
     registrationUrl: input.registrationUrl?.trim() || null,
+    teamListUrl: input.teamListUrl?.trim() || null,
     volunteerUrl: input.volunteerUrl?.trim() || null,
     chiefDelphiUrl: input.chiefDelphiUrl?.trim() || null,
     contactEmail: input.contactEmail?.trim() || null,

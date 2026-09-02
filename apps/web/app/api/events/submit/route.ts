@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
       eventStatus: str(form, 'eventStatus'),
       website: str(form, 'website'),
       registrationUrl: str(form, 'registrationUrl'),
+      teamListUrl: str(form, 'teamListUrl'),
       volunteerUrl: str(form, 'volunteerUrl'),
       chiefDelphiUrl: str(form, 'chiefDelphiUrl'),
       contactEmail: str(form, 'contactEmail'),

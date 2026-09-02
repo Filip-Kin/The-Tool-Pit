@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
-import { MapPin, CalendarDays, Pencil, Check, X, Trash2, RotateCcw, UserRound } from 'lucide-react'
+import { MapPin, CalendarDays, Pencil, Check, X, Trash2, RotateCcw, UserRound, Users } from 'lucide-react'
 import type { EventListing } from '@the-tool-pit/db'
 import {
   EVENT_STATUSES,
@@ -19,7 +19,7 @@ import {
 } from '@/lib/events/event-display'
 import type { PublicEvent } from '@/lib/events/event-display'
 import { PinMap } from '@/components/fields/pin-map'
-import { approveEvent, suppressEvent, unsuppressEvent, deleteEvent, updateEvent, type EventEditInput } from './actions'
+import { approveEvent, approveRosterSnapshot, suppressEvent, unsuppressEvent, deleteEvent, updateEvent, type EventEditInput } from './actions'
 import { ReasonButton } from '@/components/admin/reason-button'
 import { teamListStatus } from '@/lib/admin/team-list-status'
 
@@ -38,7 +38,16 @@ function asPublic(l: EventListing): PublicEvent {
   } as unknown as PublicEvent
 }
 
-export function EventAdminRow({ listing, account }: { listing: EventListing; account?: SubmitterAccount | null }) {
+export function EventAdminRow({
+  listing,
+  account,
+  pendingRoster,
+}: {
+  listing: EventListing
+  account?: SubmitterAccount | null
+  /** A scraped roster snapshot waiting for a human, when one exists. Its count is not public until approved. */
+  pendingRoster?: { snapshotId: string; teamCount: number } | null
+}) {
   const [editing, setEditing] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -116,6 +125,18 @@ export function EventAdminRow({ listing, account }: { listing: EventListing; acc
           <Button variant="secondary" size="sm" onClick={() => setEditing((v) => !v)} disabled={pending}>
             <Pencil className="h-3 w-3" /> Edit
           </Button>
+          {/* A scraped roster is waiting. Approving it publishes the count and
+              flips the snapshot so the public roster route serves the list. */}
+          {pendingRoster && !editing && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => run(() => approveRosterSnapshot(pendingRoster.snapshotId))}
+              disabled={pending}
+            >
+              <Users className="h-3 w-3" /> Approve roster ({pendingRoster.teamCount} teams)
+            </Button>
+          )}
           {/* Hidden while the editor is open: the editor has its own Save and
               publish, and a Publish up here would ignore everything typed
               below it. */}

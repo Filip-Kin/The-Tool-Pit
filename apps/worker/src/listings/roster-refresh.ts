@@ -243,13 +243,16 @@ export async function processRosterRefreshJob(
   // #region the event's own team list
   //
   // Only for listings TBA does not hold. TBA is structured and authoritative;
-  // a page is neither, so its snapshot lands PENDING for review and the team
-  // list stays out of public view until somebody has looked at it.
+  // a page is neither, so its snapshot lands PENDING for review and NOTHING
+  // reaches the public listing until somebody has approved that snapshot.
   //
-  // The COUNT is promoted anyway, and that is a deliberate split: the number is
-  // the same class of measurement TBA's is, it is the thing a team checks to
-  // see whether there is still room, and it goes stale in a way a reviewer
-  // cannot keep up with. The names are what needs a person.
+  // The COUNT is NOT promoted here. A scraped number is as unvetted as the
+  // names beside it: a broken parser or a page that lists last year's teams
+  // would leak a wrong count onto the public card with no human in the loop.
+  // The public registeredTeamCount changes only when a moderator approves the
+  // pending snapshot (approveRosterSnapshot in the event-listings admin), which
+  // writes the count and flips the snapshot to 'approved' in one step. TBA,
+  // above, is trusted and writes its count immediately.
   //
   // A MODEL-AUTHORED PARSER, not a shared heuristic. Every event's list is
   // shaped differently and no regex reads them all: RiverRage writes the team
@@ -349,6 +352,9 @@ export async function processRosterRefreshJob(
 
       // A sane roster. registeredTeamCount counts the teams IN the event, not
       // the waitlist below it, so a full event does not read as over capacity.
+      // Computed here only for the log line; the public count is NOT written on
+      // this path (see the region note) and moves only when the pending
+      // snapshot is approved.
       const registeredCount = teams.filter((t) => !t.waitlisted).length
       const hash = hashTeams(teams)
       const didChange = previousSnap?.contentHash !== hash
@@ -361,14 +367,10 @@ export async function processRosterRefreshJob(
         teams,
         contentHash: hash,
         changed: didChange,
-        // Read off somebody's web page, so a person confirms the list.
+        // Read off somebody's web page, so a person confirms the list AND its
+        // count before either reaches the public listing.
         status: 'pending',
       })
-
-      await db
-        .update(eventListings)
-        .set({ registeredTeamCount: registeredCount, teamCountUpdatedAt: new Date(), updatedAt: new Date() })
-        .where(eq(eventListings.id, listing.id))
 
       stats.fromSite++
       if (didChange) stats.changed++

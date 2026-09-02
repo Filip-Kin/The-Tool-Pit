@@ -1,9 +1,9 @@
 import Link from 'next/link'
-import { desc, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
-import { eventListings, users, EVENT_LISTING_STATUSES } from '@the-tool-pit/db'
-import type { EventListingStatus } from '@the-tool-pit/db'
+import { eventListings, eventRosterSnapshots, users, EVENT_LISTING_STATUSES } from '@the-tool-pit/db'
+import type { EventListingStatus, RosterTeam } from '@the-tool-pit/db'
 import { EventAdminRow } from './event-admin-row'
 
 export const dynamic = 'force-dynamic'
@@ -44,6 +44,35 @@ export default async function EventListingsAdminPage({
   const counts: Record<string, number> = {}
   for (const r of all) counts[r.status] = (counts[r.status] ?? 0) + 1
 
+  // The newest UNAPPROVED scraped roster per listing, so the row can offer a
+  // one-press approve. A scraped snapshot lands 'pending' and its count is held
+  // back from the public card until a human approves it here.
+  const listingIds = rows.map((r) => r.listing.id)
+  const pendingSnaps = listingIds.length
+    ? await db
+        .select({
+          id: eventRosterSnapshots.id,
+          eventListingId: eventRosterSnapshots.eventListingId,
+          teams: eventRosterSnapshots.teams,
+          fetchedAt: eventRosterSnapshots.fetchedAt,
+        })
+        .from(eventRosterSnapshots)
+        .where(
+          and(eq(eventRosterSnapshots.status, 'pending'), inArray(eventRosterSnapshots.eventListingId, listingIds)),
+        )
+        .orderBy(desc(eventRosterSnapshots.fetchedAt))
+    : []
+  const pendingRosterByListing = new Map<string, { snapshotId: string; teamCount: number }>()
+  for (const s of pendingSnaps) {
+    // Ordered newest-first, so the first one seen for a listing is the one to offer.
+    if (pendingRosterByListing.has(s.eventListingId)) continue
+    const teams = (s.teams ?? []) as RosterTeam[]
+    pendingRosterByListing.set(s.eventListingId, {
+      snapshotId: s.id,
+      teamCount: teams.filter((t) => !t.waitlisted).length,
+    })
+  }
+
   return (
     <div className="p-4 md:p-6">
       <h1 className="text-xl font-semibold text-foreground">Off-Season Events</h1>
@@ -77,6 +106,7 @@ export default async function EventListingsAdminPage({
             <EventAdminRow
               listing={r.listing}
               account={r.accountId ? { id: r.accountId, displayName: r.accountName, email: r.accountEmail } : null}
+              pendingRoster={pendingRosterByListing.get(r.listing.id) ?? null}
             />
           </div>
         ))}

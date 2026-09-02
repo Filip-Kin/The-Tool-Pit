@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { eq, or } from 'drizzle-orm'
+import { and, eq, inArray, ne, or } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
 import { eventListingCandidates, eventListings } from '@the-tool-pit/db'
@@ -54,6 +54,67 @@ async function findListing(ref: string) {
     .where(isUuid ? or(eq(eventListings.id, clean), eq(eventListings.tbaKey, clean)) : eq(eventListings.tbaKey, clean))
     .limit(1)
   return row ?? null
+}
+
+/**
+ * Mark every other PENDING candidate for the same event as a duplicate.
+ *
+ * The same off-season event reaches us twice: TBA codes it and someone posts a
+ * Chief Delphi thread, so two candidates describe one event. Insert-time dedupe
+ * runs on tba_key and canonical URL, but publishing one candidate did nothing
+ * to its twin, which sat in pending until a human noticed (2026cc, 2026nycrr,
+ * 2026rsr were exactly this). Publishing now closes the twin.
+ *
+ * Two ways to recognise a twin, matching how the crawler dedupes at insert:
+ *   - the SAME non-null tba_key. The published candidate carries one, or the
+ *     admin typed one onto the listing while accepting a keyless CD thread, and
+ *     that key is read back off the listing here. This is what closes a TBA
+ *     twin of a published CD candidate and the reverse.
+ *   - the SAME canonical or source URL, which closes a second lead scraped off
+ *     the very page this one came from.
+ *
+ * Idempotent: it only touches rows still 'pending', so a second publish for the
+ * same event finds nothing left to close, and the just-published candidate is
+ * excluded by both its status and its id.
+ */
+async function closeTwinCandidates(
+  candidate: { id: string; tbaKey: string | null; canonicalUrl: string | null; sourceUrl: string },
+  listingId: string,
+): Promise<void> {
+  const db = getDb()
+
+  const [listing] = await db
+    .select({ tbaKey: eventListings.tbaKey })
+    .from(eventListings)
+    .where(eq(eventListings.id, listingId))
+    .limit(1)
+
+  const keys = [...new Set([candidate.tbaKey, listing?.tbaKey].filter((k): k is string => Boolean(k && k.trim())))]
+  const urls = [...new Set([candidate.canonicalUrl, candidate.sourceUrl].filter((u): u is string => Boolean(u && u.trim())))]
+
+  const matchers = []
+  if (keys.length) matchers.push(inArray(eventListingCandidates.tbaKey, keys))
+  if (urls.length) {
+    matchers.push(inArray(eventListingCandidates.canonicalUrl, urls))
+    matchers.push(inArray(eventListingCandidates.sourceUrl, urls))
+  }
+  if (matchers.length === 0) return
+
+  await db
+    .update(eventListingCandidates)
+    .set({
+      status: 'duplicate',
+      matchedListingId: listingId,
+      rejectionReason: 'Duplicate of a candidate already published for this event',
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(eventListingCandidates.status, 'pending'),
+        ne(eventListingCandidates.id, candidate.id),
+        or(...matchers),
+      ),
+    )
 }
 
 /**
@@ -146,6 +207,11 @@ export async function acceptEventCandidate(
     .set({ status: 'published', matchedListingId: created.id, rejectionReason: null, updatedAt: new Date() })
     .where(eq(eventListingCandidates.id, candidateId))
   await bumpListingSourceCounter('event', candidate.sourceId, 'yield')
+
+  // Close the twin. The same off-season event surfaces from TBA and from a
+  // Chief Delphi thread as two separate candidates; dedupe only runs at insert
+  // time, so publishing one used to leave its twin sitting in pending forever.
+  await closeTwinCandidates(candidate, created.id)
 
   revalidateAll()
   return {

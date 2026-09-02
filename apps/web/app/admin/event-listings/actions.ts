@@ -7,11 +7,13 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import {
   eventListings,
+  eventRosterSnapshots,
   EVENT_PROGRAMS,
   EVENT_STATUSES,
   REGISTRATION_STATUSES,
   VOLUNTEER_STATUSES,
 } from '@the-tool-pit/db'
+import type { RosterTeam } from '@the-tool-pit/db'
 import { notifyEventPublished, notifyEventRejected } from '@/lib/notify/approvals'
 import { grantEventOwnership } from '@/lib/listings/submitter-ownership'
 import { eventPublishBlockers } from '@/lib/events/publish-bar'
@@ -89,6 +91,54 @@ export async function suppressEvent(id: string, reason: string): Promise<{ error
   await notifyEventRejected(id, before.status === 'published', clean)
   revalidateAll()
   return {}
+}
+
+/**
+ * Approve a scraped roster snapshot and let its count reach the public listing.
+ *
+ * A site-scraped roster lands 'pending': the worker reads it off an event's own
+ * page, which can break silently or list last year's teams, so neither the team
+ * list NOR the count is public until a human has looked. This is that human's
+ * door. It flips the snapshot to 'approved' (which the public roster route then
+ * serves) AND writes the count in the same step, so the two never disagree. The
+ * waitlist is not registered, so it is left out of the count, exactly as the
+ * scrape path computed it.
+ *
+ * registeredTeamCount is machine-owned, so this write needs no human-edited
+ * guard: approving a snapshot IS the human decision for that column.
+ */
+export async function approveRosterSnapshot(snapshotId: string): Promise<{ error?: string; count?: number }> {
+  await assertAdmin()
+  const db = getDb()
+
+  const [snap] = await db
+    .select({
+      id: eventRosterSnapshots.id,
+      status: eventRosterSnapshots.status,
+      eventListingId: eventRosterSnapshots.eventListingId,
+      teams: eventRosterSnapshots.teams,
+    })
+    .from(eventRosterSnapshots)
+    .where(eq(eventRosterSnapshots.id, snapshotId))
+    .limit(1)
+  if (!snap) return { error: 'Roster snapshot not found.' }
+  if (snap.status !== 'pending') return { error: 'This roster snapshot was already handled.' }
+
+  const teams = (snap.teams ?? []) as RosterTeam[]
+  const registeredCount = teams.filter((t) => !t.waitlisted).length
+
+  await db
+    .update(eventRosterSnapshots)
+    .set({ status: 'approved' })
+    .where(eq(eventRosterSnapshots.id, snapshotId))
+
+  await db
+    .update(eventListings)
+    .set({ registeredTeamCount: registeredCount, teamCountUpdatedAt: new Date(), updatedAt: new Date() })
+    .where(eq(eventListings.id, snap.eventListingId))
+
+  revalidateAll()
+  return { count: registeredCount }
 }
 
 export async function unsuppressEvent(id: string): Promise<void> {
