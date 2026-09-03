@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     template: '%s | The Tool Pit',
   },
   description:
-    'Discover tools, calculators, apps, and resources for FRC, FTC, and FLL teams. The community directory for FIRST robotics.',
+    'Tools, calculators and apps for FRC, FTC and FLL teams. Browse by program or search by what you need, and bookmark the ones your team keeps reaching for.',
   metadataBase: new URL(process.env.NEXT_PUBLIC_URL ?? 'https://frc.tools'),
   alternates: {
     canonical: '/',
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     url: '/',
     title: 'The Tool Pit: FIRST Robotics Tool Directory',
     description:
-      'Discover tools, calculators, apps, and resources for FRC, FTC, and FLL teams. The community directory for FIRST robotics.',
+      'Tools, calculators and apps for FRC, FTC and FLL teams. Browse by program or search by what you need, and bookmark the ones your team keeps reaching for.',
   },
   // The default share card is app/opengraph-image.tsx, which Next.js merges into
   // both openGraph.images and twitter.images for every route automatically, so
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'The Tool Pit: FIRST Robotics Tool Directory',
     description:
-      'Discover tools, calculators, apps, and resources for FRC, FTC, and FLL teams. The community directory for FIRST robotics.',
+      'Tools, calculators and apps for FRC, FTC and FLL teams. Browse by program or search by what you need, and bookmark the ones your team keeps reaching for.',
   },
 }
 

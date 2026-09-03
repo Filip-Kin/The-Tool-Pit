@@ -9,17 +9,17 @@ const PROGRAM_META: Record<string, { name: string; color: string; description: s
   frc: {
     name: 'FRC',
     color: 'var(--color-frc)',
-    description: 'Tools for FIRST Robotics Competition teams: programming, CAD, scouting, strategy, and more.',
+    description: 'Tools for FIRST Robotics Competition teams: programming, CAD, scouting and strategy.',
   },
   ftc: {
     name: 'FTC',
     color: 'var(--color-ftc)',
-    description: 'Tools for FIRST Tech Challenge teams: autonomous, teleop, build systems, and resources.',
+    description: 'Tools for FIRST Tech Challenge teams: autonomous, teleop and build systems.',
   },
   fll: {
     name: 'FLL',
     color: 'var(--color-fll)',
-    description: 'Tools for FIRST LEGO League teams: mission planning, research, and team resources.',
+    description: 'Tools for FIRST LEGO League teams: mission planning and research.',
   },
 }
 
