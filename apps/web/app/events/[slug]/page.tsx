@@ -2,9 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound, permanentRedirect } from 'next/navigation'
 import { getPublishedEventBySlug, getPublishedEventById } from '@/lib/queries/event-listings'
-import { EventDetail } from '@/components/events/event-card'
-import { EventRosterTable } from '@/components/events/event-roster-table'
-import { ClaimListingButton } from '@/components/auth/claim-listing-button'
+import { EventPermalinkBody } from '@/components/events/event-permalink-body'
 import { listingClaimState } from '@/lib/queries/listing-ownership'
 import { eventDateRange, eventLocation, costLabel } from '@/lib/events/event-display'
 import { eventListingUrl } from '@the-tool-pit/types'
@@ -59,17 +57,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ sl
       <JsonLd data={eventJsonLd(ev)} />
       <Link href="/events" className="text-sm text-muted hover:text-foreground">← Back to the map</Link>
       <div className="mt-4">
-        <EventDetail event={ev} now={new Date()} />
-        {/* The registered-team list, same as the map dialog. It fetches the
-            approved roster on the client and renders nothing when there is none. */}
-        <EventRosterTable eventId={ev.id} />
-      </div>
-      {/* Additive, the same as the practice field page: anyone can still submit
-          an event without an account. This is only a shortcut for the organiser
-          who actually runs it, so they can keep the cost, the slots and the
-          registration state right without waiting on a moderator. */}
-      <div className="mt-6">
-        <ClaimListingButton entityType="event" entityId={ev.id} state={claimState} />
+        <EventPermalinkBody event={ev} claimState={claimState} />
       </div>
     </div>
   )
