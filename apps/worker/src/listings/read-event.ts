@@ -156,6 +156,14 @@ Fields:
                     "Teams", "Team List" or "Registered Teams". This is how the site tells people
                     who is coming, and it is the only such record for an event that is not on The
                     Blue Alliance.
+                    A REGISTRATION OR SIGN-UP FORM IS NOT A TEAM LIST. A "Register your team", "Sign
+                    up", "Apply" page, or a Google Form, is where teams enter, not a list of who has
+                    entered. Do not use it as teamListUrl. Only a page that actually SHOWS the teams
+                    counts.
+                    IF THE TEAM LIST IS AN EMBEDDED GOOGLE SHEET (the teams are in an iframe from
+                    docs.google.com), use the SHEET'S OWN published URL, not the wrapping page: take
+                    the iframe's docs.google.com/spreadsheets/.../pubhtml link (the /pubhtml or
+                    /pubhtml/sheet form), because the wrapper page's own HTML has no teams in it.
   website           the event's own site
   contactEmail      an email address for the organisers
   notes             the source's OWN sentence that a reader would want and no other field holds,
