@@ -110,9 +110,16 @@ Fields:
                       "open"      a team can sign up right now
                       "waitlist"  full, but still taking names
                       "closed"    sign-ups have ENDED, or the field is full and no list is being kept.
-                                  "Applications closed", "accepted teams were notified in August"
+                                  "Applications closed", "accepted teams were notified in August".
+                                  A "closed" answer needs the site to SAY sign-ups are closed or full.
                       "unknown"   nothing you read says
                     Never answer "closed" for an event whose sign-ups have not opened yet.
+                    A page-generation date, a "last updated" line, a copyright year, or the event
+                    date having already passed is NOT a statement about registration, and NEVER
+                    quote a footer timestamp like "This page was generated on ..." as evidence for
+                    this field. The Blue Alliance and other results/schedule databases do not carry
+                    the registration state at all: read it from the event's OWN site, and if no page
+                    states it, answer "unknown", never "closed".
   registrationOpensAt  "YYYY-MM-DD", the date team sign-ups OPEN, when the source states one.
                     Sites often say "Registration opens 1 September" or "applications open in
                     a couple of weeks on 8/1"; read that date. Null when no open date is stated,
