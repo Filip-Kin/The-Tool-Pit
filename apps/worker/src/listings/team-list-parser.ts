@@ -94,6 +94,7 @@ function extractTeams() {
 
 What it returns:
 - One entry per team ROBOT, not per organisation. Some events let one team enter a second robot, shown as "4611 B" or similar; that is a second entry, { number: 4611, robot: "B" }. One robot means robot: null.
+- MULTIPLE TEAMS IN ONE ROW OR CELL. A single row or cell can list several team numbers together (several teams sharing a row, often from one school), e.g. "1306 10553 10909 11258" or "2202 / 6223". Return EVERY number as its own entry { number, robot: null }, not just the first in the cell. This is different from a second robot of ONE team ("4611 B" → robot: "B"): separate whole numbers are separate teams, each robot: null.
 - number is the real FRC team number. Many lists number their SLOTS ("1 - 48", "2 - 144", ...); the slot index is NOT a team number and must not appear. Only the number after the dash is the team.
 - Skip an empty slot: "24 -" with nothing after it is not an entry.
 - Return only real teams. Ignore navigation, headings, footers, dates, times and scores elsewhere on the page.
