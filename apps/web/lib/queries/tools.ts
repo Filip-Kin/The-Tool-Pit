@@ -26,12 +26,17 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<ToolListR
   const db = getDb()
   const ids = rows.map((r) => r.id)
 
-  const [programRows, linkRows, homepageRows, voteRows] = await Promise.all([
+  const [programRows, functionRows, linkRows, homepageRows, voteRows] = await Promise.all([
     db
       .select({ toolId: toolPrograms.toolId, slug: programs.slug })
       .from(toolPrograms)
       .innerJoin(programs, eq(programs.id, toolPrograms.programId))
       .where(inArray(toolPrograms.toolId, ids)),
+    db
+      .select({ toolId: toolAudienceFunctions.toolId, slug: audienceFunctions.slug })
+      .from(toolAudienceFunctions)
+      .innerJoin(audienceFunctions, eq(audienceFunctions.id, toolAudienceFunctions.functionId))
+      .where(inArray(toolAudienceFunctions.toolId, ids)),
     db
       .select({ toolId: toolLinks.toolId, url: toolLinks.url })
       .from(toolLinks)
@@ -52,6 +57,13 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<ToolListR
     const arr = progMap.get(r.toolId) ?? []
     arr.push(r.slug)
     progMap.set(r.toolId, arr)
+  }
+
+  const funcMap = new Map<string, string[]>()
+  for (const r of functionRows) {
+    const arr = funcMap.get(r.toolId) ?? []
+    arr.push(r.slug)
+    funcMap.set(r.toolId, arr)
   }
 
   const githubMap = new Map<string, string>()
@@ -85,6 +97,7 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<ToolListR
     popularityScore: r.popularityScore,
     voteCount: (voteMap.get(r.id) ?? 0) + (r.githubStars ?? 0) + (r.chiefDelphiLikes ?? 0),
     programs: progMap.get(r.id) ?? [],
+    audienceFunctions: funcMap.get(r.id) ?? [],
     githubUrl: githubMap.get(r.id) ?? null,
     firstParty: firstPartyIds.has(r.id),
   }))

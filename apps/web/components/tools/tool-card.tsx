@@ -7,6 +7,9 @@ import { VoteButton } from '@/components/tools/vote-button'
 import { FavoriteButton } from '@/components/auth/favorite-button'
 import { cn } from '@/lib/utils/cn'
 import { formatRelativeTime } from '@/lib/utils/time'
+// Subpath, not the db barrel: this label map has zero imports, so it is safe
+// for a card that ships in the client bundle. Same file the "For:" filter reads.
+import { AUDIENCE_LABELS } from '@the-tool-pit/db/audience-enums'
 import type { SearchResultRow } from '@/lib/search/search'
 
 const PROGRAM_LABELS: Record<string, string> = {
@@ -14,6 +17,13 @@ const PROGRAM_LABELS: Record<string, string> = {
   ftc: 'FTC',
   fll: 'FLL',
 }
+
+/**
+ * How many subcategory (audience-function) badges a card shows before it stops.
+ * A tool can carry many; three keeps the badge row from wrapping into a wall and
+ * still names what the visitor most likely filtered by.
+ */
+const MAX_FUNCTION_BADGES = 3
 
 interface ToolCardProps {
   tool: SearchResultRow
@@ -71,6 +81,12 @@ export function ToolCard({ tool, voted = false, favorited = false, firstParty = 
             )}
             {tool.programs.map((p) => (
               <Badge key={p} variant="program">{PROGRAM_LABELS[p] ?? p.toUpperCase()}</Badge>
+            ))}
+            {/* Subcategory (audience function): Mechanical, Electrical,
+                Programmer, … the same field the search "For:" filter selects.
+                Neutral variant so it reads apart from program/source badges. */}
+            {tool.audienceFunctions.slice(0, MAX_FUNCTION_BADGES).map((fn) => (
+              <Badge key={fn} variant="default">{AUDIENCE_LABELS[fn] ?? fn}</Badge>
             ))}
           </div>
         </div>

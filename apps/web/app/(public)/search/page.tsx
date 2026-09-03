@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { SearchBar } from '@/components/search/search-bar'
 import { SearchResults } from '@/components/search/search-results'
 import { SearchFilters } from '@/components/search/search-filters'
+import { VerticalMatches } from '@/components/search/vertical-matches'
 import { searchTools } from '@/lib/search/search'
 import { parseSearchSort } from '@/lib/search/sort'
 import { parseSearchPage, toSearchQuery, SEARCH_PAGE_SIZE, type SearchUrlParams } from '@/lib/search/url'
@@ -65,6 +66,11 @@ export default async function SearchPage({ searchParams }: PageProps) {
           />
         </Suspense>
       </div>
+
+      {/* Verticals that aren't tools rows (Photos, Fields, Grants, Robot Code,
+          Events) surface here as a distinct section when the query names one,
+          so a search for "practice fields" or "grants" is not a dead end. */}
+      <VerticalMatches query={query} className="mb-8" />
 
       <Suspense fallback={<SearchResults.Skeleton />}>
         <SearchResults

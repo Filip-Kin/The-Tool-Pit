@@ -1,6 +1,6 @@
 import { sql, and, eq, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { tools, toolPrograms, toolLinks, toolVotes, programs, TOOL_TYPE_WEIGHTS } from '@the-tool-pit/db'
+import { tools, toolPrograms, toolLinks, toolVotes, programs, audienceFunctions, toolAudienceFunctions, TOOL_TYPE_WEIGHTS } from '@the-tool-pit/db'
 import type { SearchParams } from '@the-tool-pit/types'
 import { parseSearchSort } from './sort'
 import { searchOrderBy } from './order-by'
@@ -23,6 +23,12 @@ export interface SearchResultRow {
   popularityScore: number
   voteCount: number
   programs: string[]
+  /**
+   * Audience-function slugs (mechanical, electrical, programmer, …), the same
+   * vocabulary the "For:" filter uses. Surfaced on the card so a result carries
+   * the subcategory a visitor filtered by. Labels via AUDIENCE_LABELS.
+   */
+  audienceFunctions: string[]
   githubUrl: string | null
 }
 
@@ -296,7 +302,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
   // Fetch programs and GitHub links for returned tools
   const toolIds = rankedRows.map((r) => r.id)
 
-  const [programRows, linkRows, voteCountRows] = await Promise.all([
+  const [programRows, functionRows, linkRows, voteCountRows] = await Promise.all([
     db
       .select({
         toolId: toolPrograms.toolId,
@@ -305,6 +311,12 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
       .from(toolPrograms)
       .innerJoin(programs, eq(programs.id, toolPrograms.programId))
       .where(inArray(toolPrograms.toolId, toolIds)),
+
+    db
+      .select({ toolId: toolAudienceFunctions.toolId, slug: audienceFunctions.slug })
+      .from(toolAudienceFunctions)
+      .innerJoin(audienceFunctions, eq(audienceFunctions.id, toolAudienceFunctions.functionId))
+      .where(inArray(toolAudienceFunctions.toolId, toolIds)),
 
     db
       .select({ toolId: toolLinks.toolId, url: toolLinks.url })
@@ -333,6 +345,13 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     programsByTool.set(row.toolId, existing)
   }
 
+  const functionsByTool = new Map<string, string[]>()
+  for (const row of functionRows) {
+    const existing = functionsByTool.get(row.toolId) ?? []
+    existing.push(row.slug)
+    functionsByTool.set(row.toolId, existing)
+  }
+
   const githubByTool = new Map<string, string>()
   for (const row of linkRows) {
     githubByTool.set(row.toolId, row.url)
@@ -352,6 +371,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
   const result: SearchResultRow[] = rankedRows.map((row) => ({
     ...row,
     programs: programsByTool.get(row.id) ?? [],
+    audienceFunctions: functionsByTool.get(row.id) ?? [],
     githubUrl: githubByTool.get(row.id) ?? null,
     voteCount: (votesByTool.get(row.id) ?? 0) + (row.githubStars ?? 0) + (row.chiefDelphiLikes ?? 0),
     lastActivityAt: row.lastActivityAt ?? null,
