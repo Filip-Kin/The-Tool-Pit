@@ -54,6 +54,7 @@ export default async function EventCandidatesPage({
     : 'pending') as EventListingCandidateStatus
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
   const db = getDb()
+  const today = new Date().toISOString().slice(0, 10)
 
   const where = eq(eventListingCandidates.status, status)
   const [rows, [totals]] = await Promise.all([
@@ -70,10 +71,15 @@ export default async function EventCandidatesPage({
       .leftJoin(eventListingCrawlSources, eq(eventListingCrawlSources.id, eventListingCandidates.sourceId))
       .leftJoin(eventListings, eq(eventListings.id, eventListingCandidates.matchedListingId))
       .where(where)
-      // Newest first. There is no classifier score to sort by here: every
-      // connector in this vertical is deterministic, so a lead is not more
-      // likely to be real than the one under it.
-      .orderBy(desc(eventListingCandidates.createdAt))
+      // Upcoming first, soonest to happen at the top, so a reviewer works the
+      // events teams can still act on before ones that have already run. The
+      // start date lives in the extracted jsonb; past and undated leads sink to
+      // the bottom, newest-read among them.
+      .orderBy(
+        sql`case when coalesce(${eventListingCandidates.extracted} ->> 'startDate', '') >= ${today} then 0 else 1 end`,
+        sql`(${eventListingCandidates.extracted} ->> 'startDate') asc nulls last`,
+        desc(eventListingCandidates.createdAt),
+      )
       .limit(PAGE_SIZE)
       .offset((page - 1) * PAGE_SIZE),
     db.select({ total: sql<number>`count(*)::int` }).from(eventListingCandidates).where(where),
