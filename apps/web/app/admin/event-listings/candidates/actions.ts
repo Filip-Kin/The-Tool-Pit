@@ -2,8 +2,10 @@
 
 import { revalidatePath } from 'next/cache'
 import { and, eq, inArray, ne, or } from 'drizzle-orm'
+import { Queue } from 'bullmq'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
+import { getRedis } from '@/lib/redis'
 import { eventListingCandidates, eventListings } from '@the-tool-pit/db'
 import { bumpListingSourceCounter, eventListingFromCandidate } from '@/lib/admin/listing-discovery'
 import { eventPublishBlockers } from '@/lib/events/publish-bar'
@@ -27,6 +29,29 @@ const QUEUE_PATH = '/admin/event-listings/candidates'
 function revalidateAll() {
   revalidatePath(QUEUE_PATH)
   revalidatePath('/admin/event-listings')
+}
+
+/**
+ * Read a just-accepted listing's team list right now, rather than waiting for
+ * the 05:50 cron. Publishing an event used to do nothing for its roster, so a
+ * listing sat with no count for up to a day. The roster-refresh worker takes a
+ * `listingId` and does exactly one listing, so this enqueues that job for the
+ * new row. Only worth firing when there is somewhere to read from: a team-list
+ * URL or a TBA key. Best-effort, so a Redis hiccup never fails the publish.
+ */
+async function enqueueImmediateRosterRefresh(
+  listing: { id: string; teamListUrl?: string | null; tbaKey?: string | null },
+): Promise<void> {
+  if (!listing.teamListUrl && !listing.tbaKey) return
+  try {
+    const queue = new Queue<{ listingId: string }>('roster-refresh', {
+      connection: getRedis(),
+      defaultJobOptions: { removeOnComplete: { count: 50 }, removeOnFail: { count: 100 } },
+    })
+    await queue.add('roster-refresh', { listingId: listing.id })
+  } catch (err) {
+    console.error(`[event-candidates] could not enqueue roster refresh for ${listing.id}:`, err)
+  }
 }
 
 async function loadCandidate(candidateId: string) {
@@ -212,6 +237,10 @@ export async function acceptEventCandidate(
   // Chief Delphi thread as two separate candidates; dedupe only runs at insert
   // time, so publishing one used to leave its twin sitting in pending forever.
   await closeTwinCandidates(candidate, created.id)
+
+  // Read the team list straight away instead of waiting for the daily sweep.
+  // The row carries whatever source it has; the worker picks website vs TBA.
+  await enqueueImmediateRosterRefresh({ id: created.id, teamListUrl: row.teamListUrl, tbaKey: row.tbaKey })
 
   revalidateAll()
   return {

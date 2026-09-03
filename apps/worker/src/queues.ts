@@ -529,6 +529,17 @@ export async function scheduleRecurringJobs() {
     data: {},
   })
 
+  // TBA re-check, daily, half an hour after the roster sweep. Off-season events
+  // are often coded in TBA only days before they run, so a listing found first
+  // on Chief Delphi sits keyless until then; this pass finds a confident match
+  // and attaches the key, and the next roster sweep reads its roster. Same
+  // queue and worker as the refresh, told apart by the recheckTba flag. 06:20
+  // is clear of the listings discovery block (02:40-06:40) and the 05:50 sweep.
+  await rosterRefreshQueue.upsertJobScheduler('roster-tba-recheck', { pattern: '20 6 * * *' }, {
+    name: 'roster-tba-recheck',
+    data: { recheckTba: true },
+  })
+
   // The mid-April renewal ask. A CRON PATTERN AND NOT `every`, and this is the
   // job the comment above the grants block was written for: `every` counts
   // from the upsert, which is worker startup, so `every: 365 days` would fire

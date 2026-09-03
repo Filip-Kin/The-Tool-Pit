@@ -21,9 +21,10 @@
  * Deterministic. No model call.
  */
 import { createHash } from 'node:crypto'
-import { and, desc, eq, inArray } from 'drizzle-orm'
-import { getDb, eventListings, eventRosterSnapshots, type RosterTeam } from '@the-tool-pit/db'
+import { and, desc, eq, gte, inArray, isNull, or } from 'drizzle-orm'
+import { getDb, eventListings, eventRosterSnapshots, isHumanEdited, type RosterTeam } from '@the-tool-pit/db'
 import { delay } from '../connectors/base.js'
+import { TbaEventsConnector, type TbaEventUpsert } from '../connectors/tba-events.js'
 import {
   generateTeamListParser,
   runTeamListParser,
@@ -35,6 +36,47 @@ const TBA_BASE = 'https://www.thebluealliance.com/api/v3'
 export interface RosterRefreshPayload {
   /** Refresh one listing rather than every listing with a TBA key. */
   listingId?: string
+  /**
+   * Run the TBA re-check pass instead of a roster refresh: find a TBA key for
+   * published listings that have none yet. Its own scheduled job in queues.ts.
+   */
+  recheckTba?: boolean
+}
+
+/** TBA event_type ints kept as off-season. 99 = OFFSEASON, 100 = PRESEASON. */
+const OFFSEASON_EVENT_TYPES = new Set([99, 100])
+
+/**
+ * Where a listing's roster should be read from THIS run.
+ *
+ * TBA is not always the better source. An event's own team-list page is what an
+ * organiser keeps current before the event runs, and it is often live weeks
+ * before TBA has even coded the event. Once the event has started TBA becomes
+ * authoritative: it holds the roster that actually turned up, deterministically
+ * and without a per-site parser.
+ *
+ *   - Both sources, event not started yet -> the WEBSITE, even though a tbaKey
+ *     exists, because the organiser's page is fresher pre-event.
+ *   - Both sources, event started or over  -> TBA, now authoritative.
+ *   - One source only                      -> that source.
+ *   - No startDate                         -> treat as NOT started (most
+ *     listings are upcoming), so the website wins when it exists.
+ *
+ * `today` is an ISO date (YYYY-MM-DD); startDate is the same shape, so a string
+ * compare is a date compare.
+ */
+export function chooseRosterSource(
+  listing: { tbaKey?: string | null; teamListUrl?: string | null; startDate?: string | null },
+  today: string,
+): 'tba' | 'site' | null {
+  const hasTba = Boolean(listing.tbaKey)
+  const hasUrl = Boolean(listing.teamListUrl)
+  if (!hasTba && !hasUrl) return null
+  if (hasTba && !hasUrl) return 'tba'
+  if (hasUrl && !hasTba) return 'site'
+  // Both exist: the website until the event starts, TBA once it has.
+  const started = Boolean(listing.startDate) && today >= (listing.startDate as string)
+  return started ? 'tba' : 'site'
 }
 
 export interface RosterRefreshStats {
@@ -166,12 +208,27 @@ export async function processRosterRefreshJob(
   }
 
   const db = getDb()
+
+  // The daily TBA re-check pass is its own job on this same queue: find a key
+  // for listings that have none, so a later run can read their roster.
+  if (payload.recheckTba) {
+    const r = await processTbaRecheck(db)
+    stats.considered = r.considered
+    stats.changed = r.matched
+    stats.failed = r.failed
+    console.log(
+      `[roster-refresh] TBA re-check: ${r.considered} keyless listings, ${r.matched} newly keyed, ${r.failed} failed`,
+    )
+    return stats
+  }
+
   const listings = await db
     .select({
       id: eventListings.id,
       name: eventListings.name,
       tbaKey: eventListings.tbaKey,
       teamListUrl: eventListings.teamListUrl,
+      startDate: eventListings.startDate,
       seasonYear: eventListings.seasonYear,
       teamListParser: eventListings.teamListParser,
       teamListParserSourceUrl: eventListings.teamListParserSourceUrl,
@@ -183,8 +240,12 @@ export async function processRosterRefreshJob(
   const wanted = listings.filter(
     (l) => (l.tbaKey || l.teamListUrl) && (!payload.listingId || l.id === payload.listingId),
   )
-  const withKey = wanted.filter((l) => l.tbaKey)
-  const siteOnly = wanted.filter((l) => !l.tbaKey && l.teamListUrl)
+  // Source per listing decided by timing, not by "does it have a key". A listing
+  // with both a tbaKey and a teamListUrl reads from its own site until it starts
+  // and from TBA after. See chooseRosterSource.
+  const today = new Date().toISOString().slice(0, 10)
+  const withKey = wanted.filter((l) => chooseRosterSource(l, today) === 'tba')
+  const siteOnly = wanted.filter((l) => chooseRosterSource(l, today) === 'site')
   stats.considered = wanted.length
 
   for (const listing of withKey) {
@@ -242,9 +303,11 @@ export async function processRosterRefreshJob(
 
   // #region the event's own team list
   //
-  // Only for listings TBA does not hold. TBA is structured and authoritative;
-  // a page is neither, so its snapshot lands PENDING for review and NOTHING
-  // reaches the public listing until somebody has approved that snapshot.
+  // For every listing chooseRosterSource routed here: one with no tbaKey at all,
+  // and one that has a tbaKey but has not started yet, whose own page is the
+  // fresher source until it does. TBA is structured and authoritative; a page is
+  // neither, so its snapshot lands PENDING for review and NOTHING reaches the
+  // public listing until somebody has approved that snapshot.
   //
   // The COUNT is NOT promoted here. A scraped number is as unvetted as the
   // names beside it: a broken parser or a page that lists last year's teams
@@ -389,3 +452,149 @@ export async function processRosterRefreshJob(
   )
   return stats
 }
+
+// #region TBA re-check for keyless listings
+
+/** Name reduced to letters and digits, so punctuation and spacing do not decide a match. */
+function normEventName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+/**
+ * A CONFIDENT TBA event for a listing that has no key, or null.
+ *
+ * Deliberately strict: a name that reduces to the same letters AND a second
+ * signal that agrees (the exact start date, or the same city and region).
+ * Attaching the wrong key would pull a different event's roster onto the
+ * listing, which is worse than leaving it keyless for another day.
+ */
+export function findTbaMatch(
+  listing: { name: string; startDate?: string | null; city?: string | null; region?: string | null },
+  events: TbaEventUpsert[],
+): { tbaKey: string; reason: string } | null {
+  const target = normEventName(listing.name)
+  // Too short to be distinctive: "CORI" or "MARC" alone would match loosely.
+  if (target.length < 5) return null
+  for (const ev of events) {
+    if (normEventName(ev.name) !== target) continue
+    if (listing.startDate && ev.startDate && listing.startDate === ev.startDate) {
+      return { tbaKey: ev.tbaKey, reason: 'name + start date' }
+    }
+    if (
+      listing.region &&
+      ev.stateProv &&
+      listing.city &&
+      ev.city &&
+      listing.region.toUpperCase() === ev.stateProv.toUpperCase() &&
+      normEventName(listing.city) === normEventName(ev.city)
+    ) {
+      return { tbaKey: ev.tbaKey, reason: 'name + city/region' }
+    }
+  }
+  return null
+}
+
+/**
+ * Attach a TBA key to published listings that have none.
+ *
+ * Off-season events are often coded in TBA only a few days before they run, so
+ * a listing we found first on Chief Delphi sits keyless until then. This pass
+ * re-checks TBA for a confident match and writes the key, which lets the normal
+ * roster refresh (and, once the event starts, its authoritative TBA roster)
+ * take over. It NEVER overwrites a human-set key, and it never takes a key that
+ * already belongs to another listing (tbaKey is unique).
+ */
+async function processTbaRecheck(
+  db: ReturnType<typeof getDb>,
+): Promise<{ considered: number; matched: number; failed: number }> {
+  // Upcoming or recently finished. A key that appears after the event is still
+  // worth having for its final roster; something that ran months ago is not.
+  const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
+
+  const keyless = await db
+    .select({
+      id: eventListings.id,
+      name: eventListings.name,
+      startDate: eventListings.startDate,
+      seasonYear: eventListings.seasonYear,
+      city: eventListings.city,
+      region: eventListings.region,
+      humanEditedFields: eventListings.humanEditedFields,
+    })
+    .from(eventListings)
+    .where(
+      and(
+        eq(eventListings.status, 'published'),
+        isNull(eventListings.tbaKey),
+        or(isNull(eventListings.startDate), gte(eventListings.startDate, cutoff)),
+      ),
+    )
+
+  if (keyless.length === 0) return { considered: 0, matched: 0, failed: 0 }
+
+  const currentYear = new Date().getFullYear()
+  const years = new Set<number>([currentYear, currentYear + 1])
+  for (const l of keyless) {
+    if (l.seasonYear) years.add(l.seasonYear)
+    else if (l.startDate) years.add(Number(l.startDate.slice(0, 4)))
+  }
+
+  // One TBA request per season, reusing the same client the discovery connector
+  // uses. skipTeams: we only want the event list, not four hundred rosters.
+  const connector = new TbaEventsConnector()
+  const offseasonByYear = new Map<number, TbaEventUpsert[]>()
+  for (const year of years) {
+    try {
+      const res = await connector.run(year, { skipTeams: true })
+      offseasonByYear.set(
+        year,
+        res.events.filter((e) => e.eventType != null && OFFSEASON_EVENT_TYPES.has(e.eventType)),
+      )
+    } catch (err) {
+      console.error(`[roster-recheck] TBA fetch ${year}: ${String(err)}`)
+    }
+    await delay(250)
+  }
+
+  let matched = 0
+  let failed = 0
+  for (const l of keyless) {
+    // A key a person deliberately set (or cleared) is theirs; never touch it.
+    if (isHumanEdited(l.humanEditedFields, 'tbaKey')) continue
+
+    const year = l.seasonYear ?? (l.startDate ? Number(l.startDate.slice(0, 4)) : currentYear)
+    const events = offseasonByYear.get(year) ?? []
+    const match = findTbaMatch(l, events)
+    if (!match) continue
+
+    // tbaKey is unique. If the key already sits on another listing, this is a
+    // duplicate of it, not a new key to write. Leave it for a human to merge.
+    const [taken] = await db
+      .select({ id: eventListings.id })
+      .from(eventListings)
+      .where(eq(eventListings.tbaKey, match.tbaKey))
+      .limit(1)
+    if (taken) {
+      console.log(`[roster-recheck] ${l.name}: TBA ${match.tbaKey} already on another listing; left keyless`)
+      continue
+    }
+
+    try {
+      await db
+        .update(eventListings)
+        // Guard the write too: only if the key is still null, so two overlapping
+        // passes cannot both claim it.
+        .set({ tbaKey: match.tbaKey, updatedAt: new Date() })
+        .where(and(eq(eventListings.id, l.id), isNull(eventListings.tbaKey)))
+      matched++
+      console.log(`[roster-recheck] ${l.name}: attached TBA key ${match.tbaKey} (${match.reason})`)
+    } catch (err) {
+      failed++
+      console.error(`[roster-recheck] ${l.name}: ${String(err)}`)
+    }
+  }
+
+  return { considered: keyless.length, matched, failed }
+}
+
+// #endregion
