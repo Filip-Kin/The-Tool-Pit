@@ -174,7 +174,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
   // ln(1300), the current maximum, so the best tool scores about 1.
   const popularityNorm = sql<number>`least(ln(1 + greatest(${tools.popularityScore}, 0)) / 7.2, 1.0) * 0.35`
 
-  // Type weight boost — preferred tool types rank higher.
+  // Type weight boost, preferred tool types rank higher.
   //
   // Built from TOOL_TYPE_WEIGHTS rather than typed out again. This was a second
   // hand-written copy of that map and the two had already drifted: the map gave
@@ -189,7 +189,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     sql` `,
   )} else 0.5 end * 0.15`
 
-  // Team-artifact penalty — demotes team code AND team CAD in general browsing without zeroing
+  // Team-artifact penalty, demotes team code AND team CAD in general browsing without zeroing
   // them. Disabled whenever the caller is explicitly after team artifacts (a team filter, or a
   // "254 code" query that set one above), so the Robot Code Archive and team searches rank normally.
   const teamFilterActive =
@@ -267,7 +267,7 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
   // lib/search/order-by.ts the clause.
   const orderBy = searchOrderBy(parseSearchSort(sort), rankScore)
 
-  // Main query — fetch tool IDs ranked by score
+  // Main query: fetch tool IDs ranked by score
   const rankedRows = await db
     .select({
       id: tools.id,
@@ -389,8 +389,8 @@ const TEAM_CAD_WORDS = /\b(cad|onshape|grabcad|models?|design)\b/
 
 /**
  * Recognise "254 code", "1678 cad", "team 254" style queries and translate them into a
- * structured team-number + artifact lookup. Returns null for ordinary searches — including a
- * bare number with no team intent — so a search for a tool that merely contains digits is not
+ * structured team-number + artifact lookup. Returns null for ordinary searches, including a
+ * bare number with no team intent, so a search for a tool that merely contains digits is not
  * hijacked.
  */
 export function parseTeamQuery(q?: string): { teamNumber: number; artifact: 'code' | 'cad' | 'any' } | null {

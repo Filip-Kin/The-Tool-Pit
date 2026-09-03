@@ -23,7 +23,7 @@
 export type TeamListTone = 'tba' | 'ok' | 'failed' | 'stale' | 'none'
 
 export interface TeamListStatus {
-  /** One short line for the badge, e.g. "Scraping OK — 24 teams". */
+  /** One short line for the badge, e.g. "Scraping OK: 24 teams". */
   label: string
   /** Semantic health, for callers that group or count by state. */
   tone: TeamListTone
@@ -80,7 +80,7 @@ export function teamListStatus(listing: TeamListStatusInput, now: Date = new Dat
   const count = listing.registeredTeamCount
   // A parser that yields a fresh, non-empty count is the healthy case.
   if (count != null && count > 0 && !isStale(listing.teamListParserUpdatedAt, now)) {
-    return tone('ok', `Scraping OK — ${count} team${count === 1 ? '' : 's'}`)
+    return tone('ok', `Scraping OK: ${count} team${count === 1 ? '' : 's'}`)
   }
 
   // Parser present but the count is missing/zero, or the parser has gone

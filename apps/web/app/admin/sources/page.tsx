@@ -129,7 +129,7 @@ export default async function SourcesPage() {
                                         {s.toolName ?? s.toolId}
                                       </Link>
                                     ) : (
-                                      '—'
+                                      '-'
                                     )}
                                   </td>
                                   <td className="px-4 py-2 font-mono text-xs text-muted">{s.sourceType}</td>
@@ -138,10 +138,10 @@ export default async function SourcesPage() {
                                       <a href={s.sourceUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
                                         {s.sourceUrl}
                                       </a>
-                                    ) : '—'}
+                                    ) : '-'}
                                   </td>
                                   <td className="px-4 py-2 text-xs text-muted whitespace-nowrap">
-                                    {s.discoveredAt ? new Date(s.discoveredAt).toLocaleDateString() : '—'}
+                                    {s.discoveredAt ? new Date(s.discoveredAt).toLocaleDateString() : '-'}
                                   </td>
                                 </tr>
                               ))}

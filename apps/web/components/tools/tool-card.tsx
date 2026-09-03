@@ -91,7 +91,7 @@ export function ToolCard({ tool, voted = false, favorited = false, firstParty = 
           </div>
         </div>
 
-        {/* GitHub link — prominent */}
+        {/* GitHub link, prominent */}
         {tool.githubUrl && (
           <a
             href={tool.githubUrl}

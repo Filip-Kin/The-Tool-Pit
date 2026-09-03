@@ -2,7 +2,7 @@
  * Admin dashboard E2E tests.
  *
  * These tests require:
- *   ADMIN_SECRET=<value> — must match what the running server uses
+ *   ADMIN_SECRET=<value>, must match what the running server uses
  *   (reads from TEST_ADMIN_SECRET env var, falls back to 'change-me-in-production')
  *
  * Covers:
@@ -10,7 +10,7 @@
  * - Overview page renders stats
  * - Tools list page renders and paginates
  * - Analytics page renders all three data tables
- *   (top queries, zero results, AND top clicked — will FAIL until the render bug is fixed)
+ *   (top queries, zero results, AND top clicked, will FAIL until the render bug is fixed)
  * - Broken nav links are caught (crawl-jobs, sources)
  */
 
@@ -106,7 +106,7 @@ describe('admin tools', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Analytics — specifically tests the topClicked bug
+// Analytics, specifically tests the topClicked bug
 // ---------------------------------------------------------------------------
 
 describe('admin analytics', () => {
@@ -139,7 +139,7 @@ describe('admin analytics', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Nav link health check — catches 404s on sidebar links
+// Nav link health check, catches 404s on sidebar links
 // ---------------------------------------------------------------------------
 
 describe('admin nav links', () => {

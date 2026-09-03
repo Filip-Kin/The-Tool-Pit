@@ -66,8 +66,8 @@ describe('homepage', () => {
   })
 
   it('vote counts on tool cards are numbers (not undefined/NaN)', async () => {
-    // Vote button shows a number — verify it's numeric, even if 0
-    // This catches the enrichTools() voteCount: 0 hardcoding — the count should
+    // Vote button shows a number, verify it's numeric, even if 0
+    // This catches the enrichTools() voteCount: 0 hardcoding, the count should
     // at least be a valid number rendered in the DOM.
     const voteTexts = await page.$$eval(
       // Vote buttons contain the count as text alongside the arrow icon

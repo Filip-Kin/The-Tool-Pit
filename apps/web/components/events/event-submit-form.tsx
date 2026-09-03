@@ -387,7 +387,7 @@ export function EventSubmitForm({
     return (
       <SubmitConfirmation
         message={result.message}
-        title={editing ? 'Thanks — your edit is in for review' : undefined}
+        title={editing ? 'Thanks, your edit is in for review' : undefined}
         onSubmitAnother={
           editing
             ? undefined
@@ -458,7 +458,7 @@ export function EventSubmitForm({
           <div className="w-32">
             <Field label="Days">
               <select value={form.days} onChange={(e) => set('days', e.target.value)} className="input">
-                <option value="">—</option>
+                <option value="">-</option>
                 <option value="1">1 day</option>
                 <option value="2">2 days</option>
               </select>

@@ -157,7 +157,7 @@ export function AddressField({
       {verified ? (
         <p className="mt-1.5 flex items-center gap-1.5 text-xs text-rookie">
           <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          Address verified — the pin is set and it will place correctly on the map.
+          Address verified, the pin is set and it will place correctly on the map.
         </p>
       ) : touched ? (
         <p className="mt-1.5 flex items-center gap-1.5 text-xs text-official">

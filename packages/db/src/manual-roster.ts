@@ -65,7 +65,7 @@ function parseOneTeam(segment: string): RosterTeam | null {
   // dash is a slot index and must never be read as a team; take the one after.
   // A hyphen with a LETTER after it ("4145-B") is not this: that is a B team,
   // and it falls through to the ordinary read below.
-  const slot = s.match(/^\d{1,5}\s*[-–—]\s*(\d{1,5})\s*([A-Za-z])?$/)
+  const slot = s.match(/^\d{1,5}\s*[-–\u2014]\s*(\d{1,5})\s*([A-Za-z])?$/)
   if (slot) {
     const number = Number(slot[1])
     if (number >= 1 && number <= MAX_TEAM_NUMBER) {

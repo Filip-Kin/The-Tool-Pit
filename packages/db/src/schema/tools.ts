@@ -37,9 +37,9 @@ export const tools = pgTable(
 
     /**
      * Lifecycle status:
-     * draft — ingested, below confidence threshold
-     * published — visible to public
-     * suppressed — hidden (spam, dupe, removed)
+     * draft: ingested, below confidence threshold
+     * published: visible to public
+     * suppressed: hidden (spam, dupe, removed)
      */
     status: text('status').notNull().default('draft'),
 
@@ -179,7 +179,7 @@ export const toolPrograms = pgTable(
 export const toolAudiencePrimaryRoles = pgTable(
   'tool_audience_primary_roles',
   {
-    // No .references() here — FK is defined at table level with a short name
+    // No .references() here, FK is defined at table level with a short name
     // to stay under Postgres's 63-character identifier limit
     toolId: uuid('tool_id').notNull(),
     roleId: integer('role_id').notNull(),

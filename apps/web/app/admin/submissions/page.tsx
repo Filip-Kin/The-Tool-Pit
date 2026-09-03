@@ -196,7 +196,7 @@ export default async function AdminSubmissionsPage({
                                   {row.submitterNote ? (
                                     <p className="text-xs text-muted line-clamp-3">{row.submitterNote}</p>
                                   ) : (
-                                    <span className="text-xs text-muted-2">—</span>
+                                    <span className="text-xs text-muted-2">-</span>
                                   )}
                                 </td>
 
@@ -215,7 +215,7 @@ export default async function AdminSubmissionsPage({
                                       )}
                                     </div>
                                   ) : (
-                                    <span className="text-xs text-muted-2">—</span>
+                                    <span className="text-xs text-muted-2">-</span>
                                   )}
                                 </td>
 

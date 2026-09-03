@@ -433,9 +433,9 @@ export default async function AdminToolEditPage({
                   <a href={s.sourceUrl} target="_blank" rel="noopener noreferrer" className="hover:underline truncate flex-1">
                     {s.sourceUrl}
                   </a>
-                ) : <span className="text-muted-2 flex-1">—</span>}
+                ) : <span className="text-muted-2 flex-1">-</span>}
                 <span className="text-muted-2 shrink-0">
-                  {s.discoveredAt ? new Date(s.discoveredAt).toLocaleDateString() : '—'}
+                  {s.discoveredAt ? new Date(s.discoveredAt).toLocaleDateString() : '-'}
                 </span>
               </div>
             ))}

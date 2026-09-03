@@ -98,7 +98,7 @@ export default async function AdminAnalyticsPage() {
         {/* Zero result queries */}
         <AnalyticsTable
           title="Zero-Result Searches"
-          description="Queries that returned no tools — opportunities for new content"
+          description="Queries that returned no tools: opportunities for new content"
           headers={['Query', 'Count']}
           rows={data.zeroResultQueries.map((r) => [r.query, r.count])}
           highlightEmpty
@@ -200,7 +200,7 @@ function AnalyticsTable({
                           <tr key={i} className="border-t border-border-subtle hover:bg-surface">
                             {row.map((cell, j) => (
                               <td key={j} className={`px-3 py-2 ${j === 0 ? 'font-mono text-xs text-foreground' : 'text-xs text-muted'}`}>
-                                {cell ?? '—'}
+                                {cell ?? '-'}
                               </td>
                             ))}
                           </tr>

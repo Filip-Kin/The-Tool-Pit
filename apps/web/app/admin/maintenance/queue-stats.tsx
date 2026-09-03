@@ -59,15 +59,15 @@ export async function QueueStats() {
                   {queues.map(({ name, counts }) => (
                     <tr key={name} className="border-t border-border-subtle">
                       <td className="px-4 py-2 font-mono text-xs text-foreground">{name}</td>
-                      <td className="px-4 py-2 text-right text-xs text-muted">{counts.waiting || '—'}</td>
+                      <td className="px-4 py-2 text-right text-xs text-muted">{counts.waiting || '-'}</td>
                       <td className={`px-4 py-2 text-right text-xs font-medium ${counts.active > 0 ? 'text-official' : 'text-muted'}`}>
-                        {counts.active || '—'}
+                        {counts.active || '-'}
                       </td>
-                      <td className="px-4 py-2 text-right text-xs text-muted">{counts.delayed || '—'}</td>
+                      <td className="px-4 py-2 text-right text-xs text-muted">{counts.delayed || '-'}</td>
                       <td className={`px-4 py-2 text-right text-xs font-medium ${counts.failed > 0 ? 'text-frc' : 'text-muted'}`}>
-                        {counts.failed || '—'}
+                        {counts.failed || '-'}
                       </td>
-                      <td className="px-4 py-2 text-right text-xs text-muted">{counts.completed || '—'}</td>
+                      <td className="px-4 py-2 text-right text-xs text-muted">{counts.completed || '-'}</td>
                     </tr>
                   ))}
                 </tbody>

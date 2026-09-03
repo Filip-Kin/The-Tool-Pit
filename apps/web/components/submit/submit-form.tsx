@@ -68,7 +68,7 @@ export function SubmitForm() {
       script.onload = renderWidget
       document.head.appendChild(script)
     } else {
-      // Script already injected but not yet loaded — poll briefly
+      // Script already injected but not yet loaded, poll briefly
       const poll = setInterval(() => {
         if (window.turnstile) {
           clearInterval(poll)
@@ -183,7 +183,7 @@ export function SubmitForm() {
 
       <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="tool" />
 
-      {/* Cloudflare Turnstile widget — only rendered when site key is configured */}
+      {/* Cloudflare Turnstile widget, only rendered when site key is configured */}
       {SITE_KEY && (
         <div ref={turnstileRef} className="min-h-[65px]" />
       )}

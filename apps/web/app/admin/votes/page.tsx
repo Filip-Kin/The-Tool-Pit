@@ -63,7 +63,7 @@ export default async function AdminVotesPage() {
                                     {v.toolName ?? v.toolId}
                                   </Link>
                                 ) : (
-                                  <span className="text-sm text-muted-2">—</span>
+                                  <span className="text-sm text-muted-2">-</span>
                                 )}
                                 {v.toolSlug && (
                                   <span className="ml-2 text-xs text-muted-2">/tools/{v.toolSlug}</span>

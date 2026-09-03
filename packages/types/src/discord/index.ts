@@ -287,7 +287,7 @@ function fail(message: string): void {
  * platform (it started life as the practice-field one), so the honest name is
  * DISCORD_WEBHOOK. The old FIELD_SUBMISSION_DISCORD_WEBHOOK is read as a fallback
  * so a half-updated Coolify environment still posts, but DISCORD_WEBHOOK is the one
- * to set going forward — on BOTH the web and worker services (the worker had neither,
+ * to set going forward, on BOTH the web and worker services (the worker had neither,
  * which is why team-list-parser failures logged "unset" instead of pinging).
  */
 export const DISCORD_WEBHOOK_ENV = 'DISCORD_WEBHOOK'

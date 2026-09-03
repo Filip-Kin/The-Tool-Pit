@@ -86,18 +86,18 @@ export default async function CrawlJobDetailPage({
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs sm:grid-cols-3">
           <div>
             <dt className="text-muted mb-0.5">Started</dt>
-            <dd className="text-foreground">{job.startedAt ? new Date(job.startedAt).toLocaleString() : '—'}</dd>
+            <dd className="text-foreground">{job.startedAt ? new Date(job.startedAt).toLocaleString() : '-'}</dd>
           </div>
           <div>
             <dt className="text-muted mb-0.5">Finished</dt>
-            <dd className="text-foreground">{job.finishedAt ? new Date(job.finishedAt).toLocaleString() : '—'}</dd>
+            <dd className="text-foreground">{job.finishedAt ? new Date(job.finishedAt).toLocaleString() : '-'}</dd>
           </div>
           <div>
             <dt className="text-muted mb-0.5">Duration</dt>
             <dd className="text-foreground">
               {job.startedAt && job.finishedAt
                 ? formatDuration(new Date(job.startedAt), new Date(job.finishedAt))
-                : '—'}
+                : '-'}
             </dd>
           </div>
         </dl>

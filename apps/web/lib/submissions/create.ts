@@ -64,7 +64,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Su
     })
     .returning({ id: submissions.id })
 
-  // Enqueue worker job — worker handles extract → classify → publish
+  // Enqueue worker job: worker handles extract → classify → publish
   await getSubmissionQueue().add('process-submission', { submissionId: created.id })
 
   // NEWLY WIRED. The oldest submit form on the site and the only one that never

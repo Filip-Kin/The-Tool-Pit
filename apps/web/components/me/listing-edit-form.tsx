@@ -449,7 +449,7 @@ function TeamListAutoGuidance() {
         </li>
         <li>
           One team per row or cell, starting with the team{' '}
-          <span className="text-foreground">number</span>. A name after it is fine — we pull team
+          <span className="text-foreground">number</span>. A name after it is fine, we pull team
           names from The Blue Alliance either way.
         </li>
         <li>
@@ -464,7 +464,7 @@ function TeamListAutoGuidance() {
           A real waitlist: put it under its own <span className="text-foreground">Waitlist</span>{' '}
           heading, in the order teams get pulled in, separate from the registered list.
         </li>
-        <li>Don&apos;t add a 1, 2, 3… row-number column — we read those as slots, not teams.</li>
+        <li>Don&apos;t add a 1, 2, 3… row-number column, we read those as slots, not teams.</li>
       </ul>
     </div>
   )

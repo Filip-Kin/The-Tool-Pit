@@ -41,7 +41,7 @@ const KEY_LABELS: Record<keyof EventEditProposalData, string> = {
 function fmt(v: unknown): string {
   if (v === true) return 'yes'
   if (v === false) return 'no'
-  if (v === null || v === undefined || v === '') return '—'
+  if (v === null || v === undefined || v === '') return '-'
   return String(v)
 }
 

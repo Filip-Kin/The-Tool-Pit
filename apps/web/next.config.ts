@@ -16,7 +16,7 @@ try {
     if (key && !(key in process.env)) process.env[key] = val
   }
 } catch {
-  // In production (Coolify), env vars are injected directly — no .env file needed
+  // In production (Coolify), env vars are injected directly, no .env file needed
 }
 
 const nextConfig: NextConfig = {

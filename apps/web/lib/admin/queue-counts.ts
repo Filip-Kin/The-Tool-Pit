@@ -203,7 +203,7 @@ export interface WorkerQueueRow {
  * Each queue gets its own short-lived connection (the maintenance page pattern):
  * passing the shared getRedis() singleton and then calling close() would tear
  * down the connection the rest of the request relies on, so BullMQ owns and
- * closes a URL-based connection instead. Fails open — an unreachable Redis
+ * closes a URL-based connection instead. Fails open, an unreachable Redis
  * returns zeros rather than 500-ing the whole overview.
  */
 export async function getWorkerQueueBacklog(): Promise<WorkerQueueRow[]> {

@@ -91,7 +91,7 @@ function writtenObjects(source: string): string[] {
       for (const spread of inline.matchAll(/\.\.\.(?:\w+\()?(\w+)/g)) names.add(spread[1])
       continue
     }
-    // `.values(toolData)` — an identifier rather than a literal.
+    // `.values(toolData)`, an identifier rather than a literal.
     const ident = source.slice(after).match(/^\s*(\w+)\s*\)/)
     if (ident) names.add(ident[1])
   }

@@ -238,7 +238,7 @@ export function ReadDetailView({ detail }: { detail: ReadDetail }) {
                   <div key={ev.field} className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-0.5">
                     <dt className="text-xs text-muted-2">{ev.field}</dt>
                     <dd className="flex min-w-0 flex-col gap-1">
-                      <span className="break-words text-sm text-foreground">{ev.value ?? '—'}</span>
+                      <span className="break-words text-sm text-foreground">{ev.value ?? '-'}</span>
                       <span className="flex flex-wrap items-start gap-1.5 text-[11px] leading-snug">
                         <span className="shrink-0 rounded bg-official/20 px-1 py-px font-medium uppercase tracking-wide text-official">
                           {shortUrl(ev.source)}

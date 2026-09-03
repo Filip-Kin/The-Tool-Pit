@@ -37,10 +37,10 @@ export default async function RosterCrawlDetailPage({
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-xs">
         <div className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1">
           <span className="text-muted-2">public count</span>
-          <span className="text-foreground">{detail.registeredTeamCount ?? '—'} teams</span>
+          <span className="text-foreground">{detail.registeredTeamCount ?? '-'} teams</span>
 
           <span className="text-muted-2">TBA key</span>
-          <span className="text-foreground">{detail.tbaKey ?? '—'}</span>
+          <span className="text-foreground">{detail.tbaKey ?? '-'}</span>
 
           <span className="text-muted-2">team-list page</span>
           {detail.teamListUrl ? (
@@ -48,7 +48,7 @@ export default async function RosterCrawlDetailPage({
               {detail.teamListUrl}
             </a>
           ) : (
-            <span className="text-foreground">—</span>
+            <span className="text-foreground">-</span>
           )}
 
           <span className="text-muted-2">site parser</span>

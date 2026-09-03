@@ -5,11 +5,11 @@ export const VOTE_COOKIE_NAME = 'tp_vid'
 export const VOTE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 2 // 2 years
 
 export interface VoterIdentity {
-  /** Hashed fingerprint stored in the DB — never the raw cookie value. */
+  /** Hashed fingerprint stored in the DB, never the raw cookie value. */
   fingerprint: string
   /** Raw UUID stored in the cookie. */
   cookieValue: string
-  /** True when no cookie existed on the request — caller must set the cookie. */
+  /** True when no cookie existed on the request, caller must set the cookie. */
   isNewCookie: boolean
 }
 
@@ -17,7 +17,7 @@ export interface VoterIdentity {
  * Resolves or creates a stable voter identity from the request cookie.
  *
  * If a tp_vid cookie is present its value is hashed to produce the fingerprint.
- * If absent a fresh UUID is generated — the caller is responsible for setting
+ * If absent a fresh UUID is generated, the caller is responsible for setting
  * the cookie in the response so subsequent requests reuse the same fingerprint.
  */
 export function resolveVoterIdentity(req: NextRequest): VoterIdentity {

@@ -70,15 +70,15 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border border-border bg-surface p-4 text-sm sm:grid-cols-4">
         <div>
           <dt className="text-xs text-muted">Joined</dt>
-          <dd className="text-foreground">{formatDate(user.createdAt) || '—'}</dd>
+          <dd className="text-foreground">{formatDate(user.createdAt) || '-'}</dd>
         </div>
         <div>
           <dt className="text-xs text-muted">Last seen</dt>
-          <dd className="text-foreground">{formatDateTime(user.lastSeenAt) || '—'}</dd>
+          <dd className="text-foreground">{formatDateTime(user.lastSeenAt) || '-'}</dd>
         </div>
         <div>
           <dt className="text-xs text-muted">GitHub</dt>
-          <dd className="text-foreground">{user.githubLogin ? `@${user.githubLogin}` : '—'}</dd>
+          <dd className="text-foreground">{user.githubLogin ? `@${user.githubLogin}` : '-'}</dd>
         </div>
         <div>
           <dt className="text-xs text-muted">Email verified</dt>

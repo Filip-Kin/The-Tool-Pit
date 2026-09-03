@@ -1,6 +1,6 @@
 /**
  * Seed 25 real FIRST Robotics tools directly into the database.
- * Bypasses the ingestion pipeline — treats these as manually curated records.
+ * Bypasses the ingestion pipeline, treats these as manually curated records.
  *
  * Run with: npx tsx src/seed-tools.ts
  *
@@ -43,7 +43,7 @@ interface SeedTool {
 
 const SEED_TOOLS: SeedTool[] = [
   // ---------------------------------------------------------------------------
-  // FRC — Scouting & Data
+  // FRC - Scouting & Data
   // ---------------------------------------------------------------------------
   {
     slug: 'the-blue-alliance',
@@ -93,7 +93,7 @@ const SEED_TOOLS: SeedTool[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // FRC — Autonomous & Path Planning
+  // FRC - Autonomous & Path Planning
   // ---------------------------------------------------------------------------
   {
     slug: 'pathplanner',
@@ -129,7 +129,7 @@ const SEED_TOOLS: SeedTool[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // FRC — Vision
+  // FRC - Vision
   // ---------------------------------------------------------------------------
   {
     slug: 'photonvision',
@@ -166,7 +166,7 @@ const SEED_TOOLS: SeedTool[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // FRC — Telemetry & Debugging
+  // FRC - Telemetry & Debugging
   // ---------------------------------------------------------------------------
   {
     slug: 'advantagescope',
@@ -185,7 +185,7 @@ const SEED_TOOLS: SeedTool[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // FRC — Programming Framework & Libraries
+  // FRC - Programming Framework & Libraries
   // ---------------------------------------------------------------------------
   {
     slug: 'wpilib',
@@ -222,7 +222,7 @@ const SEED_TOOLS: SeedTool[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // FRC — Design Resources
+  // FRC - Design Resources
   // ---------------------------------------------------------------------------
   {
     slug: 'frcdesign-org',
@@ -241,7 +241,7 @@ const SEED_TOOLS: SeedTool[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // FRC — Event & Queue Management
+  // FRC - Event & Queue Management
   // ---------------------------------------------------------------------------
   {
     slug: 'frc-nexus',
@@ -260,7 +260,7 @@ const SEED_TOOLS: SeedTool[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // FRC — Official Data
+  // FRC - Official Data
   // ---------------------------------------------------------------------------
   {
     slug: 'frc-events-api',
@@ -280,7 +280,7 @@ const SEED_TOOLS: SeedTool[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // FTC — Data & Scouting
+  // FTC - Data & Scouting
   // ---------------------------------------------------------------------------
   {
     slug: 'ftcscout',
@@ -300,7 +300,7 @@ const SEED_TOOLS: SeedTool[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // FTC — Autonomous & Path Planning
+  // FTC - Autonomous & Path Planning
   // ---------------------------------------------------------------------------
   {
     slug: 'road-runner',
@@ -336,7 +336,7 @@ const SEED_TOOLS: SeedTool[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // FTC — Telemetry & Debugging
+  // FTC - Telemetry & Debugging
   // ---------------------------------------------------------------------------
   {
     slug: 'ftc-dashboard',
@@ -356,7 +356,7 @@ const SEED_TOOLS: SeedTool[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // FTC — Vision
+  // FTC - Vision
   // ---------------------------------------------------------------------------
   {
     slug: 'eocv-sim',
@@ -375,7 +375,7 @@ const SEED_TOOLS: SeedTool[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // FTC — Official Data
+  // FTC - Official Data
   // ---------------------------------------------------------------------------
   {
     slug: 'ftc-event-results',

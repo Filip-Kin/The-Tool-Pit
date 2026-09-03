@@ -18,7 +18,7 @@ try {
     if (key && !(key in process.env)) process.env[key] = val
   }
 } catch {
-  // .env absent in CI/production — env vars must be set externally
+  // .env absent in CI/production, env vars must be set externally
 }
 
 if (!process.env.DATABASE_URL) {

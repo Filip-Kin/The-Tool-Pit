@@ -26,7 +26,7 @@ export interface MergeField {
 }
 
 function display(v: string | number | boolean | null): string {
-  if (v === null) return '—'
+  if (v === null) return '-'
   if (typeof v === 'boolean') return v ? 'yes' : 'no'
   return String(v)
 }

@@ -30,7 +30,7 @@ export function VoteButton({ toolId, initialCount, initialVoted = false, classNa
           setVoted(data.voted)
         }
       } catch {
-        // Fail silently — voting is non-critical
+        // Fail silently, voting is non-critical
       }
     })
   }

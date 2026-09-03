@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { searchTools } from '@/lib/search/search'
 
 /**
- * Lightweight suggestions endpoint — returns top 5 matching tools for the
+ * Lightweight suggestions endpoint, returns top 5 matching tools for the
  * search bar dropdown. No analytics logging (not a committed search).
  */
 export async function GET(req: NextRequest) {

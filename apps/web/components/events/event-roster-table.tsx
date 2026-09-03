@@ -102,7 +102,7 @@ function TeamRow({ team }: { team: RosterTeamRow }) {
           </span>
         </span>
       </td>
-      <td className="w-full break-words py-1.5 pr-3 text-muted">{team.name ?? '—'}</td>
+      <td className="w-full break-words py-1.5 pr-3 text-muted">{team.name ?? '-'}</td>
     </tr>
   )
 }

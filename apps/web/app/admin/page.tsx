@@ -131,7 +131,7 @@ export default async function AdminOverviewPage() {
                       )}
                     </td>
                     <td className="px-4 py-2 text-right text-xs text-muted">
-                      {row.oldestPendingAt ? new Date(row.oldestPendingAt).toLocaleDateString() : '—'}
+                      {row.oldestPendingAt ? new Date(row.oldestPendingAt).toLocaleDateString() : '-'}
                     </td>
                   </ClickableRow>
                 ))}
@@ -168,16 +168,16 @@ export default async function AdminOverviewPage() {
                   >
                     <td className="px-4 py-2 text-foreground">{row.label}</td>
                     <td className="px-4 py-2 text-right font-mono text-xs text-muted">
-                      {row.waiting > 0 ? row.waiting.toLocaleString() : '—'}
+                      {row.waiting > 0 ? row.waiting.toLocaleString() : '-'}
                     </td>
                     <td className={`px-4 py-2 text-right font-mono text-xs ${row.active > 0 ? 'text-official font-medium' : 'text-muted'}`}>
-                      {row.active > 0 ? row.active.toLocaleString() : '—'}
+                      {row.active > 0 ? row.active.toLocaleString() : '-'}
                     </td>
                     <td className={`px-4 py-2 text-right font-mono text-xs ${row.failed > 0 ? 'text-frc font-semibold' : 'text-muted'}`}>
-                      {row.failed > 0 ? row.failed.toLocaleString() : '—'}
+                      {row.failed > 0 ? row.failed.toLocaleString() : '-'}
                     </td>
                     <td className="px-4 py-2 text-right text-xs text-muted">
-                      {row.oldestWaitingAt ? new Date(row.oldestWaitingAt).toLocaleString() : '—'}
+                      {row.oldestWaitingAt ? new Date(row.oldestWaitingAt).toLocaleString() : '-'}
                     </td>
                   </ClickableRow>
                 ))}
@@ -212,10 +212,10 @@ export default async function AdminOverviewPage() {
                                     <StatusText status={job.status} />
                                   </td>
                                   <td className="px-4 py-2 text-xs text-muted">
-                                    {job.startedAt ? new Date(job.startedAt).toLocaleString() : '—'}
+                                    {job.startedAt ? new Date(job.startedAt).toLocaleString() : '-'}
                                   </td>
                                   <td className="px-4 py-2 text-right text-xs text-muted">
-                                    {job.stats ? `${(job.stats as any).discovered ?? 0} found` : '—'}
+                                    {job.stats ? `${(job.stats as any).discovered ?? 0} found` : '-'}
                                   </td>
                                 </ClickableRow>
                               ))}

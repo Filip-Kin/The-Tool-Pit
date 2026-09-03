@@ -328,7 +328,7 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
         <L label="Start date"><DateField value={form.startDate ?? ''} onChange={(v) => set('startDate', v || null)} /></L>
         <L label="End date"><DateField value={form.endDate ?? ''} onChange={(v) => set('endDate', v || null)} /></L>
         <div className="flex gap-2">
-          <L label="Days"><select className="input" value={form.days ?? ''} onChange={(e) => set('days', e.target.value ? Number(e.target.value) : null)}><option value="">—</option><option value="1">1</option><option value="2">2</option></select></L>
+          <L label="Days"><select className="input" value={form.days ?? ''} onChange={(e) => set('days', e.target.value ? Number(e.target.value) : null)}><option value="">-</option><option value="1">1</option><option value="2">2</option></select></L>
           <L label="Capacity"><input type="number" className="input" value={form.capacity ?? ''} onChange={(e) => set('capacity', e.target.value ? Number(e.target.value) : null)} /></L>
         </div>
         <div className="flex gap-2">

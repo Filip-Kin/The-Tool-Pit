@@ -320,7 +320,7 @@ export async function getOfficialTools(limit = 6): Promise<ToolListRow[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Tool detail — full record with all relations
+// Tool detail: full record with all relations
 // ---------------------------------------------------------------------------
 
 export interface ToolDetailData {

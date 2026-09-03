@@ -13,7 +13,7 @@ function isOffseason(eventType: number | null): boolean {
   return eventType === 99 || eventType === 100
 }
 
-/** Collage of album cover images — the focal point of the card. */
+/** Collage of album cover images, the focal point of the card. */
 function CoverCollage({ covers }: { covers: string[] }) {
   const n = covers.length
   if (n === 0) {

@@ -198,7 +198,7 @@ export async function mergeDuplicate(
   try {
     await db.transaction(async (tx) => {
       for (const duplicateId of ids) {
-        // Re-point votes — delete conflicting rows first (same voter already voted on canonical)
+        // Re-point votes, delete conflicting rows first (same voter already voted on canonical)
         await tx.execute(sql`
           DELETE FROM tool_votes
           WHERE tool_id = ${duplicateId}
@@ -235,7 +235,7 @@ export async function mergeDuplicate(
           WHERE matched_tool_id = ${duplicateId}
         `)
 
-        // Merge junction tables (ignore conflicts — canonical may already have the row)
+        // Merge junction tables (ignore conflicts, canonical may already have the row)
         await tx.execute(sql`
           INSERT INTO tool_programs (tool_id, program_id)
           SELECT ${canonicalId}, program_id FROM tool_programs WHERE tool_id = ${duplicateId}
@@ -338,7 +338,7 @@ ${groupSummaries.join('\n\n')}`
 
     const text = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? ''
 
-    // Extract individual "index": "uuid" pairs directly — tolerates truncated responses
+    // Extract individual "index": "uuid" pairs directly, tolerates truncated responses
     const raw: Record<string, string> = {}
     const pairRe = /"(\d+)"\s*:\s*"([0-9a-f-]{36})"/g
     let m: RegExpExecArray | null

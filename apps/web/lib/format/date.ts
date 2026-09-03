@@ -2,7 +2,7 @@
  * One unambiguous date format for the whole app.
  *
  * A bare `new Date(x).toLocaleDateString()` renders "2/9/2026", which is
- * February 9th to a US reader and September 2nd to everyone else — and the
+ * February 9th to a US reader and September 2nd to everyone else, and the
  * server's locale, not the reader's, decides. FRC's audience is overwhelmingly
  * US, so we spell the month out and lead with it: no reader has to guess.
  */

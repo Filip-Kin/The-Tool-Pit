@@ -108,7 +108,7 @@ const SHORT_LINK_HOSTS = new Set(['photos.app.goo.gl', 'app.goo.gl', 'goo.gl'])
 /**
  * Resolve a short share link to its final URL by following one redirect, so both forms of the
  * same album canonicalize identically. Returns the input unchanged for non-short-link hosts or
- * on any failure. SERVER-SIDE ONLY — performs a network fetch; do not call from client code.
+ * on any failure. SERVER-SIDE ONLY, performs a network fetch; do not call from client code.
  */
 export async function resolveShareUrl(url: string): Promise<string> {
   let host: string

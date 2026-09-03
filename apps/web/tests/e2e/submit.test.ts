@@ -49,7 +49,7 @@ describe('submit page', () => {
     await sleep(1000)
 
     const bodyText = await page.$eval('body', (el) => el.textContent ?? '')
-    // Should show some error message — either browser validation or app-level
+    // Should show some error message, either browser validation or app-level
     // The submit form in submit-form.tsx shows error states
     const hasError =
       bodyText.toLowerCase().includes('invalid') ||

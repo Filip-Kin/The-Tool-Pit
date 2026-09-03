@@ -43,7 +43,7 @@ export function cleanEventName(raw: string): string {
   // Only when what precedes it is long enough to be a name on its own, so
   // "Bordie Blast 2026 - Bordie Through Time" keeps "Bordie Blast" but a title
   // that opens with a dash is left alone.
-  const dash = name.search(/\s[-–—:|]\s/)
+  const dash = name.search(/\s[-–\u2014:|]\s/)
   if (dash > 6) name = name.slice(0, dash)
 
   // A call to action, wherever it sits.
@@ -67,5 +67,5 @@ export function cleanEventName(raw: string): string {
   // A leading article the thread added: "The 2026 Red Stick Rumble".
   name = name.replace(/^\s*the\s+/i, '')
 
-  return name.replace(/\s+/g, ' ').replace(/^[\s\-–—:|,]+|[\s\-–—:|,]+$/g, '').trim() || raw.trim()
+  return name.replace(/\s+/g, ' ').replace(/^[\s\-–\u2014:|,]+|[\s\-–\u2014:|,]+$/g, '').trim() || raw.trim()
 }

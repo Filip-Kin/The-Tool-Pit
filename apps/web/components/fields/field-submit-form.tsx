@@ -295,7 +295,7 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
     return (
       <SubmitConfirmation
         message={result.message}
-        title={editing ? 'Thanks — your edit is in for review' : undefined}
+        title={editing ? 'Thanks, your edit is in for review' : undefined}
         onSubmitAnother={
           editing
             ? undefined

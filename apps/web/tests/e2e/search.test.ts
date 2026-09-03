@@ -40,7 +40,7 @@ afterAll(async () => {
 // Basic search
 // ---------------------------------------------------------------------------
 
-describe('search — basic', () => {
+describe('search - basic', () => {
   it('navigates to /search when typing in the hero search bar', async () => {
     await goto(page, '/')
     const input = await page.waitForSelector('input[type="search"], input[type="text"], input:not([type])')
@@ -90,7 +90,7 @@ describe('search — basic', () => {
 // Program filter
 // ---------------------------------------------------------------------------
 
-describe('search — program filter', () => {
+describe('search - program filter', () => {
   it('program filter chip updates URL with program param', async () => {
     await goto(page, '/search?q=')
     // Click the FRC filter chip
@@ -140,10 +140,10 @@ describe('search — program filter', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Sort — these tests document current BROKEN behavior and will pass once fixed
+// Sort, these tests document current BROKEN behavior and will pass once fixed
 // ---------------------------------------------------------------------------
 
-describe('search — sort (BUG: currently ignored)', () => {
+describe('search - sort (BUG: currently ignored)', () => {
   it('sort=popular URL param is preserved in the page URL', async () => {
     await goto(page, '/search?sort=popular')
     // The URL should contain sort=popular (basic param passthrough)
@@ -165,11 +165,11 @@ describe('search — sort (BUG: currently ignored)', () => {
 // Official / Rookie filters
 // ---------------------------------------------------------------------------
 
-describe('search — boolean filters', () => {
+describe('search - boolean filters', () => {
   it('official=true filter returns only official tools', async () => {
     await goto(page, '/search?official=true')
     await page.waitForSelector('article', { timeout: 10000 })
-    // Official tools have an "Official" badge — verify at least some are present
+    // Official tools have an "Official" badge, verify at least some are present
     const officialBadges = await page.$$eval(
       'article',
       (cards) =>
@@ -193,7 +193,7 @@ describe('search — boolean filters', () => {
 // Type filter
 // ---------------------------------------------------------------------------
 
-describe('search — tool type filter', () => {
+describe('search - tool type filter', () => {
   it('type=web_app filter chip updates the URL', async () => {
     await goto(page, '/search')
     await page.waitForSelector('button')

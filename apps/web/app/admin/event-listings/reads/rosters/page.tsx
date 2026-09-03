@@ -82,7 +82,7 @@ export default async function RosterCrawlsPage({
               </div>
               <div className="flex shrink-0 items-center gap-3 text-[11px] text-muted-2">
                 <span className="text-foreground">
-                  {row.registeredTeamCount ?? '—'} teams
+                  {row.registeredTeamCount ?? '-'} teams
                 </span>
                 {row.lastSnapshotStatus && <StatusChip status={row.lastSnapshotStatus} />}
                 <span aria-hidden>→</span>

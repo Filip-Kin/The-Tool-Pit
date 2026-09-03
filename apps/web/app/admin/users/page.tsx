@@ -134,10 +134,10 @@ export default async function AdminUsersPage({
                       <span className="text-xs text-muted-2">{u.email || 'No email'}</span>
                     </td>
                     <td className="px-4 py-2 text-xs text-muted">
-                      {u.githubLogin ? `@${u.githubLogin}` : '—'}
+                      {u.githubLogin ? `@${u.githubLogin}` : '-'}
                     </td>
-                    <td className="px-4 py-2 text-xs text-muted">{formatDate(u.createdAt) || '—'}</td>
-                    <td className="px-4 py-2 text-xs text-muted">{formatDate(u.lastSeenAt) || '—'}</td>
+                    <td className="px-4 py-2 text-xs text-muted">{formatDate(u.createdAt) || '-'}</td>
+                    <td className="px-4 py-2 text-xs text-muted">{formatDate(u.lastSeenAt) || '-'}</td>
                     <td className="px-4 py-2 text-right text-xs text-muted tabular-nums">
                       {ownedCount.get(u.id) ?? 0}
                     </td>

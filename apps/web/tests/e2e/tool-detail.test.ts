@@ -36,7 +36,7 @@ afterAll(async () => {
 describe('tool detail page', () => {
   it('loads a real tool slug without error', async () => {
     if (!firstSlug) {
-      console.warn('[tool-detail] no published tools found — skipping')
+      console.warn('[tool-detail] no published tools found, skipping')
       return
     }
     const response = await page.goto(`${BASE_URL}/tools/${firstSlug}`, {
@@ -72,7 +72,7 @@ describe('tool detail page', () => {
     const response = await page.goto(`${BASE_URL}/tools/this-tool-does-not-exist-xyz`, {
       waitUntil: 'networkidle2',
     })
-    // Next.js renders a 404 page — either the status is 404 or the body says "not found"
+    // Next.js renders a 404 page, either the status is 404 or the body says "not found"
     const status = response?.status() ?? 0
     const body = await page.$eval('body', (el) => el.textContent?.toLowerCase() ?? '')
     const is404 = status === 404 || body.includes('not found') || body.includes('404')

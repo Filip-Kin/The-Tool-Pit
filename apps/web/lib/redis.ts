@@ -11,7 +11,7 @@ export function getRedis(): Redis {
       enableReadyCheck: false,
     })
     _redis.on('error', (err) => {
-      // Log but don't crash — Redis is used for rate-limiting/caching,
+      // Log but don't crash, Redis is used for rate-limiting/caching,
       // not for core data. Fail open where possible.
       console.error('[redis] connection error', err.message)
     })

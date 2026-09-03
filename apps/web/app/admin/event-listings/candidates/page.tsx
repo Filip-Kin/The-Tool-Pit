@@ -312,7 +312,7 @@ function CandidateRosterPreview({ teams }: { teams: RosterTeam[] }) {
   return (
     <div className="mt-3 rounded-lg border border-border-subtle p-3 text-sm">
       <div className="font-medium text-foreground">
-        Scraped team list — {registered.length} team{registered.length === 1 ? '' : 's'}
+        Scraped team list: {registered.length} team{registered.length === 1 ? '' : 's'}
         {waitlist.length > 0 ? ` + ${waitlist.length} waitlist` : ''}
       </div>
       <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 tabular-nums text-muted">

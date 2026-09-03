@@ -5,7 +5,7 @@
  * - Vote button is present on tool detail page
  * - Clicking vote button increments the count
  * - Clicking again decrements it (toggle)
- * - Vote state persists after page reload (requires cookie fix — will FAIL until fixed)
+ * - Vote state persists after page reload (requires cookie fix, will FAIL until fixed)
  * - Vote button is present on tool cards in search results
  * - Rate limiting returns 429 after excessive votes
  */
@@ -75,7 +75,7 @@ describe('voting', () => {
   it('vote button is present on a tool detail page', async () => {
     const slug = await getFirstToolSlug(page)
     if (!slug) {
-      console.warn('[voting] no tool cards found on homepage — skipping')
+      console.warn('[voting] no tool cards found on homepage, skipping')
       return
     }
     await goto(page, `/tools/${slug}`)
@@ -105,7 +105,7 @@ describe('voting', () => {
     expect(Math.abs(after - before)).toBe(1)
   })
 
-  it('voting is a toggle — clicking twice returns to original count', async () => {
+  it('voting is a toggle, clicking twice returns to original count', async () => {
     const slug = await getFirstToolSlug(page)
     if (!slug) return
 
@@ -178,7 +178,7 @@ describe('voting', () => {
     await goto(page, `/tools/${slug}`)
     await page.waitForSelector('body', { timeout: 5000 })
 
-    // The toolId is in the API response — test the API contract directly
+    // The toolId is in the API response, test the API contract directly
     const result = await page.evaluate(async (baseUrl) => {
       // Get tool data from the search API for this slug
       const searchRes = await fetch(`${baseUrl}/api/search?q=`)

@@ -8,7 +8,7 @@ import { join, relative } from 'node:path'
  * Every vertical (events, fields, tools, albums) shows a "claim this listing"
  * affordance. They are meant to be ONE shared component parameterised by the
  * vertical, differing only where a vertical genuinely needs it. The bug that
- * kept coming back was never a second implementation — it was a shared prop
+ * kept coming back was never a second implementation, it was a shared prop
  * left OPTIONAL WITH A DEFAULT. `claimState = 'signed_out'` on EventDialog let
  * the events explorer render without ever passing a real state, so a signed-in
  * reader was asked to log in again to claim. A default that looks sensible is
@@ -59,7 +59,7 @@ describe('every claim button is the one shared component, with no masking defaul
     expect(offenders, `bespoke claim UI not using the shared primitives: ${offenders.join(', ')}`).toEqual([])
   })
 
-  it('never defaults a claim-state prop — it must be required so omission is a compile error', () => {
+  it('never defaults a claim-state prop, it must be required so omission is a compile error', () => {
     // The exact shape of the bug: `claimState = 'signed_out'` (or any default)
     // in a component prop destructure. A default lets a caller skip the wire.
     const offenders: string[] = []

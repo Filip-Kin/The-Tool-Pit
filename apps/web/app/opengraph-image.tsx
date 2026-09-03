@@ -8,7 +8,7 @@ import { ImageResponse } from 'next/og'
  * with this card unless a route overrides it. A clean dark card, the wordmark,
  * one line of what the site is.
  */
-export const alt = 'FRC.tools — the FIRST robotics tool, event, field and grant directory'
+export const alt = 'FRC.tools: the FIRST robotics tool, event, field and grant directory'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
