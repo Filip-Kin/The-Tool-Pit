@@ -37,14 +37,14 @@ type LoadState = 'loading' | 'ready' | 'error'
 
 /** Avatars come from the shared team-avatar service. 404 is normal (many
  * off-season teams have none), so a failed image falls back to the number in a
- * circle rather than breaking the row. */
+ * squared tile rather than breaking the row. */
 const AVATAR_BASE = 'https://avatars.frc.tools/avatar'
 
 function TeamAvatar({ number }: { number: number }) {
   const [failed, setFailed] = useState(false)
   if (failed) {
     return (
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-3 text-[10px] font-semibold tabular-nums text-muted-2">
+      <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-3 text-[10px] font-semibold tabular-nums text-muted-2">
         {number}
       </div>
     )
@@ -58,7 +58,7 @@ function TeamAvatar({ number }: { number: number }) {
       alt=""
       loading="lazy"
       onError={() => setFailed(true)}
-      className="h-8 w-8 shrink-0 rounded-full bg-surface-3 object-contain"
+      className="h-8 w-8 shrink-0 rounded-md bg-surface-3 object-contain"
     />
   )
 }
