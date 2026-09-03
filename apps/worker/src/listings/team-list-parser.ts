@@ -38,7 +38,10 @@ import { anthropic, hasAnthropicCredentials } from '../anthropic.js'
 import { sendApprovalNotice } from '@the-tool-pit/types'
 import type { RosterTeam } from '@the-tool-pit/db'
 
-const MODEL = 'claude-sonnet-5'
+// Writing a robust DOM parser for an unseen page is a hard reasoning task, so the
+// GENERATOR runs on Opus. The parser it writes then runs on every refresh with no
+// model call, so this cost is paid once per event, not per scrape.
+const MODEL = 'claude-opus-4-8'
 const MAX_HTML_CHARS = 40_000
 const MAX_PARSER_TOKENS = 3500
 const RUN_TIMEOUT_MS = 4_000
@@ -100,6 +103,7 @@ What it returns:
 - Return only real teams. Ignore navigation, headings, footers, dates, times and scores elsewhere on the page.
 - DO NOT REQUIRE THE WORD "Team" BEFORE A NUMBER. Sections format differently: one block may write 'Team 1506 "Metal Muscle"' while another under a nearby heading writes a bare '2619 "The Charge"'. Inside a team section (under a registered / host / attending / competing heading, or a team table) read the numbers whether or not the word "Team" precedes them. A regex like /Team\\s+(\\d+)/ silently drops a whole block that omits the word — do not scope extraction to that pattern. Outside team sections, do not scrape stray numbers.
 - BUT THE NUMBER MUST LOOK LIKE A TEAM NUMBER. Real FRC team numbers are NOT sequential: a run of small consecutive numbers (1, 2, 3, 4, 5 ...) is a slot or row index, a ranking, or a countdown, not teams. Team 1 is a real team, but "1, 2, 3, 4" in order down a column are indices — drop them and keep the genuine team numbers beside them. When you read bare numbers, ignore any that form a consecutive counter.
+- A COUNT OR A DATE IS NOT A TEAM. A number that is a QUANTITY — immediately followed by a word like "teams", "team", "robots", "spots", "host", "registered", "attending" ("8 host teams", "30 teams registered") — is describing the list, not a member of it. A date, a time, a year, a price ("$400"), a phone number or a zip is not a team either. A real team ENTRY is the team's own number standing on its own in a row/cell/line, usually with the team's name right after it. Read those; skip numbers embedded in a sentence.
 - WAITLIST. A team is waitlisted ONLY when it sits under an explicit waitlist HEADING that introduces an actual list of waitlisted teams. Prose that merely explains a waitlist policy ("the waitlist will be pulled in order of application", "as space becomes available") is NOT a waitlist section and marks nothing. Mark a real waitlisted entry { number, robot, waitlisted: true, waitlistPosition: 1 } with its 1-based position; leave waitlistPosition null if the page shows no order. A registered team is waitlisted: false (or the field omitted). Do not merge the two lists: a team is either in the event or on the waitlist, and the section it sits under is what says which. When in doubt, a team is REGISTERED and MUST be returned; never drop a team because the word "waitlist" appears somewhere on the page.
 
 How to write it:

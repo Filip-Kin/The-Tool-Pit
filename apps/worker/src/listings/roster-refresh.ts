@@ -38,7 +38,7 @@
  */
 import { createHash } from 'node:crypto'
 import { and, desc, eq, gte, inArray, isNull, ne, or } from 'drizzle-orm'
-import { getDb, eventListings, eventRosterSnapshots, isHumanEdited, type RosterTeam } from '@the-tool-pit/db'
+import { getDb, eventListings, eventRosterSnapshots, isHumanEdited, getTeamNames, type RosterTeam } from '@the-tool-pit/db'
 import { delay } from '../connectors/base.js'
 import { TbaEventsConnector, type TbaEventUpsert } from '../connectors/tba-events.js'
 import {
@@ -233,6 +233,22 @@ export interface ScrapedRosterDecision {
  * "clean updates the count automatically; only a suspicious change waits for a
  * person".
  */
+/**
+ * Keep only numbers that are real FRC teams. A generated parser can pick a stray
+ * number out of a section's prose (a count like "8 host teams", a date, a price)
+ * and hand it back as a team. Every number is checked against the TBA team-name
+ * cache; the 9970-9999 off-season / demo range is allowed too, since TBA issues
+ * those. If the cache is empty (never synced), the roster is returned unchanged
+ * rather than emptied.
+ */
+async function filterToKnownTeams(teams: RosterTeam[]): Promise<RosterTeam[]> {
+  if (teams.length === 0) return teams
+  const numbers = [...new Set(teams.map((t) => t.number))]
+  const known = await getTeamNames(numbers)
+  if (known.size === 0) return teams
+  return teams.filter((t) => known.has(t.number) || (t.number >= 9970 && t.number <= 9999))
+}
+
 export function decideScrapedRoster(previous: RosterTeam[], next: RosterTeam[]): ScrapedRosterDecision {
   const suspect = suspectRosterChange(previous, next)
   if (suspect.suspect) return { status: 'rejected', writeCount: false, reason: suspect.reason }
@@ -469,6 +485,11 @@ export async function processRosterRefreshJob(
           }
         }
       }
+
+      // Only real FRC teams survive: the generated parser can pick a stray
+      // number out of prose (a count like "8 host teams", a date, a price), so
+      // every number is validated against the TBA team cache before it is stored.
+      teams = await filterToKnownTeams(teams)
 
       // A sane roster. registeredTeamCount counts the teams IN the event, not
       // the waitlist below it, so a full event does not read as over capacity.
