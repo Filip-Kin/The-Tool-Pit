@@ -286,6 +286,9 @@ export function ListingEditForm({
                 </Field>
               )
             })}
+          {group.key === 'teamlist' && String(values.teamListMode ?? '') === 'auto' && (
+            <TeamListAutoGuidance />
+          )}
         </Group>
       ))}
 
@@ -426,6 +429,46 @@ function humanize(value: string): string {
 // #endregion
 
 // #region chrome
+
+/**
+ * How to structure your own team-list page so auto-import reads it correctly.
+ * Shown under the team-list section only when "Scrape my event website" is the
+ * chosen mode. Every organiser lays their table out differently; this is the
+ * cheapest place to nudge them toward the shape the reader handles cleanly.
+ */
+function TeamListAutoGuidance() {
+  return (
+    <div className="rounded-lg border border-border-subtle bg-surface-2 p-3 text-sm text-muted sm:col-span-2">
+      <p className="font-medium text-foreground">Make auto-import reliable</p>
+      <p className="mt-1">Lay out the page above like this and we read every team correctly:</p>
+      <ul className="mt-1.5 list-disc space-y-1 pl-5">
+        <li>
+          Put the teams under a clear heading like{' '}
+          <span className="text-foreground">Registered Teams</span> or{' '}
+          <span className="text-foreground">Team List</span>.
+        </li>
+        <li>
+          One team per row or cell, starting with the team{' '}
+          <span className="text-foreground">number</span>. A name after it is fine — we pull team
+          names from The Blue Alliance either way.
+        </li>
+        <li>
+          A second robot from one team (a B team): put the letter right after the number, e.g.{' '}
+          <span className="text-foreground">4145B</span>.
+        </li>
+        <li>
+          A pre-rookie team with no FRC number yet: just list its name and we give it a temporary
+          number. If it has a provisional number, use that.
+        </li>
+        <li>
+          A real waitlist: put it under its own <span className="text-foreground">Waitlist</span>{' '}
+          heading, in the order teams get pulled in, separate from the registered list.
+        </li>
+        <li>Don&apos;t add a 1, 2, 3… row-number column — we read those as slots, not teams.</li>
+      </ul>
+    </div>
+  )
+}
 
 function Group({ group, children }: { group: ListingGroup; children: React.ReactNode }) {
   return (
