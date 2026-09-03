@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { Search, LocateFixed, Loader2, History } from 'lucide-react'
@@ -20,9 +20,17 @@ import {
   seasonRangeLabel,
 } from '@/lib/events/event-display'
 import type { EventProgram } from '@the-tool-pit/db/event-enums'
+import {
+  NO_FILTERS,
+  activeFilterCount,
+  matchesEventFilters,
+  unjudgeableCounts,
+  type EventFilters,
+} from '@/lib/events/event-filters'
 import { EventCard } from './event-card'
 import { EventLegend } from './event-legend'
 import { EventDialog } from './event-dialog'
+import { ActiveFilterChips, EventFilterMenu } from './event-filter-menu'
 
 // FRC first and foremost, matching the fields explorer.
 const PROGRAMS: { value: EventProgram; label: string }[] = [
@@ -103,6 +111,24 @@ export function EventsExplorer({
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [geo, setGeo] = useState<GeoState>('idle')
   const [unit, setUnit] = useState<DistanceUnit>('km')
+  // Distance, cost, team number, second robots and dates, all behind one menu.
+  const [filters, setFilters] = useState<EventFilters>(NO_FILTERS)
+  // Team numbers per event, fetched once and only if somebody filters by team.
+  // Null means "not asked for yet", which is different from an empty answer.
+  const [rosterTeams, setRosterTeams] = useState<Record<string, number[]> | null>(null)
+  const [rosterLoading, setRosterLoading] = useState(false)
+  const rosterAsked = useRef(false)
+  // Unmount, and ONLY unmount. The roster fetch below must not be tied to its
+  // effect's cleanup: typing "7166" changes filters.teamNumber four times, and
+  // a per-effect cancel flag would be flipped by the second keystroke, throwing
+  // away the answer to the request the first one started.
+  const mounted = useRef(true)
+  useEffect(
+    () => () => {
+      mounted.current = false
+    },
+    [],
+  )
 
   function locate() {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -156,9 +182,39 @@ export function EventsExplorer({
   // must not still be filtering behind it.
   const effectiveWhen: When = archiveView ? 'all' : when
 
-  const filtered = useMemo(() => {
+  // Roster team numbers, fetched the first time somebody filters by team and
+  // then kept for the rest of the visit. Asking only on demand keeps thirty
+  // numbers per event out of the page for readers who never use the filter.
+  useEffect(() => {
+    if (filters.teamNumber == null || rosterAsked.current) return
+    rosterAsked.current = true
+    setRosterLoading(true)
+    fetch(`/api/events/rosters${archiveView ? '?seasons=earlier' : ''}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((data: { teams?: Record<string, number[]> }) => {
+        if (mounted.current) setRosterTeams(data.teams ?? {})
+      })
+      .catch(() => {
+        // An empty index filters everything out, and the menu's hint says why.
+        if (mounted.current) setRosterTeams({})
+      })
+      .finally(() => {
+        if (mounted.current) setRosterLoading(false)
+      })
+  }, [filters.teamNumber, archiveView])
+
+  /**
+   * Everything the program tabs, search, timing and registration chip allow,
+   * with each event's distance already worked out.
+   *
+   * Held apart from the filter-menu pass on purpose: this is the set the menu
+   * measures itself against when it reports "4 events do not list a price", so
+   * those counts describe the events the menu itself is hiding rather than
+   * events some other control had already removed.
+   */
+  const base = useMemo(() => {
     const query = q.trim().toLowerCase()
-    const rows = events
+    return events
       .filter((e) => {
         if (e.program !== program) return false
         const past = eventTiming(e, now) === 'past'
@@ -178,6 +234,21 @@ export function EventsExplorer({
             ? distanceKm(userLoc.lat, userLoc.lng, e.latitude, e.longitude)
             : null,
       }))
+  }, [events, q, effectiveWhen, openOnly, program, userLoc, now])
+
+  // What the menu's own filters cannot judge, so it can say how many it hides.
+  const menuCounts = useMemo(
+    () => unjudgeableCounts(base.map((r) => r.event), rosterTeams ?? {}),
+    [base, rosterTeams],
+  )
+
+  const filtered = useMemo(() => {
+    const rows = base.filter((r) =>
+      matchesEventFilters(r.event, filters, {
+        km: r.km,
+        rosterTeams: rosterTeams?.[r.event.id] ?? null,
+      }),
+    )
 
     rows.sort((a, b) => {
       // NEAREST, BUT STILL UPCOMING FIRST. A pure distance sort put an event
@@ -213,7 +284,7 @@ export function EventsExplorer({
       return ad - bd
     })
     return rows
-  }, [events, q, effectiveWhen, openOnly, program, sortBy, userLoc, now])
+  }, [base, filters, rosterTeams, sortBy, userLoc, now])
 
   const mapEvents = useMemo(() => filtered.map((r) => r.event), [filtered])
 
@@ -279,21 +350,47 @@ export function EventsExplorer({
             />
           )}
           <Chip active={openOnly} onClick={() => setOpenOnly((v) => !v)}>Registration open</Chip>
-          {userLoc && (
-            <SegmentedControl
-              label="Sort"
-              size="sm"
-              options={[
-                { value: 'date', label: 'By date' },
-                { value: 'distance', label: 'Nearest' },
-              ]}
-              value={sortBy}
-              onChange={setSortBy}
-            />
-          )}
+          <EventFilterMenu
+            filters={filters}
+            onChange={setFilters}
+            unit={unit}
+            hasLocation={userLoc != null}
+            counts={menuCounts}
+            rosterLoading={rosterLoading}
+            totalShown={filtered.length}
+          />
+          {/* ALWAYS RENDERED, including before a location arrives.
+              It used to appear only once geolocation had succeeded, which hid
+              the whole idea of a second ordering from anyone the browser will
+              not give a location to. That is not a rare case: geolocation needs
+              a secure context, so every reader on a plain-HTTP origin loses the
+              control outright, and with it the ability to say "soonest" as much
+              as "nearest".
+
+              Choosing Nearest asks for the location, the same as the Near me
+              button does. Until one arrives the sort comparator falls back to
+              date order on its own, so the choice is never left doing nothing
+              silently, and the line below says why when the browser has
+              refused. */}
+          <SegmentedControl
+            label="Sort"
+            size="sm"
+            options={[
+              { value: 'date', label: 'By date' },
+              { value: 'distance', label: 'Nearest' },
+            ]}
+            value={sortBy}
+            onChange={(v) => {
+              setSortBy(v)
+              if (v === 'distance' && !userLoc) locate()
+            }}
+          />
         </div>
-        {geo === 'denied' && (
-          <p className="text-xs text-muted-2">Location is off, so events can&apos;t be sorted by distance.</p>
+        <ActiveFilterChips filters={filters} onChange={setFilters} unit={unit} />
+        {!userLoc && (geo === 'denied' || geo === 'unsupported') && (
+          <p className="text-xs text-muted-2">
+            Location is off, so events can&apos;t be sorted or filtered by distance.
+          </p>
         )}
 
         <SeasonSwitch
@@ -343,15 +440,34 @@ export function EventsExplorer({
           />
         ))}
         {filtered.length === 0 && (
-          <p className="rounded-lg border border-border-subtle bg-surface p-6 text-center text-sm text-muted-2">
-            {(programCounts[program] ?? 0) === 0
-              ? archiveView
-                ? `No ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} events from earlier years.`
-                : `No ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} events on the map yet.`
-              : !archiveView && when === 'upcoming'
-                ? `No upcoming ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} events. Try Already run or All.`
-                : 'No events match these filters.'}
-          </p>
+          <div className="rounded-lg border border-border-subtle bg-surface p-6 text-center text-sm text-muted-2">
+            {/* An empty list caused by the filter menu says so and offers the
+                way out. Without this the reader sees the same "no events"
+                sentence whether the map is empty or their own $150 cap emptied
+                it, and the panel that did it is closed. */}
+            {base.length > 0 && activeFilterCount(filters) > 0 ? (
+              <>
+                <p>No events match your filters.</p>
+                <button
+                  type="button"
+                  onClick={() => setFilters(NO_FILTERS)}
+                  className="mt-2 text-sm font-medium text-primary hover:underline"
+                >
+                  Clear filters to see {base.length} {base.length === 1 ? 'event' : 'events'}
+                </button>
+              </>
+            ) : (
+              <p>
+                {(programCounts[program] ?? 0) === 0
+                  ? archiveView
+                    ? `No ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} events from earlier years.`
+                    : `No ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} events on the map yet.`
+                  : !archiveView && when === 'upcoming'
+                    ? `No upcoming ${PROGRAMS.find((p) => p.value === program)?.label ?? ''} events. Try Already run or All.`
+                    : 'No events match these filters.'}
+              </p>
+            )}
+          </div>
         )}
         {!archiveView && when === 'upcoming' && upcomingCount === 0 && (programCounts[program] ?? 0) > 0 && (
           <p className="text-center text-xs text-muted-2">
