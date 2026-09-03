@@ -69,3 +69,9 @@ See [COOLIFY.md](./COOLIFY.md) for the service layout and the environment variab
 
 Issues and pull requests are welcome. For a listing that is wrong or missing, the fastest fix is
 **Suggest an edit** on the site rather than an issue here.
+
+## License
+
+Copyright (c) 2026 Filip Kin. Licensed under the **GNU Affero General Public License v3.0**. See
+[LICENSE](./LICENSE). In short: use it, read it, change it, but if you run a modified version as a
+network service, you have to share your source under the same license.
