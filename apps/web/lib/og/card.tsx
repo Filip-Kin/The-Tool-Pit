@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { ImageResponse } from 'next/og'
 
 /**
@@ -105,6 +106,128 @@ export function renderOgCard({ eyebrow, title, facts }: OgCardInput): ImageRespo
               {line}
             </div>
           ))}
+        </div>
+
+        {/* Accent bar, same as the site card. */}
+        <div style={{ display: 'flex', height: 10, width: 220, borderRadius: 999, backgroundColor: ACCENT }} />
+      </div>
+    ),
+    { ...OG_SIZE },
+  )
+}
+
+interface VerticalOgInput {
+  /** The vertical's own name, shown large, e.g. "Off-season events". */
+  name: string
+  /** One line under the name saying what the section is. */
+  tagline: string
+  /**
+   * The vertical's lucide icon, as its bare SVG primitives (path / circle /
+   * rect) on the standard lucide 24x24 grid. The card wraps them in a stroked
+   * <svg>, so a route passes the same glyph the site shows the vertical with.
+   */
+  icon: ReactNode
+}
+
+/**
+ * Render one vertical's INDEX share card to a 1200x630 PNG.
+ *
+ * Where the per-listing card (renderOgCard) fronts one event or tool, this
+ * fronts a whole section. Sharing frc.tools/events or /fields used to unfurl the
+ * site-wide card, so every section looked the same in Discord or iMessage. This
+ * leads with the section's own lucide icon, big, in the indigo brand tint, then
+ * the section name and a one-line tagline, so a person seeing it knows at a
+ * glance which section it is.
+ *
+ * The accent stays indigo for every vertical because the site shows all of them
+ * in the one brand indigo (the header switcher, the home vertical cards, the
+ * favicons are all #6366f1); the icon is what tells them apart. A soft indigo
+ * glow top-right keeps the background off flat black.
+ */
+export function renderVerticalOgCard({ name, tagline, icon }: VerticalOgInput): ImageResponse {
+  return new ImageResponse(
+    (
+      <div
+        style={{
+          height: '100%',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          backgroundColor: BG,
+          backgroundImage: 'radial-gradient(circle at 82% 18%, rgba(99,102,241,0.28), rgba(10,10,11,0) 58%)',
+          padding: '72px 80px',
+        }}
+      >
+        {/* The frc.tools lockup, same as the site card. */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            fontSize: 52,
+            fontWeight: 800,
+            letterSpacing: '-0.04em',
+            color: INK,
+          }}
+        >
+          frc<span style={{ color: ACCENT }}>.tools</span>
+        </div>
+
+        {/* The section's icon, big and in the brand tint, then its name and tagline. */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 168,
+              height: 168,
+              borderRadius: 40,
+              backgroundColor: 'rgba(99,102,241,0.12)',
+              border: '2px solid rgba(99,102,241,0.4)',
+            }}
+          >
+            <svg
+              width={96}
+              height={96}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={ACCENT}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              {icon}
+            </svg>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              marginTop: 40,
+              fontSize: 82,
+              fontWeight: 800,
+              letterSpacing: '-0.03em',
+              lineHeight: 1.05,
+              color: INK,
+            }}
+          >
+            {name}
+          </div>
+          <div
+            style={{
+              display: '-webkit-box',
+              WebkitBoxOrient: 'vertical',
+              WebkitLineClamp: 2,
+              overflow: 'hidden',
+              marginTop: 18,
+              fontSize: 38,
+              fontWeight: 500,
+              lineHeight: 1.25,
+              color: MUTED,
+            }}
+          >
+            {tagline}
+          </div>
         </div>
 
         {/* Accent bar, same as the site card. */}
