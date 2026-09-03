@@ -11,6 +11,7 @@ export * from './slug'
 export * from './geocode'
 export * from './event-name'
 export * from './popularity-score'
+export * from './team-names'
 
 // Re-export common drizzle operators so consumers (and top-level scripts that
 // can't resolve drizzle-orm from their own dir) can import them from here.

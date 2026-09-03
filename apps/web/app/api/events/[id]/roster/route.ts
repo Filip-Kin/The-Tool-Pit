@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { and, desc, eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { eventListings, eventRosterSnapshots } from '@the-tool-pit/db'
+import { eventListings, eventRosterSnapshots, getTeamNames } from '@the-tool-pit/db'
 import type { RosterTeam } from '@the-tool-pit/db'
+import { mergeRosterNames } from '@/lib/listings/roster-names'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -46,5 +47,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .limit(1)
 
   const teams: RosterTeam[] = snap?.teams ?? []
+
+  // Fill the names the scrape did not carry. A roster often reads only numbers
+  // (CORI hands back 48, 144, 379 with no names), so the team-name cache turns
+  // those back into names at render time. ONE batched query for every number on
+  // the card. A name the snapshot already has is kept, because a scraped name is
+  // what the event chose to call the team; the cache only fills the gaps, and a
+  // team the cache has never seen stays a bare number.
+  if (teams.length > 0) {
+    const cache = await getTeamNames(teams.map((t) => t.number))
+    const enriched = mergeRosterNames(teams, cache)
+    return NextResponse.json({ teams: enriched })
+  }
+
   return NextResponse.json({ teams })
 }

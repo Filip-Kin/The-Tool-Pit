@@ -37,6 +37,8 @@ import { processListingDiscoverJob } from './listings/discover.js'
 import { processReadCandidatesJob } from './listings/read-candidates.js'
 import { processRosterRefreshJob } from './listings/roster-refresh.js'
 import type { RosterRefreshPayload } from './listings/roster-refresh.js'
+import { processTbaTeamsSyncJob } from './listings/tba-teams-sync.js'
+import type { TbaTeamsSyncPayload } from './listings/tba-teams-sync.js'
 import { closeBrowser } from './connectors/playwright-render.js'
 import type { ReadCandidatesPayload } from './listings/read-candidates.js'
 import { processSeasonRenewalJob } from './listings/season-renewal.js'
@@ -404,6 +406,18 @@ const rosterRefreshWorker = new Worker<RosterRefreshPayload>(
   { connection, concurrency: 1 },
 )
 
+const tbaTeamsSyncWorker = new Worker<TbaTeamsSyncPayload>(
+  'tba-teams-sync',
+  async (job) => {
+    console.log(`[tba-teams-sync] processing job ${job.id}`)
+    return processTbaTeamsSyncJob(job.data)
+  },
+  // One at a time. The job is a single serial walk of TBA's directory that
+  // paces its own requests, so a second copy would only double the rate at
+  // TBA for no faster a cache.
+  { connection, concurrency: 1 },
+)
+
 const seasonRenewalWorker = new Worker(
   'event-season-renewal',
   async () => {
@@ -420,7 +434,7 @@ const seasonRenewalWorker = new Worker(
 // #endregion
 
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, readCandidatesWorker, rosterRefreshWorker, seasonRenewalWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, readCandidatesWorker, rosterRefreshWorker, tbaTeamsSyncWorker, seasonRenewalWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -464,6 +478,7 @@ async function shutdown() {
     listingDiscoverWorker.close(),
     readCandidatesWorker.close(),
     rosterRefreshWorker.close(),
+    tbaTeamsSyncWorker.close(),
     seasonRenewalWorker.close(),
   ])
   // The shared browser outlives any single job, so it is closed here rather

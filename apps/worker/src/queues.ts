@@ -12,6 +12,7 @@ import type { GrantMatchJobPayload } from './grants/matcher.js'
 import type { ListingDiscoverPayload } from './listings/discover.js'
 import type { ReadCandidatesPayload } from './listings/read-candidates.js'
 import type { RosterRefreshPayload } from './listings/roster-refresh.js'
+import type { TbaTeamsSyncPayload } from './listings/tba-teams-sync.js'
 import type { PopularityRefreshPayload } from './jobs/popularity.js'
 // The offseason season rule and the renewal date live beside the column they
 // describe, so the schedule below and the migration that backfills the season
@@ -286,6 +287,25 @@ export const rosterRefreshQueue = new Queue<RosterRefreshPayload>('roster-refres
 })
 
 /**
+ * The team-name cache refresh from TBA.
+ *
+ * Walks TBA's whole team directory weekly and upserts every team's names into
+ * the `teams` cache, so a roster that carries only numbers can be shown with
+ * names. Two attempts, the same reasoning as the roster refresh: the walk is a
+ * lot of network for one job, and the upsert is idempotent, so a retry re-does
+ * safe work rather than double-writing.
+ */
+export const tbaTeamsSyncQueue = new Queue<TbaTeamsSyncPayload>('tba-teams-sync', {
+  connection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 60000 },
+    removeOnComplete: { count: 20 },
+    removeOnFail: { count: 50 },
+  },
+})
+
+/**
  * The yearly "are you running it again" ask for last season's event listings.
  *
  * attempts: 1, the same reasoning as grant-alert-drain. The retry story lives
@@ -538,6 +558,19 @@ export async function scheduleRecurringJobs() {
   await rosterRefreshQueue.upsertJobScheduler('roster-tba-recheck', { pattern: '20 6 * * *' }, {
     name: 'roster-tba-recheck',
     data: { recheckTba: true },
+  })
+
+  // Team-name cache, weekly. Teams rename between seasons, not between rosters,
+  // so a daily walk of TBA's whole directory would spend a lot of somebody
+  // else's bandwidth to change nothing. A cron pattern, not `every`, for the
+  // reason spelled out above the grants block: `every` counts from worker
+  // startup, so it would re-walk the directory on every deploy. Sunday 02:50 UTC
+  // sits in the gap after the 02:40 TBA off-season discovery and clear of the
+  // grant sweeps. The first backfill does not wait for Sunday: enqueue a plain
+  // `tbaTeamsSyncQueue.add('tba-teams-sync', {})` by hand to fill it now.
+  await tbaTeamsSyncQueue.upsertJobScheduler('tba-teams-sync-weekly', { pattern: '50 2 * * 0' }, {
+    name: 'tba-teams-sync',
+    data: {},
   })
 
   // The mid-April renewal ask. A CRON PATTERN AND NOT `every`, and this is the

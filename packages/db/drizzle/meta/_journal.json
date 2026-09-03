@@ -232,6 +232,13 @@
       "when": 1788413239184,
       "tag": "0032_woozy_gorgon",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788414236613,
+      "tag": "0033_teams_name_cache",
+      "breakpoints": true
     }
   ]
 }
