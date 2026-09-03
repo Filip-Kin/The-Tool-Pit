@@ -53,6 +53,10 @@ const SEARCH_QUERIES = [
 
 // Domains that are never tools — images, social, vendors, the forum itself, etc.
 const DOMAIN_BLOCKLIST = [
+  // This site. An announcement thread links to frc.tools, and without this the
+  // tools crawler would read that link back in and list frc.tools as a tool in
+  // its own directory. The endsWith rule below covers every subdomain too.
+  'frc.tools',
   'chiefdelphi.com',
   'firstinspires.org',
   'imgur.com',
