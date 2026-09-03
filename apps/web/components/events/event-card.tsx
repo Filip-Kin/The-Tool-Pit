@@ -215,7 +215,6 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
             <span className="flex items-center gap-1.5 font-medium text-foreground">
               <Users className="h-4 w-4" /> {full}
             </span>
-            <span className="text-muted-2">{full}</span>
           </div>
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-3">
             <div
