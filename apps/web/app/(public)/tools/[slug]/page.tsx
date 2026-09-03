@@ -5,6 +5,9 @@ import { listingClaimState } from '@/lib/queries/listing-ownership'
 import { getFavoritedIds } from '@/lib/queries/favorites'
 import { ToolDetail } from '@/components/tools/tool-detail'
 import { recordClickEvent } from '@/lib/analytics/events'
+import { toolUrl } from '@the-tool-pit/types'
+import { JsonLd } from '@/components/seo/json-ld'
+import { toolJsonLd } from '@/lib/seo/structured-data'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -17,6 +20,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: tool.name,
     description: tool.summary ?? undefined,
+    alternates: { canonical: toolUrl(tool.slug) },
   }
 }
 
@@ -34,11 +38,14 @@ export default async function ToolPage({ params }: PageProps) {
   ])
 
   return (
-    <ToolDetail
-      tool={tool}
-      voted={voted.has(tool.id)}
-      favorited={favorited.has(tool.id)}
-      claimState={claimState}
-    />
+    <>
+      <JsonLd data={toolJsonLd(tool)} />
+      <ToolDetail
+        tool={tool}
+        voted={voted.has(tool.id)}
+        favorited={favorited.has(tool.id)}
+        claimState={claimState}
+      />
+    </>
   )
 }

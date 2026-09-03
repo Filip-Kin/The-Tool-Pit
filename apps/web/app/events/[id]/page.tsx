@@ -6,6 +6,9 @@ import { EventDetail } from '@/components/events/event-card'
 import { ClaimListingButton } from '@/components/auth/claim-listing-button'
 import { listingClaimState } from '@/lib/queries/listing-ownership'
 import { eventDateRange } from '@/lib/events/event-display'
+import { eventListingUrl } from '@the-tool-pit/types'
+import { JsonLd } from '@/components/seo/json-ld'
+import { eventJsonLd } from '@/lib/seo/structured-data'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +17,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const ev = await getPublishedEventById(id)
   if (!ev) return { title: 'Event not found' }
   const date = eventDateRange(ev)
-  return { title: date ? `${ev.name} · ${date}` : ev.name }
+  return {
+    title: date ? `${ev.name} · ${date}` : ev.name,
+    alternates: { canonical: eventListingUrl(ev.id) },
+  }
 }
 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -26,6 +32,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
+      <JsonLd data={eventJsonLd(ev)} />
       <Link href="/events" className="text-sm text-muted hover:text-foreground">← Back to the map</Link>
       <div className="mt-4">
         <EventDetail event={ev} now={new Date()} />

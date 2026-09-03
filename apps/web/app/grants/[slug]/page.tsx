@@ -9,6 +9,9 @@ import { buildPrefillUrl } from '@/lib/grants/prefill'
 import { ButtonLink } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { getVerticalLinks } from '@/components/layout/vertical-switcher'
+import { grantListingUrl } from '@the-tool-pit/types'
+import { JsonLd } from '@/components/seo/json-ld'
+import { grantJsonLd } from '@/lib/seo/structured-data'
 import { ApplyPanel } from '@/components/grants/apply-panel'
 import { GrantCycles } from '@/components/grants/grant-cycles'
 import { GrantRequirements } from '@/components/grants/grant-requirements'
@@ -37,6 +40,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return {
     title: grant.name,
     description: grant.summary ?? undefined,
+    alternates: { canonical: grantListingUrl(grant.slug) },
   }
 }
 
@@ -75,6 +79,7 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
 
   return (
     <div className="container mx-auto max-w-5xl px-4 py-8">
+      <JsonLd data={grantJsonLd(grant)} />
       <Link href="/" className="text-sm text-muted hover:text-foreground">
         ← All grants
       </Link>

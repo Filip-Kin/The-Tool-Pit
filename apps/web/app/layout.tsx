@@ -20,9 +20,25 @@ export const metadata: Metadata = {
   description:
     'Discover tools, calculators, apps, and resources for FRC, FTC, and FLL teams. The community directory for FIRST robotics.',
   metadataBase: new URL(process.env.NEXT_PUBLIC_URL ?? 'https://frc.tools'),
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
     type: 'website',
-    siteName: 'The Tool Pit',
+    siteName: 'FRC.tools',
+    url: '/',
+    title: 'The Tool Pit: FIRST Robotics Tool Directory',
+    description:
+      'Discover tools, calculators, apps, and resources for FRC, FTC, and FLL teams. The community directory for FIRST robotics.',
+  },
+  // The default share card is app/opengraph-image.tsx, which Next.js merges into
+  // both openGraph.images and twitter.images for every route automatically, so
+  // a page only needs to set the card type here.
+  twitter: {
+    card: 'summary_large_image',
+    title: 'The Tool Pit: FIRST Robotics Tool Directory',
+    description:
+      'Discover tools, calculators, apps, and resources for FRC, FTC, and FLL teams. The community directory for FIRST robotics.',
   },
 }
 
