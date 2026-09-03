@@ -51,6 +51,7 @@ function ev(over: Partial<PublicEvent> & { id: string }): PublicEvent {
     costNote: null,
     registrationStatus: 'unknown',
     registrationOpensAt: null,
+    registrationClosesAt: null,
     volunteerStatus: 'unknown',
     eventStatus: 'confirmed',
     website: null,

@@ -237,6 +237,9 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
         {ev.registrationOpensAt && ev.registrationStatus === 'not_open' && (
           <Row icon={<Clock className="h-4 w-4" />} label="Registration opens" value={eventDateRange({ startDate: ev.registrationOpensAt, endDate: null })} />
         )}
+        {ev.registrationClosesAt && ev.registrationStatus === 'open' && (
+          <Row icon={<Clock className="h-4 w-4" />} label="Registration closes" value={eventDateRange({ startDate: ev.registrationClosesAt, endDate: null })} />
+        )}
         {cost && <Row icon={<DollarSign className="h-4 w-4" />} label="Cost" value={cost} />}
         {/* Capacity answers "can I still get in", which a finished or
             cancelled event cannot be asked. */}

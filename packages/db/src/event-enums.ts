@@ -28,8 +28,9 @@ export type EventStatus = (typeof EVENT_STATUSES)[number]
 
 /**
  * Whether teams can sign up yet. Sheet "Registration Open?" held No / Yes /
- * Waitlist / a date. A future open date goes in `registrationOpensAt`; this
- * enum is the coarse state a filter chip keys off.
+ * Waitlist / a date. A future open date goes in `registrationOpensAt`, a
+ * registration deadline in `registrationClosesAt`; this enum is the coarse
+ * state a filter chip keys off.
  *   not_open  - not yet open (sheet "No", or a future date).
  *   open      - accepting registrations now.
  *   waitlist  - full, taking a waitlist.

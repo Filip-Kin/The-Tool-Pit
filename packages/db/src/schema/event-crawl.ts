@@ -256,6 +256,8 @@ export interface ExtractedEventListingFields {
   days?: number
   /** ISO yyyy-mm-dd, when the source states the date team sign-ups open. */
   registrationOpensAt?: string
+  /** ISO yyyy-mm-dd, when the source states the registration deadline, the date team sign-ups close. */
+  registrationClosesAt?: string
   website?: string
   registrationUrl?: string
   chiefDelphiUrl?: string

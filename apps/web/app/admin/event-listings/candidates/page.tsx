@@ -224,6 +224,7 @@ export default async function EventCandidatesPage({
                           { name: 'eventStatus', label: 'Event status', type: 'select', options: EVENT_STATUSES },
                           { name: 'registrationStatus', label: 'Registration', type: 'select', options: REGISTRATION_STATUSES, value: ex.registrationStatus, evidence: ev.registrationStatus },
                           { name: 'registrationOpensAt', label: 'Registration opens', type: 'date' },
+                          { name: 'registrationClosesAt', label: 'Registration closes', type: 'date' },
                           { name: 'volunteerStatus', label: 'Volunteers', type: 'select', options: VOLUNTEER_STATUSES, value: ex.volunteerStatus, evidence: ev.volunteerStatus },
                           { name: 'venueName', label: 'Venue', value: ex.venueName, wide: true, evidence: ev.venueName },
                           { name: 'address', label: 'Address', value: ex.address, wide: true, evidence: ev.address },

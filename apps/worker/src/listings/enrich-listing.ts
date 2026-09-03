@@ -36,7 +36,7 @@ export interface EnrichListingStats {
 const FILLABLE: (keyof ExtractedEventListingFields)[] = [
   'venueName', 'address', 'city', 'region', 'country', 'hostTeamNumber',
   'startDate', 'endDate', 'days', 'capacity', 'costUsd', 'costNote',
-  'registrationStatus', 'volunteerStatus', 'registrationUrl', 'volunteerUrl',
+  'registrationStatus', 'registrationClosesAt', 'volunteerStatus', 'registrationUrl', 'volunteerUrl',
   'website', 'teamListUrl', 'contactEmail', 'notes',
 ]
 

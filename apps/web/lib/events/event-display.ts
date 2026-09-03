@@ -44,6 +44,7 @@ export interface PublicEvent {
   costNote: string | null
   registrationStatus: RegistrationStatus
   registrationOpensAt: string | null
+  registrationClosesAt: string | null
   volunteerStatus: VolunteerStatus
   eventStatus: EventStatus
   website: string | null

@@ -326,6 +326,7 @@ export interface EventEditInput {
   costNote?: string | null
   registrationStatus?: string
   registrationOpensAt?: string | null
+  registrationClosesAt?: string | null
   volunteerStatus?: string
   eventStatus?: string
   website?: string | null
@@ -376,6 +377,7 @@ export async function updateEvent(id: string, input: EventEditInput): Promise<{ 
   if (input.costNote !== undefined) patch.costNote = input.costNote?.trim() || null
   if (input.registrationStatus !== undefined) patch.registrationStatus = inEnum(input.registrationStatus, REGISTRATION_STATUSES) ?? 'unknown'
   if (input.registrationOpensAt !== undefined) patch.registrationOpensAt = cleanDate(input.registrationOpensAt)
+  if (input.registrationClosesAt !== undefined) patch.registrationClosesAt = cleanDate(input.registrationClosesAt)
   if (input.volunteerStatus !== undefined) patch.volunteerStatus = inEnum(input.volunteerStatus, VOLUNTEER_STATUSES) ?? 'unknown'
   if (input.eventStatus !== undefined) patch.eventStatus = inEnum(input.eventStatus, EVENT_STATUSES) ?? 'confirmed'
   if (input.website !== undefined) patch.website = input.website?.trim() || null

@@ -28,6 +28,7 @@ const publicColumns = {
   costNote: eventListings.costNote,
   registrationStatus: eventListings.registrationStatus,
   registrationOpensAt: eventListings.registrationOpensAt,
+  registrationClosesAt: eventListings.registrationClosesAt,
   volunteerStatus: eventListings.volunteerStatus,
   eventStatus: eventListings.eventStatus,
   website: eventListings.website,

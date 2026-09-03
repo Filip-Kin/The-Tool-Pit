@@ -1,0 +1,1 @@
+ALTER TABLE "event_listings" ADD COLUMN "registration_closes_at" date;

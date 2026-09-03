@@ -1192,6 +1192,11 @@ export async function saveEventListing(formData: FormData): Promise<OwnershipAct
   if (set.registrationStatus !== undefined && set.registrationStatus !== 'not_open') {
     set.registrationOpensAt = null
   }
+  // A close date only means anything while registration is open. Same guard: only
+  // applied when the status was actually posted.
+  if (set.registrationStatus !== undefined && set.registrationStatus !== 'open') {
+    set.registrationClosesAt = null
+  }
 
   keepPinIfCleared(set)
 

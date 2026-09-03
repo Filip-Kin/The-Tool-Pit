@@ -243,6 +243,7 @@ export const HUMAN_EDITABLE_EVENT_KEYS = [
   'costNote',
   'registrationStatus',
   'registrationOpensAt',
+  'registrationClosesAt',
   'volunteerStatus',
   'eventStatus',
   'website',

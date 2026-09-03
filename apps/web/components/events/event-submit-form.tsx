@@ -63,6 +63,7 @@ interface FormState {
   costNote: string
   registrationStatus: string
   registrationOpensAt: string
+  registrationClosesAt: string
   volunteerStatus: string
   eventStatus: string
   website: string
@@ -127,6 +128,7 @@ const INITIAL: FormState = {
   costNote: '',
   registrationStatus: 'unknown',
   registrationOpensAt: '',
+  registrationClosesAt: '',
   volunteerStatus: 'unknown',
   eventStatus: 'confirmed',
   website: '',
@@ -198,6 +200,7 @@ function fromEvent(ev: PublicEvent): FormState {
     costNote: s(ev.costNote),
     registrationStatus: ev.registrationStatus,
     registrationOpensAt: s(ev.registrationOpensAt),
+    registrationClosesAt: s(ev.registrationClosesAt),
     volunteerStatus: ev.volunteerStatus,
     eventStatus: ev.eventStatus,
     website: s(ev.website),
@@ -550,6 +553,13 @@ export function EventSubmitForm({
             <div className="flex-1">
               <Field label="Registration opens" hint="If a date is known.">
                 <DateField value={form.registrationOpensAt} onChange={(v) => set('registrationOpensAt', v)} />
+              </Field>
+            </div>
+          )}
+          {form.registrationStatus === 'open' && (
+            <div className="flex-1">
+              <Field label="Registration closes" hint="If a deadline is known.">
+                <DateField value={form.registrationClosesAt} onChange={(v) => set('registrationClosesAt', v)} />
               </Field>
             </div>
           )}

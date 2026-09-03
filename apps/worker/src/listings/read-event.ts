@@ -130,6 +130,10 @@ Fields:
                     a couple of weeks on 8/1"; read that date. Null when no open date is stated,
                     including when registration is already open. The quote is the sentence that
                     gives the date.
+  registrationClosesAt  "YYYY-MM-DD", the date team sign-ups CLOSE, the registration deadline, when
+                    the source states one. Sites often say "Registration closes 1 October" or
+                    "sign-ups end 10/1"; read that date. Null when no close date is stated. The
+                    quote is the sentence that gives the date.
   volunteerStatus     one of ${VOLUNTEER_STATUSES.map((s) => `"${s}"`).join(', ')}, same distinction:
                     "not_open" is a sign-up that has not started, not one that has finished
   registrationUrl   where a team signs up. NOT the event's website. If there is no sign-up open,
@@ -159,7 +163,7 @@ const ENUMS: Record<string, readonly string[]> = {
 
 const URL_FIELDS = new Set(['registrationUrl', 'volunteerUrl', 'website', 'teamListUrl'])
 const INT_FIELDS = new Set(['hostTeamNumber', 'capacity', 'costUsd', 'days'])
-const DATE_FIELDS = new Set(['startDate', 'endDate', 'registrationOpensAt'])
+const DATE_FIELDS = new Set(['startDate', 'endDate', 'registrationOpensAt', 'registrationClosesAt'])
 const TEXT_MAX: Record<string, number> = {
   name: 160, venueName: 160, address: 200, city: 120, region: 60, country: 8,
   costNote: 200, contactEmail: 200, notes: 400,

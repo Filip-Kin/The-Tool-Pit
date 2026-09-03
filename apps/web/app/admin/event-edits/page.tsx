@@ -28,6 +28,7 @@ const KEY_LABELS: Record<keyof EventEditProposalData, string> = {
   costNote: 'Cost note',
   registrationStatus: 'Registration',
   registrationOpensAt: 'Registration opens',
+  registrationClosesAt: 'Registration closes',
   volunteerStatus: 'Volunteers',
   eventStatus: 'Event status',
   website: 'Website',

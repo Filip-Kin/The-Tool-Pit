@@ -267,6 +267,7 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
     costNote: listing.costNote,
     registrationStatus: listing.registrationStatus,
     registrationOpensAt: listing.registrationOpensAt,
+    registrationClosesAt: listing.registrationClosesAt,
     volunteerStatus: listing.volunteerStatus,
     eventStatus: listing.eventStatus,
     website: listing.website,
@@ -338,6 +339,7 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
         <L label="Event status"><select className="input" value={form.eventStatus} onChange={(e) => set('eventStatus', e.target.value)}>{EVENT_STATUSES.map((s) => <option key={s} value={s}>{EVENT_STATUS_LABEL[s]}</option>)}</select></L>
         <L label="Registration"><select className="input" value={form.registrationStatus} onChange={(e) => set('registrationStatus', e.target.value)}>{REGISTRATION_STATUSES.map((s) => <option key={s} value={s}>{REGISTRATION_STATUS_LABEL[s]}</option>)}</select></L>
         <L label="Registration opens"><DateField value={form.registrationOpensAt ?? ''} onChange={(v) => set('registrationOpensAt', v || null)} /></L>
+        <L label="Registration closes"><DateField value={form.registrationClosesAt ?? ''} onChange={(v) => set('registrationClosesAt', v || null)} /></L>
         <L label="Volunteers"><select className="input" value={form.volunteerStatus} onChange={(e) => set('volunteerStatus', e.target.value)}>{VOLUNTEER_STATUSES.map((s) => <option key={s} value={s}>{VOLUNTEER_STATUS_LABEL[s]}</option>)}</select></L>
         <L label="Venue"><input className="input" value={form.venueName ?? ''} onChange={(e) => set('venueName', e.target.value)} /></L>
         <div className="sm:col-span-2">

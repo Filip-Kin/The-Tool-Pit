@@ -32,6 +32,7 @@ export interface CreateEventEditInput {
   costNote?: string
   registrationStatus?: string
   registrationOpensAt?: string
+  registrationClosesAt?: string
   volunteerStatus?: string
   eventStatus?: string
   website?: string
@@ -132,6 +133,8 @@ export async function createEventEditProposal(
     registrationStatus,
     // An open date only makes sense while registration is not open yet.
     registrationOpensAt: registrationStatus === 'not_open' ? cleanDate(input.registrationOpensAt) : null,
+    // A close date only makes sense while registration is open.
+    registrationClosesAt: registrationStatus === 'open' ? cleanDate(input.registrationClosesAt) : null,
     volunteerStatus: pickEnum(input.volunteerStatus, VOLUNTEER_STATUSES, 'unknown'),
     eventStatus: pickEnum(input.eventStatus, EVENT_STATUSES, 'confirmed'),
     website: input.website?.trim() || null,

@@ -132,6 +132,8 @@ export const eventListings = pgTable(
     registrationStatus: text('registration_status').notNull().default('unknown'),
     /** A future open date, when the sheet gives one (e.g. "8/1"). */
     registrationOpensAt: date('registration_opens_at'),
+    /** The registration deadline, the day team sign-ups close, when a source gives one. */
+    registrationClosesAt: date('registration_closes_at'),
     /** VOLUNTEER_STATUSES. */
     volunteerStatus: text('volunteer_status').notNull().default('unknown'),
 
@@ -445,6 +447,7 @@ export interface EventEditProposalData {
   costNote?: string | null
   registrationStatus?: string
   registrationOpensAt?: string | null
+  registrationClosesAt?: string | null
   volunteerStatus?: string
   eventStatus?: string
   website?: string | null

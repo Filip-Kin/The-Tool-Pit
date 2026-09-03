@@ -758,6 +758,13 @@ const EVENT_FORM: ListingFormSpec = {
       hint: 'Only kept while registration is not open yet.',
     },
     {
+      key: 'registrationClosesAt',
+      label: 'Registration closes',
+      kind: 'date',
+      group: 'entry',
+      hint: 'Only kept while registration is open.',
+    },
+    {
       key: 'volunteerStatus',
       label: 'Volunteers',
       kind: 'select',

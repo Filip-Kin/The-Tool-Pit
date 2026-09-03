@@ -42,6 +42,7 @@ export interface CreateEventSubmissionInput {
   costNote?: string
   registrationStatus?: string
   registrationOpensAt?: string
+  registrationClosesAt?: string
   volunteerStatus?: string
   eventStatus?: string
   website?: string
@@ -164,6 +165,8 @@ export async function createEventSubmission(
     registrationStatus,
     // An open date only makes sense while registration is not open yet.
     registrationOpensAt: registrationStatus === 'not_open' ? cleanDate(input.registrationOpensAt) : null,
+    // A close date only makes sense while registration is open.
+    registrationClosesAt: registrationStatus === 'open' ? cleanDate(input.registrationClosesAt) : null,
     volunteerStatus: pickEnum(input.volunteerStatus, VOLUNTEER_STATUSES, 'unknown'),
     eventStatus,
     website: input.website?.trim() || null,

@@ -49,6 +49,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       costNote: str(form, 'costNote'),
       registrationStatus: str(form, 'registrationStatus'),
       registrationOpensAt: str(form, 'registrationOpensAt'),
+      registrationClosesAt: str(form, 'registrationClosesAt'),
       volunteerStatus: str(form, 'volunteerStatus'),
       eventStatus: str(form, 'eventStatus'),
       website: str(form, 'website'),
