@@ -319,22 +319,6 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
 
   return (
     <div className="mt-4 flex flex-col gap-3 border-t border-border-subtle pt-4">
-      <AddressField
-        defaultQuery={form.address ?? ''}
-        verified={coords != null}
-        onPick={(parts, c) => {
-          setForm((f) => ({
-            ...f,
-            ...(parts.address ? { address: parts.address } : {}),
-            ...(parts.city ? { city: parts.city } : {}),
-            ...(parts.region ? { region: parts.region } : {}),
-            ...(parts.country ? { country: parts.country } : {}),
-          }))
-          setCoords(c)
-        }}
-        onClear={() => setCoords(null)}
-      />
-
       <div className="grid gap-3 sm:grid-cols-2">
         <L label="Name"><input className="input" value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} /></L>
         <div className="flex gap-2">
@@ -356,7 +340,29 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
         <L label="Registration opens"><DateField value={form.registrationOpensAt ?? ''} onChange={(v) => set('registrationOpensAt', v || null)} /></L>
         <L label="Volunteers"><select className="input" value={form.volunteerStatus} onChange={(e) => set('volunteerStatus', e.target.value)}>{VOLUNTEER_STATUSES.map((s) => <option key={s} value={s}>{VOLUNTEER_STATUS_LABEL[s]}</option>)}</select></L>
         <L label="Venue"><input className="input" value={form.venueName ?? ''} onChange={(e) => set('venueName', e.target.value)} /></L>
-        <L label="Address"><input className="input" value={form.address ?? ''} onChange={(e) => set('address', e.target.value)} /></L>
+        <div className="sm:col-span-2">
+          <L label="Address">
+            {/* The address field IS the autocomplete: scraped address in place,
+                verified suggestions as you edit, ✓ once matched (which fills
+                city/region/country and captures the pin). */}
+            <AddressField
+              defaultQuery={form.address ?? ''}
+              verified={coords != null}
+              onText={(v) => set('address', v)}
+              onPick={(parts, c) => {
+                setForm((f) => ({
+                  ...f,
+                  ...(parts.address ? { address: parts.address } : {}),
+                  ...(parts.city ? { city: parts.city } : {}),
+                  ...(parts.region ? { region: parts.region } : {}),
+                  ...(parts.country ? { country: parts.country } : {}),
+                }))
+                setCoords(c)
+              }}
+              onClear={() => setCoords(null)}
+            />
+          </L>
+        </div>
         <L label="City"><input className="input" value={form.city ?? ''} onChange={(e) => set('city', e.target.value)} /></L>
         <L label="Region"><input className="input" value={form.region ?? ''} onChange={(e) => set('region', e.target.value)} /></L>
         <L label="Country"><input className="input" value={form.country ?? ''} onChange={(e) => set('country', e.target.value)} /></L>

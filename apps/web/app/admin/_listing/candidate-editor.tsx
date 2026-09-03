@@ -205,28 +205,47 @@ export function CandidateEditor({
 
   return (
     <form ref={formRef} onSubmit={onSubmit} className="flex flex-col gap-4">
+      {/* The confirmed coordinates from a verified address ride along with Accept,
+          preferred over a geocode of the typed text, so the reviewer's pick wins. */}
       {pinMap && (
         <>
-          <AddressField
-            verified={coords != null}
-            onPick={(parts, c) => {
-              fillAddress(parts)
-              setCoords(c)
-            }}
-            onClear={() => setCoords(null)}
-          />
-          {/* The confirmed coordinates ride along with Accept. They are preferred
-              over a geocode of the typed address, so the reviewer's verified pick
-              wins and the accept path never has to guess. */}
           <input type="hidden" name="latitude" value={coords?.lat ?? ''} readOnly />
           <input type="hidden" name="longitude" value={coords?.lng ?? ''} readOnly />
         </>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {fields.map((f) => (
-          <Field key={f.name} field={f} />
-        ))}
+        {fields.map((f) =>
+          pinMap && f.name === 'address' ? (
+            // The address field IS the autocomplete: it shows the scraped address,
+            // suggests real geocoded matches as you edit, and a ✓ appears once a
+            // match is picked (which also captures the pin and fills city/region/
+            // country). No separate search box.
+            <label key={f.name} className="flex flex-col gap-1 sm:col-span-2">
+              <span className="text-xs font-medium text-muted">{f.label}</span>
+              <AddressField
+                name="address"
+                defaultQuery={typeof f.value === 'string' ? f.value : ''}
+                verified={coords != null}
+                onPick={(parts, c) => {
+                  fillAddress(parts)
+                  setCoords(c)
+                }}
+                onClear={() => setCoords(null)}
+              />
+              {f.evidence?.quote && (
+                <span className="flex flex-wrap items-start gap-1.5 text-[10px] leading-snug">
+                  <span className="shrink-0 rounded bg-official/20 px-1 py-px font-medium uppercase tracking-wide text-official">
+                    {sourceLabel(f.evidence.source)}
+                  </span>
+                  <span className="min-w-0 break-words italic text-muted">“{f.evidence.quote}”</span>
+                </span>
+              )}
+            </label>
+          ) : (
+            <Field key={f.name} field={f} />
+          ),
+        )}
       </div>
 
       <div className="flex flex-col gap-2">

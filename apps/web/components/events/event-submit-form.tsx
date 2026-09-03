@@ -468,33 +468,33 @@ export function EventSubmitForm({
         <Check
           checked={form.parallelDivisions}
           onChange={(v) => set('parallelDivisions', v)}
-          label="Two separate 1-day events the same weekend (each with its own field)"
+          label="Two separate 1-day events the same weekend"
         />
       </Section>
 
-      <Section title="Where it is" hint="Search the venue or address and pick a match. The address fields fill in from your choice - edit them if anything looks off.">
-        <AddressField
-          defaultQuery={form.address}
-          verified={coords != null}
-          onPick={(p, c) => {
-            setForm((f) => ({
-              ...f,
-              ...(p.address ? { address: p.address } : {}),
-              ...(p.city ? { city: p.city } : {}),
-              ...(p.region ? { region: p.region } : {}),
-              ...(p.country ? { country: p.country } : {}),
-            }))
-            setCoords(c)
-          }}
-          onClear={() => setCoords(null)}
-        />
+      <Section title="Where it is" hint="Type the address and pick a match to verify it - the city, region and country fill in and the pin is captured.">
         <Field label="Venue name" hint="e.g. Kettering University Recreation Center.">
           <input value={form.venueName} onChange={(e) => set('venueName', e.target.value)} className="input" />
         </Field>
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="flex-1">
             <Field label="Address">
-              <input value={form.address} onChange={(e) => set('address', e.target.value)} className="input" />
+              <AddressField
+                defaultQuery={form.address}
+                verified={coords != null}
+                onText={(v) => set('address', v)}
+                onPick={(p, c) => {
+                  setForm((f) => ({
+                    ...f,
+                    ...(p.address ? { address: p.address } : {}),
+                    ...(p.city ? { city: p.city } : {}),
+                    ...(p.region ? { region: p.region } : {}),
+                    ...(p.country ? { country: p.country } : {}),
+                  }))
+                  setCoords(c)
+                }}
+                onClear={() => setCoords(null)}
+              />
             </Field>
           </div>
           <div className="flex-1">

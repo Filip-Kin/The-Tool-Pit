@@ -343,8 +343,8 @@ export const REGISTRATION_STATUS_SHORT: Record<RegistrationStatus, string> = {
 }
 
 export const VOLUNTEER_STATUS_LABEL: Record<VolunteerStatus, string> = {
-  open: 'Volunteers wanted',
-  not_open: 'Volunteer sign-up not open',
+  open: 'Volunteer sign-up open',
+  not_open: 'Volunteer sign-up not open yet',
   unknown: 'Volunteer status unknown',
 }
 

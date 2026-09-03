@@ -24,14 +24,22 @@ import type { AddressParts, GeocodeResult } from '@/app/api/fields/geocode/route
  */
 
 interface AddressFieldProps {
-  /** Seed the search box, e.g. the address already on the listing. */
+  /** Seed the box, e.g. the address already scraped onto the listing. */
   defaultQuery?: string
+  /**
+   * The form field name this box POSTS as. This IS the address input, not a
+   * separate search box: its current text is submitted under this name, so the
+   * reviewer edits the scraped address in place and picks a suggestion to verify.
+   */
+  name?: string
   /** True while coordinates are captured for this listing. Drives the ✓. */
   verified: boolean
   /** A suggestion was chosen: its address parts and confirmed coordinates. */
   onPick: (parts: AddressParts, coords: { lat: number; lng: number }) => void
   /** The box was edited away from the last pick, so any captured pin is stale. */
   onClear?: () => void
+  /** Every keystroke, for a controlled form that stores the address in its own state. */
+  onText?: (value: string) => void
   placeholder?: string
   className?: string
 }
@@ -41,10 +49,12 @@ const DEBOUNCE_MS = 400
 
 export function AddressField({
   defaultQuery = '',
+  name,
   verified,
   onPick,
   onClear,
-  placeholder = 'Search the venue or address, then pick a match',
+  onText,
+  placeholder = 'Start typing the address, then pick a match to verify',
   className,
 }: AddressFieldProps) {
   const [query, setQuery] = useState(defaultQuery)
@@ -88,6 +98,7 @@ export function AddressField({
   function onQueryChange(v: string) {
     setQuery(v)
     setTouched(true)
+    onText?.(v)
     // Editing the box after a pick means the captured pin no longer matches what
     // is typed, so it is no longer trusted until a new suggestion is chosen.
     onClear?.()
@@ -98,7 +109,10 @@ export function AddressField({
   function pick(r: GeocodeResult) {
     setShowResults(false)
     setTouched(false)
-    setQuery(r.label.split(',').slice(0, 3).join(',').trim())
+    // Keep the street address in this field; the city/region/country boxes take
+    // the rest from onPick. Fall back to the first parts of the label if the
+    // geocoder did not split out a street line.
+    setQuery(r.address?.trim() || r.label.split(',').slice(0, 3).join(',').trim())
     onPick(
       { address: r.address, city: r.city, region: r.region, country: r.country },
       { lat: r.lat, lng: r.lon },
@@ -109,6 +123,7 @@ export function AddressField({
     <div ref={boxRef} className={className}>
       <div className="relative">
         <input
+          name={name}
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           onFocus={() => {
@@ -117,7 +132,7 @@ export function AddressField({
           placeholder={placeholder}
           className="input pr-9"
           autoComplete="off"
-          aria-label="Search for the address"
+          aria-label="Address"
         />
         {searching && <span className="absolute right-3 top-2 text-xs text-muted-2">…</span>}
         {showResults && results.length > 0 && (
