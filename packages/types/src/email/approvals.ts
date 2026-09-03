@@ -52,6 +52,14 @@ export const APPROVAL_EMAIL_KINDS = [
   'claim_rejected',
   /** An owner invited this person, by email, to help manage a listing. */
   'listing_invite',
+  /**
+   * A one-time hello to the scraped public contact for a listing we built
+   * from off-season sources, telling them it is up, showing what we hold, and
+   * offering to hand it over or take it down. Not a moderation outcome and not
+   * something they submitted: it is the consent-and-awareness email, sent once
+   * by an admin per listing, never to an event that has already run.
+   */
+  'listing_outreach',
 
   // #region the answer was no
   //
@@ -261,6 +269,17 @@ const COPY: Record<ApprovalEmailKind, KindCopy> = {
     ],
     cta: 'Review the invitation',
     reason: 'You are getting this because someone invited you to help manage a listing on frc.tools.',
+  },
+  listing_outreach: {
+    subject: '{title} is listed on FRC.tools',
+    lead: 'FRC.tools is a community index of FIRST off-season events, and {title} is on it. We built the listing from public sources so teams can find it, and we wanted the people who run it to know it is there.',
+    extra: [
+      'If this is your event, claim it and you can fix anything we got wrong: the dates, the venue, the cost, the registration link. The listing below shows what we currently hold.',
+      'If you would rather it was not listed, open the listing and use Suggest an edit to ask us to take it down, or just reply to this email and we will remove it.',
+    ],
+    cta: 'Claim & fix it',
+    reason:
+      'You are getting this once because this address is the public contact for the event. We will not email it again unless you claim the listing.',
   },
 
   // #region the answer was no

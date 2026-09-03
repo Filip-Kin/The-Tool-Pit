@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
-import { MapPin, CalendarDays, Pencil, Check, X, Trash2, RotateCcw, UserRound, Users } from 'lucide-react'
+import { MapPin, CalendarDays, Pencil, Check, X, Trash2, RotateCcw, UserRound, Users, Mail } from 'lucide-react'
 import type { EventListing } from '@the-tool-pit/db'
 import {
   EVENT_STATUSES,
@@ -19,13 +19,24 @@ import {
 } from '@/lib/events/event-display'
 import type { PublicEvent } from '@/lib/events/event-display'
 import { PinMap } from '@/components/fields/pin-map'
-import { approveEvent, approveRosterSnapshot, suppressEvent, unsuppressEvent, deleteEvent, updateEvent, type EventEditInput } from './actions'
+import { approveEvent, approveRosterSnapshot, sendEventOutreach, suppressEvent, unsuppressEvent, deleteEvent, updateEvent, type EventEditInput } from './actions'
 import { ReasonButton } from '@/components/admin/reason-button'
 import { teamListStatus } from '@/lib/admin/team-list-status'
 
 /** The account behind a submission, when the submitter was signed in. Null is normal. */
 export interface SubmitterAccount {
   id: string
+  displayName: string | null
+  email: string | null
+}
+
+/**
+ * One person who OWNS this listing now, which is not the same as who submitted
+ * it: a scraped event has an anonymous submitter and can still be claimed and
+ * owned later by the team that runs it.
+ */
+export interface EventOwner {
+  role: 'owner' | 'editor'
   displayName: string | null
   email: string | null
 }
@@ -41,10 +52,13 @@ function asPublic(l: EventListing): PublicEvent {
 export function EventAdminRow({
   listing,
   account,
+  owners = [],
   pendingRoster,
 }: {
   listing: EventListing
   account?: SubmitterAccount | null
+  /** Who owns this listing now, after any approved claim. Empty when nobody has claimed it. */
+  owners?: EventOwner[]
   /** A scraped roster snapshot waiting for a human, when one exists. Its count is not public until approved. */
   pendingRoster?: { snapshotId: string; teamCount: number } | null
 }) {
@@ -57,6 +71,19 @@ export function EventAdminRow({
   const cost = costLabel(pub)
   const hasCoords = listing.latitude != null && listing.longitude != null
   const scrape = teamListStatus(listing)
+
+  // The one-time "we listed you" email. Three gates, and the button says which
+  // one is holding it back rather than just greying out: no past events ever
+  // (today < startDate), a real contact email, and never sent twice.
+  const hasContact = !!listing.contactEmail && listing.contactEmail.includes('@')
+  const isFuture = !!listing.startDate && listing.startDate > new Date().toISOString().slice(0, 10)
+  const outreach = listing.outreachSentAt
+    ? { disabled: true, label: `Sent ${listing.outreachSentAt.toLocaleDateString()}`, reason: `Outreach sent to ${listing.outreachSentTo ?? 'the contact'}` }
+    : !hasContact
+      ? { disabled: true, label: 'Send outreach', reason: 'No contact email to reach' }
+      : !isFuture
+        ? { disabled: true, label: 'Send outreach', reason: listing.startDate ? 'Event has already run' : 'No start date to confirm it is upcoming' }
+        : { disabled: false, label: 'Send outreach', reason: `Email ${listing.contactEmail}` }
 
   function run(fn: () => Promise<{ error?: string } | void>) {
     setMsg(null)
@@ -118,6 +145,22 @@ export function EventAdminRow({
               <span>No account, anonymous submission</span>
             )}
           </div>
+          {owners.length > 0 && (
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-2">
+              <span className="flex items-center gap-1 text-foreground">
+                <UserRound className="h-3 w-3" />
+                {owners.length === 1 ? 'Owner' : 'Owners'}
+              </span>
+              {owners.map((o, i) => (
+                <span key={i}>
+                  <span className="text-foreground">{o.displayName ?? o.email ?? 'unknown'}</span>
+                  {o.displayName && o.email ? ` · ${o.email}` : ''}
+                  <span className="text-muted-2"> ({o.role})</span>
+                  {i < owners.length - 1 ? ',' : ''}
+                </span>
+              ))}
+            </div>
+          )}
           {listing.rejectionReason && <div className="mt-1 text-xs text-official">Reason: {listing.rejectionReason}</div>}
         </div>
 
@@ -156,6 +199,17 @@ export function EventAdminRow({
               disabled={pending}
               onConfirm={(reason) => suppressEvent(listing.id, reason)}
             />
+          )}
+          {!editing && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => run(() => sendEventOutreach(listing.id))}
+              disabled={pending || outreach.disabled}
+              title={outreach.reason}
+            >
+              <Mail className="h-3 w-3" /> {outreach.label}
+            </Button>
           )}
           <Button
             variant="secondary"

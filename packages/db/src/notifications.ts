@@ -52,10 +52,23 @@ export interface NotificationWriter {
 
 export interface QueueNotificationInput {
   /**
-   * Who to tell. Null or undefined means an anonymous submission, and that is
-   * the normal case, not an error: nothing is written and null comes back.
+   * Who to tell, when they have an account. Null or undefined means an
+   * anonymous submission, and for the moderation kinds that is the normal case,
+   * not an error: with no user AND no recipientEmail nothing is written and
+   * null comes back.
    */
   userId: string | null | undefined
+  /**
+   * A raw address to deliver to instead, for a recipient with no account.
+   *
+   * The ONLY supported use is reaching a scraped public contact (listing
+   * outreach): there is no user to point at and the address is the recipient.
+   * Pass a dedupeKey with it, because the default key is built from the user
+   * id. When both userId and recipientEmail are given, userId wins and this is
+   * ignored, so a caller cannot accidentally fan a moderation outcome out to a
+   * raw address.
+   */
+  recipientEmail?: string | null
   /** APPROVAL_EMAIL_KINDS in @the-tool-pit/types, e.g. 'field_published'. */
   kind: string
   /** What sort of thing this is about, for the admin looking at the outbox. */
@@ -90,16 +103,25 @@ export async function queueNotification(
   input: QueueNotificationInput,
   db: NotificationWriter = getDb() as unknown as NotificationWriter,
 ): Promise<string | null> {
-  // Anonymous submission. Silently and correctly nothing.
-  if (!input.userId) return null
+  // userId wins; a raw address is only for a recipient with no account.
+  const userId = input.userId ?? null
+  const recipientEmail = userId ? null : (input.recipientEmail?.trim() || null)
 
-  const dedupeKey = input.dedupeKey ?? notificationDedupeKey(input.kind, input.subjectId, input.userId)
+  // No account AND no raw address: an anonymous submission. Correctly nothing.
+  if (!userId && !recipientEmail) return null
+
+  // The default key needs a stable third part. It is the user id when there is
+  // one, and the address otherwise, so two clicks on the same outreach collapse
+  // to one row exactly the way two Approve clicks do.
+  const dedupeKey =
+    input.dedupeKey ?? notificationDedupeKey(input.kind, input.subjectId, userId ?? recipientEmail ?? '')
 
   try {
     const [row] = await db
       .insert(notificationOutbox)
       .values({
-        userId: input.userId,
+        userId,
+        recipientEmail,
         kind: input.kind,
         channel: 'email',
         subjectType: input.subjectType,

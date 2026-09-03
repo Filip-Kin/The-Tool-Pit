@@ -2,9 +2,9 @@ import Link from 'next/link'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
-import { eventListings, eventRosterSnapshots, users, EVENT_LISTING_STATUSES } from '@the-tool-pit/db'
+import { eventListings, eventRosterSnapshots, listingOwners, users, coerceOwnerRole, EVENT_LISTING_STATUSES } from '@the-tool-pit/db'
 import type { EventListingStatus, RosterTeam } from '@the-tool-pit/db'
-import { EventAdminRow } from './event-admin-row'
+import { EventAdminRow, type EventOwner } from './event-admin-row'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,6 +73,30 @@ export default async function EventListingsAdminPage({
     })
   }
 
+  // Who OWNS each listing now, which is a different fact from who first
+  // submitted it: a scraped event has an anonymous submitter and can still be
+  // claimed and owned by the team that runs it. One batched read, keyed by
+  // listing, so the row can show the owners without an N+1 across the page.
+  const ownerRows = listingIds.length
+    ? await db
+        .select({
+          entityId: listingOwners.entityId,
+          role: listingOwners.role,
+          displayName: users.displayName,
+          email: users.email,
+        })
+        .from(listingOwners)
+        .innerJoin(users, eq(users.id, listingOwners.userId))
+        .where(and(eq(listingOwners.entityType, 'event'), inArray(listingOwners.entityId, listingIds)))
+        .orderBy(desc(listingOwners.createdAt))
+    : []
+  const ownersByListing = new Map<string, EventOwner[]>()
+  for (const o of ownerRows) {
+    const list = ownersByListing.get(o.entityId) ?? []
+    list.push({ role: coerceOwnerRole(o.role), displayName: o.displayName, email: o.email })
+    ownersByListing.set(o.entityId, list)
+  }
+
   return (
     <div className="p-4 md:p-6">
       <h1 className="text-xl font-semibold text-foreground">Off-Season Events</h1>
@@ -106,6 +130,7 @@ export default async function EventListingsAdminPage({
             <EventAdminRow
               listing={r.listing}
               account={r.accountId ? { id: r.accountId, displayName: r.accountName, email: r.accountEmail } : null}
+              owners={ownersByListing.get(r.listing.id) ?? []}
               pendingRoster={pendingRosterByListing.get(r.listing.id) ?? null}
             />
           </div>

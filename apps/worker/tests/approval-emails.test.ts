@@ -213,6 +213,7 @@ describe('the kind list', () => {
       'claim_approved',
       'claim_rejected',
       'listing_invite',
+      'listing_outreach',
       // Every moderation action does double duty: it refuses something pending
       // AND takes down something already live. One email cannot be right for
       // both, so each vertical has two kinds and the action picks by reading

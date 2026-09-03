@@ -52,13 +52,30 @@ export const notificationOutbox = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     /**
-     * Who hears about it. NOT NULL and cascading: an anonymous submission has
-     * no row here at all, which is how "anonymous submissions stay anonymous"
-     * is enforced by the schema rather than by remembering to check.
+     * Who hears about it, when they have an account. Cascading, so deleting the
+     * user takes their queued mail with them.
+     *
+     * NULLABLE, with one narrow exception to "a notification is about a user".
+     * Almost every row here is a moderation outcome for a signed-in submitter,
+     * and for those an anonymous submission still has no row at all: the write
+     * side refuses to queue without a user, which is how "anonymous submissions
+     * stay anonymous" is kept. The exception is outreach to a scraped public
+     * contact that has no account (see recipientEmail): there the address is the
+     * recipient and there is no user to point at. Exactly one of userId and
+     * recipientEmail is set on any row; the drain reads whichever it finds.
      */
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    /**
+     * A raw address to deliver to, for a row with no account behind it.
+     *
+     * Set ONLY on rows whose recipient is a public contact we scraped, never
+     * confirmed and that has no user: listing outreach is the one such kind.
+     * The drain sends here directly instead of resolving a user's verified
+     * address, so this bypasses the "must be a confirmed address" rule on
+     * purpose, and the callers that write it are limited to admin-triggered,
+     * one-per-listing sends. Null on every ordinary row.
+     */
+    recipientEmail: text('recipient_email'),
     /**
      * APPROVAL_EMAIL_KINDS in @the-tool-pit/types, e.g. 'field_published'.
      * Persisted, so these strings are an on-disk contract: add, never rename.

@@ -76,11 +76,43 @@ export interface LayoutInput {
   paragraphs: string[]
   /** Optional label/value rows, e.g. Deadline, Award, Funder. */
   facts?: EmailFact[]
+  /** The main action. Rendered as the green primary button. */
   cta?: { label: string; url: string }
+  /**
+   * An optional lesser action next to the primary one, e.g. "Not right? Remove
+   * it" beside "Claim it". Rendered as the outlined secondary button. Most
+   * emails have one action and leave this unset; the shell renders it only when
+   * given, so every email that DOES have two actions looks the same.
+   */
+  secondaryCta?: { label: string; url: string }
   /** Why this person is getting this email. One short sentence. */
   reason: string
   preferencesUrl: string
 }
+
+// #region visual system
+
+/**
+ * The one visual shell every email shares.
+ *
+ * ONE LOOK FOR EVERY KIND. A published notice, a rejection, an invite, an
+ * outreach hello and a grant alert are all the same clean white card on a grey
+ * page: the frc.tools wordmark, the heading, the copy, an optional facts table,
+ * a green primary button (and an outlined secondary one when there are two
+ * actions), and a muted one-line footer. Nothing about the shell changes with
+ * the kind, only the words inside it, so the site never sends two emails that
+ * look like two different products.
+ *
+ * The wordmark links to the bare production origin rather than to siteUrl(),
+ * because this module carries no imports on purpose (see the file header): it
+ * is pure string building called from a server component, a worker job and a
+ * test alike, and reading an env var here would drag Node's types into a
+ * package that deliberately has none.
+ */
+const BRAND = '#16a34a'
+const WORDMARK_URL = 'https://frc.tools'
+
+// #endregion
 
 /**
  * One layout for every email we send. Inline styles only, because email
@@ -88,7 +120,7 @@ export interface LayoutInput {
  * ignore prefers-color-scheme and would otherwise render dark text on dark.
  */
 export function layout(input: LayoutInput): { html: string; text: string } {
-  const { heading, paragraphs, facts = [], cta, reason, preferencesUrl } = input
+  const { heading, paragraphs, facts = [], cta, secondaryCta, reason, preferencesUrl } = input
 
   const factRows = facts
     .map(
@@ -98,9 +130,23 @@ export function layout(input: LayoutInput): { html: string; text: string } {
     )
     .join('')
 
+  const primaryButton = cta
+    ? `<a href="${esc(cta.url)}" style="display:inline-block;padding:10px 18px;` +
+      `background:${BRAND};color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600">${esc(cta.label)}</a>`
+    : ''
+  const secondaryButton = secondaryCta
+    ? `<a href="${esc(secondaryCta.url)}" style="display:inline-block;padding:9px 17px;margin-left:8px;` +
+      `background:#ffffff;color:${BRAND};text-decoration:none;border:1px solid ${BRAND};border-radius:6px;font-size:15px">${esc(secondaryCta.label)}</a>`
+    : ''
+
   const html = [
     '<!doctype html><html><body style="margin:0;padding:0;background:#f5f5f5">',
-    '<div style="max-width:560px;margin:0 auto;padding:24px 20px;background:#ffffff;',
+    '<div style="max-width:560px;margin:0 auto;padding:24px 20px">',
+    // The wordmark, so every email is visibly from frc.tools before a word of
+    // copy is read.
+    `<div style="margin:0 0 16px"><a href="${WORDMARK_URL}" style="color:${BRAND};font-size:18px;font-weight:700;text-decoration:none;letter-spacing:-0.01em">frc.tools</a></div>`,
+    // The clean card.
+    '<div style="padding:24px;background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;',
     'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Helvetica,Arial,sans-serif;',
     'color:#111;line-height:1.5">',
     `<h1 style="margin:0 0 16px;font-size:18px;font-weight:600;color:#111">${esc(heading)}</h1>`,
@@ -108,14 +154,11 @@ export function layout(input: LayoutInput): { html: string; text: string } {
     factRows
       ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse">${factRows}</table>`
       : '',
-    cta
-      ? `<p style="margin:20px 0"><a href="${esc(cta.url)}" style="display:inline-block;padding:10px 16px;` +
-        `background:#4f46e5;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px">${esc(cta.label)}</a></p>`
-      : '',
+    cta ? `<p style="margin:20px 0">${primaryButton}${secondaryButton}</p>` : '',
     '<hr style="border:none;border-top:1px solid #e5e5e5;margin:24px 0 12px">',
     `<p style="margin:0 0 6px;font-size:12px;color:#666">${esc(reason)}</p>`,
-    `<p style="margin:0;font-size:12px;color:#666"><a href="${esc(preferencesUrl)}" style="color:#4f46e5">Manage these emails</a></p>`,
-    '</div></body></html>',
+    `<p style="margin:0;font-size:12px;color:#666"><a href="${esc(preferencesUrl)}" style="color:${BRAND}">Manage these emails</a></p>`,
+    '</div></div></body></html>',
   ]
     .filter(Boolean)
     .join('')
@@ -128,6 +171,7 @@ export function layout(input: LayoutInput): { html: string; text: string } {
     // plain text it indents rather than printing a bare colon.
     ...(facts.length ? [...facts.map((f) => (f.label ? `${f.label}: ${f.value}` : `  ${f.value}`)), ''] : []),
     ...(cta ? [`${cta.label}: ${cta.url}`, ''] : []),
+    ...(secondaryCta ? [`${secondaryCta.label}: ${secondaryCta.url}`, ''] : []),
     '--',
     reason,
     `Manage these emails: ${preferencesUrl}`,

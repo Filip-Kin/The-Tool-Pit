@@ -64,3 +64,16 @@ export function albumEventUrl(tbaKey: string): string {
 export function myListingsUrl(): string {
   return `${siteUrl()}/me/listings`
 }
+
+/**
+ * The claim flow for one listing, prefilled with what is being claimed.
+ *
+ * The same `/me/listings/claim?type=&id=` the public "Claim this listing"
+ * control points at, built as an absolute URL so it works from an inbox. Claim
+ * needs an account, so the page asks the reader to sign in and then carries on
+ * to the same claim, which is the correct door for an organiser we emailed:
+ * proving they run the event is exactly what a claim is for.
+ */
+export function claimListingUrl(entityType: string, entityId: string): string {
+  return `${siteUrl()}/me/listings/claim?type=${encodeURIComponent(entityType)}&id=${encodeURIComponent(entityId)}`
+}

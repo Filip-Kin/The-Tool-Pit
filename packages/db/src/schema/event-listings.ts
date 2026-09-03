@@ -259,6 +259,20 @@ export const eventListings = pgTable(
       .notNull()
       .default(sql`'{}'::text[]`),
 
+    // Outreach (the one-time "we listed you" email to the scraped contact)
+    /**
+     * When an admin sent the outreach email for this listing, or null if never.
+     *
+     * This is the "never twice" guard, and it is the listing that holds it
+     * rather than the outbox: the outbox row can be pruned or parked, but the
+     * question the admin button asks is "have we already reached out about this
+     * event", and that has to survive. Set the moment the row is queued, so a
+     * second click sees it and does nothing.
+     */
+    outreachSentAt: timestamp('outreach_sent_at', { withTimezone: true }),
+    /** The address the outreach went to, recorded so the button can show it and an admin can audit it. */
+    outreachSentTo: text('outreach_sent_to'),
+
     publishedAt: timestamp('published_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

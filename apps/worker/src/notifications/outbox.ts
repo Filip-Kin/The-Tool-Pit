@@ -217,10 +217,31 @@ export async function processNotificationDrainJob(
       continue
     }
 
-    let address = addressCache.get(row.userId)
-    if (address === undefined) {
-      address = await resolveEmailRecipient(row.userId)
-      addressCache.set(row.userId, address)
+    // Two kinds of recipient. Almost every row is about a signed-in user and
+    // its address is resolved from their account (a confirmed channel, or a
+    // provider-verified sign-in address, never anything else). The exception is
+    // a row with no user and a raw recipientEmail: outreach to a scraped public
+    // contact, where the address IS the recipient and there is no account to
+    // resolve. That address is always "available", so it skips the grace/defer
+    // path a missing user address takes. canDeliverTo() still gates it below.
+    let address: string | null
+    if (row.userId) {
+      const cached = addressCache.get(row.userId)
+      if (cached === undefined) {
+        address = await resolveEmailRecipient(row.userId)
+        addressCache.set(row.userId, address)
+      } else {
+        address = cached
+      }
+    } else {
+      address = row.recipientEmail?.trim() || null
+      if (!address) {
+        // A userless row with no address on it either is unrenderable in the
+        // one way that never fixes itself. Park it rather than defer forever.
+        await park(row.id, row.attempts, 'row has neither a user nor a recipient address')
+        stats.parkedBy.noAddress++
+        continue
+      }
     }
 
     if (!address) {

@@ -14,6 +14,8 @@ import {
   VOLUNTEER_STATUSES,
 } from '@the-tool-pit/db'
 import type { RosterTeam } from '@the-tool-pit/db'
+import { queueNotification } from '@the-tool-pit/db'
+import { claimListingUrl, eventListingUrl, type ApprovalEmailPayload, type EmailFact } from '@the-tool-pit/types'
 import { notifyEventPublished, notifyEventRejected } from '@/lib/notify/approvals'
 import { grantEventOwnership } from '@/lib/listings/submitter-ownership'
 import { eventPublishBlockers } from '@/lib/events/publish-bar'
@@ -140,6 +142,116 @@ export async function approveRosterSnapshot(snapshotId: string): Promise<{ error
   revalidateAll()
   return { count: registeredCount }
 }
+
+// #region outreach
+
+/** "12 to 13 July 2026", or the single date, from ISO yyyy-mm-dd strings. */
+function outreachDateRange(start: string | null, end: string | null): string | null {
+  const fmt = (iso: string) => {
+    // Parsed as UTC: these are date-only columns and the server's local zone
+    // must not shift an event a day.
+    const at = new Date(`${iso}T00:00:00Z`)
+    if (Number.isNaN(at.getTime())) return iso
+    return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(at)
+  }
+  if (start && end && start !== end) return `${fmt(start)} to ${fmt(end)}`
+  if (start) return fmt(start)
+  if (end) return fmt(end)
+  return null
+}
+
+/**
+ * Send the one-time outreach email for a listing: tell its scraped public
+ * contact that the event is listed, show what we hold, and offer to claim or
+ * remove it.
+ *
+ * ADMIN-TRIGGERED, once per listing, and it refuses in three ways, because the
+ * one thing this must never do is annoy an organiser or, worse, email an event
+ * that is over:
+ *
+ *   - NEVER A PAST EVENT. The gate is today < startDate. A missing start date
+ *     is treated as "cannot tell", so it is refused too. There is no outreach
+ *     about an event that has run.
+ *   - NEVER WITHOUT A REAL DESTINATION. Only the scraped contactEmail is used.
+ *     No contactEmail, no send. There is no fallback to submitterContact, which
+ *     is a free-text admin note, not an address anyone confirmed.
+ *   - NEVER TWICE. outreachSentAt is stamped on the listing the moment the row
+ *     is queued, and a second attempt sees it and stops. The outbox dedupe key
+ *     is a second guard behind it.
+ *
+ * The recipient has no account, so this does not go through the user-address
+ * path the moderation emails use: the row carries the raw contactEmail and the
+ * worker's drain sends straight to it. See queueNotification's recipientEmail.
+ */
+export async function sendEventOutreach(id: string): Promise<{ error?: string }> {
+  await assertAdmin()
+  const db = getDb()
+  const [row] = await db
+    .select({
+      id: eventListings.id,
+      name: eventListings.name,
+      venueName: eventListings.venueName,
+      city: eventListings.city,
+      region: eventListings.region,
+      country: eventListings.country,
+      startDate: eventListings.startDate,
+      endDate: eventListings.endDate,
+      contactEmail: eventListings.contactEmail,
+      outreachSentAt: eventListings.outreachSentAt,
+    })
+    .from(eventListings)
+    .where(eq(eventListings.id, id))
+    .limit(1)
+  if (!row) return { error: 'Event not found' }
+
+  if (row.outreachSentAt) return { error: 'Outreach has already been sent for this event.' }
+
+  const email = row.contactEmail?.trim()
+  if (!email || !email.includes('@')) return { error: 'This listing has no contact email to reach.' }
+
+  // today < startDate, compared as YYYY-MM-DD strings (lexicographic order is
+  // date order for that format). A missing date is not in the future, so it is
+  // refused: the rule is no outreach unless we can prove the event is ahead.
+  const today = new Date().toISOString().slice(0, 10)
+  if (!row.startDate) return { error: 'This event has no start date, so it cannot be confirmed as upcoming.' }
+  if (row.startDate <= today) return { error: 'This event has already run, so no outreach is sent.' }
+
+  const facts: EmailFact[] = []
+  const dates = outreachDateRange(row.startDate, row.endDate)
+  if (dates) facts.push({ label: 'Dates', value: dates })
+  const where = [row.venueName, row.city, row.region, row.country].filter((p) => p && p.trim()).join(', ')
+  if (where) facts.push({ label: 'Where', value: where })
+  facts.push({ label: 'Listing', value: eventListingUrl(row.id) })
+
+  const payload: ApprovalEmailPayload = {
+    title: row.name,
+    url: claimListingUrl('event', row.id),
+    facts,
+  }
+
+  // Stamp the listing first: it is the guard the button reads and the one that
+  // survives the outbox being pruned. Queueing is idempotent behind its dedupe
+  // key, so even a replayed action lands one email.
+  await db
+    .update(eventListings)
+    .set({ outreachSentAt: new Date(), outreachSentTo: email, updatedAt: new Date() })
+    .where(eq(eventListings.id, id))
+
+  await queueNotification({
+    userId: null,
+    recipientEmail: email,
+    kind: 'listing_outreach',
+    subjectType: 'event_listing',
+    subjectId: row.id,
+    dedupeKey: `listing_outreach:event:${row.id}`,
+    payload,
+  })
+
+  revalidateAll()
+  return {}
+}
+
+// #endregion
 
 export async function unsuppressEvent(id: string): Promise<void> {
   await assertAdmin()

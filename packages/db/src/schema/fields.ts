@@ -114,6 +114,19 @@ export const practiceFields = pgTable(
      */
     submitterOwns: boolean('submitter_owns'),
 
+    // Outreach (the one-time "we listed you" email; wired for events first, the
+    // columns here so the field version is a UI change and not a migration).
+    /**
+     * When an admin sent the outreach email for this field, or null if never.
+     * The "never twice" guard lives on the field, not the outbox row, so it
+     * survives the outbox being pruned. A field's public contact is the
+     * free-text contactInfo, so the field outreach path has to find an address
+     * in it before it can send; that gate lives with the (later) field button.
+     */
+    outreachSentAt: timestamp('outreach_sent_at', { withTimezone: true }),
+    /** The address the outreach went to, recorded for the button and for audit. */
+    outreachSentTo: text('outreach_sent_to'),
+
     publishedAt: timestamp('published_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
