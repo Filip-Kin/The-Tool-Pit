@@ -211,12 +211,11 @@ export async function VerticalCards({
   className?: string
 }) {
   const links = await getVerticalLinks(current)
-  const blurbs = new Map(VERTICALS.map((v) => [v.key, v.blurb]))
 
   return (
     <nav
       aria-label="Explore FRC.tools"
-      className={cn('grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3', className)}
+      className={cn('flex flex-wrap justify-center gap-3', className)}
     >
       {links
         .filter((l) => l.key !== current)
@@ -226,15 +225,12 @@ export async function VerticalCards({
             <a
               key={key}
               href={href}
-              className="group flex items-start gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-primary hover:bg-primary/5"
+              className="group flex w-full items-center gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-primary hover:bg-primary/5 sm:w-56"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
                 <Icon className="h-5 w-5" aria-hidden />
               </span>
-              <span className="flex flex-col gap-0.5">
-                <span className="font-semibold text-foreground">{label}</span>
-                <span className="text-sm text-muted">{blurbs.get(key)}</span>
-              </span>
+              <span className="font-semibold text-foreground">{label}</span>
             </a>
           )
         })}

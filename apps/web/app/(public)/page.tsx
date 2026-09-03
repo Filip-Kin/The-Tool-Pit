@@ -10,7 +10,6 @@ import {
   getRookieFriendlyTools,
   getOfficialTools,
   getFavoriteTools,
-  getFeaturedTools,
 } from '@/lib/queries/tools'
 
 /**
@@ -31,9 +30,8 @@ import {
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
-  const [favorites, featured, discover, recent, rookie, official] = await Promise.all([
+  const [favorites, discover, recent, rookie, official] = await Promise.all([
     getFavoriteTools(6),
-    getFeaturedTools(6),
     getDiscoverTools(6),
     getRecentlyUpdatedTools(6),
     getRookieFriendlyTools(6),
@@ -41,9 +39,9 @@ export default async function HomePage() {
   ])
 
   return (
-    <div className="flex flex-col gap-20 pb-20">
+    <div className="flex flex-col gap-12 pb-20">
       {/* Hero */}
-      <section className="relative flex flex-col items-center justify-center gap-6 px-4 py-24 text-center">
+      <section className="relative flex flex-col items-center justify-center gap-6 px-4 pt-24 pb-12 text-center">
         {/* Background glow */}
         <div
           aria-hidden
@@ -95,26 +93,16 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Featured leads the page. Popular, Rookie Friendly and Official are all
-          rows a reader would guess were here, and none of them can say why one
-          particular tool is worth the click. This is the row that can, so it
-          goes first. Nothing is featured to begin with and the section renders
-          nothing at all until something is, so an unset home page is the old
-          home page rather than an empty shelf. No link out: it is a short list
-          somebody chose, not a category you can browse. */}
-      {featured.tools.length > 0 && (
-        <section className="container mx-auto max-w-6xl px-4">
-          <SectionHeader title="Featured" description="Worth a look, and why" />
-          <Suspense fallback={<ToolGrid.Skeleton count={featured.tools.length} />}>
-            <ToolGrid tools={featured.tools} notes={featured.notes} />
-          </Suspense>
-        </section>
-      )}
+      {/* Browse by program leads: the fastest way in for someone who already
+          knows which program they run. */}
+      <section className="container mx-auto max-w-6xl px-4">
+        <SectionHeader title="Browse by Program" />
+        <ProgramCards />
+      </section>
 
       {/* Then your own, and only when there is some. A signed-out visitor and a
           signed-in one who has bookmarked nothing both see the page as it was.
-          Called Bookmarked because the control on every card is a bookmark;
-          it was "Favorite tools" next to a button that says bookmark. */}
+          Called Bookmarked because the control on every card is a bookmark. */}
       {favorites.length > 0 && (
         <section className="container mx-auto max-w-6xl px-4">
           <SectionHeader
@@ -128,12 +116,6 @@ export default async function HomePage() {
           </Suspense>
         </section>
       )}
-
-      {/* Browse by program */}
-      <section className="container mx-auto max-w-6xl px-4">
-        <SectionHeader title="Browse by Program" />
-        <ProgramCards />
-      </section>
 
       {/* Discover, not Popular. Popularity alone put WPILib, PathPlanner and the
           rest of the eternal giants here forever, which a veteran reads as a
