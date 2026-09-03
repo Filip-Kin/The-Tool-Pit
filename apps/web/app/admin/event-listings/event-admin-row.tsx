@@ -70,6 +70,19 @@ export function EventAdminRow({
   const loc = eventLocation(pub)
   const cost = costLabel(pub)
   const hasCoords = listing.latitude != null && listing.longitude != null
+
+  // A past event that was not cancelled reads as Completed, automatically: the
+  // public card already derives this (timingPhrase), so the admin should not
+  // still show "Confirmed" for something that ran last month. The stored column
+  // is left as-is; this is a display derivation.
+  const eventLastDay = listing.endDate ?? listing.startDate
+  const isPastEvent = eventLastDay != null && eventLastDay < new Date().toISOString().slice(0, 10)
+  const statusLabel =
+    listing.eventStatus === 'cancelled'
+      ? EVENT_STATUS_LABEL.cancelled
+      : isPastEvent
+        ? EVENT_STATUS_LABEL.completed
+        : EVENT_STATUS_LABEL[listing.eventStatus as keyof typeof EVENT_STATUS_LABEL]
   const scrape = teamListStatus(listing)
 
   // The one-time "we listed you" email. Three gates, and the button says which
@@ -110,7 +123,7 @@ export function EventAdminRow({
                 {loc}
               </span>
             )}
-            <span>{EVENT_STATUS_LABEL[listing.eventStatus as keyof typeof EVENT_STATUS_LABEL]}</span>
+            <span>{statusLabel}</span>
             <span>{REGISTRATION_STATUS_LABEL[listing.registrationStatus as keyof typeof REGISTRATION_STATUS_LABEL]}</span>
             {listing.capacity != null && <span>{listing.capacity} slots</span>}
             {cost && <span>{cost}</span>}
