@@ -206,7 +206,13 @@ export function suspectRosterChange(
   for (const n of prevNums) if (nextNums.has(n)) stillPresent++
   // Every old team still there: a healthy roster, grown or unchanged.
   if (stillPresent === prevNums.size) return { suspect: false, reason: null }
-  // Fewer than half of the known teams survived. That is the garbage case.
+  // A few teams leaving between refreshes is NORMAL churn (a team drops out, the
+  // organiser trims the list), not a broken parser. Tracking that change is the
+  // whole point; do not regenerate over it. A swing of a handful of teams is fine.
+  const lost = prevNums.size - stillPresent
+  if (lost <= 3) return { suspect: false, reason: null }
+  // A wholesale collapse (most of the roster gone at once, e.g. 15 down to 3) is
+  // the garbage case: the parser broke or the page changed shape. Regenerate.
   if (stillPresent * 2 < prevNums.size)
     return { suspect: true, reason: `only ${stillPresent} of ${prevNums.size} previously listed teams remain` }
   return { suspect: false, reason: null }
