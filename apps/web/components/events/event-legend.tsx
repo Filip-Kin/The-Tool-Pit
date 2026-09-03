@@ -13,7 +13,7 @@ export function EventLegend() {
       <LegendItem color="var(--color-reg-open)" size={16} label="Registration open" />
       <LegendItem color="var(--color-reg-waitlist)" size={13} label="Waitlist" />
       <LegendItem color="var(--color-reg-closed)" size={12} label="Closed" />
-      <LegendItem color="var(--color-reg-moot)" size={11} label="Run, cancelled, or unknown" />
+      <LegendItem color="var(--color-reg-moot)" size={11} label="Completed, cancelled, or unknown" />
     </div>
   )
 }
