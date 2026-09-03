@@ -121,7 +121,10 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Accounts',
-    items: [{ href: '/admin/claims', label: 'Listing claims', queue: 'listingClaims' }],
+    items: [
+      { href: '/admin/users', label: 'Users' },
+      { href: '/admin/claims', label: 'Listing claims', queue: 'listingClaims' },
+    ],
   },
   {
     label: 'System',
