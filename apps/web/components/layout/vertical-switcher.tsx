@@ -35,7 +35,7 @@ const VERTICALS: Vertical[] = [
   // and registration state, leading with what is coming up next.
   { key: 'events', label: 'Offseason Events', slug: 'events', blurb: 'Off-season competitions on a map, upcoming first' },
   { key: 'photos', label: 'Event Photos', slug: 'photos', blurb: 'Event photo albums, by event and team' },
-  { key: 'fields', label: 'Fields', slug: 'fields', blurb: 'A map of practice fields you can visit' },
+  { key: 'fields', label: 'Practice Fields', slug: 'fields', blurb: 'A map of practice fields you can visit' },
   // Robot code and CAD is its own vertical, not a page of the tools directory:
   // it is browsed by team and season rather than searched by what a tool does,
   // and it has its own submission route.
