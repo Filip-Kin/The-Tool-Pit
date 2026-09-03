@@ -12,6 +12,7 @@ import { entityNoun } from '@/components/me/listing-labels'
 import { albums, fieldPhotos, TOOL_TYPES } from '@the-tool-pit/db'
 import { asc, eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
+import { LISTING_WRITE_ROLES } from '@the-tool-pit/db'
 import {
   getOwnerRole,
   isListingEntityType,
@@ -20,7 +21,7 @@ import {
 } from '@/lib/queries/listing-ownership'
 import { MAX_PHOTOS } from '@/lib/fields/form-parse'
 import {
-  createInvite,
+  inviteToListing,
   removeFieldPhoto,
   removeOwner,
   saveAlbumCover,
@@ -68,9 +69,10 @@ export default async function EditListingPage({
   if (!isListingEntityType(type)) notFound()
 
   // The gate. No edit access, no page. Same as a missing listing so a guessed
-  // id cannot be used to probe what exists.
+  // id cannot be used to probe what exists. Both listing roles may edit; the
+  // check is written against the write set so a stray legacy role is refused.
   const role = await getOwnerRole(user.id, type, id)
-  if (role === null || role === 'viewer') redirect('/me/listings')
+  if (role === null || !LISTING_WRITE_ROLES.includes(role)) redirect('/me/listings')
 
   const [listing, members] = await Promise.all([loadListingForEdit(type, id), listOwnersOf(type, id)])
   if (!listing) notFound()
@@ -121,7 +123,7 @@ export default async function EditListingPage({
           members={members}
           isOwner={role === 'owner'}
           currentUserId={user.id}
-          createInviteAction={createInvite}
+          inviteAction={inviteToListing}
           removeAction={removeOwner}
         />
 

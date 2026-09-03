@@ -50,6 +50,8 @@ export const APPROVAL_EMAIL_KINDS = [
   'claim_approved',
   /** An admin reviewed a claim and said no. */
   'claim_rejected',
+  /** An owner invited this person, by email, to help manage a listing. */
+  'listing_invite',
 
   // #region the answer was no
   //
@@ -249,6 +251,16 @@ const COPY: Record<ApprovalEmailKind, KindCopy> = {
     cta: 'Open your listings',
     reason: 'You are getting this because you claimed this listing.',
     noteLabel: 'Why',
+  },
+  listing_invite: {
+    subject: 'You are invited to help manage {title}',
+    lead: 'Someone who manages {title} on frc.tools invited you to help keep it up to date. Open the invitation to accept it.',
+    extra: [
+      'Your email address is only used so the site and the other people who manage this listing can reach you. It is never shown on any public page.',
+      'The invitation is tied to this address and can be accepted once.',
+    ],
+    cta: 'Review the invitation',
+    reason: 'You are getting this because someone invited you to help manage a listing on frc.tools.',
   },
 
   // #region the answer was no

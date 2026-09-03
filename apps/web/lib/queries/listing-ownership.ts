@@ -19,6 +19,7 @@ import {
   users,
   LISTING_ENTITY_TYPES,
   LISTING_WRITE_ROLES,
+  coerceOwnerRole,
   type ClaimStatus,
   type ListingEntityType,
   type ListingOwnerRole,
@@ -285,7 +286,7 @@ export async function listOwnedListings(userId: string): Promise<OwnedListing[]>
     if (!isListingEntityType(row.entityType)) continue
     const facts = byType.get(row.entityType)?.get(row.entityId)
     if (!facts) continue // target deleted
-    const role = row.role as ListingOwnerRole
+    const role = coerceOwnerRole(row.role)
     out.push({
       entityType: row.entityType,
       entityId: row.entityId,
@@ -315,7 +316,7 @@ export async function getOwnerRole(
       ),
     )
     .limit(1)
-  return row ? (row.role as ListingOwnerRole) : null
+  return row ? coerceOwnerRole(row.role) : null
 }
 
 /** True when this user may write to this listing. Used by every edit action. */
@@ -942,7 +943,7 @@ export async function listOwnersOf(entityType: ListingEntityType, entityId: stri
     .orderBy(asc(listingOwners.createdAt))
   return rows.map((r) => ({
     userId: r.userId,
-    role: r.role as ListingOwnerRole,
+    role: coerceOwnerRole(r.role),
     displayName: r.displayName,
     email: r.email,
   }))

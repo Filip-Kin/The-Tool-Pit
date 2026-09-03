@@ -204,6 +204,13 @@
       "when": 1788381161743,
       "tag": "0028_hot_sentinels",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788398535548,
+      "tag": "0029_listing_roles_drop_viewer",
+      "breakpoints": true
     }
   ]
 }

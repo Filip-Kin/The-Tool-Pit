@@ -17,9 +17,10 @@ import { users } from './accounts'
 // the way app/me/team/profile/queries.ts gates on team_profile_members, never
 // on the claim itself.
 //
-// Polymorphic over five entity types. Grants already have their own
-// team_profile_members with the same owner/editor/viewer vocabulary; this
-// mirrors it rather than inventing a second one.
+// Polymorphic over five entity types. Grants have their own
+// team_profile_members with a wider vocabulary; a LISTING is simpler, because
+// everything on a listing is already public, so a read-only role would grant
+// nothing nobody else has. There are exactly two listing roles.
 //
 // 'event' means a row in event_listings, the curated off-season listing with
 // the cost, capacity, registration state and venue on it. It earned its own
@@ -46,12 +47,35 @@ import { users } from './accounts'
 export const LISTING_ENTITY_TYPES = ['tool', 'album', 'field', 'event', 'grant'] as const
 export type ListingEntityType = (typeof LISTING_ENTITY_TYPES)[number]
 
-/** Same three roles as team_profile_members, on purpose. 'viewer' may only read. */
-export const LISTING_OWNER_ROLES = ['owner', 'editor', 'viewer'] as const
+/**
+ * The two roles a listing has.
+ *
+ *   owner  - edits every field AND adds or removes other people.
+ *   editor - edits every field, but cannot change who else has access.
+ *
+ * There is no 'viewer': everything on a listing is public already, so a
+ * read-only role would grant nothing the whole internet does not already have.
+ * A row that still reads 'viewer' from before this change is treated as an
+ * editor; see coerceOwnerRole.
+ */
+export const LISTING_OWNER_ROLES = ['owner', 'editor'] as const
 export type ListingOwnerRole = (typeof LISTING_OWNER_ROLES)[number]
 
-/** owner and editor may write; viewer may not. */
+/** Both roles may write; the only thing an editor cannot do is manage people. */
 export const LISTING_WRITE_ROLES: readonly ListingOwnerRole[] = ['owner', 'editor']
+
+/**
+ * Read a role column safely.
+ *
+ * The role is a plain text column, so a value written by an older deploy (the
+ * retired 'viewer') or an unexpected string must not be cast blindly to
+ * ListingOwnerRole and then trusted. Anything that is not a current role
+ * becomes 'editor': the safe floor, since an editor can still do everything on
+ * a listing that a viewer ever could and nothing that only an owner may.
+ */
+export function coerceOwnerRole(value: string | null | undefined): ListingOwnerRole {
+  return value === 'owner' ? 'owner' : 'editor'
+}
 
 export const CLAIM_STATUSES = ['pending', 'verified', 'rejected'] as const
 export type ClaimStatus = (typeof CLAIM_STATUSES)[number]
@@ -71,7 +95,9 @@ export type ClaimStatus = (typeof CLAIM_STATUSES)[number]
  *                    person inside the namespace is the person to talk to about
  *                    the listing.
  *   domain_email   - the claimant's verified email domain matches the listing's contact.
- *   invite         - an existing owner's single-use link.
+ *   invite         - an existing owner sent this person an email invitation,
+ *                    which they accepted. The invite still carries a single-use
+ *                    token under the hood; the human action is entering an email.
  *   admin          - an admin decided it by hand.
  *   manual_review  - awaiting an admin because no automatic proof was available.
  */
@@ -187,10 +213,12 @@ export const listingClaims = pgTable(
 // listing_invites - an owner handing access to someone they know.
 //
 // The route around the "no verification of who is on a team" problem: rather
-// than trusting a fresh claimant, an existing owner mints a single-use link and
-// sends it to the person themselves. Accepting the link is what writes the new
-// listing_owners row. The raw token lives only in the URL; we store its sha256
-// so a database read cannot mint a working link.
+// than trusting a fresh claimant, an existing owner enters the person's EMAIL
+// and the site sends them an invitation. Accepting it is what writes the new
+// listing_owners row, at the role the owner chose. The email carries a
+// single-use token in its link; we store only its sha256, so a database read
+// cannot mint a working link, and the invite is pinned to the address it was
+// sent to so a forwarded email is useless to anyone else.
 // ---------------------------------------------------------------------------
 
 export const listingInvites = pgTable(
@@ -200,7 +228,10 @@ export const listingInvites = pgTable(
     /** LISTING_ENTITY_TYPES */
     entityType: text('entity_type').notNull(),
     entityId: uuid('entity_id').notNull(),
-    /** Role the invitee gets on accept. LISTING_OWNER_ROLES, never 'owner'. */
+    /**
+     * Role the invitee gets on accept. LISTING_OWNER_ROLES: an owner may invite
+     * another 'owner' or an 'editor'. Defaults to editor, the narrower one.
+     */
     role: text('role').notNull().default('editor'),
     /** sha256 of the raw token. The raw token is only ever in the link. */
     tokenHash: text('token_hash').notNull(),
@@ -208,8 +239,9 @@ export const listingInvites = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     /**
-     * Optional: pin the invite to one email so a leaked link is useless to
-     * anyone else. Checked against the accepter's verified email.
+     * The address the invitation was sent to. It pins the invite: only that
+     * verified email may accept, so a forwarded link is useless to anyone else.
+     * Nullable for rows minted before invites were sent by email.
      */
     email: text('email'),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),

@@ -1,7 +1,7 @@
 'use server'
 
 import { randomBytes, createHash } from 'crypto'
-import { and, eq, isNull } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { getDb } from '@/lib/db'
 import {
@@ -17,10 +17,13 @@ import {
   practiceFields,
   toolLinks,
   tools,
+  users,
   TOOL_TYPES,
   addHumanEdits,
   changedKeys,
+  coerceOwnerRole,
   linkMarker,
+  queueNotification,
   HUMAN_EDITABLE_TOOL_KEYS,
   HUMAN_EDITABLE_EVENT_KEYS,
   type ClaimEvidence,
@@ -35,6 +38,7 @@ import {
   getOwnerRole,
   isListingEntityType,
   listingColumnFields,
+  listingFacts,
   loadListingFormContext,
   loadToolLinks,
   resolveClaimable,
@@ -61,7 +65,7 @@ import {
 import { notifyClaimResolved } from '@/lib/notify/approvals'
 import { normaliseUploadedImage } from '@/lib/images/normalise'
 import { MAX_PHOTOS, readPhotoFiles } from '@/lib/fields/form-parse'
-import { sendApprovalNotice, reviewClaimUrl } from '@the-tool-pit/types'
+import { sendApprovalNotice, reviewClaimUrl, type ApprovalEmailPayload } from '@the-tool-pit/types'
 import { entityNoun } from '@/components/me/listing-labels'
 import { refreshListingPopularity, linkChangeNeedsPopularityRefresh } from '@/lib/queues/popularity'
 
@@ -92,7 +96,11 @@ export interface OwnershipActionResult {
   message?: string
   /** repo_file: the token the user must commit, and where to put it. */
   verifyToken?: string
-  /** An invite link to copy, for createInvite. */
+  /**
+   * A fallback invite link for the owner to pass on by hand. Only returned when
+   * the invited email has no account we can send to; the normal path emails the
+   * invitation and returns none.
+   */
   inviteUrl?: string
 }
 
@@ -410,12 +418,28 @@ async function grantOwnership(
 
 // #region invites
 
-/** An owner mints a single-use link. Only owners may invite; invitees are editors. */
-export async function createInvite(
+/**
+ * An owner invites someone BY EMAIL to help manage a listing.
+ *
+ * The human action is "enter an email, choose a role, send". Under the hood it
+ * still mints a single-use token and pins the invite to that address, so a
+ * forwarded email is useless to anyone else. The person gets an email with an
+ * accept link, and accepting it writes the listing_owners row at the chosen
+ * role. Only an OWNER may invite; an editor can change the listing but not
+ * widen who can.
+ *
+ * WHY THE EMAIL NEEDS AN EXISTING ACCOUNT. Every transactional email on the
+ * site goes out through notification_outbox, which is keyed on a user id, and
+ * the web app cannot reach the mail transport directly. So an invitee who
+ * already has an account is emailed; for an address with no account yet, the
+ * invite is still created and pinned, and the owner is handed the link to pass
+ * on, which is exactly what the old flow did for everyone.
+ */
+export async function inviteToListing(
   entityTypeRaw: string,
   entityId: string,
   roleRaw: string,
-  email: string | null,
+  emailRaw: string | null,
 ): Promise<OwnershipActionResult> {
   const user = await getCurrentUser()
   if (!user) return { error: 'Your session expired. Sign in again and retry.' }
@@ -426,22 +450,100 @@ export async function createInvite(
   if ((await getOwnerRole(user.id, entityType, entityId)) !== 'owner') {
     return { error: 'Only an owner of this listing can invite others.' }
   }
-  // Never invite straight to owner; ownership transfer is an admin action.
-  const role: ListingOwnerRole = roleRaw === 'viewer' ? 'viewer' : 'editor'
 
+  // An owner may invite another owner or an editor. There is no viewer role;
+  // anything that is not 'owner' is an editor, the narrower of the two.
+  const role: ListingOwnerRole = roleRaw === 'owner' ? 'owner' : 'editor'
+
+  const email = (emailRaw ?? '').trim().toLowerCase()
+  if (!email || !email.includes('@')) {
+    return { error: 'Enter the email address of the person you want to invite.' }
+  }
+
+  const db = getDb()
   const { raw, hash } = mintToken()
   const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // 14 days
-  const db = getDb()
-  await db.insert(listingInvites).values({
-    entityType,
-    entityId,
-    role,
-    tokenHash: hash,
-    invitedByUserId: user.id,
-    email: email && email.includes('@') ? email.trim().toLowerCase() : null,
-    expiresAt,
+  const [invite] = await db
+    .insert(listingInvites)
+    .values({
+      entityType,
+      entityId,
+      role,
+      tokenHash: hash,
+      invitedByUserId: user.id,
+      email,
+      expiresAt,
+    })
+    .returning({ id: listingInvites.id })
+
+  // Look for an account on that address. Only a verified one can be mailed, the
+  // same rule the outbox drain enforces on the other end.
+  const [recipient] = await db
+    .select({ id: users.id, emailVerified: users.emailVerified })
+    .from(users)
+    .where(sql`lower(${users.email}) = ${email}`)
+    .limit(1)
+
+  const acceptUrl = inviteLink(raw)
+
+  if (recipient?.emailVerified) {
+    await queueListingInviteEmail({
+      recipientUserId: recipient.id,
+      inviteId: invite.id,
+      entityType,
+      entityId,
+      role,
+      acceptUrl,
+      invitedByName: user.displayName ?? user.email ?? null,
+    })
+    return { message: `Invitation sent to ${email}. It works once and expires in 14 days.` }
+  }
+
+  // No account we can email yet. The invite is still valid and pinned to the
+  // address; hand the owner the link so they can pass it on, and say why.
+  return {
+    inviteUrl: acceptUrl,
+    message: `No frc.tools account uses ${email} yet, so we could not email them. Send them this link; it works once they sign in with that address.`,
+  }
+}
+
+/**
+ * Queue the invitation email.
+ *
+ * Reuses notification_outbox and the shared email templates: 'listing_invite'
+ * is an approval-email kind, so the worker's existing drain renders and sends
+ * it with no worker change. The accept link carries the single-use token, the
+ * same way every accept link always has.
+ */
+async function queueListingInviteEmail(opts: {
+  recipientUserId: string
+  inviteId: string
+  entityType: ListingEntityType
+  entityId: string
+  role: ListingOwnerRole
+  acceptUrl: string
+  invitedByName: string | null
+}): Promise<void> {
+  const listing = await listingFacts(opts.entityType, opts.entityId)
+  const payload: ApprovalEmailPayload = {
+    title: listing?.title ?? entityNoun(opts.entityType),
+    url: opts.acceptUrl,
+    facts: [
+      {
+        label: 'Role',
+        value: opts.role === 'owner' ? 'Owner (edit and manage people)' : 'Editor (edit the listing)',
+      },
+      ...(opts.invitedByName ? [{ label: 'Invited by', value: opts.invitedByName }] : []),
+      ...(listing?.subtitle ? [{ label: 'Listing', value: listing.subtitle }] : []),
+    ],
+  }
+  await queueNotification({
+    userId: opts.recipientUserId,
+    kind: 'listing_invite',
+    subjectType: 'listing_invite',
+    subjectId: opts.inviteId,
+    payload,
   })
-  return { inviteUrl: inviteLink(raw), message: 'Invite link created. It works once and expires in 14 days.' }
 }
 
 /** Accept an invite: validate the token, then write the ownership row. */
@@ -483,7 +585,7 @@ export async function acceptInvite(token: string): Promise<OwnershipActionResult
     invite.entityType,
     invite.entityId,
     user.id,
-    invite.role as ListingOwnerRole,
+    coerceOwnerRole(invite.role),
     'invite',
     invite.invitedByUserId,
   )

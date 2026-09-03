@@ -10,10 +10,12 @@ import type { ListingEntityType, ListingOwnerRole } from '@the-tool-pit/db'
 /**
  * Who can manage a listing, and how an owner adds someone.
  *
- * The invite is the answer to "there is no verification of who is on a team":
- * instead of trusting a stranger's claim, an existing owner sends a single-use
- * link to the person themselves. Only owners see the invite controls; an editor
- * can change the listing but not widen who can.
+ * A listing can have any number of owners and editors. An OWNER edits every
+ * field and manages who else has access; an EDITOR edits every field but cannot
+ * add or remove people. An owner invites someone by typing their EMAIL and
+ * choosing a role: the site sends them an invitation, and accepting it makes
+ * them an owner or an editor. Only owners see the invite and remove controls;
+ * an editor sees the list but nothing to change it.
  */
 export function ListingAccessPanel({
   entityType,
@@ -21,7 +23,7 @@ export function ListingAccessPanel({
   members,
   isOwner,
   currentUserId,
-  createInviteAction,
+  inviteAction,
   removeAction,
 }: {
   entityType: ListingEntityType
@@ -37,7 +39,7 @@ export function ListingAccessPanel({
    * one click and unlabelled, is exactly what that panel exists to replace.
    */
   currentUserId: string
-  createInviteAction: (
+  inviteAction: (
     entityType: string,
     entityId: string,
     role: string,
@@ -52,17 +54,25 @@ export function ListingAccessPanel({
   const router = useRouter()
   const [pending, start] = useTransition()
   const [err, setErr] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
   const [role, setRole] = useState<ListingOwnerRole>('editor')
   const [email, setEmail] = useState('')
 
   function onInvite() {
     setErr(null)
+    setMsg(null)
     setInviteUrl(null)
     start(async () => {
-      const res = await createInviteAction(entityType, entityId, role, email.trim() || null)
-      if (res.error) setErr(res.error)
-      else setInviteUrl(res.inviteUrl ?? null)
+      const res = await inviteAction(entityType, entityId, role, email.trim() || null)
+      if (res.error) {
+        setErr(res.error)
+        return
+      }
+      setMsg(res.message ?? null)
+      setInviteUrl(res.inviteUrl ?? null)
+      setEmail('')
+      router.refresh()
     })
   }
 
@@ -105,8 +115,9 @@ export function ListingAccessPanel({
         <div className="mt-5 border-t border-border-subtle pt-5">
           <h3 className="text-sm font-medium text-foreground">Invite someone</h3>
           <p className="mt-1 text-xs text-muted-2">
-            Creates a single-use link that works once and expires in 14 days. Pin it to an email to
-            make a leaked link useless to anyone else.
+            Enter their email and we will send them an invitation. An <strong>editor</strong> can
+            change the listing; an <strong>owner</strong> can also add and remove people. Their email
+            is only used to reach them and is never shown on the public listing.
           </p>
           <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
             <label className="flex flex-col gap-1.5 sm:w-36">
@@ -117,11 +128,11 @@ export function ListingAccessPanel({
                 className="input"
               >
                 <option value="editor">Editor</option>
-                <option value="viewer">Viewer</option>
+                <option value="owner">Owner</option>
               </select>
             </label>
             <label className="flex flex-1 flex-col gap-1.5">
-              <span className="text-xs font-medium text-muted">Email (optional)</span>
+              <span className="text-xs font-medium text-muted">Email</span>
               <input
                 type="email"
                 value={email}
@@ -133,16 +144,18 @@ export function ListingAccessPanel({
             <button
               type="button"
               onClick={onInvite}
-              disabled={pending}
+              disabled={pending || !email.trim()}
               className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-40"
             >
-              {pending ? 'Creating…' : 'Create link'}
+              {pending ? 'Sending…' : 'Send invite'}
             </button>
           </div>
 
+          {msg && <p className="mt-3 text-sm text-muted">{msg}</p>}
+
           {inviteUrl && (
             <div className="mt-3">
-              <p className="text-xs text-muted">Copy this and send it to the person yourself:</p>
+              <p className="text-xs text-muted">Send them this link yourself:</p>
               <code className="mt-1 block break-all rounded-md border border-border-subtle bg-surface-2 p-2 text-xs text-foreground">
                 {inviteUrl}
               </code>

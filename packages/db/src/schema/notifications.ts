@@ -43,6 +43,7 @@ export const NOTIFICATION_SUBJECTS = [
   'album_submission',
   'grant_candidate',
   'listing_claim',
+  'listing_invite',
 ] as const
 export type NotificationSubject = (typeof NOTIFICATION_SUBJECTS)[number]
 

@@ -21,11 +21,15 @@ export function entityNoun(type: ListingEntityType): string {
 const ROLE_LABELS: Record<ListingOwnerRole, string> = {
   owner: 'Owner',
   editor: 'Editor',
-  viewer: 'Viewer',
 }
 
-export function roleLabel(role: ListingOwnerRole): string {
-  return ROLE_LABELS[role]
+/**
+ * Label for a role. Typed to the two listing roles, but tolerant of a stray
+ * string from an older row (the retired 'viewer'), which reads as Editor,
+ * matching how coerceOwnerRole treats it everywhere else.
+ */
+export function roleLabel(role: ListingOwnerRole | string): string {
+  return ROLE_LABELS[role as ListingOwnerRole] ?? 'Editor'
 }
 
 /** How a pending claim is being (or was) checked, in plain words. */

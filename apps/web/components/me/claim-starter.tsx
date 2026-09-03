@@ -91,6 +91,16 @@ export function ClaimStarter({
       <h2 className="mt-1 text-lg font-semibold text-foreground">{target.facts.title}</h2>
       {target.facts.subtitle && <p className="mt-1 text-sm text-muted">{target.facts.subtitle}</p>}
 
+      {/* The #1 reassurance. People hesitate to claim with a personal address
+          because they assume it will end up on the public page. It never does:
+          an owner's email is only ever used to reach them, and no public page
+          renders it. Saying so here is what makes claiming with a real address
+          feel safe. */}
+      <p className="mt-3 rounded-md border border-border-subtle bg-surface-2 px-3 py-2 text-xs text-muted">
+        Your email is used only so the site and the other people who manage this listing can reach
+        you. It is never shown on the public listing.
+      </p>
+
       {claimed ? (
         <div className="mt-4 flex flex-col gap-3">
           <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2">

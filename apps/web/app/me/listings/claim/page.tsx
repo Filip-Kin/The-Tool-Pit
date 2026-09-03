@@ -32,7 +32,7 @@ export default async function ClaimPage({
   return (
     <MeShell
       title="Claim a listing"
-      intro="Prove you run a listing and you can edit it directly. This never removes it from anyone; contributing without an account still works everywhere."
+      intro="Prove you run a listing and you can edit it directly. This never removes it from anyone; contributing without an account still works everywhere. Your email is only used for us and other managers to reach you, and is never shown on the public listing."
       active="listings"
     >
       {target ? (
