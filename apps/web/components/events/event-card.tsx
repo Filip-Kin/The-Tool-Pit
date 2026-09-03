@@ -63,7 +63,11 @@ function FullnessBar({ ev }: { ev: PublicEvent }) {
         <div className={cn('h-full rounded-full', tone)} style={{ width: `${pct}%` }} />
       </div>
       <span className="shrink-0 text-xs text-muted-2">
-        {ev.registrationStatus === 'waitlist' && fullnessRatio(ev) == null ? 'Full' : `${pct}% full`}
+        {ev.registeredTeamCount == null
+          ? 'Full'
+          : ev.capacity
+            ? `${ev.registeredTeamCount} / ${ev.capacity} teams`
+            : `${ev.registeredTeamCount} teams`}
       </span>
     </div>
   )
@@ -211,7 +215,7 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
             <span className="flex items-center gap-1.5 font-medium text-foreground">
               <Users className="h-4 w-4" /> {full}
             </span>
-            <span className="text-muted-2">{Math.round((fullnessRatio(ev) ?? 0) * 100)}% full</span>
+            <span className="text-muted-2">{full}</span>
           </div>
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-3">
             <div
