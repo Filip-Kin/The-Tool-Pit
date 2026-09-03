@@ -91,11 +91,6 @@ function Field({ field }: { field: EditableField }) {
           type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
           defaultValue={String(value)}
           inputMode={field.type === 'number' ? 'numeric' : undefined}
-          // Native <input type="date"> renders in the browser's own locale, so a
-          // non-US owner sees DD/MM/YYYY. The stored value is always ISO; lang is
-          // the portable nudge that asks browsers which honour it to show
-          // MM/DD/YYYY. It changes the display only, never the value.
-          lang={field.type === 'date' ? 'en-US' : undefined}
         />
       )}
 

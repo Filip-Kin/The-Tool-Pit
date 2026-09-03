@@ -22,11 +22,14 @@ import {
   getDb,
   eventListingCandidates,
   practiceFieldCandidates,
+  getTeamNames,
   type ExtractedEventListingFields,
   type ExtractedPracticeFieldFields,
+  type RosterTeam,
 } from '@the-tool-pit/db'
 import { readEventCandidate } from './read-event.js'
 import { readFieldCandidate } from './read-field.js'
+import { generateTeamListParser } from './team-list-parser.js'
 import { fetchChiefDelphiTopic, parseChiefDelphiTopicId } from '../connectors/discourse.js'
 import { geocodeVenue, matchTbaEvent } from './locate.js'
 
@@ -212,6 +215,32 @@ export async function processReadCandidatesJob(
               })
             : null
         if (matched) merged.tbaKey = matched.tbaKey
+
+        // THE TEAM LIST, scraped at read time so a moderator reviews it BEFORE
+        // publishing, not after. Only for an event with a page to read. Numbers
+        // are validated against the TBA cache (a generated parser can grab a
+        // stray number out of prose) and the 9970-9999 off-season range is kept;
+        // names are resolved from TBA at display, so the scrape stores numbers.
+        if (vertical === 'event' && typeof merged.teamListUrl === 'string' && merged.teamListUrl) {
+          try {
+            const gen = await generateTeamListParser({
+              eventName: String(merged.name ?? title),
+              url: merged.teamListUrl,
+            })
+            if (gen) {
+              const nums = [...new Set(gen.teams.map((t) => t.number))]
+              const known = await getTeamNames(nums)
+              const teams: RosterTeam[] =
+                known.size === 0
+                  ? gen.teams
+                  : gen.teams.filter((t) => known.has(t.number) || (t.number >= 9970 && t.number <= 9999))
+              merged.rosterTeams = teams
+              merged.registeredTeamCount = teams.filter((t) => !t.waitlisted).length
+            }
+          } catch (err) {
+            console.warn(`[read-candidates] roster scrape failed for ${String(merged.teamListUrl)}:`, err)
+          }
+        }
 
         await db
           .update(table)

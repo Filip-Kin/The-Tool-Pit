@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, integer, real, boolean, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import { eventListings } from './event-listings'
+import { eventListings, type RosterTeam } from './event-listings'
 
 // The value tuples live in ../event-enums (a zero-dependency module) so client
 // components can import them without pulling the DB client into the browser
@@ -269,6 +269,15 @@ export interface ExtractedEventListingFields {
   volunteerUrl?: string
   /** The page on the event's own site listing the teams attending. */
   teamListUrl?: string
+  /**
+   * The registered teams scraped from teamListUrl at read time, so a moderator
+   * can review the team list BEFORE publishing rather than after. Numbers only
+   * (with waitlist flags); names are resolved from TBA at display, same as a
+   * published roster. Carried onto the listing's first roster snapshot on accept.
+   */
+  rosterTeams?: RosterTeam[]
+  /** Count of registered (non-waitlist) teams in rosterTeams, for the review row. */
+  registeredTeamCount?: number
   contactEmail?: string
   /**
    * Looked up from the venue and address, not read off a page.

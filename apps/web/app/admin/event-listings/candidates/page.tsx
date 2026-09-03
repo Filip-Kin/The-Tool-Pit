@@ -14,7 +14,7 @@ import {
   eventListingCrawlSources,
   eventListings,
 } from '@the-tool-pit/db'
-import type { EventListingCandidateStatus, ExtractedEventListingFields, RawEventListingMetadata } from '@the-tool-pit/db'
+import type { EventListingCandidateStatus, ExtractedEventListingFields, RawEventListingMetadata, RosterTeam } from '@the-tool-pit/db'
 import { ExtractedList, EvidencePanel } from '../../_listing/candidate-evidence'
 import { CandidateEditor } from '../../_listing/candidate-editor'
 import { DuplicateBanner } from '../../_listing/duplicate-banner'
@@ -194,6 +194,7 @@ export default async function EventCandidatesPage({
                 <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
                   <div className="min-w-0 flex-1">
                     {row.status === 'pending' ? (
+                      <>
                       <CandidateEditor
                         candidateId={row.id}
                         accept={acceptEventCandidate}
@@ -240,6 +241,10 @@ export default async function EventCandidatesPage({
                           { name: 'notes', label: 'Notes', type: 'textarea', value: ex.notes, wide: true, evidence: ev.notes },
                         ]}
                       />
+                      {Array.isArray(ex.rosterTeams) && ex.rosterTeams.length > 0 && (
+                        <CandidateRosterPreview teams={ex.rosterTeams} />
+                      )}
+                      </>
                     ) : (
                       <ExtractedList
                         rows={[
@@ -292,6 +297,42 @@ export default async function EventCandidatesPage({
       )}
 
       <Pager page={page} totalPages={totalPages} href={(n) => `/admin/event-listings/candidates?status=${status}&page=${n}`} />
+    </div>
+  )
+}
+
+/**
+ * Read-only view of the team list scraped for a candidate at read time, so a
+ * moderator can sanity-check it before publishing. Numbers only, with a B/C robot
+ * suffix and the waitlist called out; names resolve from TBA once published.
+ */
+function CandidateRosterPreview({ teams }: { teams: RosterTeam[] }) {
+  const registered = teams.filter((t) => !t.waitlisted)
+  const waitlist = teams.filter((t) => t.waitlisted)
+  return (
+    <div className="mt-3 rounded-lg border border-border-subtle p-3 text-sm">
+      <div className="font-medium text-foreground">
+        Scraped team list — {registered.length} team{registered.length === 1 ? '' : 's'}
+        {waitlist.length > 0 ? ` + ${waitlist.length} waitlist` : ''}
+      </div>
+      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 tabular-nums text-muted">
+        {registered.map((t) => (
+          <span key={`r-${t.number}-${t.robot ?? ''}`}>
+            {t.number}
+            {t.robot}
+          </span>
+        ))}
+      </div>
+      {waitlist.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 tabular-nums text-reg-waitlist">
+          {waitlist.map((t) => (
+            <span key={`w-${t.number}-${t.robot ?? ''}`}>
+              {t.number}
+              {t.robot}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
