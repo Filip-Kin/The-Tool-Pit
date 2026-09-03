@@ -161,7 +161,13 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
   const full = fullnessLabel(ev)
   const days = daysLabel(ev)
   const cancelled = ev.eventStatus === 'cancelled'
-  const registerHref = ev.registrationUrl ?? ev.website ?? ev.chiefDelphiUrl
+  // A "Register" button only for a DEDICATED sign-up link. Falling back to the
+  // event's own website mislabels the site as "Register" and, worse, suppresses
+  // the separate "Event website" button below (which hides only when it would
+  // point to the same place). The website gets its own button; registration
+  // that is really just the event page is not a distinct register link.
+  const registerHref =
+    ev.registrationUrl && ev.registrationUrl !== ev.website ? ev.registrationUrl : null
   // Volunteering falls back the same way registration does: the dedicated link
   // if there is one, otherwise the event's own page, which is where the form
   // usually lives. Null when nobody is asking for volunteers or we have no
@@ -243,7 +249,7 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
         <div className="flex flex-wrap gap-3">
           {registerHref && (
             <ButtonLink href={registerHref} external>
-              {ev.registrationUrl ? 'Register' : 'Event page'} <ExternalLink className="h-3.5 w-3.5" />
+              Register <ExternalLink className="h-3.5 w-3.5" />
             </ButtonLink>
           )}
           {volunteerHref && (
@@ -256,7 +262,7 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
 
       {(ev.website || ev.tbaKey) && (
         <div className="flex flex-wrap gap-3">
-          {ev.website && registerHref !== ev.website && volunteerHref !== ev.website && (
+          {ev.website && (
             <ButtonLink href={ev.website} external variant="secondary">
               Event website <ExternalLink className="h-3.5 w-3.5" />
             </ButtonLink>
