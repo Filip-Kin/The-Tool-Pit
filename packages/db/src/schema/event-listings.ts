@@ -18,6 +18,7 @@ export {
   EVENT_LISTING_STATUSES,
   EVENT_LISTING_SOURCES,
   ROSTER_SNAPSHOT_STATUSES,
+  TEAM_LIST_MODES,
 } from '../event-enums'
 export type {
   EventStatus,
@@ -26,6 +27,7 @@ export type {
   EventListingStatus,
   EventListingSource,
   RosterSnapshotStatus,
+  TeamListMode,
 } from '../event-enums'
 
 // ---------------------------------------------------------------------------
@@ -237,6 +239,29 @@ export const eventListings = pgTable(
     /** The teamListUrl the parser was written against. A changed URL means a changed page; the parser is regenerated rather than trusted on a page it never saw. */
     teamListParserSourceUrl: text('team_list_parser_source_url'),
     teamListParserUpdatedAt: timestamp('team_list_parser_updated_at', { withTimezone: true }),
+
+    /**
+     * Where this event's team list comes from. TEAM_LIST_MODES.
+     *
+     * 'auto' is everything the roster refresh has always done: scrape
+     * teamListUrl before the event starts, borrow TBA's roster after. 'manual'
+     * means the owner typed the team list themselves, into manualTeamListText,
+     * and the refresh job leaves the listing alone so nothing overwrites it.
+     *
+     * Default 'auto', so every existing listing keeps scraping exactly as before.
+     */
+    teamListMode: text('team_list_mode').notNull().default('auto'),
+
+    /**
+     * The team list an owner typed by hand, one team per line, kept verbatim so
+     * the edit form can show it back to them.
+     *
+     * This is the SOURCE, not the parsed result. On save the text is run through
+     * parseManualRoster into a trusted, auto-approved event_roster_snapshots row
+     * (the same shape a scrape produces), which is what the public roster reads.
+     * A second robot from the same team is the number then the letter, "4145B".
+     */
+    manualTeamListText: text('manual_team_list_text'),
 
     /**
      * The fields a person has set by hand, so an automated pass leaves them be.

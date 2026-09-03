@@ -93,8 +93,13 @@ function TeamRow({ team }: { team: RosterTeamRow }) {
               {team.waitlistPosition}
             </span>
           )}
-          {team.number}
-          {team.robot && <span className="font-normal text-muted">{team.robot}</span>}
+          {/* Number and robot letter read as one token, "4145B", with no space
+              between them: the letter is a second robot from the same team, not
+              a separate column. */}
+          <span>
+            {team.number}
+            {team.robot && <span className="font-normal text-muted">{team.robot}</span>}
+          </span>
         </span>
       </td>
       <td className="w-full break-words py-1.5 pr-3 text-muted">{team.name ?? '—'}</td>

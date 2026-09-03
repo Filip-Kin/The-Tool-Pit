@@ -1,5 +1,11 @@
 import type { ListingEntityType } from '@the-tool-pit/db'
-import { EVENT_PROGRAMS, EVENT_STATUSES, REGISTRATION_STATUSES, VOLUNTEER_STATUSES } from '@the-tool-pit/db/event-enums'
+import {
+  EVENT_PROGRAMS,
+  EVENT_STATUSES,
+  REGISTRATION_STATUSES,
+  TEAM_LIST_MODES,
+  VOLUNTEER_STATUSES,
+} from '@the-tool-pit/db/event-enums'
 import {
   FIELD_AVAILABILITY,
   FIELD_COVERAGE,
@@ -97,6 +103,16 @@ export interface ListingFieldSpec {
   hint?: string
   /** Spans both columns of the grid. */
   wide?: boolean
+  /**
+   * Show this field only while another field currently holds a given value.
+   *
+   * The team-list section uses it to reveal exactly one of "scrape a URL" and
+   * "type the teams", keyed on the teamListMode toggle. The renderer keeps a
+   * hidden field's value round-tripping (an <input type=hidden>), so a field
+   * that is not currently shown is never silently cleared, and the parser walks
+   * the full spec as always.
+   */
+  showWhen?: { field: string; equals: string }
 }
 
 export interface ListingGroup {
@@ -638,6 +654,12 @@ const EVENT_FORM: ListingFormSpec = {
       blurb: 'Cost, slots and whether the door is open. This is what the map colours are keyed on.',
     },
     { key: 'links', title: 'Links and contact' },
+    {
+      key: 'teamlist',
+      title: 'Team list',
+      blurb:
+        'How the map shows how full your event is. Either point us at the team list on your own site and we read it, or type the teams here yourself. Pick one.',
+    },
     { key: 'more', title: 'Anything else' },
   ],
   fields: [
@@ -755,6 +777,37 @@ const EVENT_FORM: ListingFormSpec = {
       maxLength: 200,
       wide: true,
       hint: 'Shown publicly, so use the address you want teams writing to.',
+    },
+    {
+      key: 'teamListMode',
+      label: 'Where the team list comes from',
+      kind: 'select',
+      group: 'teamlist',
+      options: TEAM_LIST_MODES,
+      optionLabels: { auto: 'Scrape my event website', manual: 'Enter the teams myself' },
+      wide: true,
+      hint: 'Scrape reads the roster off your site and keeps the count fresh on its own. Enter the teams yourself if you would rather keep the list here.',
+    },
+    {
+      key: 'teamListUrl',
+      label: 'Team list page URL',
+      kind: 'url',
+      group: 'teamlist',
+      maxLength: 500,
+      wide: true,
+      showWhen: { field: 'teamListMode', equals: 'auto' },
+      hint: 'The page on your own site that lists the teams. We read the roster from here and update the count as it changes.',
+    },
+    {
+      key: 'manualTeamListText',
+      label: 'Teams',
+      kind: 'textarea',
+      group: 'teamlist',
+      maxLength: 20_000,
+      rows: 10,
+      wide: true,
+      showWhen: { field: 'teamListMode', equals: 'manual' },
+      hint: 'One team per line, e.g. 254. For a second robot from the same team (a B team), add the letter right after the number: 4145B.',
     },
     {
       key: 'notes',

@@ -29,9 +29,15 @@
  * The TBA path is deterministic. The site path calls the model only to WRITE a
  * parser, once per event or when the page moves; the scheduled scrape after
  * that runs the stored parser with no model call.
+ *
+ * A THIRD MODE THIS JOB LEAVES ALONE. An owner can turn off scraping and type
+ * their team list into the listing form instead (teamListMode 'manual'). That
+ * roster is a trusted human entry the form publishes directly as an approved
+ * snapshot, so this job SKIPS a manual listing entirely: it is never scraped and
+ * its TBA key, if any, is never read over the top of what the owner typed.
  */
 import { createHash } from 'node:crypto'
-import { and, desc, eq, gte, inArray, isNull, or } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, isNull, ne, or } from 'drizzle-orm'
 import { getDb, eventListings, eventRosterSnapshots, isHumanEdited, type RosterTeam } from '@the-tool-pit/db'
 import { delay } from '../connectors/base.js'
 import { TbaEventsConnector, type TbaEventUpsert } from '../connectors/tba-events.js'
@@ -265,6 +271,7 @@ export async function processRosterRefreshJob(
       name: eventListings.name,
       tbaKey: eventListings.tbaKey,
       teamListUrl: eventListings.teamListUrl,
+      teamListMode: eventListings.teamListMode,
       startDate: eventListings.startDate,
       seasonYear: eventListings.seasonYear,
       teamListParser: eventListings.teamListParser,
@@ -273,9 +280,15 @@ export async function processRosterRefreshJob(
     .from(eventListings)
 
   // Pending listings included on purpose, so a moderator sees the count before
-  // deciding whether to publish.
+  // deciding whether to publish. A listing whose owner entered the team list by
+  // hand (teamListMode 'manual') is SKIPPED here: its roster is a trusted human
+  // entry the owner form already published as an approved snapshot, and neither
+  // a scrape nor a TBA read may overwrite it.
   const wanted = listings.filter(
-    (l) => (l.tbaKey || l.teamListUrl) && (!payload.listingId || l.id === payload.listingId),
+    (l) =>
+      l.teamListMode !== 'manual' &&
+      (l.tbaKey || l.teamListUrl) &&
+      (!payload.listingId || l.id === payload.listingId),
   )
   // Source per listing decided by timing, not by "does it have a key". A listing
   // with both a tbaKey and a teamListUrl reads from its own site until it starts
@@ -586,6 +599,9 @@ async function processTbaRecheck(
       and(
         eq(eventListings.status, 'published'),
         isNull(eventListings.tbaKey),
+        // A manual listing is not ours to key: its roster is the owner's, and a
+        // TBA key would only invite a later read over the top of what they typed.
+        ne(eventListings.teamListMode, 'manual'),
         or(isNull(eventListings.startDate), gte(eventListings.startDate, cutoff)),
       ),
     )

@@ -1,13 +1,14 @@
 'use server'
 
 import { randomBytes, createHash } from 'crypto'
-import { and, eq, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { getDb } from '@/lib/db'
 import {
   albumCovers,
   albums,
   eventListings,
+  eventRosterSnapshots,
   events,
   fieldPhotos,
   grants,
@@ -26,6 +27,7 @@ import {
   queueNotification,
   HUMAN_EDITABLE_TOOL_KEYS,
   HUMAN_EDITABLE_EVENT_KEYS,
+  parseManualRoster,
   type ClaimEvidence,
   type ListingEntityType,
   type ListingOwnerRole,
@@ -1211,10 +1213,79 @@ export async function saveEventListing(formData: FormData): Promise<OwnershipAct
     .update(eventListings)
     .set({ ...set, ...(humanEditedFields ? { humanEditedFields } : {}), updatedAt: new Date() })
     .where(eq(eventListings.id, step.entityId))
+
+  // A manually entered team list is a trusted human roster, so it publishes the
+  // way an approved scrape does: the typed text is parsed into an APPROVED
+  // snapshot and its count is written straight to the public listing. The public
+  // roster reads the latest approved snapshot, so the teams show there with the
+  // same avatars and B-team handling a scrape produces. The roster refresh job
+  // skips a 'manual' listing entirely, so nothing overwrites this.
+  const mode = (set.teamListMode as string | undefined) ?? before?.teamListMode ?? 'auto'
+  if (mode === 'manual') {
+    await writeManualRoster(step.entityId, step.values.manualTeamListText, before?.registeredTeamCount ?? null)
+  }
+
   revalidatePath('/me/listings')
   revalidatePath('/events')
   revalidatePath(`/events/${step.entityId}`)
   return { message: 'Saved.' }
+}
+
+/**
+ * Turn an owner's typed team list into an approved roster snapshot and publish
+ * its count.
+ *
+ * WHY NOTHING WHEN IT PARSES EMPTY. An empty textarea, or one that yields no
+ * team, is not a signal that the event emptied out: it is an owner who has not
+ * typed the list yet, or who just switched to manual mode. Zeroing the public
+ * count there would read as "nobody signed up", so the last good count stands,
+ * exactly as the scrape path leaves an empty read alone.
+ *
+ * WHY THE HASH GATE. The form autosaves on every blur, so a save that did not
+ * change the roster must not write a fresh snapshot each time. A snapshot lands
+ * only when the parsed teams actually differ from the newest one on file; the
+ * count is written only when it moved. registeredTeamCount is machine-owned
+ * (MACHINE_OWNED_EVENT_KEYS), so it needs no human-edited guard.
+ */
+async function writeManualRoster(
+  listingId: string,
+  rawText: unknown,
+  previousCount: number | null,
+): Promise<void> {
+  const db = getDb()
+  const teams = parseManualRoster(typeof rawText === 'string' ? rawText : '')
+  if (teams.length === 0) return
+
+  const hash = createHash('sha256')
+    .update(teams.map((t) => `${t.number}:${t.robot ?? ''}`).join(','))
+    .digest('hex')
+
+  const [prev] = await db
+    .select({ contentHash: eventRosterSnapshots.contentHash })
+    .from(eventRosterSnapshots)
+    .where(eq(eventRosterSnapshots.eventListingId, listingId))
+    .orderBy(desc(eventRosterSnapshots.fetchedAt))
+    .limit(1)
+
+  if (prev?.contentHash !== hash) {
+    await db.insert(eventRosterSnapshots).values({
+      eventListingId: listingId,
+      sourceUrl: 'manual',
+      teamCount: teams.length,
+      teams,
+      contentHash: hash,
+      changed: true,
+      // Trusted human entry, so it is approved on the spot, like a clean scrape.
+      status: 'approved',
+    })
+  }
+
+  if (previousCount !== teams.length) {
+    await db
+      .update(eventListings)
+      .set({ registeredTeamCount: teams.length, teamCountUpdatedAt: new Date(), updatedAt: new Date() })
+      .where(eq(eventListings.id, listingId))
+  }
 }
 
 // #endregion

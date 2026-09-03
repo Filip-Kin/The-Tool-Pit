@@ -41,6 +41,10 @@
       "bun": "./src/human-edited.ts",
       "default": "./dist/human-edited.js"
     },
+    "./manual-roster": {
+      "bun": "./src/manual-roster.ts",
+      "default": "./dist/manual-roster.js"
+    },
     "./client": {
       "bun": "./src/client.ts",
       "default": "./dist/client.js"

@@ -255,17 +255,36 @@ export function ListingEditForm({
         <Group key={group.key} group={group}>
           {spec.fields
             .filter((f) => f.group === group.key)
-            .map((field) => (
-              <Field key={field.key} field={field}>
-                <Input
-                  field={field}
-                  value={values[field.key]}
-                  options={field.options ?? dynamicOptions[field.key] ?? []}
-                  tagOptions={listing.tagOptions[field.key as ToolTagKey] ?? []}
-                  onChange={(v) => set(field.key, v)}
-                />
-              </Field>
-            ))}
+            .map((field) => {
+              // A field gated on another field's value (the team-list toggle):
+              // when it is not the active choice, it stays out of the layout but
+              // keeps posting its stored value through a hidden input, so
+              // flipping the toggle back and forth never blanks what was typed
+              // and the server still parses the full spec. See ListingFieldSpec.
+              if (field.showWhen && String(values[field.showWhen.field] ?? '') !== field.showWhen.equals) {
+                const held = values[field.key]
+                return (
+                  <input
+                    key={field.key}
+                    type="hidden"
+                    name={field.key}
+                    value={typeof held === 'string' ? held : ''}
+                    readOnly
+                  />
+                )
+              }
+              return (
+                <Field key={field.key} field={field}>
+                  <Input
+                    field={field}
+                    value={values[field.key]}
+                    options={field.options ?? dynamicOptions[field.key] ?? []}
+                    tagOptions={listing.tagOptions[field.key as ToolTagKey] ?? []}
+                    onChange={(v) => set(field.key, v)}
+                  />
+                </Field>
+              )
+            })}
         </Group>
       ))}
 

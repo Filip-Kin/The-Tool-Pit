@@ -55,6 +55,18 @@ export type EventListingSource = (typeof EVENT_LISTING_SOURCES)[number]
 export const ROSTER_SNAPSHOT_STATUSES = ['pending', 'approved', 'rejected'] as const
 export type RosterSnapshotStatus = (typeof ROSTER_SNAPSHOT_STATUSES)[number]
 
+/**
+ * Where an event's team list comes from, chosen by the owner.
+ *   auto   - we read the roster ourselves: scrape teamListUrl before the event
+ *            starts, borrow TBA's after. The default, and everything the roster
+ *            refresh job has always done.
+ *   manual - the owner typed the team list into the listing form. The refresh
+ *            job SKIPS a manual listing entirely, so nothing overwrites a
+ *            hand-entered roster. See parseManualRoster and roster-refresh.ts.
+ */
+export const TEAM_LIST_MODES = ['auto', 'manual'] as const
+export type TeamListMode = (typeof TEAM_LIST_MODES)[number]
+
 // ---------------------------------------------------------------------------
 // Off-season event DISCOVERY (crawl) enums
 //
