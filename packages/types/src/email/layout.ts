@@ -146,12 +146,31 @@ export interface LayoutInput {
  * test alike, and reading an env var here would drag Node's types into a
  * package that deliberately has none.
  */
-const PAGE_BG = '#0a0a0b'
-const CARD_BG = '#111113'
-const BORDER = '#2e2e34'
-const TEXT = '#f0f0f2'
-const MUTED = '#8b8b96'
+// Inline styles are the LIGHT theme (the universal email default, shown by any
+// client). The <style> block below flips them to dark for clients that honour
+// prefers-color-scheme. The purple brand accent is the SAME in both, per brand.
+const PAGE_BG = '#f7f8fa'
+const CARD_BG = '#ffffff'
+const BORDER = '#d7dce3'
+const TEXT = '#16181d'
+const MUTED = '#4b5563'
 const PRIMARY = '#6366f1'
+const DARK_PAGE = '#0a0a0b'
+const DARK_CARD = '#111113'
+const DARK_BORDER = '#2e2e34'
+const DARK_TEXT = '#f0f0f2'
+const DARK_MUTED = '#8b8b96'
+
+/** Dark-mode overrides, applied by class so the inline light styles are the fallback. */
+const DARK_STYLE =
+  `<style>@media (prefers-color-scheme: dark) {` +
+  `.e-bg{background:${DARK_PAGE}!important}` +
+  `.e-card{background:${DARK_CARD}!important;border-color:${DARK_BORDER}!important;color:${DARK_TEXT}!important}` +
+  `.e-text{color:${DARK_TEXT}!important}` +
+  `.e-muted{color:${DARK_MUTED}!important}` +
+  `.e-hr{border-top-color:${DARK_BORDER}!important}` +
+  `.e-sec{color:${DARK_TEXT}!important;border-color:${DARK_BORDER}!important}` +
+  `}</style>`
 const WORDMARK_URL = 'https://frc.tools'
 
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
@@ -172,8 +191,8 @@ export function layout(input: LayoutInput): { html: string; text: string } {
       // gap; a real value reads in the body colour.
       const valueColor = f.muted ? MUTED : TEXT
       return (
-        `<tr><td style="padding:5px 16px 5px 0;color:${MUTED};font-size:14px;vertical-align:top;white-space:nowrap">${esc(f.label)}</td>` +
-        `<td style="padding:5px 0;color:${valueColor};font-size:14px">${esc(f.value)}</td></tr>`
+        `<tr><td class="e-muted" style="padding:5px 16px 5px 0;color:${MUTED};font-size:14px;vertical-align:top;white-space:nowrap">${esc(f.label)}</td>` +
+        `<td class="${f.muted ? 'e-muted' : 'e-text'}" style="padding:5px 0;color:${valueColor};font-size:14px">${esc(f.value)}</td></tr>`
       )
     })
     .join('')
@@ -183,31 +202,32 @@ export function layout(input: LayoutInput): { html: string; text: string } {
       `background:${PRIMARY};color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600">${esc(cta.label)}</a>`
     : ''
   const secondaryButton = secondaryCta
-    ? `<a href="${esc(secondaryCta.url)}" style="display:inline-block;padding:9px 17px;margin-left:8px;` +
+    ? `<a href="${esc(secondaryCta.url)}" class="e-sec" style="display:inline-block;padding:9px 17px;margin-left:8px;` +
       `background:transparent;color:${TEXT};text-decoration:none;border:1px solid ${BORDER};border-radius:6px;font-size:15px">${esc(secondaryCta.label)}</a>`
     : ''
 
   const html = [
-    `<!doctype html><html><body style="margin:0;padding:0;background:${PAGE_BG}">`,
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAGE_BG}"><tr><td align="center" style="padding:24px 12px">`,
+    `<!doctype html><html><head><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark">${DARK_STYLE}</head>`,
+    `<body class="e-bg" style="margin:0;padding:0;background:${PAGE_BG}">`,
+    `<table role="presentation" class="e-bg" width="100%" cellpadding="0" cellspacing="0" style="background:${PAGE_BG}"><tr><td align="center" style="padding:24px 12px">`,
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">`,
     // The wordmark, so every email is visibly from frc.tools before a word of
-    // copy is read. ".tools" carries the indigo accent.
-    `<tr><td style="padding:0 4px 16px"><a href="${WORDMARK_URL}" style="font-family:${FONT};font-size:18px;font-weight:700;text-decoration:none;letter-spacing:-0.01em;color:${TEXT}">FRC<span style="color:${PRIMARY}">.tools</span></a></td></tr>`,
+    // copy is read. ".tools" carries the indigo accent (same in both themes).
+    `<tr><td style="padding:0 4px 16px"><a href="${WORDMARK_URL}" class="e-text" style="font-family:${FONT};font-size:18px;font-weight:700;text-decoration:none;letter-spacing:-0.01em;color:${TEXT}">FRC<span style="color:${PRIMARY}">.tools</span></a></td></tr>`,
     // The card.
-    `<tr><td style="padding:24px;background:${CARD_BG};border:1px solid ${BORDER};border-radius:10px;font-family:${FONT};color:${TEXT};line-height:1.5">`,
-    `<h1 style="margin:0 0 16px;font-size:18px;font-weight:600;color:${TEXT}">${esc(heading)}</h1>`,
-    ...paragraphs.map((p) => `<p style="margin:0 0 12px;font-size:15px;color:${TEXT}">${esc(p)}</p>`),
+    `<tr><td class="e-card" style="padding:24px;background:${CARD_BG};border:1px solid ${BORDER};border-radius:10px;font-family:${FONT};color:${TEXT};line-height:1.5">`,
+    `<h1 class="e-text" style="margin:0 0 16px;font-size:18px;font-weight:600;color:${TEXT}">${esc(heading)}</h1>`,
+    ...paragraphs.map((p) => `<p class="e-text" style="margin:0 0 12px;font-size:15px;color:${TEXT}">${esc(p)}</p>`),
     factRows
       ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse">${factRows}</table>`
       : '',
-    ctaIntro ? `<p style="margin:16px 0 0;font-size:15px;color:${TEXT}">${esc(ctaIntro)}</p>` : '',
+    ctaIntro ? `<p class="e-text" style="margin:16px 0 0;font-size:15px;color:${TEXT}">${esc(ctaIntro)}</p>` : '',
     cta ? `<p style="margin:16px 0 4px">${primaryButton}${secondaryButton}</p>` : '',
-    `<hr style="border:none;border-top:1px solid ${BORDER};margin:24px 0 12px">`,
-    `<p style="margin:0 0 6px;font-size:12px;color:${MUTED}">${esc(reason)}</p>`,
-    `<p style="margin:0;font-size:12px;color:${MUTED}"><a href="${esc(preferencesUrl)}" style="color:${MUTED};text-decoration:underline">Manage these emails</a>` +
+    `<hr class="e-hr" style="border:none;border-top:1px solid ${BORDER};margin:24px 0 12px">`,
+    `<p class="e-muted" style="margin:0 0 6px;font-size:12px;color:${MUTED}">${esc(reason)}</p>`,
+    `<p class="e-muted" style="margin:0;font-size:12px;color:${MUTED}"><a href="${esc(preferencesUrl)}" class="e-muted" style="color:${MUTED};text-decoration:underline">Manage these emails</a>` +
       (unsubscribeUrl
-        ? `&nbsp;&middot;&nbsp;<a href="${esc(unsubscribeUrl)}" style="color:${MUTED};text-decoration:underline">Unsubscribe from everything</a>`
+        ? `&nbsp;&middot;&nbsp;<a href="${esc(unsubscribeUrl)}" class="e-muted" style="color:${MUTED};text-decoration:underline">Unsubscribe from everything</a>`
         : '') +
       '</p>',
     '</td></tr></table></td></tr></table></body></html>',
