@@ -92,11 +92,13 @@ You are given the cleaned HTML of the page. Write a function that runs IN THE BR
 
 function extractTeams() {
   // read the DOM through the global \`document\`
-  return [{ number: 254, robot: null }, { number: 4611, robot: null }, { number: 4611, robot: "B" }];
+  return [{ number: 254, robot: null, name: "The Cheesy Poofs" }, { number: 4611, robot: null }, { number: 4611, robot: "B" }];
 }
 
 What it returns:
 - One entry per team ROBOT, not per organisation. Some events let one team enter a second robot, shown as "4611 B" or similar; that is a second entry, { number: 4611, robot: "B" }. One robot means robot: null.
+- INCLUDE THE NAME the page shows for each team, as \`name\`, when there is one (leave it off when the row is just a number). We usually replace it with the canonical name from The Blue Alliance, but a placeholder team (see below) or a brand-new team TBA has never indexed has only the name on this page, so it must be carried.
+- A PLACEHOLDER NUMBER IS NOT A NUMBER. A team shown as "10xxx", "TBD", "TBA", "pending", "10###" or similar has no real number yet (a pre-rookie or a late add). Do NOT read the leading digits as its number ("10xxx" is not team 10). Treat it exactly like a name-only team: give it a 9970-9999 placeholder number and carry its \`name\`.
 - MULTIPLE TEAMS IN ONE ROW OR CELL. A single row or cell can list several team numbers together (several teams sharing a row, often from one school), e.g. "1306 10553 10909 11258" or "2202 / 6223". Return EVERY number as its own entry { number, robot: null }, not just the first in the cell. This is different from a second robot of ONE team ("4611 B" → robot: "B"): separate whole numbers are separate teams, each robot: null.
 - number is the real FRC team number. Many lists number their SLOTS ("1 - 48", "2 - 144", ...); the slot index is NOT a team number and must not appear. Only the number after the dash is the team.
 - Skip an empty slot: "24 -" with nothing after it is not an entry.
@@ -318,7 +320,13 @@ export function normaliseTeams(raw: unknown[]): RosterTeam[] {
     const pos = rec.waitlistPosition
     const waitlistPosition =
       waitlisted && typeof pos === 'number' && Number.isInteger(pos) && pos > 0 && pos < 1000 ? pos : null
-    teams.push({ number, robot: robotLabel, ...(waitlisted ? { waitlisted, waitlistPosition } : {}) })
+    // The scraped name is KEPT (it used to be dropped). TBA is still the name
+    // authority for a team it knows, but a 9970-9999 placeholder or a pre-rookie
+    // TBA has never seen has only this name, and TBA's own label for a placeholder
+    // number is a useless "Off-Season Demo Team 9970". The render decides which to
+    // show; storing it here is what gives it the choice.
+    const name = typeof rec.name === 'string' && rec.name.trim() ? rec.name.trim().slice(0, 120) : undefined
+    teams.push({ number, robot: robotLabel, ...(name ? { name } : {}), ...(waitlisted ? { waitlisted, waitlistPosition } : {}) })
   }
   return teams.sort(
     (a, b) =>

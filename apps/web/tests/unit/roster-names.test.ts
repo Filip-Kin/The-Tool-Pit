@@ -29,6 +29,20 @@ describe('mergeRosterNames', () => {
     expect(out.name).toBe('Brand New Team')
   })
 
+  it('lets the scraped name win for a 9970-9999 placeholder (TBA only has a generic label)', () => {
+    const teams: RosterTeam[] = [{ number: 9970, name: 'New North Creek HS Team' }]
+    const cache = cacheOf([[9970, { nickname: 'Off-Season Demo Team 9970', name: null }]])
+    const [out] = mergeRosterNames(teams, cache)
+    expect(out.name).toBe('New North Creek HS Team')
+  })
+
+  it('falls back to the TBA label for a placeholder with no scraped name', () => {
+    const teams: RosterTeam[] = [{ number: 9971 }]
+    const cache = cacheOf([[9971, { nickname: 'Off-Season Demo Team 9971', name: null }]])
+    const [out] = mergeRosterNames(teams, cache)
+    expect(out.name).toBe('Off-Season Demo Team 9971')
+  })
+
   it('fills a missing name from the cache, preferring the nickname', () => {
     const teams: RosterTeam[] = [{ number: 48 }]
     const cache = cacheOf([[48, { nickname: 'Delphi E.L.I.T.E.', name: 'Delphi and Delta College' }]])

@@ -31,13 +31,24 @@ export function mergeRosterNames(
   cache: Map<number, CachedTeamName>,
 ): RosterTeam[] {
   return teams.map((team) => {
+    const scraped = team.name?.trim()
     const cached = cache.get(team.number)
     const fromTba = cached ? cached.nickname?.trim() || cached.name?.trim() : undefined
 
-    // The Blue Alliance knows this team: its name is authoritative.
+    // 9970-9999 are PLACEHOLDER numbers (a pre-rookie, a name-only team we
+    // assigned one). TBA's label for them is a generic "Off-Season Demo Team
+    // 9970", so the name off the event's own site is the real one and wins here;
+    // TBA is only the last resort.
+    if (team.number >= 9970 && team.number <= 9999) {
+      const name = scraped || fromTba
+      return name && team.name !== name ? { ...team, name } : team
+    }
+
+    // A normal team: The Blue Alliance is authoritative.
     if (fromTba) return team.name === fromTba ? team : { ...team, name: fromTba }
 
-    // Unknown to TBA: keep the snapshot's own name (a manual entry) or nothing.
+    // TBA has never seen this number (a brand-new team): keep the scraped/manual
+    // name, or nothing.
     return team
   })
 }

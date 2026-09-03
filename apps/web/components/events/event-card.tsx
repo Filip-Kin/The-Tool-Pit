@@ -135,7 +135,10 @@ export function EventCard({
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <RegBadge ev={ev} />
-          {full && (
+          {/* The count lives beside the fullness bar below. Only show it as a chip
+              here when there is NO bar (no capacity and no waitlist), so an event
+              that has a bar does not print the same "21 / 40 teams" twice. */}
+          {full && ev.registrationStatus !== 'waitlist' && fullnessRatio(ev) == null && (
             <span className="flex items-center gap-1 rounded bg-surface-3 px-1.5 py-0.5 text-xs font-medium text-muted">
               <Users className="h-3 w-3" />
               {full}
