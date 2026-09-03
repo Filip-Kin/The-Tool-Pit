@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { PinMap } from '@/components/fields/pin-map'
+import type { AddressParts } from '@/app/api/fields/geocode/route'
 
 /**
  * Review a discovered candidate by CORRECTING it, then accept.
@@ -89,6 +91,11 @@ function Field({ field }: { field: EditableField }) {
           type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
           defaultValue={String(value)}
           inputMode={field.type === 'number' ? 'numeric' : undefined}
+          // Native <input type="date"> renders in the browser's own locale, so a
+          // non-US owner sees DD/MM/YYYY. The stored value is always ISO; lang is
+          // the portable nudge that asks browsers which honour it to show
+          // MM/DD/YYYY. It changes the display only, never the value.
+          lang={field.type === 'date' ? 'en-US' : undefined}
         />
       )}
 
@@ -106,12 +113,28 @@ function Field({ field }: { field: EditableField }) {
   )
 }
 
+/**
+ * Optional map + address search at the top of the editor.
+ *
+ * The event candidate accept flow needs the same pin experience the published
+ * editor has: a reviewer searches an address or drops a pin, the address parts
+ * fill the boxes below, and the pin's coordinates ride along with Accept so the
+ * listing lands on the map without a second geocode round trip. When this prop
+ * is absent (the practice-field queue) the editor is exactly the plain form it
+ * was.
+ */
+export interface PinMapConfig {
+  /** The coordinates the candidate already carries, if any. */
+  initial: { lat: number; lng: number } | null
+}
+
 export function CandidateEditor({
   candidateId,
   fields,
   accept,
   acceptLabel,
   note,
+  pinMap,
 }: {
   candidateId: string
   fields: EditableField[]
@@ -122,11 +145,40 @@ export function CandidateEditor({
   }>
   acceptLabel: string
   note: string
+  /** Present only for the event queue: a pin map that fills the address boxes and captures coordinates for Accept. */
+  pinMap?: PinMapConfig
 }) {
   const router = useRouter()
   const [busy, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [pendingNote, setPendingNote] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(pinMap?.initial ?? null)
+
+  /**
+   * Write the pin's resolved address parts into the uncontrolled boxes.
+   *
+   * The fields are defaultValue inputs, so the map fills them by writing into
+   * the live DOM elements rather than through React state. A part the geocoder
+   * did not resolve is left alone, so a good value the reviewer already typed is
+   * never wiped by an empty reverse-geocode.
+   */
+  function fillAddress(parts: AddressParts) {
+    const form = formRef.current
+    if (!form) return
+    for (const key of ['address', 'city', 'region', 'country'] as const) {
+      const value = parts[key]
+      if (value == null || value === '') continue
+      const el = form.elements.namedItem(key)
+      if (
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        el instanceof HTMLSelectElement
+      ) {
+        el.value = value
+      }
+    }
+  }
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -149,7 +201,17 @@ export function CandidateEditor({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+    <form ref={formRef} onSubmit={onSubmit} className="flex flex-col gap-4">
+      {pinMap && (
+        <>
+          <PinMap value={coords} onChange={setCoords} onResolveAddress={fillAddress} height={260} />
+          {/* The pin the reviewer set rides along with Accept. It is preferred
+              over a geocode of the typed address, so a corrected pin wins. */}
+          <input type="hidden" name="latitude" value={coords?.lat ?? ''} />
+          <input type="hidden" name="longitude" value={coords?.lng ?? ''} />
+        </>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2">
         {fields.map((f) => (
           <Field key={f.name} field={f} />

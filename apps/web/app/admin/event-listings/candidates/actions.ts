@@ -172,8 +172,14 @@ export async function acceptEventCandidate(
   const clean = (values.name ?? '').trim()
   if (!clean) return { error: 'Give the event a name before accepting it.' }
 
+  // The pin the reviewer set on the map, pulled out before the rest is folded
+  // onto the candidate so it never lands in `extracted` as a stray string.
+  const { latitude: rawLat, longitude: rawLng, ...fieldValues } = values
+  const manualLat = coordOrNull(rawLat)
+  const manualLng = coordOrNull(rawLng)
+
   // The reviewer's edits, folded onto the candidate before it is mapped.
-  const corrected = { ...(candidate.extracted ?? {}), ...parseEventValues(values) }
+  const corrected = { ...(candidate.extracted ?? {}), ...parseEventValues(fieldValues) }
   candidate.extracted = corrected as typeof candidate.extracted
 
   // ACCEPT MEANS PUBLISH. A moderator reading the candidate, checking the
@@ -186,13 +192,21 @@ export async function acceptEventCandidate(
   // and the reviewer is told exactly which field is missing.
   const row = eventListingFromCandidate(candidate, clean)
 
+  // THE REVIEWER'S PIN WINS. If they searched an address or dropped a pin on the
+  // map, those coordinates are what they saw and confirmed, so they override
+  // whatever the read geocoded and skip the lookup below entirely.
+  if (manualLat != null && manualLng != null) {
+    row.latitude = manualLat
+    row.longitude = manualLng
+  }
+
   // A PIN IS A LOOKUP, so do it here rather than refusing over it.
   //
   // The read geocodes what it finds, but a candidate read before that existed
   // has no pin, and a moderator who has just corrected the address in the form
   // should not be told to go and find the building on a map. Same strictness as
   // the reader: a real address or a venue with a town, and the answer has to
-  // land in the state the row claims.
+  // land in the state the row claims. Skipped when the reviewer set a pin above.
   if (row.latitude == null || row.longitude == null) {
     const located = await geocodeVenue({
       venueName: row.venueName,
@@ -432,6 +446,19 @@ export async function reopenEventCandidate(candidateId: string): Promise<{ error
  * the column null. That is the difference between a reviewer deleting a wrong
  * venue and a reviewer never touching it.
  */
+/**
+ * A coordinate the reviewer's map posted, or null. The pin fields are hidden
+ * inputs that are empty until a pin exists, so a blank or unparseable value is
+ * "no pin", not a zero.
+ */
+function coordOrNull(raw: string | undefined): number | null {
+  if (raw == null) return null
+  const trimmed = raw.trim()
+  if (trimmed === '') return null
+  const n = Number(trimmed)
+  return Number.isFinite(n) ? n : null
+}
+
 function parseEventValues(values: Record<string, string>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   const numbers = new Set(['hostTeamNumber', 'capacity', 'costUsd', 'days'])

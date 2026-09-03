@@ -193,6 +193,15 @@ export default async function EventCandidatesPage({
                         accept={acceptEventCandidate}
                         acceptLabel="Accept and publish"
                         note="Publishes straight away when it has a pin, a date, a venue, an address, a program and a registration state. Anything short of that is saved and the missing field is named."
+                        // The pin the reviewer sets here fills the address boxes
+                        // and rides along with Accept, so a lead lands on the map
+                        // without a second trip through the listings screen.
+                        pinMap={{
+                          initial:
+                            ex.latitude != null && ex.longitude != null
+                              ? { lat: ex.latitude, lng: ex.longitude }
+                              : null,
+                        }}
                         fields={[
                           // Same field set and order as the published-event editor
                           // (event-admin-row), so the two edit forms match.
