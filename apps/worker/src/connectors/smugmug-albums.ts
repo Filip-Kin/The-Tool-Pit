@@ -24,8 +24,13 @@ const SMUGMUG_ROOTS = [
   'https://ferrisphotos.smugmug.com/Academic/Engineering-Technology/FIRST-Robotics-Competition',
 ]
 
-/** Public web API key SmugMug ships in-page; fallback if scrape fails. */
-const FALLBACK_API_KEY = 'W0g9oqdOrzuhEpIQ2qaTXimrzsfryKSZ'
+/**
+ * SmugMug's own read-only browse key, the one it embeds in the pages it serves
+ * to any anonymous visitor, used as a fallback when scraping the key off the live
+ * page fails. It is public by design, not a secret, but it reads better from an
+ * env var than hard-coded, so SMUGMUG_API_KEY overrides it where one is set.
+ */
+const FALLBACK_API_KEY = process.env.SMUGMUG_API_KEY ?? 'W0g9oqdOrzuhEpIQ2qaTXimrzsfryKSZ'
 const API_BASE = 'https://api.smugmug.com/api/v2'
 const MAX_DEPTH = 7
 const MAX_NODES = 4000

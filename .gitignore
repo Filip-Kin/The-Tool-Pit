@@ -32,3 +32,6 @@ npm-debug.log*
 drizzle/meta/
 *.tsbuildinfo
 NOTES-*.md
+
+# Local editor / assistant settings
+.claude/
