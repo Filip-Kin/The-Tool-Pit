@@ -104,7 +104,7 @@ export function ClaimStarter({
         <div className="mt-4 flex flex-col gap-3">
           <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2">
             <span className="text-sm font-medium text-foreground">
-              {token ? 'Waiting on your repo' : 'Thanks, that is sent'}
+              {token ? 'Waiting on your repo' : 'Claim submitted'}
             </span>
           </div>
           {token ? (
@@ -121,8 +121,8 @@ export function ClaimStarter({
             </>
           ) : (
             <p className="text-sm text-muted">
-              {msg ?? 'A reviewer will take a look.'}{' '}
-              {user?.email ? `We will email ${user.email} when it is decided.` : ''}
+              A reviewer will look at your claim
+              {user?.email ? `, and we'll email ${user.email} when it's decided` : ''}.
             </p>
           )}
         </div>
@@ -144,7 +144,9 @@ export function ClaimStarter({
         </>
       )}
 
-      {msg && !token && <p className="mt-3 text-sm text-muted">{msg}</p>}
+      {/* The claimed block already shows the confirmation; only surface a raw msg
+          before a claim is submitted (a status or a soft error). */}
+      {msg && !token && !claimed && <p className="mt-3 text-sm text-muted">{msg}</p>}
       {err && (
         <p role="alert" className="mt-3 text-sm text-frc">
           {err}
