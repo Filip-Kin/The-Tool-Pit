@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { Pager } from '@/components/admin/pager'
 import { StatusChip } from '@/components/admin/status'
+import { LocalTime } from '@/components/admin/local-time'
 import { assertAdmin } from '@/lib/admin/auth'
-import { formatDate } from '@/lib/format/date'
 import { getWorkerQueueBacklog } from '@/lib/admin/queue-counts'
 import { getRosterCrawls } from '../../../_listing/reads-rosters-data'
 import { ReadsTabs } from '../../../_listing/reads-shared'
@@ -41,7 +41,7 @@ export default async function RosterCrawlsPage({
         <h1 className="mt-1 text-2xl font-bold text-foreground">Reads &amp; crawls</h1>
       </div>
 
-      <ReadsTabs active="crawls" />
+      <ReadsTabs vertical="events" active="rosters" />
 
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-4">
         <p className="text-sm text-foreground">{list.total.toLocaleString()} published events with a roster source</p>
@@ -77,7 +77,7 @@ export default async function RosterCrawlsPage({
                 <p className="truncate text-sm font-medium text-foreground">{row.name}</p>
                 <p className="text-[11px] text-muted-2">
                   {row.tbaKey ? `TBA ${row.tbaKey}` : row.hasParser ? 'site parser' : 'team-list page, no parser yet'}
-                  {row.countUpdatedAt && ` · refreshed ${formatDate(row.countUpdatedAt)}`}
+                  {row.countUpdatedAt && <> · refreshed <LocalTime value={row.countUpdatedAt} /></>}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3 text-[11px] text-muted-2">

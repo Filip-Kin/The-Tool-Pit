@@ -22,7 +22,7 @@ export default async function FieldReadDetailPage({
     <div className="flex flex-col gap-6 p-4 md:p-8">
       <div>
         <Link href="/admin/practice-fields/reads" className="text-xs text-muted hover:text-foreground">
-          ← Reads
+          ← Candidate reads
         </Link>
         <h1 className="mt-1 text-2xl font-bold text-foreground">{detail.name}</h1>
       </div>

@@ -3,7 +3,7 @@ import { Pager } from '@/components/admin/pager'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getWorkerQueueBacklog } from '@/lib/admin/queue-counts'
 import { getReadsList, getReadsOverview } from '../../_listing/reads-data'
-import { ReadsProgress, ReadsListRows } from '../../_listing/reads-shared'
+import { ReadsProgress, ReadsListRows, ReadsTabs } from '../../_listing/reads-shared'
 import { ReadsLive } from '../../_listing/reads-live'
 
 /**
@@ -46,8 +46,10 @@ export default async function FieldReadsPage({
         <Link href="/admin/practice-fields" className="text-xs text-muted hover:text-foreground">
           ← Practice fields
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-foreground">Reads</h1>
+        <h1 className="mt-1 text-2xl font-bold text-foreground">Reads &amp; crawls</h1>
       </div>
+
+      <ReadsTabs vertical="fields" active="reads" />
 
       <ReadsProgress overview={overview} queue={queue} />
 

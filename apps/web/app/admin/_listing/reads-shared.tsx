@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { formatDateTime } from '@/lib/format/date'
+import { LocalTime } from '@/components/admin/local-time'
 import type { WorkerQueueRow } from '@/lib/admin/queue-counts'
 import type { ReadDetail, ReadListRow, ReadsOverview } from './reads-data'
 
@@ -24,18 +24,37 @@ function shortUrl(source: string): string {
 }
 
 /**
- * Reads | Team-list crawls, the two halves of the events reads inspector.
+ * The tab strip on top of every "Reads & crawls" inspector.
  *
- * Both are "what an automated pass produced": one reads a candidate's fields,
- * the other refreshes an event's roster. They sit under one sidebar entry, so a
- * light strip switches between them. The fields vertical has no roster pass and
- * renders no strip.
+ * Each vertical shows the tabs it actually has. All of them are "what an
+ * automated pass produced": a candidate read, a roster refresh, or a discovery
+ * crawl. The discovery crawl-jobs table used to be one shared /admin/crawls
+ * screen reached from a separate sidebar link per vertical; it is a tab here now
+ * so one observability entry per vertical holds all of it.
+ *
+ * A vertical with only one tab (tools, photos, grants have no candidate-read
+ * pass) still renders the strip, so the header reads the same everywhere.
  */
-export function ReadsTabs({ active }: { active: 'reads' | 'crawls' }) {
-  const tabs: { key: 'reads' | 'crawls'; label: string; href: string }[] = [
+export type ReadsVertical = 'events' | 'fields' | 'tools' | 'photos' | 'grants'
+export type ReadsTabKey = 'reads' | 'rosters' | 'crawls'
+
+const READS_TABS: Record<ReadsVertical, { key: ReadsTabKey; label: string; href: string }[]> = {
+  events: [
     { key: 'reads', label: 'Candidate reads', href: '/admin/event-listings/reads' },
-    { key: 'crawls', label: 'Team-list crawls', href: '/admin/event-listings/reads/rosters' },
-  ]
+    { key: 'rosters', label: 'Team-list crawls', href: '/admin/event-listings/reads/rosters' },
+    { key: 'crawls', label: 'Crawl jobs', href: '/admin/event-listings/reads/crawls' },
+  ],
+  fields: [
+    { key: 'reads', label: 'Candidate reads', href: '/admin/practice-fields/reads' },
+    { key: 'crawls', label: 'Crawl jobs', href: '/admin/practice-fields/reads/crawls' },
+  ],
+  tools: [{ key: 'crawls', label: 'Crawl jobs', href: '/admin/tools/reads' }],
+  photos: [{ key: 'crawls', label: 'Crawl jobs', href: '/admin/album-candidates/reads' }],
+  grants: [{ key: 'crawls', label: 'Crawl jobs', href: '/admin/grants/reads' }],
+}
+
+export function ReadsTabs({ vertical, active }: { vertical: ReadsVertical; active: ReadsTabKey }) {
+  const tabs = READS_TABS[vertical]
   return (
     <div className="flex gap-1 border-b border-border">
       {tabs.map((t) => (
@@ -60,7 +79,7 @@ export function ReadStatus({ readAt }: { readAt: string | null }) {
   if (!readAt) return <span className="text-muted-2">not read yet</span>
   return (
     <span className="text-official">
-      <span aria-hidden>✓</span> read {formatDateTime(readAt)}
+      <span aria-hidden>✓</span> read <LocalTime value={readAt} />
     </span>
   )
 }
@@ -103,7 +122,7 @@ export function ReadsProgress({
           <QueueChip label="active" value={queue.active} live={queue.active > 0} />
           <QueueChip label="failed" value={queue.failed} bad={queue.failed > 0} />
           {queue.oldestWaitingAt && (
-            <span className="text-muted-2">oldest queued {formatDateTime(queue.oldestWaitingAt)}</span>
+            <span className="text-muted-2">oldest queued <LocalTime value={queue.oldestWaitingAt} /></span>
           )}
         </div>
       )}

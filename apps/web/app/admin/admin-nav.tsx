@@ -8,12 +8,18 @@ import type { AdminQueueCounts } from '@/lib/admin/queue-counts'
 /**
  * Admin navigation: the verticals down the side, each with the same slots.
  *
- * Every vertical gets Submissions, Candidates, Crawl jobs, one link per
+ * Every vertical gets Submissions, Candidates, Reads & crawls, one link per
  * published-side status, and Sources, in that order, because that is the order
- * a queue is worked: what people sent us, what a crawler found, whether the
- * crawler ran, the live listings by status, and the knobs. A vertical that
- * genuinely has no page for a slot omits it rather than linking somewhere that
- * 404s.
+ * a queue is worked: what people sent us, what a crawler found, what the
+ * automated passes did (candidate reads, roster refreshes, discovery crawls),
+ * the live listings by status, and the knobs. A vertical that genuinely has no
+ * page for a slot omits it rather than linking somewhere that 404s.
+ *
+ * ONE OBSERVABILITY ENTRY PER VERTICAL. Each vertical used to carry a separate
+ * "Crawl jobs" link to /admin/crawls?vertical=x on top of its reads inspector,
+ * so the same runs were reachable from two places. The discovery crawl jobs are
+ * a tab inside each vertical's Reads & crawls inspector now; the merged
+ * all-verticals table stays once, under System as "Crawl jobs, all".
  *
  * STATUS LIVES HERE, NOT ON THE PAGE. Each list page used to carry its own
  * Pending / Published / Suppressed / All tab bar, which repeated this
@@ -22,10 +28,10 @@ import type { AdminQueueCounts } from '@/lib/admin/queue-counts'
  * Suppressed (and the album views) are their own links here now, and each page
  * renders the one list its URL asks for.
  *
- * Crawl jobs is one page with a vertical filter, not five pages. The five job
- * tables have identical columns and the overnight sweeps all land within two
- * hours of each other, so the answer to "did anything run last night" is one
- * screen.
+ * "Crawl jobs, all" under System is still one page over all five verticals. The
+ * five job tables have identical columns and the overnight sweeps all land
+ * within two hours of each other, so the answer to "did anything run last night"
+ * is one screen; each vertical's own Reads & crawls tab filters it to that one.
  *
  * THE BADGES. Each queue page used to carry its own strip of status tabs that
  * repeated these links and put a count on them, so the same navigation existed
@@ -60,7 +66,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/admin/submissions', label: 'Submissions', queue: 'toolSubmissions' },
       { href: '/admin/candidates', label: 'Candidates', queue: 'toolCandidates' },
-      { href: '/admin/crawls?vertical=tools', label: 'Crawl jobs' },
+      { href: '/admin/tools/reads', label: 'Reads & crawls' },
       { href: '/admin/tools', label: 'Published' },
       { href: '/admin/tools?status=draft', label: 'Draft' },
       { href: '/admin/tools?status=suppressed', label: 'Suppressed' },
@@ -77,7 +83,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/admin/album-candidates?status=no_cover', label: 'No cover' },
       { href: '/admin/album-candidates?status=published', label: 'Published' },
       { href: '/admin/album-candidates?status=suppressed', label: 'Suppressed' },
-      { href: '/admin/crawls?vertical=photos', label: 'Crawl jobs' },
+      { href: '/admin/album-candidates/reads', label: 'Reads & crawls' },
       { href: '/admin/album-sources', label: 'Sources' },
     ],
   },
@@ -88,7 +94,6 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/admin/event-listings/candidates', label: 'Candidates', queue: 'eventCandidates' },
       { href: '/admin/event-listings/reads', label: 'Reads & crawls' },
       { href: '/admin/event-edits', label: 'Suggested edits', queue: 'eventEdits' },
-      { href: '/admin/crawls?vertical=events', label: 'Crawl jobs' },
       { href: '/admin/event-listings?status=published', label: 'Published' },
       { href: '/admin/event-listings?status=suppressed', label: 'Suppressed' },
       { href: '/admin/event-listings/sources', label: 'Sources' },
@@ -99,8 +104,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/admin/practice-fields', label: 'Submissions', queue: 'fieldSubmissions' },
       { href: '/admin/practice-fields/candidates', label: 'Candidates', queue: 'fieldCandidates' },
-      { href: '/admin/practice-fields/reads', label: 'Reads' },
-      { href: '/admin/crawls?vertical=fields', label: 'Crawl jobs' },
+      { href: '/admin/practice-fields/reads', label: 'Reads & crawls' },
       { href: '/admin/practice-fields?status=published', label: 'Published' },
       { href: '/admin/practice-fields?status=suppressed', label: 'Suppressed' },
       { href: '/admin/practice-fields/sources', label: 'Sources' },
@@ -111,7 +115,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Grants',
     items: [
       { href: '/admin/grants/candidates', label: 'Candidates', queue: 'grantCandidates' },
-      { href: '/admin/crawls?vertical=grants', label: 'Crawl jobs' },
+      { href: '/admin/grants/reads', label: 'Reads & crawls' },
       { href: '/admin/grants', label: 'Published' },
       { href: '/admin/grants?status=pending', label: 'Pending' },
       { href: '/admin/grants?status=unverified', label: 'Unverified' },

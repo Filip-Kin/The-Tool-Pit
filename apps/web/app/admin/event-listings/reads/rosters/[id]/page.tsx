@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { StatusChip } from '@/components/admin/status'
+import { LocalTime } from '@/components/admin/local-time'
 import { assertAdmin } from '@/lib/admin/auth'
-import { formatDateTime } from '@/lib/format/date'
 import { getRosterCrawlDetail } from '../../../../_listing/reads-rosters-data'
 
 /** The latest roster snapshot a team-list refresh produced for one event. */
@@ -53,9 +53,11 @@ export default async function RosterCrawlDetailPage({
 
           <span className="text-muted-2">site parser</span>
           <span className="text-foreground">
-            {detail.hasParser
-              ? `written${detail.parserUpdatedAt ? ` ${formatDateTime(detail.parserUpdatedAt)}` : ''}`
-              : 'none'}
+            {detail.hasParser ? (
+              <>written{detail.parserUpdatedAt && <> <LocalTime value={detail.parserUpdatedAt} /></>}</>
+            ) : (
+              'none'
+            )}
           </span>
         </div>
       </div>
@@ -69,7 +71,7 @@ export default async function RosterCrawlDetailPage({
             <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted-2">Latest snapshot</h2>
             <StatusChip status={snap.status} />
             {snap.changed && <span className="rounded bg-surface-3 px-1.5 py-0.5 text-[10px] text-muted">changed</span>}
-            <span className="text-[11px] text-muted-2">{formatDateTime(snap.fetchedAt)}</span>
+            <span className="text-[11px] text-muted-2"><LocalTime value={snap.fetchedAt} /></span>
           </div>
 
           {suspect && snap.error && (

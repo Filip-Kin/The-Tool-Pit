@@ -45,7 +45,7 @@ export default async function EventReadsPage({
         <h1 className="mt-1 text-2xl font-bold text-foreground">Reads &amp; crawls</h1>
       </div>
 
-      <ReadsTabs active="reads" />
+      <ReadsTabs vertical="events" active="reads" />
 
       <ReadsProgress overview={overview} queue={queue} />
 
