@@ -5,7 +5,8 @@ import { getDb } from '@/lib/db'
 import { eventListings, practiceFields } from '@the-tool-pit/db'
 import { eventListingUrl, fieldUrl } from '@the-tool-pit/types'
 import { verifyOutreachRemove } from '@/lib/listings/outreach-token'
-import { confirmOutreachRemoval, isRemoveTarget } from './actions'
+import { confirmOutreachRemoval } from './actions'
+import { isRemoveTarget } from './targets'
 
 /**
  * The one-click "take this listing down" page an outreach email links to.

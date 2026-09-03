@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { getDb } from '@/lib/db'
 import { eventListings, practiceFields } from '@the-tool-pit/db'
 import { verifyOutreachRemove } from '@/lib/listings/outreach-token'
+import { isRemoveTarget } from './targets'
 
 /**
  * The verticals outreach goes out for, and where each one lives. Outreach is
@@ -60,10 +61,6 @@ const REMOVE_TARGETS = {
     },
   },
 } as const
-
-export function isRemoveTarget(type: string): type is keyof typeof REMOVE_TARGETS {
-  return type in REMOVE_TARGETS
-}
 
 /**
  * The accountless "take my listing down" action behind the outreach email.
