@@ -43,6 +43,12 @@ const LISTING_DISCOVER_QUEUE = 'listing-discover'
 interface ListingDiscoverPayload {
   connector: string
   sourceId?: string
+  /**
+   * One-time backfill widening, mirrored from the worker payload. Season years
+   * whose already-run events the TBA off-season connector should surface as
+   * candidates. Absent on the daily cron, so normal sweeps are unchanged.
+   */
+  includePastSeasons?: number[]
 }
 
 let _queue: Queue<ListingDiscoverPayload> | undefined
@@ -109,10 +115,23 @@ export function connectorForSourceKind(vertical: ListingVertical, kind: string):
   return null
 }
 
-/** Queue one discovery run. `sourceId` makes the worker skip the cadence check. */
-export async function queueListingDiscover(connector: string, sourceId?: string): Promise<{ error?: string }> {
+/**
+ * Queue one discovery run. `sourceId` makes the worker skip the cadence check.
+ *
+ * `options.includePastSeasons` is the one-time backfill widening: seasons whose
+ * already-run off-season events the TBA connector should surface as candidates.
+ * Left off by every normal caller, so a routine sweep is unchanged.
+ */
+export async function queueListingDiscover(
+  connector: string,
+  sourceId?: string,
+  options?: { includePastSeasons?: number[] },
+): Promise<{ error?: string }> {
   try {
-    await getListingDiscoverQueue().add('listing-discover', sourceId ? { connector, sourceId } : { connector })
+    const payload: ListingDiscoverPayload = { connector }
+    if (sourceId) payload.sourceId = sourceId
+    if (options?.includePastSeasons?.length) payload.includePastSeasons = options.includePastSeasons
+    await getListingDiscoverQueue().add('listing-discover', payload)
   } catch (err) {
     return { error: `Could not queue the job: ${String(err)}` }
   }

@@ -1,5 +1,5 @@
 /**
- * Keep each off-season event's registered team count current, from TBA.
+ * Keep each off-season event's registered team count current.
  *
  * This was scripts/sync-event-rosters.ts, run by hand, which meant the count
  * was as fresh as the last time somebody remembered. It is the one number on
@@ -7,18 +7,28 @@
  * than none: a team looking at "12 registered" on an event that filled up a
  * month ago plans around a place that is not there.
  *
+ * TWO SOURCES, ONE RULE FOR PROMOTING THE COUNT. TBA is structured and
+ * authoritative and writes its count immediately. An event's own team-list page
+ * is scraped by a model-authored, self-proving parser (see team-list-parser.ts)
+ * and USED to land as a pending snapshot a moderator had to approve by hand. It
+ * no longer does: a scrape that reads cleanly and passes the suspect guard is
+ * auto-approved and writes the public count too, exactly the way TBA does. Only
+ * a scrape that looks wrong (leaked slot indices, an emptied roster, more than
+ * half the teams gone, or a parser that will not run) is held: the bad run is
+ * stored 'rejected', the last good count is kept, and a person is left to look.
+ * There is an agent working the team-list script, so a clean parse is treated
+ * as right rather than parked for a rubber-stamp.
+ *
  * MACHINE-OWNED COLUMNS ONLY, and the split is written down in
  * MACHINE_OWNED_EVENT_KEYS. This job may write registeredTeamCount and
  * teamCountUpdatedAt and nothing else on the listing. Everything an organiser
  * can type is theirs: they moved the event to a different gym and TBA has not
- * heard yet, so TBA is the one that is wrong.
+ * heard yet, so TBA is the one that is wrong. registeredTeamCount is
+ * machine-owned, so neither path needs a human-edited guard to write it.
  *
- * WHY TBA rather than each event's own site: off-season events register through
- * wildly different systems and their sites almost never publish a real roster
- * in static HTML. TBA holds it once an event is coded there, and it is the same
- * source the photos vertical already trusts.
- *
- * Deterministic. No model call.
+ * The TBA path is deterministic. The site path calls the model only to WRITE a
+ * parser, once per event or when the page moves; the scheduled scrape after
+ * that runs the stored parser with no model call.
  */
 import { createHash } from 'node:crypto'
 import { and, desc, eq, gte, inArray, isNull, or } from 'drizzle-orm'
@@ -196,6 +206,33 @@ export function suspectRosterChange(
   return { suspect: false, reason: null }
 }
 
+export interface ScrapedRosterDecision {
+  /** The snapshot status to store for this scrape. */
+  status: 'approved' | 'rejected'
+  /** Whether this run may write the public registeredTeamCount. */
+  writeCount: boolean
+  /** Why it was held, for the log and the stored snapshot. Null when approved. */
+  reason: string | null
+}
+
+/**
+ * The auto-approve rule for a site-scraped roster, in ONE place so it is
+ * testable and the loop below cannot drift from it.
+ *
+ * A roster that passes the suspect guard is trusted the same way a TBA snapshot
+ * is: stored 'approved', and its count written to the public listing. A roster
+ * the guard flags (leaked slot indices, an emptied roster, or more than half the
+ * previously-listed teams gone without being a superset) is held: stored
+ * 'rejected', the last good count kept, nothing public. This is the whole of
+ * "clean updates the count automatically; only a suspicious change waits for a
+ * person".
+ */
+export function decideScrapedRoster(previous: RosterTeam[], next: RosterTeam[]): ScrapedRosterDecision {
+  const suspect = suspectRosterChange(previous, next)
+  if (suspect.suspect) return { status: 'rejected', writeCount: false, reason: suspect.reason }
+  return { status: 'approved', writeCount: true, reason: null }
+}
+
 export async function processRosterRefreshJob(
   payload: RosterRefreshPayload = {},
 ): Promise<RosterRefreshStats> {
@@ -305,17 +342,24 @@ export async function processRosterRefreshJob(
   //
   // For every listing chooseRosterSource routed here: one with no tbaKey at all,
   // and one that has a tbaKey but has not started yet, whose own page is the
-  // fresher source until it does. TBA is structured and authoritative; a page is
-  // neither, so its snapshot lands PENDING for review and NOTHING reaches the
-  // public listing until somebody has approved that snapshot.
+  // fresher source until it does.
   //
-  // The COUNT is NOT promoted here. A scraped number is as unvetted as the
-  // names beside it: a broken parser or a page that lists last year's teams
-  // would leak a wrong count onto the public card with no human in the loop.
-  // The public registeredTeamCount changes only when a moderator approves the
-  // pending snapshot (approveRosterSnapshot in the event-listings admin), which
-  // writes the count and flips the snapshot to 'approved' in one step. TBA,
-  // above, is trusted and writes its count immediately.
+  // AUTO-APPROVE when the roster reads cleanly. The parser proves itself before
+  // it is ever stored, and the suspect guard (decideScrapedRoster over
+  // suspectRosterChange: leak / emptied / >half-vanished non-superset) re-checks
+  // every scheduled run. A read that passes is trusted the same way a TBA
+  // snapshot is: the snapshot lands 'approved' and its count is written straight
+  // to the public listing, no moderator in the loop. A moderator can still
+  // approve a stray pending snapshot in the admin, but a clean scrape no longer
+  // needs one.
+  //
+  // HELD only when the read looks wrong. If the stored parser leaks slot indices,
+  // returns nothing against a known roster, or loses more than half the teams,
+  // and a freshly generated parser cannot do better either, the bad run is stored
+  // 'rejected', the last good count is kept, and nothing reaches the public card.
+  // A parser that fails ten generation attempts pings Discord from
+  // generateTeamListParser. So a clean roster updates the count automatically;
+  // only a suspicious change waits for a person.
   //
   // A MODEL-AUTHORED PARSER, not a shared heuristic. Every event's list is
   // shaped differently and no regex reads them all: RiverRage writes the team
@@ -415,12 +459,15 @@ export async function processRosterRefreshJob(
 
       // A sane roster. registeredTeamCount counts the teams IN the event, not
       // the waitlist below it, so a full event does not read as over capacity.
-      // Computed here only for the log line; the public count is NOT written on
-      // this path (see the region note) and moves only when the pending
-      // snapshot is approved.
+      // This is the count the auto-approve below writes to the public listing.
       const registeredCount = teams.filter((t) => !t.waitlisted).length
       const hash = hashTeams(teams)
       const didChange = previousSnap?.contentHash !== hash
+
+      // Reaching here means the run already passed the suspect guard, so the
+      // decision is 'approved'. Derived through decideScrapedRoster anyway, so
+      // the stored status and the count-write can never drift from the rule.
+      const decision = decideScrapedRoster(previousTeams, teams)
 
       await db.insert(eventRosterSnapshots).values({
         eventListingId: listing.id,
@@ -430,15 +477,28 @@ export async function processRosterRefreshJob(
         teams,
         contentHash: hash,
         changed: didChange,
-        // Read off somebody's web page, so a person confirms the list AND its
-        // count before either reaches the public listing.
-        status: 'pending',
+        // Clean scrape: trusted like TBA and auto-approved. The public count is
+        // written below, so the snapshot and the listing agree in one pass.
+        status: decision.status,
       })
+
+      // Write the public count exactly as the TBA path and approveRosterSnapshot
+      // do. registeredTeamCount is machine-owned (MACHINE_OWNED_EVENT_KEYS), so
+      // it needs no human-edited guard. An empty clean roster keeps whatever
+      // count it had rather than resetting the card to zero.
+      if (decision.writeCount && teams.length > 0) {
+        await db
+          .update(eventListings)
+          .set({ registeredTeamCount: registeredCount, teamCountUpdatedAt: new Date(), updatedAt: new Date() })
+          .where(eq(eventListings.id, listing.id))
+      } else if (teams.length === 0) {
+        stats.empty++
+      }
 
       stats.fromSite++
       if (didChange) stats.changed++
       else stats.unchanged++
-      console.log(`[roster-refresh] ${listing.name}: ${registeredCount} teams via ${via}`)
+      console.log(`[roster-refresh] ${listing.name}: ${registeredCount} teams via ${via} (auto-approved)`)
     } catch (err) {
       stats.failed++
       console.error(`[roster-refresh] ${listing.name} (${url}): ${String(err)}`)

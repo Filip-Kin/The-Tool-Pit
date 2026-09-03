@@ -49,6 +49,14 @@ export interface ListingDiscoverPayload {
   connector: string
   /** Set when one crawl source row was requeued by hand from the admin. */
   sourceId?: string
+  /**
+   * One-time backfill widening for the TBA off-season connector: season years
+   * whose already-run events should be surfaced as candidates instead of dropped
+   * by the past-event cutoff. Merged over the source row's config before the
+   * connector runs. Absent on the daily cron, so normal sweeps are unchanged.
+   * See tba-offseason.ts (TbaOffseasonConfig.includePastSeasons).
+   */
+  includePastSeasons?: number[]
 }
 
 /**
@@ -245,7 +253,17 @@ export async function processListingDiscoverJob(
   const insertedCandidateIds: string[] = []
 
   try {
-    const result = await connector.run({ sourceId, config: source?.config ?? undefined })
+    // A one-time backfill can widen the connector's scope without a source row:
+    // payload.includePastSeasons is merged over the row config, so an enqueue of
+    // { connector: 'tba_offseason_events', includePastSeasons: [2026] } surfaces
+    // this season's already-run off-seasons. The daily cron sends no such field,
+    // so its scope is unchanged.
+    const runConfig: Record<string, unknown> = { ...(source?.config ?? {}) }
+    if (payload.includePastSeasons?.length) runConfig.includePastSeasons = payload.includePastSeasons
+    const result = await connector.run({
+      sourceId,
+      config: Object.keys(runConfig).length > 0 ? runConfig : undefined,
+    })
 
     // #region dedupe within the run
     // Two queries regularly land on the same thread, and that is a good sign,

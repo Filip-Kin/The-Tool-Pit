@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { chooseRosterSource, findTbaMatch } from '../src/listings/roster-refresh.js'
+import { chooseRosterSource, decideScrapedRoster, findTbaMatch } from '../src/listings/roster-refresh.js'
 import type { TbaEventUpsert } from '../src/connectors/tba-events.js'
+import type { RosterTeam } from '@the-tool-pit/db'
+
+const t = (...nums: number[]): RosterTeam[] => nums.map((number) => ({ number, robot: null }))
 
 // The one rule these tests exist to pin: an event's OWN site is the roster
 // source until it starts, and TBA is authoritative once it has. A regression
@@ -92,5 +95,54 @@ describe('findTbaMatch', () => {
     expect(
       findTbaMatch({ name: 'Bunnybots', startDate: '2026-09-12', city: 'Flint', region: 'MI' }, events),
     ).toBeNull()
+  })
+})
+
+// The rule CHANGE 1 added: a site-scraped roster auto-approves and writes the
+// public count when it reads cleanly, and is HELD (never auto-written) when the
+// suspect guard fires. decideScrapedRoster is the single source of that split,
+// so the loop's stored status and count-write cannot drift from it.
+describe('decideScrapedRoster (auto-approve vs held)', () => {
+  it('clean unchanged roster: approved, writes the count', () => {
+    const d = decideScrapedRoster(t(503, 247, 8728, 226), t(503, 247, 8728, 226))
+    expect(d.status).toBe('approved')
+    expect(d.writeCount).toBe(true)
+  })
+
+  it('clean growth (a superset): approved, writes the count', () => {
+    const d = decideScrapedRoster(t(503, 247, 8728), t(503, 247, 8728, 226, 1114))
+    expect(d.status).toBe('approved')
+    expect(d.writeCount).toBe(true)
+  })
+
+  it('first roster on a brand-new listing (no previous): approved', () => {
+    const d = decideScrapedRoster([], t(254, 1678, 118, 148, 33, 217, 1114, 610))
+    expect(d.status).toBe('approved')
+    expect(d.writeCount).toBe(true)
+  })
+
+  it('minor churn keeping more than half: approved', () => {
+    const d = decideScrapedRoster(t(11, 22, 33, 44), t(11, 22, 33, 99))
+    expect(d.status).toBe('approved')
+    expect(d.writeCount).toBe(true)
+  })
+
+  it('leaked slot indices: held, no count write', () => {
+    const d = decideScrapedRoster(t(503, 247, 8728, 226), t(1, 2, 3, 4, 5, 6, 7, 8))
+    expect(d.status).toBe('rejected')
+    expect(d.writeCount).toBe(false)
+    expect(d.reason).toBeTruthy()
+  })
+
+  it('roster emptied while the last one was not: held', () => {
+    const d = decideScrapedRoster(t(503, 247, 8728, 226), [])
+    expect(d.status).toBe('rejected')
+    expect(d.writeCount).toBe(false)
+  })
+
+  it('more than half the teams vanished without being a superset: held', () => {
+    const d = decideScrapedRoster(t(11, 22, 33, 44, 55, 66), t(11, 77))
+    expect(d.status).toBe('rejected')
+    expect(d.writeCount).toBe(false)
   })
 })

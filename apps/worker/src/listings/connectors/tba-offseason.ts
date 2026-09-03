@@ -50,6 +50,18 @@ interface TbaOffseasonConfig {
    * nothing and returns an empty crawl that looks like a working one.
    */
   stateProvs?: string[]
+  /**
+   * Season years whose ALREADY-RUN events are kept as candidates instead of
+   * dropped by the past-event cutoff below.
+   *
+   * The vertical normally lists only what a team can still go to, so a finished
+   * event is noise in a review queue. But the site's "already run" view wants
+   * this season's past off-seasons too, and a one-time backfill sets e.g.
+   * [2026] to surface them. Nothing here publishes: past events land as pending
+   * candidates, deduped by tba_key in discover.ts, exactly like every other
+   * lead. The daily sweep sends no such value, so its scope is unchanged.
+   */
+  includePastSeasons?: number[]
 }
 
 export class TbaOffseasonEventsConnector implements EventListingConnector {
@@ -67,6 +79,13 @@ export class TbaOffseasonEventsConnector implements EventListingConnector {
     const keepRegions = (config.stateProvs ?? [])
       .map((s) => s.trim().toUpperCase())
       .filter((s) => s.length > 0)
+
+    // Seasons whose already-run events are kept rather than dropped by the past
+    // cutoff. Empty by default, so the daily sweep still lists only upcoming and
+    // just-finished events.
+    const includePastSeasons = new Set(
+      (config.includePastSeasons ?? []).filter((y): y is number => Number.isInteger(y)),
+    )
 
     if (keepRegions.some((r) => r.length > 3)) {
       // Someone typed "Michigan". Say so loudly rather than crawling to zero.
@@ -104,8 +123,11 @@ export class TbaOffseasonEventsConnector implements EventListingConnector {
 
         // An event with no dates at all cannot be judged past or future, so it
         // is kept: a reviewer can see it, an automatic drop is invisible.
+        // Already-run events are normally dropped; for a season named in
+        // includePastSeasons they are kept, which is how the one-time backfill of
+        // this year's finished off-seasons reaches the review queue.
         const last = event.endDate ?? event.startDate
-        if (last && last < cutoff) {
+        if (last && last < cutoff && !includePastSeasons.has(year)) {
           pastEvents++
           skipped++
           continue
@@ -154,6 +176,11 @@ export class TbaOffseasonEventsConnector implements EventListingConnector {
     if (pastEvents > 0) {
       limits.push(
         `${pastEvents} off-season events that finished more than ${PAST_EVENT_GRACE_DAYS} days ago were not listed`,
+      )
+    }
+    if (includePastSeasons.size > 0) {
+      limits.push(
+        `backfill mode: already-run events kept for season(s) ${[...includePastSeasons].sort().join(', ')}`,
       )
     }
     if (filteredByRegion > 0) {
