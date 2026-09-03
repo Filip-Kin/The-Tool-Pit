@@ -36,11 +36,13 @@ interface RosterTeamRow {
 type LoadState = 'loading' | 'ready' | 'error'
 
 /** Avatars come from the shared team-avatar service. 404 is normal (many
- * off-season teams have none), so a failed image falls back to the number in a
- * squared tile rather than breaking the row. */
+ * off-season teams have none), so a team without one falls back to the service's
+ * default avatar; only if THAT also fails do we show the number in a tile. */
 const AVATAR_BASE = 'https://avatars.frc.tools/avatar'
+const DEFAULT_AVATAR = `${AVATAR_BASE}/default.png`
 
 function TeamAvatar({ number }: { number: number }) {
+  const [src, setSrc] = useState(`${AVATAR_BASE}/${number}.png?s=64`)
   const [failed, setFailed] = useState(false)
   if (failed) {
     return (
@@ -54,10 +56,10 @@ function TeamAvatar({ number }: { number: number }) {
     // onError fallback, not a build-time domain allowlist.
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={`${AVATAR_BASE}/${number}.png?s=64`}
+      src={src}
       alt=""
       loading="lazy"
-      onError={() => setFailed(true)}
+      onError={() => (src === DEFAULT_AVATAR ? setFailed(true) : setSrc(DEFAULT_AVATAR))}
       className="h-8 w-8 shrink-0 rounded-md bg-surface-3 object-contain"
     />
   )
