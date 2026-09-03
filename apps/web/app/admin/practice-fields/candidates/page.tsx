@@ -15,7 +15,7 @@ import {
   practiceFields,
 } from '@the-tool-pit/db'
 import type { FieldCandidateStatus, ExtractedPracticeFieldFields, RawPracticeFieldMetadata } from '@the-tool-pit/db'
-import { ExtractedList, EvidencePanel, StatusTabs } from '../../_listing/candidate-evidence'
+import { ExtractedList, EvidencePanel } from '../../_listing/candidate-evidence'
 import { CandidateEditor } from '../../_listing/candidate-editor'
 import { ListingCandidateActions } from '../../_listing/candidate-actions'
 import {
@@ -56,7 +56,7 @@ export default async function FieldCandidatesPage({
   const db = getDb()
 
   const where = eq(practiceFieldCandidates.status, status)
-  const [rows, [totals], counts] = await Promise.all([
+  const [rows, [totals]] = await Promise.all([
     db
       .select({
         candidate: practiceFieldCandidates,
@@ -74,14 +74,9 @@ export default async function FieldCandidatesPage({
       .limit(PAGE_SIZE)
       .offset((page - 1) * PAGE_SIZE),
     db.select({ total: sql<number>`count(*)::int` }).from(practiceFieldCandidates).where(where),
-    db
-      .select({ status: practiceFieldCandidates.status, count: sql<number>`count(*)::int` })
-      .from(practiceFieldCandidates)
-      .groupBy(practiceFieldCandidates.status),
   ])
 
   const total = totals?.total ?? 0
-  const countMap: Record<string, number> = Object.fromEntries(counts.map((r) => [r.status, r.count]))
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   return (
@@ -105,14 +100,6 @@ export default async function FieldCandidatesPage({
         in the box beside its quote. Accept publishes when the field has a pin and a way to get in
         touch; coordinates are never guessed, so the pin is usually yours to place.
       </p>
-
-      <StatusTabs
-        basePath="/admin/practice-fields/candidates"
-        statuses={FIELD_CANDIDATE_STATUSES}
-        active={status}
-        counts={countMap}
-        labels={TAB_LABELS}
-      />
 
       {rows.length === 0 ? (
         <p className="text-sm text-muted">

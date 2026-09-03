@@ -8,11 +8,19 @@ import type { AdminQueueCounts } from '@/lib/admin/queue-counts'
 /**
  * Admin navigation: the verticals down the side, each with the same slots.
  *
- * Every vertical gets Submissions, Candidates, Crawl jobs, the full list, and
- * Sources, in that order, because that is the order a queue is worked: what
- * people sent us, what a crawler found, whether the crawler ran, everything we
- * hold, and the knobs. A vertical that genuinely has no page for a slot omits
- * it rather than linking somewhere that 404s.
+ * Every vertical gets Submissions, Candidates, Crawl jobs, one link per
+ * published-side status, and Sources, in that order, because that is the order
+ * a queue is worked: what people sent us, what a crawler found, whether the
+ * crawler ran, the live listings by status, and the knobs. A vertical that
+ * genuinely has no page for a slot omits it rather than linking somewhere that
+ * 404s.
+ *
+ * STATUS LIVES HERE, NOT ON THE PAGE. Each list page used to carry its own
+ * Pending / Published / Suppressed / All tab bar, which repeated this
+ * navigation and, on a page whose bare path is already the Submissions queue,
+ * showed a Pending tab that was always empty and read as a bug. Published and
+ * Suppressed (and the album views) are their own links here now, and each page
+ * renders the one list its URL asks for.
  *
  * Crawl jobs is one page with a vertical filter, not five pages. The five job
  * tables have identical columns and the overnight sweeps all land within two
@@ -53,7 +61,9 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/admin/submissions', label: 'Submissions', queue: 'toolSubmissions' },
       { href: '/admin/candidates', label: 'Candidates', queue: 'toolCandidates' },
       { href: '/admin/crawls?vertical=tools', label: 'Crawl jobs' },
-      { href: '/admin/tools', label: 'All tools' },
+      { href: '/admin/tools', label: 'Published' },
+      { href: '/admin/tools?status=draft', label: 'Draft' },
+      { href: '/admin/tools?status=suppressed', label: 'Suppressed' },
       { href: '/admin/sources', label: 'Sources' },
       { href: '/admin/votes', label: 'Votes' },
     ],
@@ -63,6 +73,10 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/admin/album-submissions', label: 'Submissions' },
       { href: '/admin/album-candidates', label: 'Candidates', queue: 'albumCandidates' },
+      { href: '/admin/album-candidates?status=unmatched', label: 'Needs event' },
+      { href: '/admin/album-candidates?status=no_cover', label: 'No cover' },
+      { href: '/admin/album-candidates?status=published', label: 'Published' },
+      { href: '/admin/album-candidates?status=suppressed', label: 'Suppressed' },
       { href: '/admin/crawls?vertical=photos', label: 'Crawl jobs' },
       { href: '/admin/album-sources', label: 'Sources' },
     ],
@@ -74,7 +88,8 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/admin/event-listings/candidates', label: 'Candidates', queue: 'eventCandidates' },
       { href: '/admin/event-edits', label: 'Suggested edits', queue: 'eventEdits' },
       { href: '/admin/crawls?vertical=events', label: 'Crawl jobs' },
-      { href: '/admin/event-listings?status=all', label: 'All events' },
+      { href: '/admin/event-listings?status=published', label: 'Published' },
+      { href: '/admin/event-listings?status=suppressed', label: 'Suppressed' },
       { href: '/admin/event-listings/sources', label: 'Sources' },
     ],
   },
@@ -84,7 +99,8 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/admin/practice-fields', label: 'Submissions', queue: 'fieldSubmissions' },
       { href: '/admin/practice-fields/candidates', label: 'Candidates', queue: 'fieldCandidates' },
       { href: '/admin/crawls?vertical=fields', label: 'Crawl jobs' },
-      { href: '/admin/practice-fields?status=all', label: 'All fields' },
+      { href: '/admin/practice-fields?status=published', label: 'Published' },
+      { href: '/admin/practice-fields?status=suppressed', label: 'Suppressed' },
       { href: '/admin/practice-fields/sources', label: 'Sources' },
       { href: '/admin/field-edits', label: 'Suggested edits', queue: 'fieldEdits' },
     ],
@@ -94,7 +110,11 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/admin/grants/candidates', label: 'Candidates', queue: 'grantCandidates' },
       { href: '/admin/crawls?vertical=grants', label: 'Crawl jobs' },
-      { href: '/admin/grants', label: 'All grants' },
+      { href: '/admin/grants', label: 'Published' },
+      { href: '/admin/grants?status=pending', label: 'Pending' },
+      { href: '/admin/grants?status=unverified', label: 'Unverified' },
+      { href: '/admin/grants?status=suppressed', label: 'Suppressed' },
+      { href: '/admin/grants?status=archived', label: 'Archived' },
       { href: '/admin/grants/sources', label: 'Sources' },
       { href: '/admin/grants/changes', label: 'Changes', queue: 'grantChanges' },
     ],
@@ -119,9 +139,9 @@ const STORAGE_KEY = 'admin-nav-groups'
  * Which link is the current page.
  *
  * Several items share a pathname and differ only by query, e.g. the events
- * Submissions and All events links. The item with the most query parameters
- * that all match wins, so `?status=all` highlights All events and a bare path
- * highlights Submissions.
+ * Submissions and Published links. The item with the most query parameters
+ * that all match wins, so `?status=published` highlights Published and a bare
+ * path highlights Submissions.
  */
 function activeHref(pathname: string, search: URLSearchParams): string | null {
   let best: string | null = null

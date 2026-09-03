@@ -3,7 +3,6 @@ import { ButtonLink } from '@/components/ui/button'
 import { Pager } from '@/components/admin/pager'
 import { tools, toolPrograms, programs } from '@the-tool-pit/db'
 import { eq, sql, desc, inArray, ilike, and } from 'drizzle-orm'
-import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { FreshnessChip } from '@/components/ui/freshness-chip'
 import { ClickableRow } from '@/components/admin/clickable-row'
@@ -59,33 +58,15 @@ export default async function AdminToolsPage({
     progMap.set(r.toolId, arr)
   }
 
-  const STATUS_TABS = ['published', 'draft', 'suppressed']
   const totalPages = Math.ceil(total / pageSize)
 
   return (
     <div className="p-4 md:p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Tools</h1>
+        <h1 className="text-2xl font-bold capitalize text-foreground">{status} tools</h1>
         <ButtonLink href="/admin/tools/new" size="sm">
           + New Tool
         </ButtonLink>
-      </div>
-
-      {/* Status tabs */}
-      <div className="flex flex-wrap gap-x-1 border-b border-border-subtle">
-        {STATUS_TABS.map((s) => (
-          <Link
-            key={s}
-            href={`/admin/tools?status=${s}`}
-            className={`px-3 py-2 text-sm transition-colors capitalize ${
-              status === s
-                ? 'border-b-2 border-primary text-primary'
-                : 'text-muted hover:text-foreground'
-            }`}
-          >
-            {s}
-          </Link>
-        ))}
       </div>
 
       {/* Search + count */}

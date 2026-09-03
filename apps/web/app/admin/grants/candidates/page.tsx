@@ -55,7 +55,7 @@ export default async function AdminGrantCandidatesPage({
     : undefined
   const where = searchFilter ? and(statusFilter, searchFilter)! : statusFilter
 
-  const [rows, [{ total }], counts] = await Promise.all([
+  const [rows, [{ total }]] = await Promise.all([
     db
       .select({
         candidate: grantCandidates,
@@ -68,20 +68,15 @@ export default async function AdminGrantCandidatesPage({
       .leftJoin(grantSources, eq(grantSources.id, grantCandidates.sourceId))
       .leftJoin(grants, eq(grants.id, grantCandidates.matchedGrantId))
       .where(where)
-      // Highest confidence first inside the pending tab: the ones most likely
+      // Highest confidence first inside the pending queue: the ones most likely
       // to be real grants are also the quickest to judge, so the queue drains
       // from the useful end rather than the noisy one.
       .orderBy(status === 'pending' ? desc(grantCandidates.confidenceScore) : desc(grantCandidates.updatedAt))
       .limit(PAGE_SIZE)
       .offset((page - 1) * PAGE_SIZE),
     db.select({ total: sql<number>`count(*)::int` }).from(grantCandidates).where(where),
-    db
-      .select({ status: grantCandidates.status, count: sql<number>`count(*)::int` })
-      .from(grantCandidates)
-      .groupBy(grantCandidates.status),
   ])
 
-  const countMap: Record<string, number> = Object.fromEntries(counts.map((r) => [r.status, r.count]))
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const qs = (extra: Record<string, string | number>) =>
     new URLSearchParams({ status, ...(q ? { q } : {}), ...Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, String(v)])) }).toString()
@@ -124,23 +119,6 @@ export default async function AdminGrantCandidatesPage({
           </Link>
         )}
       </form>
-
-      <div className="flex flex-wrap gap-x-1 border-b border-border-subtle">
-        {STATUS_TABS.map((s) => (
-          <Link
-            key={s}
-            href={`/admin/grants/candidates?status=${s}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm capitalize transition-colors ${
-              status === s ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'
-            }`}
-          >
-            {s}
-            {countMap[s] != null && (
-              <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] text-muted">{countMap[s]}</span>
-            )}
-          </Link>
-        ))}
-      </div>
 
       {rows.length === 0 ? (
         <p className="text-sm text-muted">{q ? `No matches for "${q}".` : `No ${status} candidates.`}</p>

@@ -1,5 +1,3 @@
-import Link from 'next/link'
-
 /**
  * The two halves of a candidate card, shared by both listing verticals.
  *
@@ -210,64 +208,6 @@ export function EvidencePanel({
       )}
 
       {discoveredVia && <p className="text-[10px] text-muted-2">via {discoveredVia}</p>}
-    </div>
-  )
-}
-
-/**
- * Status tabs with counts, identical on both queues.
- *
- * `labels` exists because the candidate status tuple says 'published' where a
- * reviewer means "accepted into a listing". The listing it produced is still
- * pending its own review, so the raw word would be a lie on this screen.
- */
-export function StatusTabs({
-  basePath,
-  statuses,
-  active,
-  counts,
-  labels,
-}: {
-  basePath: string
-  statuses: readonly string[]
-  active: string
-  counts: Record<string, number>
-  labels?: Record<string, string>
-}) {
-  return (
-    // WRAPS on a phone, scrolls on nothing.
-    //
-    // These were one horizontally-scrolling row, so on a 390px screen the last
-    // two statuses sat off the right edge with nothing to say they were there:
-    // a queue you cannot see is a queue nobody works. Six short words wrap onto
-    // two lines and every one of them is reachable without a drag.
-    //
-    // The inactive tabs were text-muted, which on this background is a caption
-    // grey. They are links, and one of them is where the reviewer is going
-    // next.
-    <div className="flex flex-wrap gap-x-1 gap-y-0 border-b border-border-subtle">
-      {statuses.map((s) => (
-        <Link
-          key={s}
-          href={`${basePath}?status=${s}`}
-          className={`-mb-px flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm capitalize transition-colors ${
-            active === s
-              ? 'border-primary font-medium text-primary'
-              : 'border-transparent text-foreground/80 hover:border-border hover:text-foreground'
-          }`}
-        >
-          {labels?.[s] ?? s}
-          {counts[s] != null && counts[s] > 0 && (
-            <span
-              className={`rounded-full px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${
-                active === s ? 'bg-primary/20 text-primary' : 'bg-surface-3 text-foreground'
-              }`}
-            >
-              {counts[s]}
-            </span>
-          )}
-        </Link>
-      ))}
     </div>
   )
 }

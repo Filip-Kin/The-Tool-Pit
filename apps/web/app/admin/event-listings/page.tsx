@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
@@ -39,10 +38,6 @@ export default async function EventListingsAdminPage({
     .leftJoin(users, eq(eventListings.submittedByUserId, users.id))
     .where(active === 'all' ? undefined : eq(eventListings.status, active))
     .orderBy(desc(eventListings.createdAt))
-
-  const all = await db.select({ status: eventListings.status }).from(eventListings)
-  const counts: Record<string, number> = {}
-  for (const r of all) counts[r.status] = (counts[r.status] ?? 0) + 1
 
   // The newest UNAPPROVED scraped roster per listing, so the row can offer a
   // one-press approve. A scraped snapshot lands 'pending' and its count is held
@@ -100,27 +95,11 @@ export default async function EventListingsAdminPage({
   return (
     <div className="p-4 md:p-6">
       <h1 className="text-xl font-semibold text-foreground">Off-Season Events</h1>
-      <p className="mt-1 text-sm text-muted">Review submitted events, place their pin, and publish to the map.</p>
-
-      <div className="mt-4 flex flex-wrap gap-x-1 border-b border-border-subtle">
-        {TABS.map((t) => (
-          <Link
-            key={t}
-            href={`/admin/event-listings?status=${t}`}
-            className={
-              'rounded-t-md px-3 py-2 text-sm capitalize ' +
-              (t === active ? 'border-b-2 border-primary font-medium text-foreground' : 'text-muted hover:text-foreground')
-            }
-          >
-            {t}{' '}
-            {t === 'all' ? (
-              <span className="text-muted-2">({all.length})</span>
-            ) : counts[t] ? (
-              <span className="text-muted-2">({counts[t]})</span>
-            ) : null}
-          </Link>
-        ))}
-      </div>
+      <p className="mt-1 text-sm text-muted">
+        {active === 'all'
+          ? 'Every event we hold. Use the sidebar to jump to Submissions, Published or Suppressed.'
+          : `Review ${active} events, place their pin, and publish to the map.`}
+      </p>
 
       <div className="mt-4 flex flex-col gap-3">
         {rows.length === 0 && <p className="text-sm text-muted-2">Nothing here.</p>}

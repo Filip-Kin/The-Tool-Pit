@@ -12,12 +12,10 @@ import { assertAdmin } from '@/lib/admin/auth'
 import { CANDIDATE_STATUSES } from '@the-tool-pit/db'
 
 /**
- * One tab per status the candidates table can actually hold.
- *
- * It used to list pending, suppressed and duplicate. Nothing writes 'duplicate'
- * for a tool candidate, so that tab could never fill, and there was no tab at
- * all for the 1203 PUBLISHED candidates, which is the pile a moderator most
- * often wants to look back through.
+ * The statuses a candidate URL may ask for. This is the discovery queue, so the
+ * page defaults to pending; the other statuses stay reachable by URL. The old
+ * in-page status tab bar is gone, because it duplicated the sidebar's own
+ * Candidates link and its badge.
  */
 const STATUS_TABS = CANDIDATE_STATUSES
 type TabStatus = (typeof STATUS_TABS)[number]
@@ -52,14 +50,6 @@ export default async function AdminCandidatesPage({
       .where(eq(crawlCandidates.status, status)),
   ])
 
-  // Count per status for tab badges
-  const counts = await db
-    .select({ status: crawlCandidates.status, count: sql<number>`count(*)::int` })
-    .from(crawlCandidates)
-    .groupBy(crawlCandidates.status)
-
-  const countMap = Object.fromEntries(counts.map((r) => [r.status, r.count]))
-
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   return (
@@ -69,28 +59,6 @@ export default async function AdminCandidatesPage({
         <p className="text-sm text-muted">
           {total.toLocaleString()} {status}
         </p>
-      </div>
-
-      {/* Status tabs */}
-      <div className="flex flex-wrap gap-x-1 border-b border-border-subtle">
-        {STATUS_TABS.map((s) => (
-          <Link
-            key={s}
-            href={`/admin/candidates?status=${s}`}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm transition-colors capitalize ${
-              status === s
-                ? 'border-b-2 border-primary text-primary'
-                : 'text-muted hover:text-foreground'
-            }`}
-          >
-            {s}
-            {countMap[s] != null && (
-              <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] text-muted">
-                {countMap[s]}
-              </span>
-            )}
-          </Link>
-        ))}
       </div>
 
       {/* Table */}

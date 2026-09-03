@@ -40,7 +40,7 @@ export default async function AdminGrantsPage({
     : undefined
   const where = searchFilter ? and(statusFilter, searchFilter)! : statusFilter
 
-  const [rows, [{ total }], statusCounts, [{ unverified }]] =
+  const [rows, [{ total }]] =
     await Promise.all([
       db
         .select({
@@ -59,12 +59,8 @@ export default async function AdminGrantsPage({
         .limit(PAGE_SIZE)
         .offset((page - 1) * PAGE_SIZE),
       db.select({ total: sql<number>`count(*)::int` }).from(grants).leftJoin(grantFunders, eq(grantFunders.id, grants.funderId)).where(where),
-      db.select({ status: grants.status, count: sql<number>`count(*)::int` }).from(grants).groupBy(grants.status),
-      db.select({ unverified: sql<number>`count(*)::int` }).from(grants).where(isNull(grants.verifiedAt)),
     ])
 
-  const countMap: Record<string, number> = Object.fromEntries(statusCounts.map((r) => [r.status, r.count]))
-  countMap.unverified = unverified
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   return (
@@ -98,23 +94,6 @@ export default async function AdminGrantsPage({
           </Link>
         )}
       </form>
-
-      <div className="flex flex-wrap gap-x-1 border-b border-border-subtle">
-        {STATUS_TABS.map((s) => (
-          <Link
-            key={s}
-            href={`/admin/grants?status=${s}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm capitalize transition-colors ${
-              status === s ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'
-            }`}
-          >
-            {s}
-            {countMap[s] != null && (
-              <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] text-muted">{countMap[s]}</span>
-            )}
-          </Link>
-        ))}
-      </div>
 
       {rows.length === 0 ? (
         <p className="text-sm text-muted">{q ? `No matches for "${q}".` : `No ${status} grants.`}</p>

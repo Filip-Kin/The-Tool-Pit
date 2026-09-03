@@ -182,23 +182,6 @@ export default async function AdminAlbumCandidatesPage({
         )}
       </form>
 
-      <div className="flex flex-wrap gap-x-1 border-b border-border-subtle">
-        {STATUS_TABS.map((s) => (
-          <Link
-            key={s}
-            href={`/admin/album-candidates?status=${s}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm capitalize transition-colors ${
-              status === s ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'
-            }`}
-          >
-            {TAB_LABELS[s]}
-            {countMap[s] != null && (
-              <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] text-muted">{countMap[s]}</span>
-            )}
-          </Link>
-        ))}
-      </div>
-
       {status === 'unmatched' && unmatchedCount > 0 && (
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-2 p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted">

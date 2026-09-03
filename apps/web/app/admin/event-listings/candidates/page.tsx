@@ -15,7 +15,7 @@ import {
   eventListings,
 } from '@the-tool-pit/db'
 import type { EventListingCandidateStatus, ExtractedEventListingFields, RawEventListingMetadata } from '@the-tool-pit/db'
-import { ExtractedList, EvidencePanel, StatusTabs } from '../../_listing/candidate-evidence'
+import { ExtractedList, EvidencePanel } from '../../_listing/candidate-evidence'
 import { CandidateEditor } from '../../_listing/candidate-editor'
 import { DuplicateBanner } from '../../_listing/duplicate-banner'
 import { ListingCandidateActions } from '../../_listing/candidate-actions'
@@ -56,7 +56,7 @@ export default async function EventCandidatesPage({
   const db = getDb()
 
   const where = eq(eventListingCandidates.status, status)
-  const [rows, [totals], counts] = await Promise.all([
+  const [rows, [totals]] = await Promise.all([
     db
       .select({
         candidate: eventListingCandidates,
@@ -77,14 +77,9 @@ export default async function EventCandidatesPage({
       .limit(PAGE_SIZE)
       .offset((page - 1) * PAGE_SIZE),
     db.select({ total: sql<number>`count(*)::int` }).from(eventListingCandidates).where(where),
-    db
-      .select({ status: eventListingCandidates.status, count: sql<number>`count(*)::int` })
-      .from(eventListingCandidates)
-      .groupBy(eventListingCandidates.status),
   ])
 
   const total = totals?.total ?? 0
-  const countMap: Record<string, number> = Object.fromEntries(counts.map((r) => [r.status, r.count]))
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   // Does this lead already exist as a listing?
@@ -141,14 +136,6 @@ export default async function EventCandidatesPage({
         the event when it has a pin, a date, a venue, an address, a program and a registration
         state; short of that it is saved and the missing field is named.
       </p>
-
-      <StatusTabs
-        basePath="/admin/event-listings/candidates"
-        statuses={EVENT_LISTING_CANDIDATE_STATUSES}
-        active={status}
-        counts={countMap}
-        labels={TAB_LABELS}
-      />
 
       {rows.length === 0 ? (
         <p className="text-sm text-muted">
