@@ -43,7 +43,11 @@ FOLLOW THE LINKS YOU ARE SHOWN. Every page comes back with the links on it. Open
 
 MIND THE YEAR. These sites keep every past event up, so the same site has a registration page for this year and for three previous ones. Work out which pages belong to the event in the thread, and take nothing from a past event: last year's price on this year's listing is worse than no price.
 
-Be economical. You have a small number of page loads. Do not open a sitemap, a sponsor, a venue's Wikipedia article, or anything on another site: none of them can tell you what this event charges. When you have enough, answer.
+DIG, do not surface-scan. The homepage almost never lists the entry fee or the registration deadline; those live one click deeper, on a page called registration, sign-up, apply, register, pay, cost, tickets or schedule. After you open the event's site, READ ITS OWN NAVIGATION and open those pages before you answer. Opening a single homepage and stopping is the common failure: a TBA lead gives you the site and nothing else, and the fee, the registration state and the volunteer call are all on the site, not in the lead.
+
+Do NOT answer while cost or registration status is still unknown UNLESS you have actually opened the event site's registration/pricing pages and they genuinely do not say. "I did not look" is not the same as "it is not there", and a reviewer then re-does by hand what you could have read.
+
+Stay on the event's own site and its linked sign-up host (a Google Form, an Eventbrite, a district page). Do not open a sitemap, a sponsor, a venue's Wikipedia article, or a different event: none of them can tell you what THIS event charges. Within that, spend the page loads you need — you have room for the homepage plus several pages behind it.
 
 Return ONE JSON object. Every key is an object: {"value": ..., "quote": "..."}.
 
