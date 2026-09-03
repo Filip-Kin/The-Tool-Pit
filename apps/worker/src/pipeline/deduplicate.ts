@@ -3,7 +3,7 @@
  * Checks if a candidate already exists in the database as a tool or prior candidate.
  * Strategy: URL normalization first, then name similarity check.
  */
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import { tools, toolLinks, crawlCandidates } from '@the-tool-pit/db'
 import {
@@ -86,21 +86,36 @@ export async function checkDuplicateByUrl(canonicalUrl: string): Promise<DedupeR
     }
   }
 
-  // 2. Existing candidate with same URL that was actually published (has a matchedToolId).
-  //    Pending/suppressed candidates are NOT considered duplicates — they are prior attempts
-  //    at the same URL that can be reset and retried (e.g. on requeue).
-  const [publishedCandidate] = await db
+  // 2. Existing candidate for the same URL that reached a TERMINAL state: either
+  //    published (has a matchedToolId) or suppressed by a quality gate / a human.
+  //    Both mean we already decided about this URL, so a re-crawl must not re-file
+  //    it as new. A PENDING candidate is still excluded on purpose: it is an
+  //    in-flight attempt a requeue can reset and retry.
+  //
+  //    The suppressed arm is what stops the fta.tools loop: that source lists a
+  //    couple of URLs that never clear the bar (a WPILib doc page, and a homepage
+  //    whose GitHub repo is already listed). Each was suppressed, left no tool row
+  //    for step 1 to match, and so was re-counted as "new" every 6 hours, pinging
+  //    the review webhook four times a day. Prefer a published match so the forum
+  //    -link path below still gets a matchedToolId when one exists.
+  const [priorCandidate] = await db
     .select({ id: crawlCandidates.id, matchedToolId: crawlCandidates.matchedToolId, canonicalUrl: crawlCandidates.canonicalUrl })
     .from(crawlCandidates)
-    .where(and(eq(crawlCandidates.canonicalUrl, canonicalUrl), isNotNull(crawlCandidates.matchedToolId)))
+    .where(
+      and(
+        eq(crawlCandidates.canonicalUrl, canonicalUrl),
+        or(isNotNull(crawlCandidates.matchedToolId), eq(crawlCandidates.status, 'suppressed')),
+      ),
+    )
+    .orderBy(sql`${crawlCandidates.matchedToolId} nulls last`)
     .limit(1)
 
-  if (publishedCandidate) {
+  if (priorCandidate) {
     return {
       isDuplicate: true,
-      matchedCandidateId: publishedCandidate.id,
-      matchedToolId: publishedCandidate.matchedToolId ?? undefined,
-      matchedUrl: publishedCandidate.canonicalUrl ?? undefined,
+      matchedCandidateId: priorCandidate.id,
+      matchedToolId: priorCandidate.matchedToolId ?? undefined,
+      matchedUrl: priorCandidate.canonicalUrl ?? undefined,
       method: 'url_exact',
     }
   }

@@ -327,8 +327,13 @@ export const seasonRenewalQueue = new Queue('event-season-renewal', {
 
 /** Schedule recurring jobs. Call once on worker startup. */
 export async function scheduleRecurringJobs() {
-  // Re-crawl fta.tools every 6 hours
-  await crawlQueue.upsertJobScheduler('crawl-fta-tools', { every: 6 * 60 * 60 * 1000 }, {
+  // Re-crawl fta.tools once a day, on a CRON PATTERN not `every`, for the reason
+  // spelled out above the freshness block: `every` counts from the upsert, which
+  // is worker startup, so `every: 6h` fired a full crawl on every deploy on top of
+  // its four-a-day cadence. fta.tools is a hand-curated list that barely changes,
+  // so daily is plenty. 23:40 UTC sits clear of the 22:15 freshness pass, the
+  // 02:10-06:40 discovery block and the 07:20 popularity sweep.
+  await crawlQueue.upsertJobScheduler('crawl-fta-tools', { pattern: '40 23 * * *' }, {
     name: 'crawl-fta-tools',
     data: { connector: 'fta_tools', jobId: 'scheduled' },
   })
