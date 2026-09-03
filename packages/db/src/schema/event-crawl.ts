@@ -246,8 +246,16 @@ export interface ExtractedEventListingFields {
   /** ISO yyyy-mm-dd. */
   startDate?: string
   endDate?: string
-  /** Competition days, derived from the dates when both are known. */
+  /**
+   * Competition days: 1 or 2, counted off the event's SCHEDULE as the distinct
+   * days that play qualification or playoff matches. A load-in / move-in day,
+   * and a load-in day whose only matches are practice matches, do not count.
+   * The schedule is authoritative over the date span; the span is a fallback
+   * only when no schedule is found.
+   */
   days?: number
+  /** ISO yyyy-mm-dd, when the source states the date team sign-ups open. */
+  registrationOpensAt?: string
   website?: string
   registrationUrl?: string
   chiefDelphiUrl?: string

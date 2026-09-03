@@ -75,18 +75,27 @@ Fields:
   country           two-letter code, "US" or "CA"
   startDate         "YYYY-MM-DD", the FIRST day. "October 30 - November 1" starts on 30 October
   endDate           "YYYY-MM-DD", the LAST day. Null for a one-day event
-  days              1 or 2: the number of days that PLAY QUALIFICATION OR PLAYOFF MATCHES.
-                    Nothing else counts, and this cannot be worked out from the dates. A day of
-                    setup, load-in, move-in, pit hours or inspection does not count. A day of
-                    PRACTICE MATCHES does not count either, even though matches are played on it:
-                    "Friday load-in and practice matches in the late afternoon, qualifications
-                    Saturday, playoffs Sunday" is TWO.
-                    The combinations vary and no rule of thumb covers them. One day can hold
-                    load-in and the whole competition. Setup and load-in can take a day each and
-                    be followed by a single competition day. A three-day span can be one
-                    competition day or two. Read the schedule and count the days with quals or
-                    playoffs on them; if the source never says, return null rather than guessing
-                    from the span.
+  days              1 or 2: the number of COMPETITION DAYS, read off the event's SCHEDULE, not
+                    worked out from the date span. FIND WHERE THE SITE STATES THE SCHEDULE. It is
+                    a page or a section called "Schedule", "Agenda", "Event Schedule", "Day 1 /
+                    Day 2", "Saturday / Sunday" or the like, and it may be a linked page or a
+                    printable, PDF-like page on the site. Open it and read it.
+                    A COMPETITION DAY is a day that plays QUALIFICATION OR PLAYOFF (elimination)
+                    matches. Count the distinct days that have quals or playoffs on them.
+                    These do NOT count, and nothing else counts either:
+                      - a load-in / move-in / setup day only,
+                      - a load-in day that ALSO has only PRACTICE matches (practice matches never
+                        count, even though matches are played),
+                      - a day of pit hours or inspection only.
+                    So "Friday load-in and practice matches in the late afternoon, qualifications
+                    Saturday, playoffs Sunday" is TWO. The combinations vary and no rule of thumb
+                    covers them: one day can hold load-in and the whole competition; setup and
+                    load-in can take a day each before a single competition day; a three-day span
+                    can be one competition day or two.
+                    THE SCHEDULE IS AUTHORITATIVE over the date span. Only when you find no
+                    schedule at all may you fall back to the span. When you do read a schedule,
+                    the quote for this field is the SCHEDULE TEXT you counted from. If neither a
+                    schedule nor the dates say, return null rather than guessing from the span.
   capacity          integer, how many teams can enter
   costUsd           integer US dollars per team to enter, so 250 for "$250 per team"
   costNote          ONLY when the price is not one flat number: a discount for a second robot, a
@@ -104,6 +113,11 @@ Fields:
                                   "Applications closed", "accepted teams were notified in August"
                       "unknown"   nothing you read says
                     Never answer "closed" for an event whose sign-ups have not opened yet.
+  registrationOpensAt  "YYYY-MM-DD", the date team sign-ups OPEN, when the source states one.
+                    Sites often say "Registration opens 1 September" or "applications open in
+                    a couple of weeks on 8/1"; read that date. Null when no open date is stated,
+                    including when registration is already open. The quote is the sentence that
+                    gives the date.
   volunteerStatus     one of ${VOLUNTEER_STATUSES.map((s) => `"${s}"`).join(', ')}, same distinction:
                     "not_open" is a sign-up that has not started, not one that has finished
   registrationUrl   where a team signs up. NOT the event's website. If there is no sign-up open,
@@ -133,7 +147,7 @@ const ENUMS: Record<string, readonly string[]> = {
 
 const URL_FIELDS = new Set(['registrationUrl', 'volunteerUrl', 'website', 'teamListUrl'])
 const INT_FIELDS = new Set(['hostTeamNumber', 'capacity', 'costUsd', 'days'])
-const DATE_FIELDS = new Set(['startDate', 'endDate'])
+const DATE_FIELDS = new Set(['startDate', 'endDate', 'registrationOpensAt'])
 const TEXT_MAX: Record<string, number> = {
   name: 160, venueName: 160, address: 200, city: 120, region: 60, country: 8,
   costNote: 200, contactEmail: 200, notes: 400,

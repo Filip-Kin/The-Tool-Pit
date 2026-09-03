@@ -51,6 +51,35 @@ describe('competition days', () => {
   })
 })
 
+describe('registrationOpensAt', () => {
+  const src = [{ source: 'thread', text: 'Registration opens September 1, 2026 for all teams.' }]
+
+  it('keeps a plausible ISO open date backed by a quote', () => {
+    const { fields } = validateEventRead(
+      { registrationOpensAt: { value: '2026-09-01', quote: 'Registration opens September 1, 2026' } },
+      src,
+    )
+    expect(fields.registrationOpensAt).toBe('2026-09-01')
+  })
+
+  it('rejects a value that is not an ISO date', () => {
+    const { fields, rejected } = validateEventRead(
+      { registrationOpensAt: { value: 'September 1', quote: 'Registration opens September 1, 2026' } },
+      src,
+    )
+    expect(fields.registrationOpensAt).toBeUndefined()
+    expect(rejected.join(' ')).toContain('is not an ISO date')
+  })
+
+  it('drops it when nothing read supports the quote', () => {
+    const { fields } = validateEventRead(
+      { registrationOpensAt: { value: '2026-09-01', quote: 'a date nobody wrote' } },
+      src,
+    )
+    expect(fields.registrationOpensAt).toBeUndefined()
+  })
+})
+
 describe('the website field', () => {
   it('refuses a sign-up form', () => {
     // "Any link that is not the registration link" made a second form, a
