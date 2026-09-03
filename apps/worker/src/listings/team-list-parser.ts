@@ -377,6 +377,64 @@ export interface GeneratedParser {
   teams: RosterTeam[]
 }
 
+/** One roster entry as a key, so two lists can be compared: "1706:" or "1706:B". */
+function rosterKey(t: RosterTeam): string {
+  return `${t.number}:${t.robot ?? ''}`
+}
+
+/** A roster entry as a person reads it: "1706" or "1706B". For feedback text. */
+function rosterLabel(t: RosterTeam): string {
+  return `${t.number}${t.robot ?? ''}`
+}
+
+/**
+ * The model's OWN reading of the roster from the HTML, used only to CHECK the
+ * parser it goes on to write.
+ *
+ * A DOM parser can return a clean-looking 33 while the page actually lists 36:
+ * three of those are second robots hidden behind a "#2" marker or a repeated
+ * row, and a selector that keys off the bare number silently drops them. Nothing
+ * the parser returns is wrong on its face, so the only thing that catches the
+ * miss is reading the list a second way and comparing. This is that second read.
+ *
+ * Best-effort. A reading that fails, or comes back empty, disables the check
+ * rather than blocking generation: a page we cannot read twice still gets the
+ * old behaviour, a parser proven only against "not empty, not a slot index".
+ */
+const READING_PROMPT = `You are given the cleaned HTML of a FIRST Robotics event page. Read its REGISTERED TEAM LIST and return it as JSON only: an array of { "number": <int>, "robot": <null | "B" | "C">, "name": <string, optional> }.
+
+- One entry per team ROBOT. A second robot (a B team) is written "4611 B", "4611 (B)", "4611 #2", or by repeating the number/row; return it as its own entry with robot "B" ("C" for a third). Map "#2" -> "B", "#3" -> "C". A single robot is robot: null.
+- When the same number appears twice, decide from the page: a real second robot (a "#2"/"B" marker, or the WHOLE ROW repeated with the same name/city, often adjacent) is kept as a B team; a lone stray duplicate is returned once.
+- Several DIFFERENT numbers in one cell are separate teams, each robot null.
+- UNION every registered / host / attending / competing section; do not stop at the first.
+- Slot indices (1, 2, 3 ... down a column) and past-season YEAR lists are not teams. A count, date, price or zip is not a team.
+- A name-only team, or a "10xxx" / "TBD" placeholder, gets a 9970-9999 number and carries its name. An invitation ("Team ????", "Your Team Here") is not a team.
+- A waitlisted team, under an explicit waitlist heading, still counts; include it.
+Return ONLY the JSON array.`
+
+async function readExpectedRoster(html: string, eventName: string): Promise<RosterTeam[]> {
+  try {
+    const response = await anthropic().messages.create({
+      model: MODEL,
+      max_tokens: MAX_PARSER_TOKENS,
+      system: READING_PROMPT,
+      messages: [{ role: 'user', content: `Event: ${eventName}\n\nCleaned page HTML:\n${html}` }],
+    })
+    const text = response.content.find(
+      (b): b is Extract<(typeof response.content)[number], { type: 'text' }> => b.type === 'text',
+    )?.text
+    if (!text) return []
+    const start = text.indexOf('[')
+    const end = text.lastIndexOf(']')
+    if (start < 0 || end <= start) return []
+    const parsed = JSON.parse(text.slice(start, end + 1)) as unknown
+    return Array.isArray(parsed) ? normaliseTeams(parsed) : []
+  } catch (err) {
+    console.warn(`[team-list-parser] ${eventName}: could not read an expected roster to verify against:`, err)
+    return []
+  }
+}
+
 /**
  * Write a parser for this page, and prove it works before returning it.
  *
@@ -406,9 +464,21 @@ export async function generateTeamListParser(input: {
       return null
     }
 
+    // Read the roster a SECOND way first, so the parser can be checked against a
+    // list rather than only against "not empty". This is what catches a parser
+    // that quietly drops a team's second robot (a "#2" B team) or a whole section.
+    const expected = await readExpectedRoster(html, input.eventName)
+    const expectedKeys = new Set(expected.map(rosterKey))
+
     const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
       { role: 'user', content: `Event: ${input.eventName}\n\nCleaned page HTML:\n${html}` },
     ]
+
+    // A wrong second reading must not block a good parser forever, so the
+    // completeness check only forces a retry a few times before the parser is
+    // accepted on the old, weaker criteria.
+    let verifyRetries = 0
+    const MAX_VERIFY_RETRIES = 3
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       let response
@@ -440,12 +510,27 @@ export async function generateTeamListParser(input: {
         const teams = await runAcrossFrames(page, script)
         const leaked = slotIndicesLeaked(teams)
         if (teams.length > 0 && !leaked) {
-          console.log(`[team-list-parser] ${input.eventName}: found ${teams.length} teams on attempt ${attempt + 1}`)
-          return { script, teams }
+          // Compare against the second reading: any team the reading found that
+          // this parser did NOT is a dropped entry, most often a second robot the
+          // selector collapsed. Only entries the reading is sure of count, so a
+          // parser that returns MORE (it saw a frame the reading's truncated HTML
+          // did not) is fine; one that returns LESS is sent back to fix it.
+          const producedKeys = new Set(teams.map(rosterKey))
+          const missing = expected.filter((t) => !producedKeys.has(rosterKey(t)))
+          if (missing.length === 0 || verifyRetries >= MAX_VERIFY_RETRIES || attempt >= MAX_ATTEMPTS - 1) {
+            console.log(
+              `[team-list-parser] ${input.eventName}: found ${teams.length} teams on attempt ${attempt + 1}` +
+                (missing.length ? ` (accepted with ${missing.length} unverified)` : ''),
+            )
+            return { script, teams }
+          }
+          verifyRetries++
+          problem = `Your function returned ${teams.length} teams, but the page also lists ${missing.length} it dropped: ${missing.map(rosterLabel).join(', ')}. These are almost always a team's SECOND ROBOT — a "#2" marker, or the same number or row listed again (a B team) — or a whole section your selector skipped. A "#2" entry is { number, robot: "B" } (and "#3" is "C"). Include every one of them, then return the corrected function.`
+        } else {
+          problem = leaked
+            ? `Your result is the sequence ${leaked}, which is NOT a roster. Real FRC team numbers are never consecutive, so a run like that is one of two things you read by mistake: a row or SLOT index column (1, 2, 3, ...) beside the real teams, or a YEAR archive (2007, 2008, ...) listing the event's past seasons. Watch for a bracket or seeding layout where each row reads "SLOT - TEAM", e.g. "6 - 4145": the number LEFT of the dash is the slot, the number RIGHT of the dash is the team. Empty slots still print their slot number with nothing after the dash ("16 -", "17 -", ... "32 -") — take only the value AFTER the separator, and skip any row that has no team after it. Otherwise the team list is usually a DATA TABLE whose columns are headed like "Number", "Team", "Team #" or "Team Number", next to "Team Name", "City" and "State". Find that table by its header row, read the cells under the team-number column, and ignore the leading index column and anything outside that table. Do not gate on a nearby prose heading: a Wix data grid has column headers, not a "Registered Teams" heading above it.`
+            : 'That function ran without error but returned no teams. The list may be in a table or a nested widget; look again at where the team rows actually are, and try a broader selector.'
         }
-        problem = leaked
-          ? `Your result is the sequence ${leaked}, which is NOT a roster. Real FRC team numbers are never consecutive, so a run like that is one of two things you read by mistake: a row or SLOT index column (1, 2, 3, ...) beside the real teams, or a YEAR archive (2007, 2008, ...) listing the event's past seasons. Watch for a bracket or seeding layout where each row reads "SLOT - TEAM", e.g. "6 - 4145": the number LEFT of the dash is the slot, the number RIGHT of the dash is the team. Empty slots still print their slot number with nothing after the dash ("16 -", "17 -", ... "32 -") — take only the value AFTER the separator, and skip any row that has no team after it. Otherwise the team list is usually a DATA TABLE whose columns are headed like "Number", "Team", "Team #" or "Team Number", next to "Team Name", "City" and "State". Find that table by its header row, read the cells under the team-number column, and ignore the leading index column and anything outside that table. Do not gate on a nearby prose heading: a Wix data grid has column headers, not a "Registered Teams" heading above it.`
-          : 'That function ran without error but returned no teams. The list may be in a table or a nested widget; look again at where the team rows actually are, and try a broader selector.'
       }
 
       // Feed the failure back and let it fix its own script.
