@@ -58,14 +58,19 @@ Return ONE JSON object. Every key is an object: {"value": ..., "quote": "..."}.
 
 Fields:
   name              the event's own name AND NOTHING ELSE. Not the thread's title.
-                    Strip the year: the season is tracked separately, so "Bordie Blast 2026" is
-                    "Bordie Blast" and "The 2026 Red Stick Rumble" is "Red Stick Rumble".
-                    Strip everything the thread added around it: dates, a description, a call to
-                    action, the edition's theme.
+                    STRIP THE YEAR, always: the season is tracked separately, so "Bordie Blast 2026"
+                    is "Bordie Blast" and "The 2026 Red Stick Rumble" is "Red Stick Rumble". A year
+                    anywhere in the name comes out, and so does a leading "The".
+                    Strip the thread's cruft too: dates, a description, a call to action ("Registration
+                    Is Now Open"), and a format/program descriptor ("two day offseason", "Offseason
+                    Competition", "Central Ohio Offseason Event").
+                    KEEP the event's own titled subtitle or edition name, the part that is its brand
+                    rather than this year's date. "Bordie Through Time" is the edition's name and stays;
+                    "two day offseason 10/10-11" is a date and goes.
                       "NYC Robo Replay 2026 - two day offseason 10/10-11"  ->  "NYC Robo Replay"
                       "CORI 2026 Registration Is Now Open! - Central Ohio Offseason Event" -> "CORI"
                       "2026 SoCal Showdown Offseason Competition"  ->  "SoCal Showdown"
-                      "Bordie Blast 2026 - Bordie Through Time"  ->  "Bordie Blast"
+                      "Bordie Blast 2026 - Bordie Through Time"  ->  "Bordie Blast - Bordie Through Time"
                     If the event's own site titles it differently from the thread, the site wins.
   program           one of ${EVENT_PROGRAMS.map((p) => `"${p}"`).join(', ')}
   hostTeamNumber    integer team number of the host, when one team runs it
@@ -93,6 +98,13 @@ Fields:
                     covers them: one day can hold load-in and the whole competition; setup and
                     load-in can take a day each before a single competition day; a three-day span
                     can be one competition day or two.
+                    days COUNTS ONE TEAM'S COMPETITION, not the calendar. When a weekend is run as
+                    TWO SEPARATE ONE-DAY COMPETITIONS - "(2) one day competitions", "Day 1 (Saturday)"
+                    and "Day 2 (Sunday)" each a full standalone event with its own registration, two
+                    back-to-back one-day events on consecutive dates - days is 1, because a team enters
+                    one of them and competes for one day. Answer 2 ONLY when the SAME field of teams
+                    plays across two days (quals one day, playoffs the next). "This event will be run
+                    as (2) one day competitions" is days 1, not 2.
                     THE SCHEDULE IS AUTHORITATIVE over the date span. Only when you find no
                     schedule at all may you fall back to the span. When you do read a schedule,
                     the quote for this field is the SCHEDULE TEXT you counted from. If neither a
@@ -129,6 +141,12 @@ Fields:
                                   A "closed" answer needs the site to SAY sign-ups are closed or full.
                       "unknown"   nothing you read says
                     Never answer "closed" for an event whose sign-ups have not opened yet.
+                    A FUTURE CLOSE DATE IS NOT CLOSED. "Applications close July 11" while July 11 is
+                    still ahead means registration is OPEN right now. A CONDITIONAL or ROLLING close
+                    is OPEN too: "applications close July 11, or become rolling if fewer than 42 teams
+                    apply" means a team can still sign up, so answer "open", not "closed". Read a
+                    deadline as "closed" only once it has actually passed or the site says sign-ups
+                    have ended.
                     A page-generation date, a "last updated" line, a copyright year, or the event
                     date having already passed is NOT a statement about registration, and NEVER
                     quote a footer timestamp like "This page was generated on ..." as evidence for
@@ -148,6 +166,12 @@ Fields:
                     "not_open" is a sign-up that has not started, not one that has finished
   registrationUrl   where a team signs up. NOT the event's website. If there is no sign-up open,
                     or the page you found is just the site's front page, return null.
+                    THE SIGN-UP LINK IS USUALLY AN EXTERNAL FORM behind a "Register", "Register your
+                    team", "Apply" or "Sign up" button: a Google Form (forms.gle or
+                    docs.google.com/forms/...), a Zeffy or other ticketing page, an Eventbrite. FOLLOW
+                    that button and record where it actually goes, not the button's own page. A team
+                    that clicks "Register" expects the form, so give the form's URL. Only when no such
+                    link exists do you return null.
   volunteerUrl      where a volunteer signs up. Same rule: null when there is no volunteer sign-up,
                     which is normal for an event that has already happened. Do not fall back to
                     the website; a reader who clicks "volunteer" and lands on a home page has been
