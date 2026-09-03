@@ -108,7 +108,12 @@ Fields:
                       "not_open"  sign-ups have not started. "Save the date", "applications open in
                                   a couple of weeks", "registration opens 1 September"
                       "open"      a team can sign up right now
-                      "waitlist"  full, but still taking names
+                      "waitlist"  the event is FULL RIGHT NOW and taking names for the next spot. A
+                                  page that only explains a waitlist policy ("the waitlist will be
+                                  pulled in order of application", "as space becomes available") is
+                                  describing how a waitlist WOULD work, not saying the event is full:
+                                  that is not "waitlist". Answer "waitlist" only when the site says the
+                                  spots are gone and a waitlist is now being kept.
                       "closed"    sign-ups have ENDED, or the field is full and no list is being kept.
                                   "Applications closed", "accepted teams were notified in August".
                                   A "closed" answer needs the site to SAY sign-ups are closed or full.
