@@ -40,11 +40,12 @@ export function eventPublishBlockers(row: EventPublishFacts): string[] {
     missing.push('a pin location, so it can go on the map')
   }
   if (row.startDate == null) missing.push('a start date')
-  // Venue and address are one thought to a reader deciding whether they can
-  // drive to it, and TBA supplies both, so a scraped candidate has no excuse
-  // for either.
+  // A venue name plus a verified pin is enough to place and identify the event:
+  // a school geocodes to a real point on the map without a street number, and
+  // requiring the street line too pended events that were otherwise complete and
+  // already had a ✓ pin (e.g. STING at North Gwinnett High School). The street
+  // address stays an editable field, just not a publish blocker.
   if (blank(row.venueName)) missing.push('a venue name')
-  if (blank(row.address)) missing.push('a street address')
   if (blank(row.program)) missing.push('a program')
   // "Open", "closed", "waitlist" or "not open yet" are all fine answers. No
   // answer means a team cannot tell whether there is any point in reading on.
