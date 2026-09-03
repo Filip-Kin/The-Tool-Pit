@@ -7,9 +7,10 @@ import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox
 import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { SubmitConfirmation } from '@/components/ui/submit-confirmation'
 import { cn } from '@/lib/utils/cn'
-// The pin-drop map and its Nominatim geocode proxy are vertical-neutral, so we
-// reuse the fields ones rather than duplicate ~200 lines and a second API route.
-import { PinMap } from '@/components/fields/pin-map'
+// The verified-address search and the shared date picker, reused so the public
+// submit form matches the admin editors box for box.
+import { AddressField } from '@/components/fields/address-field'
+import { DateField } from '@/components/ui/date-field'
 import {
   EVENT_STATUSES,
   REGISTRATION_STATUSES,
@@ -327,7 +328,7 @@ export function EventSubmitForm({
       return
     }
     if (!coords) {
-      setResult({ ok: false, message: 'Please drop a pin on the map so the event can be placed.' })
+      setResult({ ok: false, message: 'Please pick a verified address so the event can be placed on the map.' })
       return
     }
     if (SITE_KEY && !turnstileToken) {
@@ -446,12 +447,12 @@ export function EventSubmitForm({
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="flex-1">
             <Field label="Start date">
-              <input type="date" value={form.startDate} onChange={(e) => set('startDate', e.target.value)} className="input" />
+              <DateField value={form.startDate} onChange={(v) => set('startDate', v)} />
             </Field>
           </div>
           <div className="flex-1">
             <Field label="End date" hint="Leave blank for a one-day event.">
-              <input type="date" value={form.endDate} onChange={(e) => set('endDate', e.target.value)} className="input" />
+              <DateField value={form.endDate} onChange={(v) => set('endDate', v)} />
             </Field>
           </div>
           <div className="w-32">
@@ -471,11 +472,11 @@ export function EventSubmitForm({
         />
       </Section>
 
-      <Section title="Where it is" hint="Search an address or drop a pin, then drag it to the exact venue. The address fields fill in from the pin - edit them if anything looks off.">
-        <PinMap
-          value={coords}
-          onChange={setCoords}
-          onResolveAddress={(p) =>
+      <Section title="Where it is" hint="Search the venue or address and pick a match. The address fields fill in from your choice - edit them if anything looks off.">
+        <AddressField
+          defaultQuery={form.address}
+          verified={coords != null}
+          onPick={(p, c) => {
             setForm((f) => ({
               ...f,
               ...(p.address ? { address: p.address } : {}),
@@ -483,7 +484,9 @@ export function EventSubmitForm({
               ...(p.region ? { region: p.region } : {}),
               ...(p.country ? { country: p.country } : {}),
             }))
-          }
+            setCoords(c)
+          }}
+          onClear={() => setCoords(null)}
         />
         <Field label="Venue name" hint="e.g. Kettering University Recreation Center.">
           <input value={form.venueName} onChange={(e) => set('venueName', e.target.value)} className="input" />
@@ -546,7 +549,7 @@ export function EventSubmitForm({
           {form.registrationStatus === 'not_open' && (
             <div className="flex-1">
               <Field label="Registration opens" hint="If a date is known.">
-                <input type="date" value={form.registrationOpensAt} onChange={(e) => set('registrationOpensAt', e.target.value)} className="input" />
+                <DateField value={form.registrationOpensAt} onChange={(v) => set('registrationOpensAt', v)} />
               </Field>
             </div>
           )}

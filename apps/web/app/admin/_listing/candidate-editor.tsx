@@ -2,7 +2,8 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { PinMap } from '@/components/fields/pin-map'
+import { AddressField } from '@/components/fields/address-field'
+import { DateField } from '@/components/ui/date-field'
 import type { AddressParts } from '@/app/api/fields/geocode/route'
 
 /**
@@ -71,6 +72,11 @@ function Field({ field }: { field: EditableField }) {
         </select>
       ) : field.type === 'textarea' ? (
         <textarea {...common} rows={3} defaultValue={String(value)} />
+      ) : field.type === 'date' ? (
+        // ONE date picker, ISO on the wire, the viewer's locale on screen. This
+        // is the uncontrolled form-POST path: a hidden input carries the ISO
+        // value under field.name so the accept FormData reads it as before.
+        <DateField name={field.name} defaultValue={String(value)} id={field.name} />
       ) : field.type === 'checkbox' ? (
         <span className="flex items-center gap-2">
           {/* A hidden partner so an unchecked box posts a value rather than
@@ -88,7 +94,7 @@ function Field({ field }: { field: EditableField }) {
       ) : (
         <input
           {...common}
-          type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+          type={field.type === 'number' ? 'number' : 'text'}
           defaultValue={String(value)}
           inputMode={field.type === 'number' ? 'numeric' : undefined}
         />
@@ -109,14 +115,16 @@ function Field({ field }: { field: EditableField }) {
 }
 
 /**
- * Optional map + address search at the top of the editor.
+ * Optional verified-address search at the top of the editor.
  *
- * The event candidate accept flow needs the same pin experience the published
- * editor has: a reviewer searches an address or drops a pin, the address parts
- * fill the boxes below, and the pin's coordinates ride along with Accept so the
- * listing lands on the map without a second geocode round trip. When this prop
- * is absent (the practice-field queue) the editor is exactly the plain form it
- * was.
+ * The event candidate accept flow needs a way to place the listing: a reviewer
+ * searches an address, picks a real geocoded match, its parts fill the boxes
+ * below, and the confirmed coordinates ride along with Accept so the listing
+ * lands on the map without a second geocode round trip. The old draggable map
+ * was replaced by this box: it takes far less room and, crucially, shows whether
+ * the address is verified BEFORE Accept, so a bad address is caught in the form
+ * instead of silently dropping the listing back into pending. When this prop is
+ * absent (the practice-field queue) the editor is exactly the plain form it was.
  */
 export interface PinMapConfig {
   /** The coordinates the candidate already carries, if any. */
@@ -199,11 +207,19 @@ export function CandidateEditor({
     <form ref={formRef} onSubmit={onSubmit} className="flex flex-col gap-4">
       {pinMap && (
         <>
-          <PinMap value={coords} onChange={setCoords} onResolveAddress={fillAddress} height={260} />
-          {/* The pin the reviewer set rides along with Accept. It is preferred
-              over a geocode of the typed address, so a corrected pin wins. */}
-          <input type="hidden" name="latitude" value={coords?.lat ?? ''} />
-          <input type="hidden" name="longitude" value={coords?.lng ?? ''} />
+          <AddressField
+            verified={coords != null}
+            onPick={(parts, c) => {
+              fillAddress(parts)
+              setCoords(c)
+            }}
+            onClear={() => setCoords(null)}
+          />
+          {/* The confirmed coordinates ride along with Accept. They are preferred
+              over a geocode of the typed address, so the reviewer's verified pick
+              wins and the accept path never has to guess. */}
+          <input type="hidden" name="latitude" value={coords?.lat ?? ''} readOnly />
+          <input type="hidden" name="longitude" value={coords?.lng ?? ''} readOnly />
         </>
       )}
 

@@ -11,6 +11,7 @@ import {
 } from './listing-fields'
 import { ExtraLinksEditor } from './extra-links-editor'
 import { TagPicker } from './tag-picker'
+import { DateField } from '@/components/ui/date-field'
 import { cn } from '@/lib/utils/cn'
 import type { EditableListing, ListingFormValues } from '@/lib/queries/listing-ownership'
 import type { TagOption } from '@/lib/listings/tool-taxonomy'
@@ -347,6 +348,13 @@ function Input({
 
   const text = typeof value === 'string' ? value : ''
 
+  if (field.kind === 'date') {
+    // The shared picker: ISO on the wire through the hidden input the autosave
+    // FormData reads, the viewer's locale on screen. `value`/`onChange` keep it
+    // in the form's controlled state so the dirty check and showWhen still work.
+    return <DateField name={field.key} value={text} onChange={onChange} />
+  }
+
   if (field.kind === 'select') {
     return (
       <select
@@ -384,7 +392,7 @@ function Input({
       value={text}
       onChange={(e) => onChange(e.target.value)}
       step={field.kind === 'number' ? 'any' : undefined}
-      maxLength={field.kind === 'int' || field.kind === 'number' || field.kind === 'date' ? undefined : field.maxLength}
+      maxLength={field.kind === 'int' || field.kind === 'number' ? undefined : field.maxLength}
       min={field.kind === 'int' || field.kind === 'number' ? field.min : undefined}
       max={field.kind === 'int' || field.kind === 'number' ? field.max : undefined}
       inputMode={field.kind === 'int' ? 'numeric' : field.kind === 'number' ? 'decimal' : undefined}

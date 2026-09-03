@@ -18,7 +18,8 @@ import {
   costLabel,
 } from '@/lib/events/event-display'
 import type { PublicEvent } from '@/lib/events/event-display'
-import { PinMap } from '@/components/fields/pin-map'
+import { AddressField } from '@/components/fields/address-field'
+import { DateField } from '@/components/ui/date-field'
 import { approveEvent, approveRosterSnapshot, sendEventOutreach, suppressEvent, unsuppressEvent, deleteEvent, updateEvent, type EventEditInput } from './actions'
 import { ReasonButton } from '@/components/admin/reason-button'
 import { teamListStatus } from '@/lib/admin/team-list-status'
@@ -318,7 +319,21 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
 
   return (
     <div className="mt-4 flex flex-col gap-3 border-t border-border-subtle pt-4">
-      <PinMap value={coords} onChange={setCoords} height={260} />
+      <AddressField
+        defaultQuery={form.address ?? ''}
+        verified={coords != null}
+        onPick={(parts, c) => {
+          setForm((f) => ({
+            ...f,
+            ...(parts.address ? { address: parts.address } : {}),
+            ...(parts.city ? { city: parts.city } : {}),
+            ...(parts.region ? { region: parts.region } : {}),
+            ...(parts.country ? { country: parts.country } : {}),
+          }))
+          setCoords(c)
+        }}
+        onClear={() => setCoords(null)}
+      />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <L label="Name"><input className="input" value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} /></L>
@@ -326,8 +341,8 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
           <L label="Program"><select className="input uppercase" value={form.program} onChange={(e) => set('program', e.target.value)}>{['frc', 'ftc', 'fll'].map((p) => <option key={p} value={p}>{p.toUpperCase()}</option>)}</select></L>
           <L label="Host team #"><input type="number" className="input" value={form.hostTeamNumber ?? ''} onChange={(e) => set('hostTeamNumber', e.target.value ? Number(e.target.value) : null)} /></L>
         </div>
-        <L label="Start date"><input type="date" lang="en-US" className="input" value={form.startDate ?? ''} onChange={(e) => set('startDate', e.target.value)} /></L>
-        <L label="End date"><input type="date" lang="en-US" className="input" value={form.endDate ?? ''} onChange={(e) => set('endDate', e.target.value)} /></L>
+        <L label="Start date"><DateField value={form.startDate ?? ''} onChange={(v) => set('startDate', v || null)} /></L>
+        <L label="End date"><DateField value={form.endDate ?? ''} onChange={(v) => set('endDate', v || null)} /></L>
         <div className="flex gap-2">
           <L label="Days"><select className="input" value={form.days ?? ''} onChange={(e) => set('days', e.target.value ? Number(e.target.value) : null)}><option value="">—</option><option value="1">1</option><option value="2">2</option></select></L>
           <L label="Capacity"><input type="number" className="input" value={form.capacity ?? ''} onChange={(e) => set('capacity', e.target.value ? Number(e.target.value) : null)} /></L>
@@ -338,7 +353,7 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
         </div>
         <L label="Event status"><select className="input" value={form.eventStatus} onChange={(e) => set('eventStatus', e.target.value)}>{EVENT_STATUSES.map((s) => <option key={s} value={s}>{EVENT_STATUS_LABEL[s]}</option>)}</select></L>
         <L label="Registration"><select className="input" value={form.registrationStatus} onChange={(e) => set('registrationStatus', e.target.value)}>{REGISTRATION_STATUSES.map((s) => <option key={s} value={s}>{REGISTRATION_STATUS_LABEL[s]}</option>)}</select></L>
-        <L label="Registration opens"><input type="date" lang="en-US" className="input" value={form.registrationOpensAt ?? ''} onChange={(e) => set('registrationOpensAt', e.target.value)} /></L>
+        <L label="Registration opens"><DateField value={form.registrationOpensAt ?? ''} onChange={(v) => set('registrationOpensAt', v || null)} /></L>
         <L label="Volunteers"><select className="input" value={form.volunteerStatus} onChange={(e) => set('volunteerStatus', e.target.value)}>{VOLUNTEER_STATUSES.map((s) => <option key={s} value={s}>{VOLUNTEER_STATUS_LABEL[s]}</option>)}</select></L>
         <L label="Venue"><input className="input" value={form.venueName ?? ''} onChange={(e) => set('venueName', e.target.value)} /></L>
         <L label="Address"><input className="input" value={form.address ?? ''} onChange={(e) => set('address', e.target.value)} /></L>
