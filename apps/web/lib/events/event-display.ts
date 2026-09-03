@@ -18,6 +18,8 @@ import type {
  */
 export interface PublicEvent {
   id: string
+  /** Human URL slug. The public page lives at /events/<slug>. */
+  slug: string
   program: string
   name: string
   hostTeamNumber: number | null

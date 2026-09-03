@@ -20,12 +20,13 @@
 // Relative import (not the package name): this top-level script has no
 // node_modules of its own, so it reaches into the db package source.
 import { getDb, eventListings, eq } from '../packages/db/src/index'
+import { buildSlug } from '../packages/db/src/slug'
 import type { NewEventListing } from '../packages/db/src/index'
 
 // Every event is in Michigan, USA, 2026 - factored out to keep the rows short.
 const MI = { region: 'MI', country: 'USA' } as const
 
-const SEED: NewEventListing[] = [
+const SEED: Omit<NewEventListing, 'slug'>[] = [
   {
     name: 'Tornado Tumble',
     ...MI,
@@ -340,6 +341,17 @@ const SEED: NewEventListing[] = [
   },
 ]
 
+/** A stable human slug nobody else in event_listings is using. */
+async function uniqueSlug(db: ReturnType<typeof getDb>, base: string): Promise<string> {
+  const root = (buildSlug(base) || 'event').slice(0, 80)
+  let slug = root
+  for (let attempt = 1; ; attempt++) {
+    const [clash] = await db.select({ id: eventListings.id }).from(eventListings).where(eq(eventListings.slug, slug)).limit(1)
+    if (!clash) return slug
+    slug = `${root}-${attempt}`
+  }
+}
+
 async function main() {
   const db = getDb()
   let inserted = 0
@@ -354,7 +366,8 @@ async function main() {
       skipped++
       continue
     }
-    await db.insert(eventListings).values({ ...ev, program: 'frc', status: 'pending', source: 'seed' })
+    const slug = await uniqueSlug(db, ev.name)
+    await db.insert(eventListings).values({ ...ev, slug, program: 'frc', status: 'pending', source: 'seed' })
     inserted++
     console.log(`  + ${ev.name}`)
   }

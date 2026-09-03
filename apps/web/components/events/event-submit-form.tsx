@@ -86,6 +86,8 @@ interface FormState {
  */
 export interface RenewalPrefill {
   previousListingId: string
+  /** The previous listing's human slug, for the "previous listing" link. */
+  previousListingSlug: string
   previousSeasonYear: number | null
   name: string
   program: string

@@ -171,6 +171,7 @@ async function resolveFields(ids: string[]): Promise<Resolved> {
   const rows = await db
     .select({
       id: practiceFields.id,
+      slug: practiceFields.slug,
       name: practiceFields.name,
       teamNumber: practiceFields.teamNumber,
       teamName: practiceFields.teamName,
@@ -203,7 +204,7 @@ async function resolveFields(ids: string[]): Promise<Resolved> {
     out.set(r.id, {
       title: r.name,
       subtitle: subtitle || null,
-      href: `/fields/${r.id}`,
+      href: `/fields/${r.slug}`,
       imageUrl: coverByField.get(r.id),
     })
   }

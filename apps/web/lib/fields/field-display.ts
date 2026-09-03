@@ -18,6 +18,8 @@ export interface FieldPhotoRef {
  */
 export interface PublicField {
   id: string
+  /** Human URL slug. The public page lives at /fields/<slug>. */
+  slug: string
   teamNumber: number | null
   teamName: string | null
   program: string

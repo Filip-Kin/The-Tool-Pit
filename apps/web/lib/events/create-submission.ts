@@ -12,6 +12,7 @@ import {
   VOLUNTEER_STATUSES,
 } from '@the-tool-pit/db'
 import type { NewEventListing } from '@the-tool-pit/db'
+import { uniqueEventSlug } from '@/lib/queries/event-listings'
 import { sendApprovalNotice, reviewEventUrl } from '@the-tool-pit/types'
 import {
   eventDateRange,
@@ -142,8 +143,12 @@ export async function createEventSubmission(
   // renewal that skipped a year would be filed a year early.
   const seasonYear = offseasonSeasonYear(startDate ?? endDate) ?? currentOffseasonSeason()
 
+  // A stable human slug, built from the name once. A later rename keeps it.
+  const slug = await uniqueEventSlug(name)
+
   const values: NewEventListing = {
     name,
+    slug,
     program: pickEnum(input.program, EVENT_PROGRAMS, 'frc'),
     hostTeamNumber,
     latitude: lat,

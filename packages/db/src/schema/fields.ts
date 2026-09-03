@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, real, boolean, doublePrecision, timestamp, jsonb, index, customType } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, real, boolean, doublePrecision, timestamp, jsonb, index, uniqueIndex, customType } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { users } from './accounts'
 
@@ -41,6 +41,16 @@ export const practiceFields = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
 
     // Identity
+    /**
+     * Human URL slug, built from the team number and name, e.g.
+     * "1234-kettering-practice-field". The public page lives at /fields/<slug>;
+     * the UUID id still resolves and 301s to it.
+     *
+     * STABLE ONCE SET. Generated at insert (uniqueFieldSlug) with a numeric
+     * suffix on collision so it is globally unique in this table. A later rename
+     * keeps the existing slug, the same rule tools and grants use.
+     */
+    slug: text('slug').notNull(),
     /** Host team number, when a team runs the field. */
     teamNumber: integer('team_number'),
     /** Free-text team / organisation name. */
@@ -132,6 +142,7 @@ export const practiceFields = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    uniqueIndex('practice_fields_slug_idx').on(table.slug),
     index('practice_fields_status_idx').on(table.status),
     index('practice_fields_program_idx').on(table.program),
     index('practice_fields_team_number_idx').on(table.teamNumber),

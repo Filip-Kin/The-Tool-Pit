@@ -57,12 +57,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .where(eq(tools.status, 'published'))
       .limit(PER_VERTICAL_LIMIT),
     db
-      .select({ id: eventListings.id, updatedAt: eventListings.updatedAt })
+      .select({ slug: eventListings.slug, updatedAt: eventListings.updatedAt })
       .from(eventListings)
       .where(eq(eventListings.status, 'published'))
       .limit(PER_VERTICAL_LIMIT),
     db
-      .select({ id: practiceFields.id, updatedAt: practiceFields.updatedAt })
+      .select({ slug: practiceFields.slug, updatedAt: practiceFields.updatedAt })
       .from(practiceFields)
       .where(eq(practiceFields.status, 'published'))
       .limit(PER_VERTICAL_LIMIT),
@@ -83,8 +83,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const listingEntries: MetadataRoute.Sitemap = [
     ...toolRows.map((r) => ({ url: toolUrl(r.slug), lastModified: r.updatedAt ?? undefined })),
-    ...eventRows.map((r) => ({ url: eventListingUrl(r.id), lastModified: r.updatedAt ?? undefined })),
-    ...fieldRows.map((r) => ({ url: fieldUrl(r.id), lastModified: r.updatedAt ?? undefined })),
+    ...eventRows.map((r) => ({ url: eventListingUrl(r.slug), lastModified: r.updatedAt ?? undefined })),
+    ...fieldRows.map((r) => ({ url: fieldUrl(r.slug), lastModified: r.updatedAt ?? undefined })),
     ...grantRows.map((r) => ({ url: grantListingUrl(r.slug), lastModified: r.updatedAt ?? undefined })),
     ...photoRows.map((r) => ({ url: albumEventUrl(r.tbaKey), lastModified: r.updatedAt ?? undefined })),
   ]

@@ -117,6 +117,7 @@ export async function notifyFieldPublished(fieldId: string): Promise<void> {
     const [row] = await db
       .select({
         id: practiceFields.id,
+        slug: practiceFields.slug,
         name: practiceFields.name,
         city: practiceFields.city,
         region: practiceFields.region,
@@ -132,7 +133,7 @@ export async function notifyFieldPublished(fieldId: string): Promise<void> {
 
     const payload: ApprovalEmailPayload = {
       title: row.name,
-      url: fieldUrl(row.id),
+      url: fieldUrl(row.slug),
       facts: facts([
         { label: 'Where', value: place([row.city, row.region, row.country]) },
         { label: 'Host', value: team(row.teamNumber, row.teamName) },
@@ -164,6 +165,7 @@ export async function notifyFieldEditApplied(proposalId: string, changed: string
       .select({
         id: fieldEditProposals.id,
         fieldId: fieldEditProposals.fieldId,
+        fieldSlug: practiceFields.slug,
         userId: fieldEditProposals.submittedByUserId,
         fieldName: practiceFields.name,
         city: practiceFields.city,
@@ -177,7 +179,7 @@ export async function notifyFieldEditApplied(proposalId: string, changed: string
 
     const payload: ApprovalEmailPayload = {
       title: row.fieldName,
-      url: fieldUrl(row.fieldId),
+      url: fieldUrl(row.fieldSlug),
       facts: facts([{ label: 'Where', value: place([row.city, row.region]) }]),
       changes: changed,
     }
@@ -259,6 +261,7 @@ export async function notifyEventPublished(listingId: string): Promise<void> {
     const [row] = await db
       .select({
         id: eventListings.id,
+        slug: eventListings.slug,
         name: eventListings.name,
         venueName: eventListings.venueName,
         city: eventListings.city,
@@ -276,7 +279,7 @@ export async function notifyEventPublished(listingId: string): Promise<void> {
 
     const payload: ApprovalEmailPayload = {
       title: row.name,
-      url: eventListingUrl(row.id),
+      url: eventListingUrl(row.slug),
       facts: facts([
         { label: 'Dates', value: dateRange(row.startDate, row.endDate) },
         { label: 'Where', value: place([row.venueName, row.city, row.region, row.country]) },

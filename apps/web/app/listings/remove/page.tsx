@@ -63,17 +63,20 @@ export default async function RemoveListingPage({
   const [row] =
     type === 'event'
       ? await db
-          .select({ id: eventListings.id, name: eventListings.name, status: eventListings.status })
+          .select({ id: eventListings.id, slug: eventListings.slug, name: eventListings.name, status: eventListings.status })
           .from(eventListings)
           .where(eq(eventListings.id, id))
           .limit(1)
       : await db
-          .select({ id: practiceFields.id, name: practiceFields.name, status: practiceFields.status })
+          .select({ id: practiceFields.id, slug: practiceFields.slug, name: practiceFields.name, status: practiceFields.status })
           .from(practiceFields)
           .where(eq(practiceFields.id, id))
           .limit(1)
 
-  const keepUrl = type === 'event' ? eventListingUrl(id) : fieldUrl(id)
+  // Point the "keep it" link at the pretty slug URL. Only rendered when the row
+  // exists (a missing row returns the "not valid" card below), so the empty
+  // fallback is never shown.
+  const keepUrl = row ? (type === 'event' ? eventListingUrl(row.slug) : fieldUrl(row.slug)) : ''
   const listingWord = type === 'event' ? 'off-season events map and list' : 'practice field map'
 
   if (!row) {

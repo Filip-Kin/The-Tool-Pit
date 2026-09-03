@@ -91,7 +91,7 @@ function program(v: string | undefined, allowed: readonly string[]): string {
 export function eventListingFromCandidate(
   candidate: Pick<EventListingCandidate, 'sourceUrl' | 'tbaKey' | 'extracted'>,
   name: string,
-): NewEventListing {
+): Omit<NewEventListing, 'slug'> {
   const ex = (candidate.extracted ?? {}) as ExtractedEventListingFields
   // A candidate found on the forum keeps its thread even when the connector did
   // not read a chiefDelphiUrl out of the post, because the thread IS the only
@@ -177,7 +177,7 @@ export function eventListingFromCandidate(
 export function practiceFieldFromCandidate(
   candidate: Pick<PracticeFieldCandidate, 'teamNumber' | 'extracted'>,
   name: string,
-): NewPracticeField {
+): Omit<NewPracticeField, 'slug'> {
   const ex = (candidate.extracted ?? {}) as ExtractedPracticeFieldFields
 
   return {

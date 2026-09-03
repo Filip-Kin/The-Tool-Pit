@@ -93,7 +93,7 @@ export function FieldDialog({
                   </button>
                   {/* Pinned right: the permalink is a share handle, not an action,
                       so it sits apart from the two things you DO here. */}
-                  <Link href={`/fields/${field.id}`} className={cn(FOOTER_LINK, 'ml-auto')}>
+                  <Link href={`/fields/${field.slug}`} className={cn(FOOTER_LINK, 'ml-auto')}>
                     <Link2 className="h-4 w-4" aria-hidden />
                     Permalink
                   </Link>

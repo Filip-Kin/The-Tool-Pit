@@ -1,12 +1,14 @@
-import { eq, and, isNotNull, desc, asc, inArray } from 'drizzle-orm'
+import { eq, and, ne, isNotNull, desc, asc, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldPhotos } from '@the-tool-pit/db'
+import { slugify } from '@/lib/utils/slugify'
 import type { PublicField, FieldPhotoRef } from '@/lib/fields/field-display'
 import type { FieldCoverage, FieldElements, FieldAvailability, FieldPerimeter } from '@the-tool-pit/db'
 
 /** Columns exposed publicly - never the submitter audit fields. */
 const publicColumns = {
   id: practiceFields.id,
+  slug: practiceFields.slug,
   teamNumber: practiceFields.teamNumber,
   teamName: practiceFields.teamName,
   program: practiceFields.program,
@@ -92,4 +94,41 @@ export async function getPublishedFieldById(id: string): Promise<PublicField | n
   if (!row) return null
   const photos = await photosByField([row.id])
   return toPublic(row, photos.get(row.id) ?? [])
+}
+
+/**
+ * A single published field by its human slug, for its shareable detail page.
+ * The slug is the canonical public key now, the same way tools and grants
+ * resolve.
+ */
+export async function getPublishedFieldBySlug(slug: string): Promise<PublicField | null> {
+  const db = getDb()
+  const [row] = await db
+    .select(publicColumns)
+    .from(practiceFields)
+    .where(and(eq(practiceFields.slug, slug), eq(practiceFields.status, 'published')))
+    .limit(1)
+  if (!row) return null
+  const photos = await photosByField([row.id])
+  return toPublic(row, photos.get(row.id) ?? [])
+}
+
+/**
+ * A slug nobody else in practice_fields is using, built from the team number
+ * and name. Mirrors uniqueGrantSlug: `ignoreId` lets a row keep its own slug
+ * across a rename so the slug is stable once set.
+ */
+export async function uniqueFieldSlug(base: string, ignoreId?: string): Promise<string> {
+  const db = getDb()
+  const root = (slugify(base) || 'field').slice(0, 80)
+  let slug = root
+  for (let attempt = 1; ; attempt++) {
+    const [clash] = await db
+      .select({ id: practiceFields.id })
+      .from(practiceFields)
+      .where(ignoreId ? and(eq(practiceFields.slug, slug), ne(practiceFields.id, ignoreId)) : eq(practiceFields.slug, slug))
+      .limit(1)
+    if (!clash) return slug
+    slug = `${root}-${attempt}`
+  }
 }

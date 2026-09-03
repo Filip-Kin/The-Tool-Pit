@@ -75,6 +75,7 @@ export function seasonRenewalDedupeKey(
 export type RenewableListing = Pick<
   EventListing,
   | 'id'
+  | 'slug'
   | 'name'
   | 'seasonYear'
   | 'startDate'
@@ -132,7 +133,7 @@ export function buildRenewalPayload(
     seasonYear,
     previousSeasonYear,
     renewUrl: `${siteUrl()}/events/submit?renew=${listing.id}`,
-    previousUrl: eventListingUrl(listing.id),
+    previousUrl: eventListingUrl(listing.slug),
     facts,
   }
 }

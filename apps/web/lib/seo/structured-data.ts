@@ -143,7 +143,7 @@ export function eventJsonLd(ev: PublicEvent): Record<string, unknown> {
     // Every off-season event is an in-person competition.
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location,
-    url: eventListingUrl(ev.id),
+    url: eventListingUrl(ev.slug),
     organizer: ev.hostTeamNumber
       ? { '@type': 'Organization', name: `FIRST Robotics Competition Team ${ev.hostTeamNumber}` }
       : undefined,
@@ -170,7 +170,7 @@ export function fieldJsonLd(field: PublicField): Record<string, unknown> {
     '@context': 'https://schema.org',
     '@type': 'Place',
     name: field.name,
-    url: fieldUrl(field.id),
+    url: fieldUrl(field.slug),
     address: hasAddress ? address : undefined,
     geo:
       field.latitude != null && field.longitude != null

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
-import { getPublishedEventById } from '@/lib/queries/event-listings'
+import { notFound, permanentRedirect } from 'next/navigation'
+import { getPublishedEventBySlug, getPublishedEventById } from '@/lib/queries/event-listings'
 import { EventDetail } from '@/components/events/event-card'
 import { ClaimListingButton } from '@/components/auth/claim-listing-button'
 import { listingClaimState } from '@/lib/queries/listing-ownership'
@@ -12,13 +12,21 @@ import { eventJsonLd } from '@/lib/seo/structured-data'
 
 export const dynamic = 'force-dynamic'
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-  const { id } = await params
-  const ev = await getPublishedEventById(id)
+/**
+ * A bare UUID in the slot means an old /events/<uuid> permalink, shared before
+ * the pretty URL existed. Those links have to keep resolving, so the page looks
+ * the row up by id and 301s to its /events/<slug> URL.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params
+  const ev = (await getPublishedEventBySlug(slug)) ?? (UUID_RE.test(slug) ? await getPublishedEventById(slug) : null)
   if (!ev) return { title: 'Event not found' }
   const date = eventDateRange(ev)
   const title = date ? `${ev.name} · ${date}` : ev.name
-  const url = eventListingUrl(ev.id)
+  // Canonical always points at the slug URL, never the UUID.
+  const url = eventListingUrl(ev.slug)
   const location = eventLocation(ev)
   const cost = costLabel(ev)
   // One-line summary from the listing's own facts: date, place, cost.
@@ -33,9 +41,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   }
 }
 
-export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const ev = await getPublishedEventById(id)
+export default async function EventDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
+  const ev = await getPublishedEventBySlug(slug)
+  if (!ev && UUID_RE.test(slug)) {
+    // An old UUID permalink. Resolve by id and 301 to the canonical slug URL.
+    const byId = await getPublishedEventById(slug)
+    if (byId) permanentRedirect(`/events/${byId.slug}`)
+  }
   if (!ev) notFound()
 
   const claimState = await listingClaimState('event', ev.id)

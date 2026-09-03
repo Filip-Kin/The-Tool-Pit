@@ -1,6 +1,7 @@
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import type { NewPracticeField } from '@the-tool-pit/db'
+import { uniqueFieldSlug } from '@/lib/queries/fields'
 import { sendApprovalNotice, reviewFieldUrl } from '@the-tool-pit/types'
 import {
   COVERAGE_LABEL,
@@ -99,8 +100,13 @@ export async function createFieldSubmission(
       ? input.ceilingHeightFt
       : null
 
+  // A stable human slug, built from the team number and name once. A later
+  // rename keeps it, the same rule tools and grants use.
+  const slug = await uniqueFieldSlug([teamNumber, name].filter(Boolean).join(' '))
+
   const values: NewPracticeField = {
     name,
+    slug,
     teamNumber,
     teamName: input.teamName?.trim() || null,
     program: pickEnum(input.program, FIELD_PROGRAMS, 'frc'),

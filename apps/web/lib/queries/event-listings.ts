@@ -1,12 +1,14 @@
-import { eq, and, or, isNull, isNotNull, gte, lt, asc, desc, sql } from 'drizzle-orm'
+import { eq, and, or, ne, isNull, isNotNull, gte, lt, asc, desc, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { eventListings, currentOffseasonSeason } from '@the-tool-pit/db'
+import { slugify } from '@/lib/utils/slugify'
 import type { PublicEvent, SeasonScope } from '@/lib/events/event-display'
 import type { RegistrationStatus, VolunteerStatus, EventStatus } from '@the-tool-pit/db'
 
 /** Columns exposed publicly - never the submitter audit fields. */
 const publicColumns = {
   id: eventListings.id,
+  slug: eventListings.slug,
   program: eventListings.program,
   name: eventListings.name,
   hostTeamNumber: eventListings.hostTeamNumber,
@@ -144,4 +146,42 @@ export async function getPublishedEventById(id: string): Promise<PublicEvent | n
     .where(and(eq(eventListings.id, id), eq(eventListings.status, 'published')))
     .limit(1)
   return row ? toPublic(row) : null
+}
+
+/**
+ * A single published event by its human slug, for its shareable detail page.
+ *
+ * The slug is the canonical public key now, the same way tools and grants
+ * resolve. Not season filtered, for the same reason getPublishedEventById is
+ * not: archiving hides a finished season from the LIST, it never takes a page
+ * down.
+ */
+export async function getPublishedEventBySlug(slug: string): Promise<PublicEvent | null> {
+  const db = getDb()
+  const [row] = await db
+    .select(publicColumns)
+    .from(eventListings)
+    .where(and(eq(eventListings.slug, slug), eq(eventListings.status, 'published')))
+    .limit(1)
+  return row ? toPublic(row) : null
+}
+
+/**
+ * A slug nobody else in event_listings is using, built from the name. Mirrors
+ * uniqueGrantSlug: `ignoreId` lets a row keep its own slug across a rename so
+ * the slug is stable once set. The suffix loop makes it globally unique.
+ */
+export async function uniqueEventSlug(base: string, ignoreId?: string): Promise<string> {
+  const db = getDb()
+  const root = (slugify(base) || 'event').slice(0, 80)
+  let slug = root
+  for (let attempt = 1; ; attempt++) {
+    const [clash] = await db
+      .select({ id: eventListings.id })
+      .from(eventListings)
+      .where(ignoreId ? and(eq(eventListings.slug, slug), ne(eventListings.id, ignoreId)) : eq(eventListings.slug, slug))
+      .limit(1)
+    if (!clash) return slug
+    slug = `${root}-${attempt}`
+  }
 }

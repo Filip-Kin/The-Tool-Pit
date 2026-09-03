@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
-import { getPublishedFieldById } from '@/lib/queries/fields'
+import { notFound, permanentRedirect } from 'next/navigation'
+import { getPublishedFieldBySlug, getPublishedFieldById } from '@/lib/queries/fields'
 import { FieldDetail } from '@/components/fields/field-card'
 import { ClaimListingButton } from '@/components/auth/claim-listing-button'
 import { listingClaimState } from '@/lib/queries/listing-ownership'
@@ -12,12 +12,20 @@ import { fieldJsonLd } from '@/lib/seo/structured-data'
 
 export const dynamic = 'force-dynamic'
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-  const { id } = await params
-  const field = await getPublishedFieldById(id)
+/**
+ * A bare UUID in the slot means an old /fields/<uuid> permalink, shared before
+ * the pretty URL existed. Those links have to keep resolving, so the page looks
+ * the row up by id and 301s to its /fields/<slug> URL.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params
+  const field = (await getPublishedFieldBySlug(slug)) ?? (UUID_RE.test(slug) ? await getPublishedFieldById(slug) : null)
   if (!field) return { title: 'Field not found' }
   const title = field.teamNumber ? `${field.teamNumber} · ${field.name}` : field.name
-  const url = fieldUrl(field.id)
+  // Canonical always points at the slug URL, never the UUID.
+  const url = fieldUrl(field.slug)
   const location = [field.city, field.region, field.country].filter(Boolean).join(', ')
   // One-line summary: where the field is and what it offers.
   const description = [location, fieldSpecSummary(field)].filter(Boolean).join(' · ') || field.name
@@ -31,9 +39,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   }
 }
 
-export default async function FieldDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const field = await getPublishedFieldById(id)
+export default async function FieldDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
+  const field = await getPublishedFieldBySlug(slug)
+  if (!field && UUID_RE.test(slug)) {
+    // An old UUID permalink. Resolve by id and 301 to the canonical slug URL.
+    const byId = await getPublishedFieldById(slug)
+    if (byId) permanentRedirect(`/fields/${byId.slug}`)
+  }
   if (!field) notFound()
 
   const claimState = await listingClaimState('field', field.id)

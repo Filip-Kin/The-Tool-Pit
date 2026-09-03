@@ -30,6 +30,7 @@ import type { PublicEvent } from '@/lib/events/event-display'
 
 function ev(over: Partial<PublicEvent> & { id: string }): PublicEvent {
   return {
+    slug: over.id,
     program: 'frc',
     name: over.id,
     hostTeamNumber: null,

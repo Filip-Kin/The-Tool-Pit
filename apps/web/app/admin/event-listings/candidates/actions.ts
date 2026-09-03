@@ -8,6 +8,7 @@ import { getDb } from '@/lib/db'
 import { getRedis } from '@/lib/redis'
 import { eventListingCandidates, eventListings } from '@the-tool-pit/db'
 import { bumpListingSourceCounter, eventListingFromCandidate } from '@/lib/admin/listing-discovery'
+import { uniqueEventSlug } from '@/lib/queries/event-listings'
 import { eventPublishBlockers } from '@/lib/events/publish-bar'
 import { geocodeVenue } from '@the-tool-pit/db/geocode'
 import { addHumanEdits, changedKeys, HUMAN_EDITABLE_EVENT_KEYS } from '@the-tool-pit/db/human-edited'
@@ -231,12 +232,16 @@ export async function acceptEventCandidate(
     registrationStatus: row.registrationStatus ?? null,
   })
 
+  // A stable human slug for the public /events/<slug> page, built once from the
+  // name. Unique within the table via the suffix loop.
+  const base = { ...row, slug: await uniqueEventSlug(row.name ?? 'event') }
+
   const [created] = await db
     .insert(eventListings)
     .values(
       missing.length === 0
-        ? { ...row, status: 'published', publishedAt: new Date() }
-        : row,
+        ? { ...base, status: 'published', publishedAt: new Date() }
+        : base,
     )
     .returning({ id: eventListings.id })
   if (!created) return { error: 'The listing was not written. Nothing has changed.' }

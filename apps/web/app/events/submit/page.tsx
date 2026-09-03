@@ -32,6 +32,7 @@ async function buildRenewal(id: string | undefined): Promise<RenewalPrefill | nu
   if (!prev) return null
   return {
     previousListingId: prev.id,
+    previousListingSlug: prev.slug,
     previousSeasonYear: prev.seasonYear,
     name: prev.name,
     program: prev.program,
@@ -76,7 +77,7 @@ export default async function SubmitEventPage({
         {renewal ? (
           <p className="mt-2 text-sm text-muted">
             Everything below is copied from the{' '}
-            <Link href={`/events/${renewal.previousListingId}`} className="text-primary hover:underline">
+            <Link href={`/events/${renewal.previousListingSlug}`} className="text-primary hover:underline">
               {renewal.previousSeasonYear ?? 'previous'} listing
             </Link>
             . Set this year&apos;s dates, fix anything that changed, and submit. Last year&apos;s

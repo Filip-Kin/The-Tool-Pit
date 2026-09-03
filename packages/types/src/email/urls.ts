@@ -49,14 +49,14 @@ export function grantListingUrl(slug: string): string {
   return `${siteUrl()}/grants/${slug}`
 }
 
-/** Public URL of one practice field. Fields have no slug, so it is the id. */
-export function fieldUrl(id: string): string {
-  return `${siteUrl()}/fields/${id}`
+/** Public URL of one practice field, keyed by its human slug. */
+export function fieldUrl(slug: string): string {
+  return `${siteUrl()}/fields/${slug}`
 }
 
-/** Public URL of one off-season event listing. */
-export function eventListingUrl(id: string): string {
-  return `${siteUrl()}/events/${id}`
+/** Public URL of one off-season event listing, keyed by its human slug. */
+export function eventListingUrl(slug: string): string {
+  return `${siteUrl()}/events/${slug}`
 }
 
 /** Public URL of one tool listing. */

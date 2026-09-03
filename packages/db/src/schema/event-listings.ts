@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, boolean, doublePrecision, date, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, boolean, doublePrecision, date, timestamp, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core'
 import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 import { users } from './accounts'
@@ -51,6 +51,17 @@ export const eventListings = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
 
     // Identity
+    /**
+     * Human URL slug, built from the name, e.g. "kettering-kickoff". The public
+     * page lives at /events/<slug>; the UUID id still resolves and 301s to it.
+     *
+     * STABLE ONCE SET. Generated from the name at insert (uniqueEventSlug), with
+     * a numeric suffix on collision so it is globally unique in this table. A
+     * later rename keeps the existing slug, the same rule tools and grants use,
+     * because these URLs get posted on Chief Delphi and have to keep meaning
+     * what they meant.
+     */
+    slug: text('slug').notNull(),
     /** EVENT_PROGRAMS. Most off-season events are FRC; a few are FTC too. */
     program: text('program').notNull().default('frc'),
     /** Event name shown on the pin and card, e.g. "Kettering Kickoff". */
@@ -305,6 +316,7 @@ export const eventListings = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    uniqueIndex('event_listings_slug_idx').on(table.slug),
     index('event_listings_status_idx').on(table.status),
     index('event_listings_program_idx').on(table.program),
     index('event_listings_start_date_idx').on(table.startDate),

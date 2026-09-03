@@ -20,9 +20,10 @@
 // node_modules of its own, so it reaches into the db package source, which
 // resolves drizzle-orm/postgres from packages/db/node_modules.
 import { getDb, practiceFields, eq } from '../packages/db/src/index'
+import { buildSlug } from '../packages/db/src/slug'
 import type { NewPracticeField } from '../packages/db/src/index'
 
-const SEED: NewPracticeField[] = [
+const SEED: Omit<NewPracticeField, 'slug'>[] = [
   {
     teamNumber: 1188,
     teamName: 'Royal Oak Robotics',
@@ -97,7 +98,15 @@ async function main() {
         continue
       }
     }
-    const [row] = await db.insert(practiceFields).values(field).returning({ id: practiceFields.id })
+    const slugBase = [field.teamNumber, field.name].filter(Boolean).join(' ')
+    const root = (buildSlug(slugBase) || 'field').slice(0, 80)
+    let slug = root
+    for (let attempt = 1; ; attempt++) {
+      const [clash] = await db.select({ id: practiceFields.id }).from(practiceFields).where(eq(practiceFields.slug, slug)).limit(1)
+      if (!clash) break
+      slug = `${root}-${attempt}`
+    }
+    const [row] = await db.insert(practiceFields).values({ ...field, slug }).returning({ id: practiceFields.id })
     console.log(`inserted pending field for team ${field.teamNumber}: ${row.id}`)
   }
   console.log('done - review + place pins in /admin/practice-fields?status=pending')

@@ -101,7 +101,7 @@ export function EventDialog({
                   </button>
                   {/* Pinned right: the permalink is a share handle, not an action,
                       so it sits apart from the two things you DO here. */}
-                  <Link href={`/events/${event.id}`} className={cn(FOOTER_LINK, 'ml-auto')}>
+                  <Link href={`/events/${event.slug}`} className={cn(FOOTER_LINK, 'ml-auto')}>
                     <Link2 className="h-4 w-4" aria-hidden />
                     Permalink
                   </Link>

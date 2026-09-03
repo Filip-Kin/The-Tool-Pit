@@ -134,6 +134,7 @@ async function resolveFields(ids: string[]): Promise<Resolved> {
   const rows = await db
     .select({
       id: practiceFields.id,
+      slug: practiceFields.slug,
       name: practiceFields.name,
       teamNumber: practiceFields.teamNumber,
       teamName: practiceFields.teamName,
@@ -151,7 +152,7 @@ async function resolveFields(ids: string[]): Promise<Resolved> {
     out.set(r.id, {
       title: r.name,
       subtitle: [owner, place, status].filter(Boolean).join(' · ') || null,
-      href: `/fields/${r.id}`,
+      href: `/fields/${r.slug}`,
     })
   }
   return out
@@ -162,6 +163,7 @@ async function resolveEvents(ids: string[]): Promise<Resolved> {
   const rows = await db
     .select({
       id: eventListings.id,
+      slug: eventListings.slug,
       name: eventListings.name,
       city: eventListings.city,
       region: eventListings.region,
@@ -177,7 +179,7 @@ async function resolveEvents(ids: string[]): Promise<Resolved> {
     out.set(r.id, {
       title: r.name,
       subtitle: [r.startDate, place, status].filter(Boolean).join(' · ') || null,
-      href: `/events/${r.id}`,
+      href: `/events/${r.slug}`,
     })
   }
   return out

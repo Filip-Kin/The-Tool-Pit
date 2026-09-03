@@ -6,6 +6,7 @@ import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
 import { practiceFieldCandidates, practiceFields } from '@the-tool-pit/db'
 import { bumpListingSourceCounter, practiceFieldFromCandidate } from '@/lib/admin/listing-discovery'
+import { uniqueFieldSlug } from '@/lib/queries/fields'
 import { fieldPublishBlockers } from '@/lib/fields/publish-bar'
 import { geocodeVenue } from '@the-tool-pit/db/geocode'
 
@@ -123,9 +124,13 @@ export async function acceptFieldCandidate(
     website: row.website ?? null,
   })
 
+  // A stable human slug for the public /fields/<slug> page, built once from the
+  // team number and name. Unique within the table via the suffix loop.
+  const base = { ...row, slug: await uniqueFieldSlug([row.teamNumber, row.name].filter(Boolean).join(' ')) }
+
   const [created] = await db
     .insert(practiceFields)
-    .values(missing.length === 0 ? { ...row, status: 'published', publishedAt: new Date() } : row)
+    .values(missing.length === 0 ? { ...base, status: 'published', publishedAt: new Date() } : base)
     .returning({ id: practiceFields.id })
   if (!created) return { error: 'The field was not written. Nothing has changed.' }
 
