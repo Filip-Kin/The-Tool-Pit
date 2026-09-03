@@ -326,8 +326,8 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
           <L label="Program"><select className="input uppercase" value={form.program} onChange={(e) => set('program', e.target.value)}>{['frc', 'ftc', 'fll'].map((p) => <option key={p} value={p}>{p.toUpperCase()}</option>)}</select></L>
           <L label="Host team #"><input type="number" className="input" value={form.hostTeamNumber ?? ''} onChange={(e) => set('hostTeamNumber', e.target.value ? Number(e.target.value) : null)} /></L>
         </div>
-        <L label="Start date"><input type="date" className="input" value={form.startDate ?? ''} onChange={(e) => set('startDate', e.target.value)} /></L>
-        <L label="End date"><input type="date" className="input" value={form.endDate ?? ''} onChange={(e) => set('endDate', e.target.value)} /></L>
+        <L label="Start date"><input type="date" lang="en-US" className="input" value={form.startDate ?? ''} onChange={(e) => set('startDate', e.target.value)} /></L>
+        <L label="End date"><input type="date" lang="en-US" className="input" value={form.endDate ?? ''} onChange={(e) => set('endDate', e.target.value)} /></L>
         <div className="flex gap-2">
           <L label="Days"><select className="input" value={form.days ?? ''} onChange={(e) => set('days', e.target.value ? Number(e.target.value) : null)}><option value="">—</option><option value="1">1</option><option value="2">2</option></select></L>
           <L label="Capacity"><input type="number" className="input" value={form.capacity ?? ''} onChange={(e) => set('capacity', e.target.value ? Number(e.target.value) : null)} /></L>
@@ -338,7 +338,7 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
         </div>
         <L label="Event status"><select className="input" value={form.eventStatus} onChange={(e) => set('eventStatus', e.target.value)}>{EVENT_STATUSES.map((s) => <option key={s} value={s}>{EVENT_STATUS_LABEL[s]}</option>)}</select></L>
         <L label="Registration"><select className="input" value={form.registrationStatus} onChange={(e) => set('registrationStatus', e.target.value)}>{REGISTRATION_STATUSES.map((s) => <option key={s} value={s}>{REGISTRATION_STATUS_LABEL[s]}</option>)}</select></L>
-        <L label="Registration opens"><input type="date" className="input" value={form.registrationOpensAt ?? ''} onChange={(e) => set('registrationOpensAt', e.target.value)} /></L>
+        <L label="Registration opens"><input type="date" lang="en-US" className="input" value={form.registrationOpensAt ?? ''} onChange={(e) => set('registrationOpensAt', e.target.value)} /></L>
         <L label="Volunteers"><select className="input" value={form.volunteerStatus} onChange={(e) => set('volunteerStatus', e.target.value)}>{VOLUNTEER_STATUSES.map((s) => <option key={s} value={s}>{VOLUNTEER_STATUS_LABEL[s]}</option>)}</select></L>
         <L label="Venue"><input className="input" value={form.venueName ?? ''} onChange={(e) => set('venueName', e.target.value)} /></L>
         <L label="Address"><input className="input" value={form.address ?? ''} onChange={(e) => set('address', e.target.value)} /></L>
