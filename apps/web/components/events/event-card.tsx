@@ -12,6 +12,7 @@ import { ButtonLink } from '@/components/ui/button'
 import { Card, cardClass } from '@/components/ui/card'
 import { cn } from '@/lib/utils/cn'
 import type { PublicEvent } from '@/lib/events/event-display'
+import { formatDate } from '@/lib/format/date'
 import {
   eventMarkerStyle,
   eventTiming,
@@ -214,7 +215,7 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
           </div>
           {ev.teamCountUpdatedAt && (
             <p className="mt-2 text-xs text-muted-2">
-              Team count last checked {new Date(ev.teamCountUpdatedAt).toLocaleDateString()}
+              Team count last checked {formatDate(ev.teamCountUpdatedAt)}
             </p>
           )}
         </Card>

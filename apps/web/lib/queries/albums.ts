@@ -418,15 +418,51 @@ export async function searchEventsForSubmission(
   if (query.length < 2) return []
   const yearMatch = query.match(/\b(19|20)\d{2}\b/)
   const year = yearMatch ? parseInt(yearMatch[0], 10) : undefined
-  const text = query.replace(/\b(19|20)\d{2}\b/, '').trim()
-  const pattern = `%${text}%`
+  const text = query
+    .replace(/\b(19|20)\d{2}\b/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+  // Tokenised: each word matches independently, so a query in a different order
+  // or with an extra word still finds the event. Words shorter than 2 chars are
+  // noise.
+  const tokens = text.split(' ').filter((t) => t.length >= 2)
 
-  const filters: SQL[] = [
-    eq(events.program, program),
-    sql`(${events.startDate} is null or ${events.startDate} <= now())`,
-  ]
-  if (text) filters.push(or(ilike(events.name, pattern), ilike(events.eventCode, pattern))!)
+  // The searchable text for one event. The championship finals are named
+  // "Einstein Field" in TBA, which shares no word with how people search for it
+  // ("world championship", "worlds", "champs"), so a synonym blob is folded in
+  // for the finals and for any event whose name already says "Championship".
+  const haystack = sql`lower(
+    coalesce(${events.name}, '') || ' ' ||
+    coalesce(${events.eventCode}, '') || ' ' ||
+    coalesce(${events.city}, '') || ' ' ||
+    case
+      when ${events.eventCode} in ('cmp', 'cmptx', 'cmpmi', 'cmpmo', 'cmpstl')
+        or lower(${events.name}) like '%einstein%'
+        then 'world championship worlds champs finals einstein'
+      when lower(${events.name}) like '%championship%' then 'worlds champs'
+      else ''
+    end
+  )`
+
+  const filters: SQL[] = [eq(events.program, program)]
   if (year) filters.push(eq(events.year, year))
+  if (tokens.length) {
+    // At least one token must appear, so "FIRST World Championship" still finds
+    // "Einstein Field" (via the synonym blob) even though most words miss.
+    filters.push(sql`(${sql.join(tokens.map((t) => sql`${haystack} like ${'%' + t + '%'}`), sql` or `)})`)
+  }
+
+  // Rank: how many query words the event matched, then trigram closeness of the
+  // name to the typed text, then most recent season.
+  const matchCount = tokens.length
+    ? sql<number>`(${sql.join(tokens.map((t) => sql`(${haystack} like ${'%' + t + '%'})::int`), sql` + `)})`
+    : sql<number>`0`
+  const nameSim = text ? sql<number>`similarity(lower(${events.name}), ${text})` : sql<number>`0`
+  // The actual world championship is "Einstein Field"; a search for "world
+  // championship" should rank it ABOVE the many district/state championships
+  // that literally contain those words, so the finals get a boost.
+  const finalsBoost = sql<number>`(case when ${events.eventCode} in ('cmp', 'cmptx', 'cmpmi', 'cmpmo', 'cmpstl') or lower(${events.name}) like '%einstein%' then 2 else 0 end)`
 
   const rows = await db
     .select({
@@ -440,8 +476,7 @@ export async function searchEventsForSubmission(
     })
     .from(events)
     .where(and(...filters))
-    // Most recent season first (the common case is submitting a current event).
-    .orderBy(desc(events.year), desc(events.startDate))
+    .orderBy(desc(sql`${matchCount} + ${finalsBoost}`), desc(nameSim), desc(events.year), desc(events.startDate))
     .limit(limit)
   return rows
 }

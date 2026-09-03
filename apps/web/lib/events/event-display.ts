@@ -258,16 +258,21 @@ function fmtDay(iso: string): { m: number; d: number; y: number } {
   return { m: (m ?? 1) - 1, d: d ?? 1, y: y ?? 0 }
 }
 
-/** "12 - 13 Sep 2026", "1 Aug 2026", or "" when there is no date. */
+/**
+ * US month-first format, because the audience is overwhelmingly US teams and
+ * "12/9" or "12 Sep" reads as the wrong day to half of them:
+ * "Sep 12–13, 2026", "Aug 1, 2026", "Aug 30 – Sep 1, 2026",
+ * "Dec 30, 2025 – Jan 1, 2026", or "" when there is no date.
+ */
 export function eventDateRange(ev: Pick<PublicEvent, 'startDate' | 'endDate'>): string {
   if (!ev.startDate) return ''
   const s = fmtDay(ev.startDate)
-  if (!ev.endDate || ev.endDate === ev.startDate) return `${s.d} ${MONTHS[s.m]} ${s.y}`
+  if (!ev.endDate || ev.endDate === ev.startDate) return `${MONTHS[s.m]} ${s.d}, ${s.y}`
   const e = fmtDay(ev.endDate)
-  // Same month: "12 - 13 Sep 2026". Different month: "30 Aug - 1 Sep 2026".
-  if (s.m === e.m && s.y === e.y) return `${s.d} - ${e.d} ${MONTHS[s.m]} ${s.y}`
-  if (s.y === e.y) return `${s.d} ${MONTHS[s.m]} - ${e.d} ${MONTHS[e.m]} ${s.y}`
-  return `${s.d} ${MONTHS[s.m]} ${s.y} - ${e.d} ${MONTHS[e.m]} ${e.y}`
+  // Same month: "Sep 12–13, 2026". Different month: "Aug 30 – Sep 1, 2026".
+  if (s.m === e.m && s.y === e.y) return `${MONTHS[s.m]} ${s.d}–${e.d}, ${s.y}`
+  if (s.y === e.y) return `${MONTHS[s.m]} ${s.d} – ${MONTHS[e.m]} ${e.d}, ${s.y}`
+  return `${MONTHS[s.m]} ${s.d}, ${s.y} – ${MONTHS[e.m]} ${e.d}, ${e.y}`
 }
 
 /** "$300", "$300 · $450 for both days", "Free", or null when cost is unknown. */

@@ -3,6 +3,7 @@ import { Pager } from '@/components/admin/pager'
 import { desc, eq, sql } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
+import { formatDate } from '@/lib/format/date'
 import {
   EVENT_LISTING_CANDIDATE_STATUSES,
   EVENT_PROGRAMS,
@@ -181,7 +182,7 @@ export default async function EventCandidatesPage({
                   <h2 className="text-sm font-semibold text-foreground">{title}</h2>
                   <p className="text-[10px] text-muted-2">
                     {sourceLabel ?? 'no source row'} · {sourceKind ?? meta.discoveredVia ?? 'unknown kind'} ·{' '}
-                    {new Date(row.createdAt).toLocaleDateString()}
+                    {formatDate(row.createdAt)}
                   </p>
                 </header>
 
