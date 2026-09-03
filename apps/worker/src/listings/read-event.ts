@@ -27,6 +27,7 @@
  */
 import {
   EVENT_PROGRAMS,
+  EVENT_STATUSES,
   REGISTRATION_STATUSES,
   VOLUNTEER_STATUSES,
   type ExtractedEventListingFields,
@@ -103,6 +104,15 @@ Fields:
                     FTC than FRC, an early-bird deadline, or a fee charged on top. Do NOT restate
                     costUsd here: "$300 registration fee" next to costUsd 300 is noise. If the
                     price is a single figure, return null.
+  eventStatus       one of ${EVENT_STATUSES.map((s) => `"${s}"`).join(', ')}, what the site says about
+                    whether the event is happening:
+                      "cancelled"  called off. "This event is cancelled", "will not run this year".
+                      "tentative"  announced but not locked in: a save-the-date with no confirmed
+                                   venue or firm date, "planning stages", "tentative".
+                      "confirmed"  a real event with a date and a venue set, which is the normal case.
+                    Do NOT answer "completed" from a past date; the platform derives that from the
+                    date itself. Answer "confirmed" for an ordinary scheduled event; use "cancelled"
+                    or "tentative" only when the site indicates it; null only if you genuinely cannot tell.
   registrationStatus  where team sign-ups have got to. These are four different things and the
                     difference matters to a team deciding whether to act today:
                       "not_open"  sign-ups have not started. "Save the date", "applications open in
@@ -157,6 +167,7 @@ Return only the JSON object.`
 
 const ENUMS: Record<string, readonly string[]> = {
   program: EVENT_PROGRAMS,
+  eventStatus: EVENT_STATUSES,
   registrationStatus: REGISTRATION_STATUSES,
   volunteerStatus: VOLUNTEER_STATUSES,
 }

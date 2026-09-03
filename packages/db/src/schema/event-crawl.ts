@@ -236,6 +236,8 @@ export interface ExtractedEventListingFields {
   name?: string
   /** EVENT_PROGRAMS. Left undefined when the source did not say. */
   program?: string
+  /** EVENT_STATUSES. What the site says about whether the event is happening (cancelled / tentative / confirmed). */
+  eventStatus?: string
   hostTeamNumber?: number
   venueName?: string
   address?: string
