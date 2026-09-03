@@ -254,10 +254,10 @@ export async function startClaim(
   // Something rather than nothing. A character count was arbitrary and did not
   // make a claim any more checkable: a long note is not proof and a short one
   // pointing at a public page is. An admin reads it either way.
+  // A note is optional now: the claim form no longer asks a claimant to justify
+  // themselves (it proved nothing and added friction), and an admin approves
+  // every claim by hand anyway. Kept for the rare path that still passes one.
   const note = (noteRaw ?? '').trim().slice(0, 1000)
-  if (!note) {
-    return { error: 'Say how you are connected to it. An admin reads this.' }
-  }
   const [filed] = await db
     .insert(listingClaims)
     .values({
@@ -282,10 +282,33 @@ export async function startClaim(
     submitter: user.displayName ?? user.email ?? null,
     facts: [
       { label: 'Contested', value: target.alreadyOwned ? 'Yes, this listing already has an owner' : 'No, nobody owns it yet' },
-      { label: 'They say', value: note },
+      ...(note ? [{ label: 'They say', value: note }] : []),
       { label: 'Listing', value: target.facts.subtitle },
     ],
   })
+
+  // Did this claim come from an outreach email we sent? That is the only signal
+  // of whether those emails convert, so tell the owner when one does.
+  let outreachAt: Date | null = null
+  if (entityType === 'event') {
+    const [r] = await db.select({ o: eventListings.outreachSentAt }).from(eventListings).where(eq(eventListings.id, entityId)).limit(1)
+    outreachAt = r?.o ?? null
+  } else if (entityType === 'field') {
+    const [r] = await db.select({ o: practiceFields.outreachSentAt }).from(practiceFields).where(eq(practiceFields.id, entityId)).limit(1)
+    outreachAt = r?.o ?? null
+  }
+  if (outreachAt) {
+    sendApprovalNotice({
+      vertical: 'claim',
+      title: `Outreach converted: ${target.facts.title} was claimed`,
+      reviewUrl: reviewClaimUrl(filed.id),
+      submitter: user.displayName ?? user.email ?? null,
+      facts: [
+        { label: 'Listing', value: target.facts.subtitle },
+        { label: 'Signal', value: 'Claimed after we emailed the organiser their listing' },
+      ],
+    })
+  }
 
   revalidatePath('/me/listings')
   return {
