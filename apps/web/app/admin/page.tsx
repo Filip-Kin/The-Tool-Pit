@@ -13,7 +13,7 @@ import Link from 'next/link'
 import { ClickableRow } from '@/components/admin/clickable-row'
 import { StatusText } from '@/components/admin/status'
 import { assertAdmin } from '@/lib/admin/auth'
-import { getAdminQueueBacklog } from '@/lib/admin/queue-counts'
+import { getAdminQueueBacklog, getWorkerQueueBacklog } from '@/lib/admin/queue-counts'
 
 async function getStats() {
   const db = getDb()
@@ -68,7 +68,11 @@ async function getStats() {
 
 export default async function AdminOverviewPage() {
   await assertAdmin()
-  const [stats, backlog] = await Promise.all([getStats(), getAdminQueueBacklog()])
+  const [stats, backlog, workerQueues] = await Promise.all([
+    getStats(),
+    getAdminQueueBacklog(),
+    getWorkerQueueBacklog(),
+  ])
 
   return (
     <div className="p-4 md:p-8 flex flex-col gap-8">
@@ -128,6 +132,52 @@ export default async function AdminOverviewPage() {
                     </td>
                     <td className="px-4 py-2 text-right text-xs text-muted">
                       {row.oldestPendingAt ? new Date(row.oldestPendingAt).toLocaleDateString() : '—'}
+                    </td>
+                  </ClickableRow>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Worker queues: reading jobs and team-list crawls run entirely through
+          BullMQ and never write the *_crawl_jobs tables the backlog above reads,
+          so their state lives in Redis. One row per queue, waiting/active plus
+          the actionable failed count and how long the oldest job has waited. */}
+      <div className="flex flex-col gap-4">
+        <h2 className="text-lg font-semibold text-foreground">Worker queues</h2>
+        <div className="rounded-lg border border-border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-[36rem] w-full text-sm">
+              <thead className="bg-surface-2 text-muted text-xs">
+                <tr>
+                  <th className="px-4 py-2 text-left">Queue</th>
+                  <th className="px-4 py-2 text-right">Waiting</th>
+                  <th className="px-4 py-2 text-right">Active</th>
+                  <th className="px-4 py-2 text-right">Failed</th>
+                  <th className="px-4 py-2 text-right">Oldest waiting</th>
+                </tr>
+              </thead>
+              <tbody>
+                {workerQueues.map((row) => (
+                  <ClickableRow
+                    key={row.key}
+                    href={row.href}
+                    className={`border-t border-border-subtle hover:bg-surface ${row.waiting + row.active + row.failed > 0 ? '' : 'text-muted'}`}
+                  >
+                    <td className="px-4 py-2 text-foreground">{row.label}</td>
+                    <td className="px-4 py-2 text-right font-mono text-xs text-muted">
+                      {row.waiting > 0 ? row.waiting.toLocaleString() : '—'}
+                    </td>
+                    <td className={`px-4 py-2 text-right font-mono text-xs ${row.active > 0 ? 'text-official font-medium' : 'text-muted'}`}>
+                      {row.active > 0 ? row.active.toLocaleString() : '—'}
+                    </td>
+                    <td className={`px-4 py-2 text-right font-mono text-xs ${row.failed > 0 ? 'text-frc font-semibold' : 'text-muted'}`}>
+                      {row.failed > 0 ? row.failed.toLocaleString() : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-right text-xs text-muted">
+                      {row.oldestWaitingAt ? new Date(row.oldestWaitingAt).toLocaleString() : '—'}
                     </td>
                   </ClickableRow>
                 ))}

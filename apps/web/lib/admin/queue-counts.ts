@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm'
+import { Queue } from 'bullmq'
 import { getDb } from '@/lib/db'
 
 /**
@@ -154,4 +155,96 @@ export async function getAdminQueueBacklog(): Promise<AdminQueueBacklogRow[]> {
       oldestPendingAt: row?.oldest ? new Date(row.oldest) : null,
     }
   })
+}
+
+/**
+ * The two worker queues whose state lives in Redis, not Postgres.
+ *
+ * Reading candidates and refreshing rosters run entirely through BullMQ and
+ * never touch the *_crawl_jobs tables the dashboard reads, so neither shows up
+ * anywhere else on the admin. An overnight read that keeps failing, or a roster
+ * sweep that has piled up behind a stuck browser, would be invisible without
+ * this.
+ */
+interface WorkerQueueSpec {
+  /** The BullMQ queue name, from apps/worker/src/queues.ts. */
+  name: string
+  /** Human label for the dashboard row. */
+  label: string
+  /** Where the row links. */
+  href: string
+}
+
+const WORKER_QUEUES: WorkerQueueSpec[] = [
+  // Off-season event / practice-field candidate reads (model + browser).
+  { name: 'read-candidates', label: 'Reading jobs', href: '/admin/event-listings/candidates' },
+  // Registered-team-count refresh from TBA / team-list URLs.
+  { name: 'roster-refresh', label: 'Team-list crawls', href: '/admin/event-listings' },
+]
+
+/** One dashboard row for a Redis-backed worker queue. */
+export interface WorkerQueueRow {
+  key: string
+  label: string
+  href: string
+  /** Jobs enqueued and not yet picked up. */
+  waiting: number
+  /** Jobs running right now. */
+  active: number
+  /** Jobs that exhausted their retries. The actionable number. */
+  failed: number
+  /** Enqueue time of the oldest waiting job, or null when nothing waits. */
+  oldestWaitingAt: Date | null
+}
+
+/**
+ * Live BullMQ counts for the worker queues the DB-backed backlog cannot see.
+ *
+ * Each queue gets its own short-lived connection (the maintenance page pattern):
+ * passing the shared getRedis() singleton and then calling close() would tear
+ * down the connection the rest of the request relies on, so BullMQ owns and
+ * closes a URL-based connection instead. Fails open — an unreachable Redis
+ * returns zeros rather than 500-ing the whole overview.
+ */
+export async function getWorkerQueueBacklog(): Promise<WorkerQueueRow[]> {
+  const redisUrl = process.env.REDIS_URL
+  if (!redisUrl) return WORKER_QUEUES.map((q) => emptyWorkerRow(q))
+
+  return Promise.all(
+    WORKER_QUEUES.map(async (spec) => {
+      const queue = new Queue(spec.name, { connection: { url: redisUrl } })
+      try {
+        const counts = await queue.getJobCounts('active', 'waiting', 'delayed', 'completed', 'failed')
+        // The single oldest waiting job carries the enqueue time; index 0..0 is
+        // one job, and an empty queue returns an empty array.
+        const [oldest] = await queue.getWaiting(0, 0)
+        return {
+          key: spec.name,
+          label: spec.label,
+          href: spec.href,
+          waiting: counts.waiting ?? 0,
+          active: counts.active ?? 0,
+          failed: counts.failed ?? 0,
+          oldestWaitingAt: oldest?.timestamp ? new Date(oldest.timestamp) : null,
+        }
+      } catch (err) {
+        console.error(`[admin] could not read worker queue ${spec.name}:`, err)
+        return emptyWorkerRow(spec)
+      } finally {
+        await queue.close()
+      }
+    }),
+  )
+}
+
+function emptyWorkerRow(spec: WorkerQueueSpec): WorkerQueueRow {
+  return {
+    key: spec.name,
+    label: spec.label,
+    href: spec.href,
+    waiting: 0,
+    active: 0,
+    failed: 0,
+    oldestWaitingAt: null,
+  }
 }
