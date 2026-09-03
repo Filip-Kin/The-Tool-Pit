@@ -5,7 +5,12 @@ import { getVotedToolIds } from '@/lib/queries/tools'
 import { getFavoritedIds } from '@/lib/queries/favorites'
 
 interface ToolGridProps {
-  tools: SearchResultRow[]
+  /**
+   * firstParty is optional so a plain SearchResultRow (search results) still
+   * fits; the home page's rows carry it and get the "Built here" badge.
+   */
+  tools: Array<SearchResultRow & { firstParty?: boolean }>
+
   /**
    * A curator's line per tool id, for the home page's Featured row. Every other
    * grid leaves this out and gets plain cards.
@@ -41,6 +46,7 @@ export async function ToolGrid({ tools, notes, className }: ToolGridProps) {
           tool={tool}
           voted={voted.has(tool.id)}
           favorited={favorited.has(tool.id)}
+          firstParty={tool.firstParty}
           note={notes?.[tool.id]}
         />
       ))}

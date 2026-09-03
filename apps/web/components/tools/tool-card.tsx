@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Github, ArrowUpRight } from 'lucide-react'
+import { Github, ArrowUpRight, Wrench } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cardClass } from '@/components/ui/card'
 import { FreshnessChip } from '@/components/ui/freshness-chip'
@@ -25,6 +25,12 @@ interface ToolCardProps {
   /** Whether this visitor already saved it. Resolved once for the whole grid. */
   favorited?: boolean
   /**
+   * Whether we host this tool ourselves, its homepage being under frc.tools.
+   * Shows a "Built here" badge so first-party work reads apart from the wall of
+   * external links. Derived in the query; search cards leave it unset.
+   */
+  firstParty?: boolean
+  /**
    * Why somebody picked this out, in their words. Only the home page's
    * Featured row passes one; everywhere else the card is the same card.
    */
@@ -32,7 +38,7 @@ interface ToolCardProps {
   className?: string
 }
 
-export function ToolCard({ tool, voted = false, favorited = false, note, className }: ToolCardProps) {
+export function ToolCard({ tool, voted = false, favorited = false, firstParty = false, note, className }: ToolCardProps) {
   return (
     <article className={cardClass({ interactive: true, className: cn('group relative flex flex-col gap-3', className) })}>
       {/* Header */}
@@ -48,6 +54,12 @@ export function ToolCard({ tool, voted = false, favorited = false, note, classNa
 
           {/* Badges row */}
           <div className="flex flex-wrap items-center gap-1">
+            {firstParty && (
+              <Badge variant="program" className="gap-1">
+                <Wrench className="h-3 w-3" aria-hidden />
+                Built here
+              </Badge>
+            )}
             {tool.isOfficial && <Badge variant="official">FIRST Official</Badge>}
             {tool.isVendor && <Badge variant="vendor">Vendor</Badge>}
             {tool.isRookieFriendly && <Badge variant="rookie">Rookie Friendly</Badge>}

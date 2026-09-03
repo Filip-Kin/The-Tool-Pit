@@ -1,21 +1,32 @@
-import { sql, eq, or, desc, and, inArray } from 'drizzle-orm'
+import { sql, eq, or, desc, and, inArray, notInArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { currentVoterFingerprint } from '@/lib/voting/fingerprint'
 import { getCurrentUser } from '@/lib/auth/session'
 import { favorites, tools, toolPrograms, toolLinks, toolVotes, programs, audiencePrimaryRoles, audienceFunctions, toolAudiencePrimaryRoles, toolAudienceFunctions } from '@the-tool-pit/db'
 import { seasonalDecaySql } from '@/lib/ranking/seasonal-decay'
+import { isFirstPartyUrl, DISCOVER_EXCLUDED_SLUGS } from '@/lib/tools/curation'
 import type { SearchResultRow } from '@/lib/search/search'
+
+/**
+ * A search row plus whether we host the tool ourselves.
+ *
+ * firstParty is derived in enrichTools from the homepage link's host, so it
+ * costs one extra fetch per grid and no schema change. Everything the home page
+ * renders carries it; a plain SearchResultRow (search results) simply omits it
+ * and the card shows no badge.
+ */
+export type ToolListRow = SearchResultRow & { firstParty: boolean }
 
 // ---------------------------------------------------------------------------
 // Helpers to enrich a list of tool IDs with programs, github link, vote count
 // ---------------------------------------------------------------------------
 
-async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchResultRow[]> {
+async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<ToolListRow[]> {
   if (rows.length === 0) return []
   const db = getDb()
   const ids = rows.map((r) => r.id)
 
-  const [programRows, linkRows, voteRows] = await Promise.all([
+  const [programRows, linkRows, homepageRows, voteRows] = await Promise.all([
     db
       .select({ toolId: toolPrograms.toolId, slug: programs.slug })
       .from(toolPrograms)
@@ -25,6 +36,10 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
       .select({ toolId: toolLinks.toolId, url: toolLinks.url })
       .from(toolLinks)
       .where(and(inArray(toolLinks.toolId, ids), eq(toolLinks.linkType, 'github'))),
+    db
+      .select({ toolId: toolLinks.toolId, url: toolLinks.url })
+      .from(toolLinks)
+      .where(and(inArray(toolLinks.toolId, ids), eq(toolLinks.linkType, 'homepage'))),
     db
       .select({ toolId: toolVotes.toolId, count: sql<number>`count(*)::int` })
       .from(toolVotes)
@@ -41,6 +56,13 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
 
   const githubMap = new Map<string, string>()
   for (const r of linkRows) githubMap.set(r.toolId, r.url)
+
+  // First-party is the homepage's host under frc.tools, computed here so no
+  // column has to store a fact that is already in the link.
+  const firstPartyIds = new Set<string>()
+  for (const r of homepageRows) {
+    if (isFirstPartyUrl(r.url)) firstPartyIds.add(r.toolId)
+  }
 
   const voteMap = new Map<string, number>()
   for (const r of voteRows) voteMap.set(r.toolId, r.count)
@@ -64,6 +86,7 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
     voteCount: (voteMap.get(r.id) ?? 0) + (r.githubStars ?? 0) + (r.chiefDelphiLikes ?? 0),
     programs: progMap.get(r.id) ?? [],
     githubUrl: githubMap.get(r.id) ?? null,
+    firstParty: firstPartyIds.has(r.id),
   }))
 }
 
@@ -86,36 +109,34 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<SearchRes
 export const ALIVE_ENOUGH_TO_RECOMMEND = sql`coalesce(${tools.freshnessState}, 'unknown') not in ('inactive', 'archived')`
 
 /**
- * The home page's "Trending" row.
+ * The home page's "Discover" row.
  *
  * There is no first-party traffic data yet, so this is popularity (GitHub
- * stars plus Chief Delphi likes plus votes) rather than genuine velocity, and
- * the section is labelled accordingly. What it must NOT do is lead with a dead
- * tool: a 5000-star repo nobody has touched in two years outranking a
- * maintained one is exactly the junk-directory feel the tools vertical already
- * got burned by.
+ * stars plus Chief Delphi likes plus votes) tempered by a seasonal decay,
+ * rather than genuine velocity. What it must NOT do is read like a link farm:
+ * a veteran told us the front page led with WPILib, PathPlanner, ReCalc and The
+ * Blue Alliance, every one of which they already had bookmarked, and none of
+ * which is news. Discover is the row for what they have NOT seen.
  *
- * TWO SEPARATE MECHANISMS, and they are not substitutes for each other.
+ * THREE MECHANISMS, and they are not substitutes for each other.
  *
- * The exclusion below removes. Anything inactive or archived is off the row
+ * The dead exclusion removes. Anything inactive or archived is off the row
  * outright, and it has to be, because no multiplier is small enough to do that
  * job: WPILib silent for two seasons still scores 1301 times any sane decay and
  * would lead the page over everything maintained.
  *
- * The decay multiplier reorders what is left. It replaces the three step
- * freshness multiplier that used to sit here, which read 1.0 for active, 0.35
- * for stale and 0.7 for unknown. Those steps landed on 365 and 730 elapsed
- * days, so a listing pushed 364 days ago outscored one pushed 366 days ago by
- * nearly three times, and inside a band a repo touched last week and one
- * touched eleven months ago ranked the same. The replacement is continuous, it
- * has no cliff, and its clock skips May to August because a quiet FIRST summer
- * is not evidence of anything. See lib/ranking/seasonal-decay.ts.
+ * The giant exclusion removes too, but for the opposite reason: these are alive
+ * and enormous and everyone knows them. DISCOVER_EXCLUDED_SLUGS lists them by
+ * hand (see lib/tools/curation.ts). They keep their full standing in Popular,
+ * in search and on their own pages; this row just does not spend its six slots
+ * re-introducing them.
  *
- * Unknown activity keeps its 0.7 unchanged, and that is 478 of the 1094
- * published listings. It means there is no repo to read a commit date from, not
- * that nothing is happening.
+ * The decay multiplier reorders what is left. Its clock skips May to August
+ * because a quiet FIRST summer is not evidence of anything, and unknown
+ * activity keeps a flat 0.7, which is 478 of the 1094 published listings. See
+ * lib/ranking/seasonal-decay.ts.
  */
-export async function getTrendingTools(limit = 6): Promise<SearchResultRow[]> {
+export async function getDiscoverTools(limit = 6): Promise<ToolListRow[]> {
   const db = getDb()
   const rows = await db
     .select()
@@ -123,14 +144,17 @@ export async function getTrendingTools(limit = 6): Promise<SearchResultRow[]> {
     .where(
       and(
         eq(tools.status, 'published'),
-        // A dead tool is not trending by any definition.
+        // A dead tool is not a discovery by any definition.
         ALIVE_ENOUGH_TO_RECOMMEND,
-        // FIRST's own resources have their own section directly below this one,
-        // and they are popular by construction: everybody uses WPILib because
-        // there is no alternative, not because the community picked it. Leaving
-        // them in meant Popular repeated Official and spent its best rows on
-        // things a reader had already been shown.
+        // FIRST's own resources have their own section, and they are popular by
+        // construction: everybody uses WPILib because there is no alternative,
+        // not because the community picked it.
         sql`${tools.isOfficial} is not true`,
+        // The eternal giants. Present everywhere else, absent here so the row
+        // surfaces rising work instead of the usual names.
+        DISCOVER_EXCLUDED_SLUGS.length > 0
+          ? notInArray(tools.slug, [...DISCOVER_EXCLUDED_SLUGS])
+          : undefined,
       ),
     )
     .orderBy(desc(sql`${seasonalDecaySql} * coalesce(${tools.popularityScore}, 0)`))
@@ -138,7 +162,39 @@ export async function getTrendingTools(limit = 6): Promise<SearchResultRow[]> {
   return enrichTools(rows)
 }
 
-export async function getRecentlyUpdatedTools(limit = 6): Promise<SearchResultRow[]> {
+/**
+ * The home page's "Built on FRC.tools" row: the tools we host ourselves.
+ *
+ * Answers the other half of the veteran's complaint, that the page mixed our
+ * own first-party work in with a wall of external links and gave no way to tell
+ * them apart. A tool qualifies when its homepage host is frc.tools or a
+ * subdomain of it, tested in SQL against the homepage link so no column is
+ * needed. Ordered by popularity, same as its neighbours.
+ */
+export async function getFirstPartyTools(limit = 6): Promise<ToolListRow[]> {
+  const db = getDb()
+  const rows = await db
+    .select()
+    .from(tools)
+    .where(
+      and(
+        eq(tools.status, 'published'),
+        // Our own tools should still be alive to be worth featuring.
+        ALIVE_ENOUGH_TO_RECOMMEND,
+        sql`exists (
+          select 1 from ${toolLinks} tl
+          where tl.tool_id = ${tools.id}
+            and tl.link_type = 'homepage'
+            and tl.url ~* '^https?://([a-z0-9-]+\\.)*frc\\.tools([/:?#]|$)'
+        )`,
+      ),
+    )
+    .orderBy(desc(tools.popularityScore))
+    .limit(limit)
+  return enrichTools(rows)
+}
+
+export async function getRecentlyUpdatedTools(limit = 6): Promise<ToolListRow[]> {
   const db = getDb()
   const rows = await db
     .select()
@@ -149,7 +205,7 @@ export async function getRecentlyUpdatedTools(limit = 6): Promise<SearchResultRo
   return enrichTools(rows)
 }
 
-export async function getRookieFriendlyTools(limit = 6): Promise<SearchResultRow[]> {
+export async function getRookieFriendlyTools(limit = 6): Promise<ToolListRow[]> {
   const db = getDb()
   const rows = await db
     .select()
@@ -177,7 +233,7 @@ export async function getRookieFriendlyTools(limit = 6): Promise<SearchResultRow
  * Newest first, not most popular: this list is the visitor's own shortlist and
  * the thing they saved a minute ago is the thing they came back for.
  */
-export async function getFavoriteTools(limit = 6): Promise<SearchResultRow[]> {
+export async function getFavoriteTools(limit = 6): Promise<ToolListRow[]> {
   const user = await getCurrentUser()
   if (!user) return []
 
@@ -217,7 +273,7 @@ export async function getFavoriteTools(limit = 6): Promise<SearchResultRow[]> {
  * flag is the decision and the note is the explanation.
  */
 export interface FeaturedTools {
-  tools: SearchResultRow[]
+  tools: ToolListRow[]
   /** Keyed by tool id. A featured tool with no note is simply absent. */
   notes: Record<string, string>
 }
@@ -239,7 +295,7 @@ export async function getFeaturedTools(limit = 6): Promise<FeaturedTools> {
   return { tools: await enrichTools(rows), notes }
 }
 
-export async function getOfficialTools(limit = 6): Promise<SearchResultRow[]> {
+export async function getOfficialTools(limit = 6): Promise<ToolListRow[]> {
   const db = getDb()
   const rows = await db
     .select()

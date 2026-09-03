@@ -5,7 +5,8 @@ import { VerticalNav } from '@/components/layout/vertical-switcher'
 import { ToolGrid } from '@/components/tools/tool-grid'
 import { SectionHeader } from '@/components/ui/section-header'
 import {
-  getTrendingTools,
+  getDiscoverTools,
+  getFirstPartyTools,
   getRecentlyUpdatedTools,
   getRookieFriendlyTools,
   getOfficialTools,
@@ -31,10 +32,11 @@ import {
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
-  const [favorites, featured, trending, recent, rookie, official] = await Promise.all([
+  const [favorites, featured, firstParty, discover, recent, rookie, official] = await Promise.all([
     getFavoriteTools(6),
     getFeaturedTools(6),
-    getTrendingTools(6),
+    getFirstPartyTools(6),
+    getDiscoverTools(6),
     getRecentlyUpdatedTools(6),
     getRookieFriendlyTools(6),
     getOfficialTools(6),
@@ -110,6 +112,24 @@ export default async function HomePage() {
         </section>
       )}
 
+      {/* Built here. The feedback that drove this: the front page mixed our own
+          first-party tools, the ones we host under frc.tools, into a wall of
+          external links with no way to tell them apart. This section is the
+          separation, and every card here also carries a "Built here" badge, so
+          the distinction survives when the tool shows up in another row. Renders
+          nothing until there is a first-party tool to show. */}
+      {firstParty.length > 0 && (
+        <section className="container mx-auto max-w-6xl px-4">
+          <SectionHeader
+            title="Built on FRC.tools"
+            description="First-party tools we host and maintain"
+          />
+          <Suspense fallback={<ToolGrid.Skeleton count={firstParty.length} />}>
+            <ToolGrid tools={firstParty} />
+          </Suspense>
+        </section>
+      )}
+
       {/* Then your own, and only when there is some. A signed-out visitor and a
           signed-in one who has bookmarked nothing both see the page as it was.
           Called Bookmarked because the control on every card is a bookmark;
@@ -134,15 +154,21 @@ export default async function HomePage() {
         <ProgramCards />
       </section>
 
+      {/* Discover, not Popular. Popularity alone put WPILib, PathPlanner and the
+          rest of the eternal giants here forever, which a veteran reads as a
+          link farm of things they already have. This row keeps the same hot
+          score but drops that handful (DISCOVER_EXCLUDED_SLUGS), so it surfaces
+          newer and rising work. The giants stay one click away under Browse
+          all, which sorts by raw popularity. */}
       <section className="container mx-auto max-w-6xl px-4">
         <SectionHeader
-          title="Popular"
-          description="What teams reach for most"
+          title="Discover"
+          description="Newer and rising tools, not the usual giants"
           href="/search?sort=popular"
-          linkLabel="See all"
+          linkLabel="Browse all"
         />
         <Suspense fallback={<ToolGrid.Skeleton count={6} />}>
-          <ToolGrid tools={trending} />
+          <ToolGrid tools={discover} />
         </Suspense>
       </section>
 
