@@ -40,7 +40,7 @@ type AlbumCandidateClassification = Partial<AlbumEventMatch> & {
 export default async function AdminAlbumCandidatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; page?: string; q?: string }>
+  searchParams: Promise<{ status?: string; page?: string; q?: string; reason?: string }>
 }) {
   await assertAdmin()
   const params = await searchParams
@@ -48,6 +48,10 @@ export default async function AdminAlbumCandidatesPage({
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
   const offset = (page - 1) * PAGE_SIZE
   const q = params.q?.trim() ?? ''
+  // Filter the suppressed tab by rejection_reason, so the owner can audit what
+  // got auto-suppressed and why (open_alliance, not_a_photo_album, dead_link,
+  // fll_no_event_mapping, ...). Only meaningful on the suppressed tab.
+  const reason = status === 'suppressed' ? (params.reason?.trim() ?? '') : ''
 
   const db = getDb()
 
@@ -66,7 +70,9 @@ export default async function AdminAlbumCandidatesPage({
         ? isNotNull(albumCandidates.submissionId)
         : status === 'unmatched'
           ? unmatchedFilter
-          : eq(albumCandidates.status, status)
+          : status === 'suppressed' && reason
+            ? and(eq(albumCandidates.status, 'suppressed'), eq(albumCandidates.rejectionReason, reason))!
+            : eq(albumCandidates.status, status)
 
   const searchFilter: SQL | undefined = q
     ? or(
@@ -79,7 +85,7 @@ export default async function AdminAlbumCandidatesPage({
     : undefined
   const where = searchFilter ? and(statusFilter, searchFilter)! : statusFilter
 
-  const [rows, [{ total }], counts, [{ noCover }], submittedCount, [unmatchedAgg]] = await Promise.all([
+  const [rows, [{ total }], counts, [{ noCover }], submittedCount, [unmatchedAgg], reasonCounts] = await Promise.all([
     db
       .select({
         candidate: albumCandidates,
@@ -122,6 +128,17 @@ export default async function AdminAlbumCandidatesPage({
       })
       .from(albumCandidates)
       .where(unmatchedFilter),
+    // Distinct rejection_reason breakdown of the suppressed tab, for the audit
+    // chips. Every auto-suppress reason (junk gate, dead link, FLL) shows here.
+    db
+      .select({
+        reason: sql<string>`coalesce(${albumCandidates.rejectionReason}, '')`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(albumCandidates)
+      .where(eq(albumCandidates.status, 'suppressed'))
+      .groupBy(sql`coalesce(${albumCandidates.rejectionReason}, '')`)
+      .orderBy(desc(sql`count(*)`)),
   ])
 
   const countMap: Record<string, number> = Object.fromEntries(counts.map((r) => [r.status, r.count]))
@@ -190,6 +207,35 @@ export default async function AdminAlbumCandidatesPage({
             Set an event to publish one, or clear the backlog.
           </p>
           <BulkSuppressUnmatched count={unmatchedCount} />
+        </div>
+      )}
+
+      {status === 'suppressed' && reasonCounts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-2">reason:</span>
+          <Link
+            href={`/admin/album-candidates?status=suppressed${q ? `&q=${encodeURIComponent(q)}` : ''}`}
+            className={`rounded-full px-2 py-0.5 text-xs ${
+              reason ? 'text-muted hover:text-foreground' : 'bg-primary/15 text-primary'
+            }`}
+          >
+            all
+          </Link>
+          {reasonCounts.map((r) => {
+            const label = r.reason || 'none'
+            return (
+              <Link
+                key={label}
+                href={`/admin/album-candidates?status=suppressed&reason=${encodeURIComponent(r.reason)}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
+                className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-xs ${
+                  reason === r.reason ? 'bg-primary/15 text-primary' : 'text-muted hover:text-foreground'
+                }`}
+              >
+                {label}
+                <span className="rounded-full bg-surface-3 px-1 text-[10px] text-muted">{r.count}</span>
+              </Link>
+            )
+          })}
         </div>
       )}
 
@@ -276,6 +322,7 @@ export default async function AdminAlbumCandidatesPage({
                                     candidateId={row.id}
                                     status={row.status}
                                     hasEvent={Boolean(row.matchedEventId)}
+                                    fromSubmission={Boolean(row.submissionId)}
                                     program={program}
                                     targetEventCode={row.targetEventCode}
                                     targetEventYear={row.targetEventYear}
@@ -293,7 +340,7 @@ export default async function AdminAlbumCandidatesPage({
         </div>
       )}
 
-      <Pager page={page} totalPages={totalPages} href={(n) => `/admin/album-candidates?status=${status}&page=${n}${q ? `&q=${encodeURIComponent(q)}` : ''}`} />
+      <Pager page={page} totalPages={totalPages} href={(n) => `/admin/album-candidates?status=${status}&page=${n}${q ? `&q=${encodeURIComponent(q)}` : ''}${reason ? `&reason=${encodeURIComponent(reason)}` : ''}`} />
     </div>
   )
 }

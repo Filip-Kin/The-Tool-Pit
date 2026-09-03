@@ -15,6 +15,7 @@ import { FlickrAlbumsConnector } from '../connectors/flickr-albums.js'
 import { SmugmugAlbumsConnector } from '../connectors/smugmug-albums.js'
 import type { AlbumConnector } from '../connectors/album-hosts.js'
 import { albumEnrichQueue } from '../queues.js'
+import { classifyAlbumJunk } from './album-junk.js'
 import type { AlbumIngestPayload } from '@the-tool-pit/types'
 import { sendApprovalNotice, reviewQueueUrl } from '@the-tool-pit/types'
 
@@ -77,6 +78,10 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
     let totalNew = 0
     let totalSkipped = 0
     let totalFailed = 0
+    // Auto-suppressed at ingest by the junk gate (Open Alliance, single videos,
+    // team general galleries). Rolled into `skipped` for the run stats - they
+    // never become an actionable pending row.
+    let totalJunk = 0
 
     for (const cand of result.candidates) {
       try {
@@ -107,6 +112,35 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
           .limit(1)
         if (dupCand) {
           totalSkipped++
+          continue
+        }
+
+        // Junk gate: Open Alliance threads, single videos, and team general
+        // galleries are never event photos. Store them straight to 'suppressed'
+        // with a distinct, filterable reason so they never sit in the queue and
+        // no enrich work is spent on them. Real event albums can't match here
+        // (see classifyAlbumJunk - conservative by design).
+        const junk = classifyAlbumJunk({
+          canonicalUrl,
+          sourceUrl: cand.sourceUrl,
+          targetEventCode: cand.targetEventCode,
+          title: cand.rawMetadata?.title,
+          threadTitle: cand.rawMetadata?.threadTitle,
+          blurb: cand.rawMetadata?.blurb,
+        })
+        if (junk) {
+          await db.insert(albumCandidates).values({
+            jobId,
+            sourceUrl: cand.sourceUrl,
+            canonicalUrl,
+            provider,
+            targetEventCode: cand.targetEventCode,
+            targetEventYear: cand.targetEventYear,
+            rawMetadata: cand.rawMetadata,
+            status: 'suppressed',
+            rejectionReason: junk.reason,
+          })
+          totalJunk++
           continue
         }
 
@@ -141,13 +175,15 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
           discovered: result.candidates.length,
           new: totalNew,
           matched: 0,
-          skipped: totalSkipped,
+          skipped: totalSkipped + totalJunk,
           failed: totalFailed,
         },
       })
       .where(eq(albumCrawlJobs.id, jobId))
 
-    console.log(`[album-ingest] ${connectorName} done: ${totalNew} new, ${totalSkipped} skipped, ${totalFailed} failed`)
+    console.log(
+      `[album-ingest] ${connectorName} done: ${totalNew} new, ${totalSkipped} skipped, ${totalJunk} junk-suppressed, ${totalFailed} failed`,
+    )
 
     // One summary per run. See the same block in jobs/crawl.ts for why.
     if (totalNew > 0) {
@@ -161,7 +197,8 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
           { label: 'Season', value: year, inline: true },
           { label: 'Discovered', value: result.candidates.length, inline: true },
           { label: 'New', value: totalNew, inline: true },
-          { label: 'Skipped', value: totalSkipped, inline: true },
+          { label: 'Skipped', value: totalSkipped + totalJunk, inline: true },
+          { label: 'Junk suppressed', value: totalJunk || null, inline: true },
           { label: 'Failed', value: totalFailed || null, inline: true },
         ],
       })

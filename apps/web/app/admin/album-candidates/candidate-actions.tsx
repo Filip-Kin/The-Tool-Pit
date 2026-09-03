@@ -19,6 +19,7 @@ export function AlbumCandidateActions({
   candidateId,
   status,
   hasEvent,
+  fromSubmission,
   program,
   targetEventCode,
   targetEventYear,
@@ -30,6 +31,8 @@ export function AlbumCandidateActions({
   candidateId: string
   status: string
   hasEvent: boolean
+  /** True when this came from a public submission (has a submitter to email). */
+  fromSubmission: boolean
   program: 'frc' | 'ftc'
   targetEventCode: string | null
   targetEventYear: number | null
@@ -149,14 +152,27 @@ async function shrinkImage(file: File): Promise<File> {
               {pending ? '…' : 'Approve'}
             </button>
           )}
-          {status !== 'suppressed' && (
-            <ReasonButton
-              label="Suppress"
-              confirmLabel="Reject"
-              disabled={pending}
-              onConfirm={(reason) => suppressAlbumCandidate(candidateId, reason)}
-            />
-          )}
+          {status !== 'suppressed' &&
+            (fromSubmission ? (
+              // A public submission has a submitter: the reason is the email, so
+              // ask for it.
+              <ReasonButton
+                label="Suppress"
+                confirmLabel="Reject"
+                disabled={pending}
+                onConfirm={(reason) => suppressAlbumCandidate(candidateId, reason)}
+              />
+            ) : (
+              // Crawled/scraped: nobody to tell, so suppress in one click.
+              <button
+                disabled={pending}
+                title="Remove this crawled candidate from the queue"
+                onClick={() => run(() => suppressAlbumCandidate(candidateId))}
+                className={buttonClass({ variant: 'secondary', size: 'sm' })}
+              >
+                {pending ? '…' : 'Suppress'}
+              </button>
+            ))}
         </div>
       )}
       {status === 'published' && <span className="text-xs text-official">published</span>}

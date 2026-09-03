@@ -200,35 +200,46 @@ export async function approveAlbumCandidate(candidateId: string): Promise<{ erro
   return {}
 }
 
+/** Internal reason a crawled candidate carries when an admin one-click suppresses it. */
+const MANUAL_SCRAPED_REASON = 'manual_reject'
+
 /**
  * Refuse an album, or take down one that is already on an event page.
  *
- * Same double duty as the other queues, same fix: read the status first, send
- * the email that matches, and require the reason because the reason IS the
- * email. deletePublishedAlbum is the harder takedown next to this one and also
- * suppresses the candidate, so both routes off a published album say so.
+ * The reason is only a message to a submitter when there IS one. A crawled
+ * candidate (no submission row) has nobody to tell, so the reason is not
+ * required and defaults to an internal slug: the queue is full of scraped rows
+ * and forcing a sentence on each one just slows the moderator down. A submitted
+ * candidate still requires the reason, because there the reason IS the email.
+ * deletePublishedAlbum is the harder takedown next to this one and always has a
+ * submitter to notify, so it keeps its own required reason.
  */
 export async function suppressAlbumCandidate(
   candidateId: string,
-  rejectionReason: string,
+  rejectionReason?: string,
 ): Promise<{ error?: string }> {
   await assertAdmin()
   const clean = rejectionReason?.trim() ?? ''
-  if (!clean) return { error: 'Give a reason. It is what the submitter is told.' }
 
   const db = getDb()
   const [before] = await db
-    .select({ status: albumCandidates.status })
+    .select({ status: albumCandidates.status, submissionId: albumCandidates.submissionId })
     .from(albumCandidates)
     .where(eq(albumCandidates.id, candidateId))
     .limit(1)
   if (!before) return { error: 'Candidate not found' }
 
+  const fromSubmission = before.submissionId != null
+  // Only a submitted candidate has someone to email, so only it needs the reason.
+  if (fromSubmission && !clean) return { error: 'Give a reason. It is what the submitter is told.' }
+  const reason = clean || MANUAL_SCRAPED_REASON
+
   await db
     .update(albumCandidates)
-    .set({ status: 'suppressed', rejectionReason: clean, updatedAt: new Date() })
+    .set({ status: 'suppressed', rejectionReason: reason, updatedAt: new Date() })
     .where(eq(albumCandidates.id, candidateId))
-  await notifyAlbumCandidateRejected(candidateId, before.status === 'published', clean)
+  // No-ops when there is no submission/submitter, so it is safe on scraped rows.
+  await notifyAlbumCandidateRejected(candidateId, before.status === 'published', reason)
   revalidatePath('/admin/album-candidates')
   return {}
 }
