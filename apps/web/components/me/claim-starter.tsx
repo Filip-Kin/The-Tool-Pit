@@ -38,7 +38,6 @@ export function ClaimStarter({
   const [claimed, setClaimed] = useState(target.existingClaim !== null)
   const [msg, setMsg] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(target.existingClaim?.token ?? null)
-  const [note, setNote] = useState('')
   const [err, setErr] = useState<string | null>(null)
 
   // Which of the three paths this listing takes, worked out the same way the
@@ -57,7 +56,7 @@ export function ClaimStarter({
     setMsg(null)
     setErr(null)
     start(async () => {
-      const res = await startAction(target.entityType, target.entityId, note.trim() || undefined)
+      const res = await startAction(target.entityType, target.entityId)
       if (res.error) {
         setErr(res.error)
         return
@@ -130,32 +129,6 @@ export function ClaimStarter({
       ) : (
         <>
           <p className="mt-4 text-sm text-muted">{how}</p>
-
-      {path === 'review' && !token && (
-        <label className="mt-4 flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-foreground">
-            Your connection to it<span className="text-frc"> *</span>
-          </span>
-          {/* The single most useful thing a claimant can do is point at
-              something public that already names them, and the account email
-              is usually it. Saying which address the reviewer will see turns a
-              vague "prove it" box into a concrete one: people recognise their
-              own address in a site footer or a repo commit. */}
-          <span className="text-xs text-muted-2">
-            {user?.email
-              ? `Sent as ${user.email}. Point at somewhere public that shows the same address, or anything else a reviewer can check.`
-              : 'Point at somewhere public a reviewer can check.'}
-          </span>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={4}
-            maxLength={1000}
-            placeholder="This address is listed as the contact on the site footer."
-            className="input"
-          />
-        </label>
-      )}
 
       {!token && (
         <button
