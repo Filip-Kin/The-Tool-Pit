@@ -31,16 +31,16 @@ interface Vertical {
 
 const VERTICALS: Vertical[] = [
   { key: 'tools', label: 'Tools', slug: null, blurb: 'Search the community directory of FRC, FTC and FLL tools' },
-  { key: 'photos', label: 'Photos', slug: 'photos', blurb: 'Event photo albums, by event and team' },
+  // Off-season events: a map of off-season competitions, with cost, capacity
+  // and registration state, leading with what is coming up next.
+  { key: 'events', label: 'Offseason Events', slug: 'events', blurb: 'Off-season competitions on a map, upcoming first' },
+  { key: 'photos', label: 'Event Photos', slug: 'photos', blurb: 'Event photo albums, by event and team' },
   { key: 'fields', label: 'Fields', slug: 'fields', blurb: 'A map of practice fields you can visit' },
-  { key: 'grants', label: 'Grants', slug: 'grants', blurb: 'Grants and funding your team can apply for' },
   // Robot code and CAD is its own vertical, not a page of the tools directory:
   // it is browsed by team and season rather than searched by what a tool does,
   // and it has its own submission route.
   { key: 'code', label: 'Robot Code / CAD', slug: 'robot-code', blurb: 'Team robot code and CAD, by team and season' },
-  // Off-season events: a map of off-season competitions, with cost, capacity
-  // and registration state, leading with what is coming up next.
-  { key: 'events', label: 'Offseason Events', slug: 'events', blurb: 'Off-season competitions on a map, upcoming first' },
+  { key: 'grants', label: 'Grants', slug: 'grants', blurb: 'Grants and funding your team can apply for' },
 ]
 
 /** Kept apart from VERTICALS so the footer form, which has no icons, does not carry them. */
@@ -225,12 +225,12 @@ export async function VerticalCards({
             <a
               key={key}
               href={href}
-              className="group flex w-full items-center gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-primary hover:bg-primary/5 sm:w-56"
+              className="group flex w-full items-center gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-primary hover:bg-primary/5 sm:w-64"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
                 <Icon className="h-5 w-5" aria-hidden />
               </span>
-              <span className="font-semibold text-foreground">{label}</span>
+              <span className="whitespace-nowrap font-semibold text-foreground">{label}</span>
             </a>
           )
         })}
