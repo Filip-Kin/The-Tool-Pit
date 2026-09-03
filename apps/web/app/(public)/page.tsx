@@ -1,12 +1,11 @@
 import { Suspense } from 'react'
 import { SearchBar } from '@/components/search/search-bar'
 import { ProgramCards } from '@/components/program/program-cards'
-import { VerticalNav } from '@/components/layout/vertical-switcher'
+import { VerticalCards } from '@/components/layout/vertical-switcher'
 import { ToolGrid } from '@/components/tools/tool-grid'
 import { SectionHeader } from '@/components/ui/section-header'
 import {
   getDiscoverTools,
-  getFirstPartyTools,
   getRecentlyUpdatedTools,
   getRookieFriendlyTools,
   getOfficialTools,
@@ -32,10 +31,9 @@ import {
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
-  const [favorites, featured, firstParty, discover, recent, rookie, official] = await Promise.all([
+  const [favorites, featured, discover, recent, rookie, official] = await Promise.all([
     getFavoriteTools(6),
     getFeaturedTools(6),
-    getFirstPartyTools(6),
     getDiscoverTools(6),
     getRecentlyUpdatedTools(6),
     getRookieFriendlyTools(6),
@@ -88,11 +86,12 @@ export default async function HomePage() {
           ))}
         </div>
 
-        {/* The other three verticals. Here rather than in the header: this is
-            where a first-time visitor actually looks, and the header had no
-            room for real labels. */}
-        <div className="relative w-full max-w-3xl pt-6">
-          <VerticalNav current="tools" />
+        {/* The other verticals, as cards. Here rather than in the header: this
+            is where a first-time visitor actually looks. A veteran said he never
+            found the fields and events sites because the old pill row read as
+            chrome; cards with an icon and a line of what-it-is fix that. */}
+        <div className="relative w-full max-w-4xl pt-8">
+          <VerticalCards current="tools" />
         </div>
       </section>
 
@@ -108,24 +107,6 @@ export default async function HomePage() {
           <SectionHeader title="Featured" description="Worth a look, and why" />
           <Suspense fallback={<ToolGrid.Skeleton count={featured.tools.length} />}>
             <ToolGrid tools={featured.tools} notes={featured.notes} />
-          </Suspense>
-        </section>
-      )}
-
-      {/* Built here. The feedback that drove this: the front page mixed our own
-          first-party tools, the ones we host under frc.tools, into a wall of
-          external links with no way to tell them apart. This section is the
-          separation, and every card here also carries a "Built here" badge, so
-          the distinction survives when the tool shows up in another row. Renders
-          nothing until there is a first-party tool to show. */}
-      {firstParty.length > 0 && (
-        <section className="container mx-auto max-w-6xl px-4">
-          <SectionHeader
-            title="Built on FRC.tools"
-            description="First-party tools we host and maintain"
-          />
-          <Suspense fallback={<ToolGrid.Skeleton count={firstParty.length} />}>
-            <ToolGrid tools={firstParty} />
           </Suspense>
         </section>
       )}

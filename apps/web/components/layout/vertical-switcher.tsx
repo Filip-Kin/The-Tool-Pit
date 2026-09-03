@@ -25,20 +25,22 @@ interface Vertical {
   label: string
   /** Subdomain label, and in path mode the route prefix. 'tools' is the bare host. */
   slug: string | null
+  /** One line for the home-page cards, so a first-time visitor knows what it is. */
+  blurb: string
 }
 
 const VERTICALS: Vertical[] = [
-  { key: 'tools', label: 'Tools', slug: null },
-  { key: 'photos', label: 'Photos', slug: 'photos' },
-  { key: 'fields', label: 'Fields', slug: 'fields' },
-  { key: 'grants', label: 'Grants', slug: 'grants' },
+  { key: 'tools', label: 'Tools', slug: null, blurb: 'Search the community directory of FRC, FTC and FLL tools' },
+  { key: 'photos', label: 'Photos', slug: 'photos', blurb: 'Event photo albums, by event and team' },
+  { key: 'fields', label: 'Fields', slug: 'fields', blurb: 'A map of practice fields you can visit' },
+  { key: 'grants', label: 'Grants', slug: 'grants', blurb: 'Grants and funding your team can apply for' },
   // Robot code and CAD is its own vertical, not a page of the tools directory:
   // it is browsed by team and season rather than searched by what a tool does,
   // and it has its own submission route.
-  { key: 'code', label: 'Robot Code / CAD', slug: 'robot-code' },
+  { key: 'code', label: 'Robot Code / CAD', slug: 'robot-code', blurb: 'Team robot code and CAD, by team and season' },
   // Off-season events: a map of off-season competitions, with cost, capacity
   // and registration state, leading with what is coming up next.
-  { key: 'events', label: 'Offseason Events', slug: 'events' },
+  { key: 'events', label: 'Offseason Events', slug: 'events', blurb: 'Off-season competitions on a map, upcoming first' },
 ]
 
 /** Kept apart from VERTICALS so the footer form, which has no icons, does not carry them. */
@@ -188,6 +190,56 @@ export async function verticalNavItems(current: VerticalKey): Promise<{ href: st
   return links
     .filter((l) => l.key !== current)
     .map(({ href, label, key }) => ({ href, label: key === 'tools' ? 'Tools directory' : label }))
+}
+
+/**
+ * The home page's prominent way into the other verticals, as cards.
+ *
+ * The pill row (VerticalNav) was too quiet: a veteran team member said he could
+ * not find the fields and events sites at all until his fifth visit, because
+ * the row read as chrome, not content. Cards with a big icon and one line of
+ * what-it-is make the other verticals impossible to miss, and they replace the
+ * old "Built on FRC.tools" tool strip that was doing the same job worse.
+ *
+ * The current vertical is left out: you are already on it.
+ */
+export async function VerticalCards({
+  current,
+  className,
+}: {
+  current: VerticalKey
+  className?: string
+}) {
+  const links = await getVerticalLinks(current)
+  const blurbs = new Map(VERTICALS.map((v) => [v.key, v.blurb]))
+
+  return (
+    <nav
+      aria-label="Explore FRC.tools"
+      className={cn('grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3', className)}
+    >
+      {links
+        .filter((l) => l.key !== current)
+        .map(({ key, label, href }) => {
+          const Icon = VERTICAL_ICONS[key]
+          return (
+            <a
+              key={key}
+              href={href}
+              className="group flex items-start gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-primary hover:bg-primary/5"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
+                <Icon className="h-5 w-5" aria-hidden />
+              </span>
+              <span className="flex flex-col gap-0.5">
+                <span className="font-semibold text-foreground">{label}</span>
+                <span className="text-sm text-muted">{blurbs.get(key)}</span>
+              </span>
+            </a>
+          )
+        })}
+    </nav>
+  )
 }
 
 export async function VerticalNav({
