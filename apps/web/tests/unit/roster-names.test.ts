@@ -1,10 +1,11 @@
 /**
  * The rule that turns a roster of bare numbers into named teams.
  *
- * A scraped roster carries numbers and, sometimes, a name off the event's own
- * page. The team-name cache fills the rest at render time. This pins the three
- * outcomes the route depends on: a scraped name wins, the cache fills a gap, and
- * a team the cache never saw stays name-less.
+ * A scraped roster carries numbers only. The team-name cache (The Blue Alliance)
+ * is the source of names, always, so the label for a team is the same across the
+ * directory. This pins the outcomes the route depends on: the cache name
+ * overrides whatever the snapshot held, a team the cache never saw keeps its own
+ * name (a manual entry) or none.
  */
 import { describe, it, expect } from 'bun:test'
 import { mergeRosterNames, type CachedTeamName } from '@/lib/listings/roster-names'
@@ -15,11 +16,17 @@ function cacheOf(entries: Array<[number, CachedTeamName]>): Map<number, CachedTe
 }
 
 describe('mergeRosterNames', () => {
-  it('keeps a name the snapshot already scraped, even when the cache disagrees', () => {
+  it('overrides a snapshot name with the cache name (TBA is authoritative)', () => {
     const teams: RosterTeam[] = [{ number: 217, name: 'ThunderChickens (scraped)' }]
     const cache = cacheOf([[217, { nickname: 'The Thunderchickens', name: 'General Motors / …' }]])
     const [out] = mergeRosterNames(teams, cache)
-    expect(out.name).toBe('ThunderChickens (scraped)')
+    expect(out.name).toBe('The Thunderchickens')
+  })
+
+  it('keeps a manual name when the cache has never seen the team', () => {
+    const teams: RosterTeam[] = [{ number: 99999, name: 'Brand New Team' }]
+    const [out] = mergeRosterNames(teams, cacheOf([]))
+    expect(out.name).toBe('Brand New Team')
   })
 
   it('fills a missing name from the cache, preferring the nickname', () => {

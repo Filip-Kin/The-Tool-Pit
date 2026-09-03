@@ -7,35 +7,37 @@ export interface CachedTeamName {
 }
 
 /**
- * Fill missing team names on a roster from the team-name cache.
+ * Set team names on a roster from the team-name cache.
  *
- * The rule, in one place so the route and its test cannot drift:
+ * The rule, in one place so the route and its test cannot drift: TBA is the
+ * source of team names, ALWAYS. A scraper reads a number off an event's page; it
+ * does not read the name, because "Team 5086" on one site and "Cadillac
+ * Connectors" on The Blue Alliance should not be two different labels across the
+ * directory. So:
  *
- *  - A name the SNAPSHOT already carries wins. It was scraped off the event's
- *    own page, which is what that event chose to call the team, so the cache
- *    never writes over it.
- *  - A team with no name (empty or missing) takes the cache's name: the
- *    nickname first ("Miracle Workerz"), the long name only if there is no
- *    nickname.
- *  - A team the cache has never seen keeps no name. The roster render already
- *    tolerates a bare number.
+ *  - A team The Blue Alliance knows takes its cached name, overriding whatever
+ *    the snapshot carried: the nickname first ("Miracle Workerz"), the long name
+ *    only if there is no nickname.
+ *  - A team the cache has never seen (a brand-new number, or a non-FRC entry)
+ *    keeps whatever name the snapshot had, which for a manually entered roster is
+ *    the one the organiser typed, and otherwise nothing. The render tolerates a
+ *    bare number.
  *
- * Pure and allocation-light: a team that needs nothing is returned unchanged.
+ * Pure and allocation-light: a team already showing its cache name is returned
+ * unchanged.
  */
 export function mergeRosterNames(
   teams: RosterTeam[],
   cache: Map<number, CachedTeamName>,
 ): RosterTeam[] {
   return teams.map((team) => {
-    const scraped = team.name?.trim()
-    if (scraped) return team
-
     const cached = cache.get(team.number)
-    if (!cached) return team
+    const fromTba = cached ? cached.nickname?.trim() || cached.name?.trim() : undefined
 
-    const filled = cached.nickname?.trim() || cached.name?.trim()
-    if (!filled) return team
+    // The Blue Alliance knows this team: its name is authoritative.
+    if (fromTba) return team.name === fromTba ? team : { ...team, name: fromTba }
 
-    return { ...team, name: filled }
+    // Unknown to TBA: keep the snapshot's own name (a manual entry) or nothing.
+    return team
   })
 }
