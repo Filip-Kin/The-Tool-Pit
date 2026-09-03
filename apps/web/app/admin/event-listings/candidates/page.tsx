@@ -234,7 +234,7 @@ export default async function EventCandidatesPage({
                           { name: 'chiefDelphiUrl', label: 'Chief Delphi URL', value: ex.chiefDelphiUrl, wide: true, evidence: ev.chiefDelphiUrl },
                           { name: 'contactEmail', label: 'Organiser email', value: ex.contactEmail, wide: true, evidence: ev.contactEmail },
                           { name: 'tbaKey', label: 'TBA key', value: ex.tbaKey ?? row.tbaKey, evidence: ev.tbaKey },
-                          { name: 'parallelDivisions', label: 'Parallel divisions', type: 'checkbox' },
+                          { name: 'parallelDivisions', label: 'Two parallel 1-day events', type: 'checkbox' },
                           { name: 'notes', label: 'Notes', type: 'textarea', value: ex.notes, wide: true, evidence: ev.notes },
                         ]}
                       />
