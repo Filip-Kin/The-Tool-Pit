@@ -96,7 +96,9 @@ function extractTeams() {
 }
 
 What it returns:
-- One entry per team ROBOT, not per organisation. Some events let one team enter a second robot, shown as "4611 B" or similar; that is a second entry, { number: 4611, robot: "B" }. One robot means robot: null.
+- One entry per team ROBOT, not per organisation. A team may enter a SECOND robot (a B team), which the page marks as "4611 B", "4611 (B)", or "4611 #2": that is a second entry, { number: 4611, robot: "B" }. Map a numeric marker onto a letter, so "#2" / "(2)" is robot "B" and "#3" is robot "C". One robot means robot: null.
+- WHEN THE SAME NUMBER APPEARS TWICE, YOU DECIDE whether it is a deliberate second robot or an accidental duplicate: the data carries no flag for it, so only the page settles it. Signs it is a real B team, which you KEEP as a second entry { number, robot: "B" } (then "C" for a third): a "#2" or "B" marker, or a list that repeats the WHOLE ROW for the team — the same name and city on two rows, as MARC lists 503 twice and 1502 twice for their B teams — especially when the repeated rows sit together. Signs it is one team listed twice by mistake, which you return ONCE: a lone stray repeat far from its first mention with nothing else echoing it. When you judge it a second robot, letter it and never drop it; when you judge it a duplicate, collapse it.
+- Several DIFFERENT numbers sharing one cell are separate teams, not robots of one team (see below): the opposite case.
 - INCLUDE THE NAME the page shows for each team, as \`name\`, when there is one (leave it off when the row is just a number). We usually replace it with the canonical name from The Blue Alliance, but a placeholder team (see below) or a brand-new team TBA has never indexed has only the name on this page, so it must be carried.
 - A PLACEHOLDER NUMBER IS NOT A NUMBER. A team shown as "10xxx", "TBD", "TBA", "pending", "10###" or similar has no real number yet (a pre-rookie or a late add). Do NOT read the leading digits as its number ("10xxx" is not team 10). Treat it exactly like a name-only team: give it a 9970-9999 placeholder number and carry its \`name\`.
 - MULTIPLE TEAMS IN ONE ROW OR CELL. A single row or cell can list several team numbers together (several teams sharing a row, often from one school), e.g. "1306 10553 10909 11258" or "2202 / 6223". Return EVERY number as its own entry { number, robot: null }, not just the first in the cell. This is different from a second robot of ONE team ("4611 B" → robot: "B"): separate whole numbers are separate teams, each robot: null.
@@ -285,16 +287,47 @@ async function runAcrossFrames(page: import('playwright').Page, script: string):
   return best
 }
 
-/** "4145" or "4145 B" or "4145B" into the object shape normalise expects. */
+/** "4145" or "4145 B" or "4145B" or "4145 #2" into the object shape normalise expects. */
 function parseTeamString(value: string): Record<string, unknown> | null {
-  const m = value.trim().match(/^(\d{1,5})\s*([A-Za-z])?$/)
+  const m = value.trim().match(/^(\d{1,5})\s*(?:#?\s*([A-Za-z0-9]{1,2}))?$/)
   if (!m) return null
-  return { number: Number(m[1]), robot: m[2] ? m[2].toUpperCase() : null }
+  return { number: Number(m[1]), robot: m[2] ?? null }
+}
+
+/**
+ * A robot designator to a single uppercase letter, or null for the first robot.
+ *
+ * Accepts a plain letter ("B"), and a numeric / hash marker ("#2", "2", "(2)")
+ * which some events use instead: the Nth robot maps to a letter, 2 -> "B",
+ * 3 -> "C". "#1" (or "1", or "A") is the first robot and carries no letter.
+ * Anything else is not a robot designator and reads as the first robot.
+ */
+function coerceRobot(raw: unknown): string | null {
+  if (raw == null) return null
+  const s = String(raw).trim().replace(/[()#]/g, '').trim()
+  if (!s) return null
+  if (/^[A-Za-z]$/.test(s)) {
+    const letter = s.toUpperCase()
+    return letter === 'A' ? null : letter
+  }
+  if (/^\d{1,2}$/.test(s)) {
+    const n = Number(s)
+    if (n <= 1) return null
+    return String.fromCharCode(64 + n) // 2 -> 'B', 3 -> 'C'
+  }
+  return null
 }
 
 /** Coerce and validate the parser's output. Anything implausible is dropped. */
 export function normaliseTeams(raw: unknown[]): RosterTeam[] {
   const teams: RosterTeam[] = []
+  // Whether a repeated number is a deliberate second robot (a B team) or an
+  // accidental duplicate row is a judgement only the page can settle, so the model
+  // that WRITES the parser makes it: it emits a distinct robot letter for a real B
+  // team (a "#2" marker, or a repeat it reads as intentional) and returns one entry
+  // for an accidental duplicate. Here we only honour that decision: coerceRobot maps
+  // a "#2"/"#3" marker onto its letter so it survives as its own entry, and an exact
+  // (number, robot) pair the model still returned twice is a double-read, collapsed.
   const seen = new Set<string>()
   for (const item of raw) {
     // The model may return an object {number, robot, waitlisted} or, for the
@@ -311,7 +344,7 @@ export function normaliseTeams(raw: unknown[]): RosterTeam[] {
     const number = entry.number
     const robot = entry.robot
     if (typeof number !== 'number' || !Number.isInteger(number) || number < 1 || number > 20_000) continue
-    const robotLabel = typeof robot === 'string' && /^[A-Z]$/.test(robot.trim()) ? robot.trim() : null
+    const robotLabel = coerceRobot(robot)
     const key = `${number}:${robotLabel ?? ''}`
     if (seen.has(key)) continue
     seen.add(key)
