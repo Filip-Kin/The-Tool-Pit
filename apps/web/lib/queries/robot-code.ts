@@ -1,11 +1,16 @@
-import { sql, eq, and, isNotNull } from 'drizzle-orm'
+import { sql, eq, and, isNotNull, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { tools } from '@the-tool-pit/db'
+import { tools, toolLinks } from '@the-tool-pit/db'
 import { searchTools } from '@/lib/search/search'
 import type { SearchResponse } from '@/lib/search/search'
 
 export type RobotCodeProgram = 'frc' | 'ftc' | 'fll'
-export interface RobotCodeEntry { year: number | null; slug: string }
+/**
+ * `url` is where the resource actually lives: the GitHub repo for code, the
+ * Chief Delphi thread or the Onshape/GrabCAD page for CAD. Null when a tool has
+ * no outbound link, in which case the chip falls back to the /tools page.
+ */
+export interface RobotCodeEntry { year: number | null; slug: string; url: string | null }
 export interface RobotCodeTeam {
   teamNumber: number
   code: RobotCodeEntry[]
@@ -28,6 +33,7 @@ export async function getRobotCodeTeams(program: RobotCodeProgram = 'frc'): Prom
   const db = getDb()
   const rows = await db
     .select({
+      id: tools.id,
       teamNumber: tools.teamNumber,
       seasonYear: tools.seasonYear,
       isTeamCode: tools.isTeamCode,
@@ -44,7 +50,7 @@ export async function getRobotCodeTeams(program: RobotCodeProgram = 'frc'): Prom
     ))
     .orderBy(tools.teamNumber)
 
-  type Slot = { year: number | null; slug: string; pop: number }
+  type Slot = { year: number | null; slug: string; pop: number; toolId: string; url: string | null }
   const teams = new Map<number, { code: Map<string, Slot>; cad: Map<string, Slot> }>()
 
   for (const r of rows) {
@@ -59,14 +65,45 @@ export async function getRobotCodeTeams(program: RobotCodeProgram = 'frc'): Prom
       const key = String(r.seasonYear ?? 'null')
       const pop = r.popularityScore ?? 0
       const existing = entry[kind].get(key)
-      if (!existing || pop > existing.pop) entry[kind].set(key, { year: r.seasonYear ?? null, slug: r.slug, pop })
+      if (!existing || pop > existing.pop) entry[kind].set(key, { year: r.seasonYear ?? null, slug: r.slug, pop, toolId: r.id, url: null })
     }
+  }
+
+  // Attach the outbound URL each chip should point at. Only the tools that
+  // survived the popularity collapse need links, so gather those ids and fetch
+  // in one query. Kind decides priority: code prefers its GitHub repo, CAD
+  // prefers the thread or CAD host it was found on.
+  const winners = [...teams.values()].flatMap((e) => [...e.code.values(), ...e.cad.values()])
+  const ids = [...new Set(winners.map((s) => s.toolId))]
+  const linksByTool = new Map<string, Map<string, string>>()
+  if (ids.length) {
+    const linkRows = await db
+      .select({ toolId: toolLinks.toolId, linkType: toolLinks.linkType, url: toolLinks.url })
+      .from(toolLinks)
+      .where(inArray(toolLinks.toolId, ids))
+    for (const l of linkRows) {
+      let byType = linksByTool.get(l.toolId)
+      if (!byType) { byType = new Map(); linksByTool.set(l.toolId, byType) }
+      // First of a type wins; the pipeline writes one row per auto-managed type.
+      if (!byType.has(l.linkType)) byType.set(l.linkType, l.url)
+    }
+  }
+  const pickUrl = (kind: 'code' | 'cad', toolId: string): string | null => {
+    const byType = linksByTool.get(toolId)
+    if (!byType) return null
+    const order = kind === 'code' ? ['github', 'homepage', 'forum'] : ['forum', 'homepage', 'github']
+    for (const t of order) { const u = byType.get(t); if (u) return u }
+    return null
+  }
+  for (const e of teams.values()) {
+    for (const s of e.code.values()) s.url = pickUrl('code', s.toolId)
+    for (const s of e.cad.values()) s.url = pickUrl('cad', s.toolId)
   }
 
   const sortYears = (m: Map<string, Slot>): RobotCodeEntry[] =>
     [...m.values()]
       .sort((a, b) => (b.year ?? -1) - (a.year ?? -1))
-      .map(({ year, slug }) => ({ year, slug }))
+      .map(({ year, slug, url }) => ({ year, slug, url }))
 
   return [...teams.entries()]
     .map(([teamNumber, e]) => {

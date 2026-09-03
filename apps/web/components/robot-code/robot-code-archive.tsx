@@ -154,17 +154,22 @@ function YearChips({ entries, highlight }: { entries: RobotCodeEntry[]; highligh
         // With a season selected the row is still the whole team, so the chip
         // that matched is marked rather than the others being hidden.
         const isMatch = highlight !== null && e.year === highlight
-        return (
-          <Link
-            key={`${e.year ?? 'x'}-${e.slug}`}
-            href={`/tools/${e.slug}`}
-            className={cn(
-              'rounded-md border px-1.5 py-0.5 text-xs tabular-nums transition-colors hover:border-primary hover:text-primary',
-              isMatch
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border bg-surface text-muted',
-            )}
-          >
+        const className = cn(
+          'rounded-md border px-1.5 py-0.5 text-xs tabular-nums transition-colors hover:border-primary hover:text-primary',
+          isMatch
+            ? 'border-primary bg-primary/10 text-primary'
+            : 'border-border bg-surface text-muted',
+        )
+        const key = `${e.year ?? 'x'}-${e.slug}`
+        // Link straight to where the resource lives (GitHub for code, the CD
+        // thread or CAD host for CAD). Only fall back to the /tools page when a
+        // tool has no outbound link, so a CAD chip is never a dead end.
+        return e.url ? (
+          <a key={key} href={e.url} target="_blank" rel="noopener noreferrer" className={className}>
+            {e.year ?? '?'}
+          </a>
+        ) : (
+          <Link key={key} href={`/tools/${e.slug}`} className={className}>
             {e.year ?? '?'}
           </Link>
         )
