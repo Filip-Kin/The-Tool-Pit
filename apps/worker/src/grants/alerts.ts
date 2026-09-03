@@ -22,9 +22,10 @@
  * outside apps/worker/src (TS6059), and a copy is how the two drifted.
  */
 import { and, asc, eq, isNull, lt, lte, sql } from 'drizzle-orm'
-import { getDb, grantAlerts, type AlertChannel, type AlertKind } from '@the-tool-pit/db'
+import { getDb, grantAlerts, isEmailSuppressed, signUnsubscribe, type AlertChannel, type AlertKind } from '@the-tool-pit/db'
 import {
   preferencesUrl,
+  unsubscribeUrl,
   renderDeadlineEmail,
   renderGrantChangeEmail,
   renderNewMatchEmail,
@@ -210,7 +211,7 @@ export async function enqueueGrantAlert(input: EnqueueGrantAlertInput): Promise<
  * All this function does now is the jsonb-to-argument conversion: dates come
  * back off a jsonb column as ISO strings, and the templates take Date objects.
  */
-function renderAlert(kind: string, payload: unknown, now: Date): EmailBody | null {
+function renderAlert(kind: string, payload: unknown, now: Date, unsub?: string): EmailBody | null {
   if (!payload || typeof payload !== 'object') return null
   const prefs = preferencesUrl()
 
@@ -224,7 +225,7 @@ function renderAlert(kind: string, payload: unknown, now: Date): EmailBody | nul
   switch (kind) {
     case 'new_match': {
       const p = payload as NewMatchAlertPayload
-      return renderNewMatchEmail({ ...p, deadlineAt: asDate(p.deadlineAt), preferencesUrl: prefs })
+      return renderNewMatchEmail({ ...p, deadlineAt: asDate(p.deadlineAt), preferencesUrl: prefs, unsubscribeUrl: unsub })
     }
     case 'deadline': {
       const p = payload as DeadlineAlertPayload
@@ -238,12 +239,12 @@ function renderAlert(kind: string, payload: unknown, now: Date): EmailBody | nul
         deadlineAt: at,
         daysLeft,
         verifiedAt: asDate(p.verifiedAt),
-        preferencesUrl: prefs,
+        preferencesUrl: prefs, unsubscribeUrl: unsub,
       })
     }
     case 'grant_change':
     case 'watch_update':
-      return renderGrantChangeEmail({ ...(payload as GrantChangeAlertPayload), preferencesUrl: prefs })
+      return renderGrantChangeEmail({ ...(payload as GrantChangeAlertPayload), preferencesUrl: prefs, unsubscribeUrl: unsub })
     default:
       return null
   }
@@ -420,7 +421,18 @@ export async function processGrantAlertDrainJob(
       continue
     }
 
-    const body = renderAlert(alert.kind, alert.payload, now)
+    // Honour a global unsubscribe: a recipient who used the "unsubscribe from
+    // everything" link gets no grant alerts either. Mark the row terminal so it
+    // is not retried, and never send.
+    if (await isEmailSuppressed(address)) {
+      await db
+        .update(grantAlerts)
+        .set({ sentAt: new Date(), attempts: alert.attempts + 1, error: 'recipient unsubscribed from all email' })
+        .where(eq(grantAlerts.id, alert.id))
+      continue
+    }
+
+    const body = renderAlert(alert.kind, alert.payload, now, unsubscribeUrl(address, signUnsubscribe(address)))
     if (!body) {
       await park(alert.id, alert.attempts, `no email body for kind '${alert.kind}'`)
       stats.parkedBy.unrenderable++

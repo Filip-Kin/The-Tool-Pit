@@ -35,6 +35,8 @@ export interface NewMatchEmailInput {
   /** Requirement labels we could not test, so the team knows what is unproven. */
   unknownReasons?: string[]
   preferencesUrl: string
+  /** No-login "unsubscribe from everything" link for this recipient. */
+  unsubscribeUrl?: string
 }
 
 export function renderNewMatchEmail(input: NewMatchEmailInput): EmailBody {
@@ -71,6 +73,7 @@ export function renderNewMatchEmail(input: NewMatchEmailInput): EmailBody {
     cta: { label: 'Open the listing', url: input.grantUrl },
     reason: 'You are getting this because grant matching is on for your team.',
     preferencesUrl: input.preferencesUrl,
+    unsubscribeUrl: input.unsubscribeUrl,
   })
 
   return { subject: `New grant match: ${input.grantName}`, html, text }
@@ -92,6 +95,8 @@ export interface DeadlineEmailInput {
   /** When a human last confirmed these dates against the funder's page. */
   verifiedAt?: Date | null
   preferencesUrl: string
+  /** No-login "unsubscribe from everything" link for this recipient. */
+  unsubscribeUrl?: string
 }
 
 export function renderDeadlineEmail(input: DeadlineEmailInput): EmailBody {
@@ -124,6 +129,7 @@ export function renderDeadlineEmail(input: DeadlineEmailInput): EmailBody {
     },
     reason: 'You are getting this because you are watching this grant.',
     preferencesUrl: input.preferencesUrl,
+    unsubscribeUrl: input.unsubscribeUrl,
   })
 
   return { subject: `${days}: ${input.grantName}`, html, text }
@@ -141,6 +147,8 @@ export interface GrantChangeEmailInput {
   /** True when the change is still waiting on a human to confirm it. */
   awaitingReview?: boolean
   preferencesUrl: string
+  /** No-login "unsubscribe from everything" link for this recipient. */
+  unsubscribeUrl?: string
 }
 
 export function renderGrantChangeEmail(input: GrantChangeEmailInput): EmailBody {
@@ -162,6 +170,7 @@ export function renderGrantChangeEmail(input: GrantChangeEmailInput): EmailBody 
     cta: { label: 'Open the listing', url: input.grantUrl },
     reason: 'You are getting this because you are watching this grant.',
     preferencesUrl: input.preferencesUrl,
+    unsubscribeUrl: input.unsubscribeUrl,
   })
 
   return { subject: `Listing changed: ${input.grantName}`, html, text }
@@ -176,6 +185,8 @@ export interface VerifyEmailInput {
   /** Hours the link stays good, so the reader is not left guessing. */
   expiresInHours: number
   preferencesUrl: string
+  /** No-login "unsubscribe from everything" link for this recipient. */
+  unsubscribeUrl?: string
 }
 
 /**
@@ -193,6 +204,7 @@ export function renderVerifyEmail(input: VerifyEmailInput): EmailBody {
     cta: { label: 'Confirm this address', url: input.verifyUrl },
     reason: 'This is a one-off confirmation, not a subscription.',
     preferencesUrl: input.preferencesUrl,
+    unsubscribeUrl: input.unsubscribeUrl,
   })
 
   return { subject: 'Confirm your email for grant alerts', html, text }
