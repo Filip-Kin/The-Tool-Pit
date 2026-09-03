@@ -39,7 +39,9 @@ type LoadState = 'loading' | 'ready' | 'error'
  * off-season teams have none), so a team without one falls back to the service's
  * default avatar; only if THAT also fails do we show the number in a tile. */
 const AVATAR_BASE = 'https://avatars.frc.tools/avatar'
-const DEFAULT_AVATAR = `${AVATAR_BASE}/default.png`
+// Ask for the 64px default, not the 960x960 original: a roster full of no-avatar
+// teams was loading dozens of near-megabyte PNGs, so they crawled in one by one.
+const DEFAULT_AVATAR = `${AVATAR_BASE}/default.png?s=64`
 
 function TeamAvatar({ number }: { number: number }) {
   const [src, setSrc] = useState(`${AVATAR_BASE}/${number}.png?s=64`)
