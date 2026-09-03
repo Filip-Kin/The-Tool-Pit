@@ -67,8 +67,7 @@ export function FieldAdminRow({
 
   return (
     <div className="rounded-lg border border-border-subtle bg-surface p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="min-w-0">
           <div className="font-medium text-foreground">
             {field.teamNumber ? `${field.teamNumber} · ` : ''}
             {field.name}
@@ -109,7 +108,7 @@ export function FieldAdminRow({
           {field.rejectionReason && <div className="mt-1 text-xs text-official">Reason: {field.rejectionReason}</div>}
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border-subtle pt-3">
           <Button variant="secondary" size="sm" onClick={() => setEditing((v) => !v)} disabled={pending}>
             <Pencil className="h-3 w-3" /> Edit
           </Button>
@@ -156,7 +155,6 @@ export function FieldAdminRow({
             <Trash2 className="h-3 w-3" />
           </Button>
         </div>
-      </div>
 
       {msg && <p className="mt-2 text-xs text-official">{msg}</p>}
 
