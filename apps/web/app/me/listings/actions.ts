@@ -525,16 +525,23 @@ async function queueListingInviteEmail(opts: {
   invitedByName: string | null
 }): Promise<void> {
   const listing = await listingFacts(opts.entityType, opts.entityId)
+  const listingName = listing?.title ?? entityNoun(opts.entityType)
   const payload: ApprovalEmailPayload = {
-    title: listing?.title ?? entityNoun(opts.entityType),
+    title: listingName,
     url: opts.acceptUrl,
+    // The NAME is what the reader recognises, so it leads the facts as its own
+    // "Listing" row. The date-and-place subtitle ("2026-10-31 · Midland, MI")
+    // is real but secondary: it rides underneath on a continuation row (empty
+    // label) rather than standing in for the name, which is how an invite to
+    // "Bot Bash" used to arrive naming only a date and a town.
     facts: [
+      { label: 'Listing', value: listingName },
+      ...(listing?.subtitle ? [{ label: '', value: listing.subtitle }] : []),
       {
         label: 'Role',
         value: opts.role === 'owner' ? 'Owner (edit and manage people)' : 'Editor (edit the listing)',
       },
       ...(opts.invitedByName ? [{ label: 'Invited by', value: opts.invitedByName }] : []),
-      ...(listing?.subtitle ? [{ label: 'Listing', value: listing.subtitle }] : []),
     ],
   }
   await queueNotification({

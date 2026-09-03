@@ -77,3 +77,20 @@ export function myListingsUrl(): string {
 export function claimListingUrl(entityType: string, entityId: string): string {
   return `${siteUrl()}/me/listings/claim?type=${encodeURIComponent(entityType)}&id=${encodeURIComponent(entityId)}`
 }
+
+/**
+ * The one-click "take this listing down" link for an outreach email.
+ *
+ * Accountless on purpose: the recipient is the scraped public contact, who has
+ * no frc.tools account, so this cannot sit behind sign-in the way the claim
+ * flow does. The `token` is a signed value the /listings/remove route checks
+ * before it suppresses anything, so the link is safe to put in an inbox: it is
+ * pure string building here, and the signing and checking live in apps/web,
+ * which has the secret and the crypto this package deliberately does not.
+ */
+export function removeListingUrl(entityType: string, entityId: string, token: string): string {
+  return (
+    `${siteUrl()}/listings/remove?type=${encodeURIComponent(entityType)}` +
+    `&id=${encodeURIComponent(entityId)}&token=${encodeURIComponent(token)}`
+  )
+}

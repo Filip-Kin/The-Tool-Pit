@@ -165,6 +165,14 @@ export type ApprovalEmailPayload = {
    * button pointing nowhere is worse than no button.
    */
   url?: string | null
+  /**
+   * A lesser action beside the primary one, e.g. "Remove this listing" next to
+   * "Claim & fix it" on the outreach email. Rendered as the outlined secondary
+   * button, and only when a primary `url` is present, so it never floats alone.
+   * The URL must already carry whatever token the action needs: nothing here is
+   * gated behind an account.
+   */
+  secondaryCta?: { label: string; url: string }
   /** Identifying detail: city, dates, team number, the album's event. */
   facts?: EmailFact[]
   /**
@@ -275,7 +283,7 @@ const COPY: Record<ApprovalEmailKind, KindCopy> = {
     lead: 'FRC.tools is a community index of FIRST off-season events, and {title} is on it. We built the listing from public sources so teams can find it, and we wanted the people who run it to know it is there.',
     extra: [
       'If this is your event, claim it and you can fix anything we got wrong: the dates, the venue, the cost, the registration link. The listing below shows what we currently hold.',
-      'If you would rather it was not listed, open the listing and use Suggest an edit to ask us to take it down, or just reply to this email and we will remove it.',
+      'If you would rather it was not listed, use Remove this listing below and it comes straight off. You can also just reply to this email.',
     ],
     cta: 'Claim & fix it',
     reason:
@@ -434,6 +442,10 @@ export function renderApprovalEmail(input: ApprovalEmailInput): EmailBody {
     paragraphs,
     facts,
     cta: input.url ? { label: copy.cta, url: input.url } : undefined,
+    // Only alongside a primary button: the shell renders it inside the primary's
+    // block, so a secondary with no primary would silently vanish. Every kind
+    // that carries one (outreach today) always carries a primary too.
+    secondaryCta: input.url ? input.secondaryCta : undefined,
     reason: copy.reason,
     preferencesUrl: input.preferencesUrl,
   })
