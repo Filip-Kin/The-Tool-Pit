@@ -1,6 +1,6 @@
 import { eq, and, or, ne, isNull, isNotNull, gte, lt, asc, desc, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { eventListings, currentOffseasonSeason } from '@the-tool-pit/db'
+import { eventListings, eventRosterSnapshots, currentOffseasonSeason } from '@the-tool-pit/db'
 import { slugify } from '@/lib/utils/slugify'
 import type { PublicEvent, SeasonScope } from '@/lib/events/event-display'
 import type { RegistrationStatus, VolunteerStatus, EventStatus } from '@the-tool-pit/db'
@@ -184,4 +184,60 @@ export async function uniqueEventSlug(base: string, ignoreId?: string): Promise<
     if (!clash) return slug
     slug = `${root}-${attempt}`
   }
+}
+
+/**
+ * Team numbers on every published listing's roster, keyed by listing id, for
+ * one season scope.
+ *
+ * This is what the map's "team number" filter runs on. It is a SEPARATE fetch
+ * and not part of getPublishedEvents on purpose: a roster is thirty-odd numbers
+ * per event, and shipping every one of them inside the map payload would grow
+ * the page for the large majority of readers who never type a team number. The
+ * explorer asks for this once, the first time somebody uses that filter.
+ *
+ * Only the LATEST APPROVED snapshot per listing counts, the same gate the
+ * public roster table uses: nothing scraped is public until a moderator has
+ * approved it.
+ *
+ * WAITLISTED TEAMS ARE INCLUDED. registeredTeamCount leaves them out, since
+ * they are not registered. This filter answers a different question, "is my
+ * team on this event's list", and a team sitting fourth on a waitlist should
+ * see the event. A second robot ("4145B") carries the same team number, so it
+ * collapses into one entry.
+ */
+export async function getPublishedRosterTeams(
+  opts: PublishedEventsOptions = {},
+): Promise<Record<string, number[]>> {
+  const db = getDb()
+  const scope = opts.scope ?? 'current'
+  const currentSeason = currentOffseasonSeason(opts.now ?? new Date())
+
+  // DISTINCT ON is the one-line Postgres form of "latest row per group": order
+  // by the group key then the recency key, and it keeps the first of each.
+  const rows = await db
+    .selectDistinctOn([eventRosterSnapshots.eventListingId], {
+      eventListingId: eventRosterSnapshots.eventListingId,
+      teams: eventRosterSnapshots.teams,
+    })
+    .from(eventRosterSnapshots)
+    .innerJoin(eventListings, eq(eventListings.id, eventRosterSnapshots.eventListingId))
+    .where(
+      and(
+        eq(eventRosterSnapshots.status, 'approved'),
+        isOnTheMap,
+        seasonFilter(scope, currentSeason),
+      ),
+    )
+    .orderBy(eventRosterSnapshots.eventListingId, desc(eventRosterSnapshots.fetchedAt))
+
+  const out: Record<string, number[]> = {}
+  for (const row of rows) {
+    const numbers = new Set<number>()
+    for (const team of row.teams ?? []) {
+      if (Number.isFinite(team?.number)) numbers.add(team.number)
+    }
+    if (numbers.size > 0) out[row.eventListingId] = [...numbers].sort((a, b) => a - b)
+  }
+  return out
 }

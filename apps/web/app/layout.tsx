@@ -58,7 +58,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             white flash on every load for anyone running a light desktop. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body>
+      {/* suppressHydrationWarning for the same reason as <html>, a different
+          writer. Browser extensions stamp their own attributes on the body
+          before React hydrates: Grammarly adds data-gr-ext-installed and
+          data-new-gr-c-s-check-loaded, and React reports the difference as a
+          hydration mismatch in an app that has done nothing wrong. The flag
+          only covers THIS element's own attributes and text, one level deep,
+          so a genuine mismatch anywhere inside the tree is still reported. */}
+      <body suppressHydrationWarning>
         <SessionProvider
           initialUser={
             user
