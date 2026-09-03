@@ -17,10 +17,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params
   const tool = await getToolBySlug(slug)
   if (!tool) return { title: 'Tool Not Found' }
+  const url = toolUrl(tool.slug)
+  const description = tool.summary ?? tool.description ?? tool.name
+  const image = { url: `${url}/opengraph-image`, width: 1200, height: 630, alt: tool.name }
   return {
     title: tool.name,
-    description: tool.summary ?? undefined,
-    alternates: { canonical: toolUrl(tool.slug) },
+    description,
+    alternates: { canonical: url },
+    openGraph: { title: tool.name, description, url, type: 'article', images: [image] },
+    twitter: { card: 'summary_large_image', title: tool.name, description, images: [image] },
   }
 }
 

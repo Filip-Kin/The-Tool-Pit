@@ -37,10 +37,24 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params
   const grant = await getGrantBySlug(slug)
   if (!grant) return { title: 'Grant not found' }
+  const url = grantListingUrl(grant.slug)
+  const award = formatAwardRange(grant)
+  const geography = geographyLabel(grant)
+  // Prefer the grant's own summary; otherwise build one from who it is for,
+  // the award and where it applies.
+  const description =
+    grant.summary ??
+    ([grant.funder ? `From ${grant.funder.name}` : null, award, geography]
+      .filter(Boolean)
+      .join(' · ') ||
+      grant.name)
+  const image = { url: `${url}/opengraph-image`, width: 1200, height: 630, alt: grant.name }
   return {
     title: grant.name,
-    description: grant.summary ?? undefined,
-    alternates: { canonical: grantListingUrl(grant.slug) },
+    description,
+    alternates: { canonical: url },
+    openGraph: { title: grant.name, description, url, type: 'article', images: [image] },
+    twitter: { card: 'summary_large_image', title: grant.name, description, images: [image] },
   }
 }
 
