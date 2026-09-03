@@ -86,6 +86,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/admin/event-listings', label: 'Submissions', queue: 'eventSubmissions' },
       { href: '/admin/event-listings/candidates', label: 'Candidates', queue: 'eventCandidates' },
+      { href: '/admin/event-listings/reads', label: 'Reads & crawls' },
       { href: '/admin/event-edits', label: 'Suggested edits', queue: 'eventEdits' },
       { href: '/admin/crawls?vertical=events', label: 'Crawl jobs' },
       { href: '/admin/event-listings?status=published', label: 'Published' },
@@ -98,6 +99,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/admin/practice-fields', label: 'Submissions', queue: 'fieldSubmissions' },
       { href: '/admin/practice-fields/candidates', label: 'Candidates', queue: 'fieldCandidates' },
+      { href: '/admin/practice-fields/reads', label: 'Reads' },
       { href: '/admin/crawls?vertical=fields', label: 'Crawl jobs' },
       { href: '/admin/practice-fields?status=published', label: 'Published' },
       { href: '/admin/practice-fields?status=suppressed', label: 'Suppressed' },
