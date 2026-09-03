@@ -8,7 +8,7 @@
  * broken and must be rewritten. Those are where a wrong roster gets published.
  */
 import { describe, it, expect } from 'bun:test'
-import { slotIndicesLeaked, normaliseTeams } from '../src/listings/team-list-parser.js'
+import { slotIndicesLeaked, normaliseTeams, isTeamListRevealControl } from '../src/listings/team-list-parser.js'
 import { suspectRosterChange } from '../src/listings/roster-refresh.js'
 import type { RosterTeam } from '@the-tool-pit/db'
 
@@ -104,6 +104,44 @@ describe('suspectRosterChange', () => {
 
   it('never flags the first run, when there is no previous roster', () => {
     expect(suspectRosterChange([], teams(503, 247)).suspect).toBe(false)
+  })
+})
+
+describe('isTeamListRevealControl', () => {
+  it('matches a control that plainly names a team list', () => {
+    // The ortop.my.site.com case: the roster hides behind a "Registered Teams" radio.
+    for (const label of [
+      'Registered Teams',
+      'Teams Registered',
+      'Team List',
+      'Team Roster',
+      'Teams',
+      'Roster',
+      'Participating Teams',
+      'Show Teams',
+      '  registered   teams  ',
+    ]) {
+      expect(isTeamListRevealControl(label)).toBe(true)
+    }
+  })
+
+  it('leaves controls that lead elsewhere alone', () => {
+    // Never click a control that goes somewhere other than the roster.
+    for (const label of [
+      'Home',
+      'Schedule',
+      'Awards',
+      'Team Sponsors',
+      'Meet the Team',
+      'Team Store',
+      'Submit Registration',
+      'Volunteer',
+      'Results',
+      '',
+      'Read about our team and its long and storied history of competing',
+    ]) {
+      expect(isTeamListRevealControl(label)).toBe(false)
+    }
   })
 })
 

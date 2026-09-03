@@ -33,7 +33,7 @@
  * scheduled job never inherits a parser nobody watched work.
  */
 import type { Page } from 'playwright'
-import { withRenderedPage } from '../connectors/playwright-render.js'
+import { withRenderedPage, settleDynamicContent } from '../connectors/playwright-render.js'
 import { anthropic, hasAnthropicCredentials } from '../anthropic.js'
 import { sendApprovalNotice } from '@the-tool-pit/types'
 import type { RosterTeam } from '@the-tool-pit/db'
@@ -43,6 +43,37 @@ const MAX_HTML_CHARS = 40_000
 const MAX_PARSER_TOKENS = 3500
 const RUN_TIMEOUT_MS = 4_000
 const MAX_ATTEMPTS = 10
+
+/** How many reveal controls we will click on one page before giving up. */
+const MAX_REVEAL_CLICKS = 4
+
+/**
+ * Labels of an on-page control that, when clicked, reveals a registered-team
+ * list. Some off-season sites (CMRC and NMRC on ortop.my.site.com, a Salesforce
+ * Experience-Cloud site) hide the team table behind a RADIO option or a tab: the
+ * table is not in the DOM until you pick "Registered Teams". The parser reads the
+ * DOM as first rendered, so it sees no teams until the control is clicked.
+ *
+ * The match is deliberately narrow: a control whose own label plainly names a
+ * team list. "Team Sponsors", "Meet the Team" and "Team Store" do not match, so
+ * we never click a control that leads somewhere other than the roster. Both word
+ * orders ("Registered Teams" and "Teams Registered") are covered.
+ */
+const REVEAL_INTENT =
+  /^teams?$|\bteam\s*list\b|\bteam\s*roster\b|\broster\b|\b(registered|participating|entered|attending|competing|confirmed)\s+teams?\b|\bteams?\s+(registered|attending|competing|list)\b|\bshow\s+teams?\b/i
+
+/**
+ * Does this control's label read as "click me to see the team list"?
+ *
+ * A pure decision over the label text, so it can be unit-tested without a
+ * browser. The reveal step below asks it of every candidate control's accessible
+ * label and clicks only the ones it says yes to.
+ */
+export function isTeamListRevealControl(label: string): boolean {
+  const text = label.replace(/\s+/g, ' ').trim()
+  if (!text || text.length > 60) return false
+  return REVEAL_INTENT.test(text)
+}
 
 /**
  * Words a DOM roster parser has no reason to use, forbidden on top of the
@@ -116,6 +147,76 @@ async function readRichestFrameHtml(page: Page): Promise<string> {
   return best.html.replace(/\s+/g, ' ').replace(/> </g, '>\n<').slice(0, MAX_HTML_CHARS)
 }
 
+/**
+ * Click any on-page control that reveals a hidden team list, then let the page
+ * settle so the table is in the DOM before the parser reads it.
+ *
+ * WHY A CLICK AT ALL. Most event pages render their roster straight away. A few
+ * off-season sites gate it behind a control: CMRC and NMRC on
+ * ortop.my.site.com, a Salesforce Experience-Cloud site, keep the team table out
+ * of the DOM until you pick the "Registered Teams" RADIO. Reading the DOM as
+ * first rendered finds nothing there. So before the model writes its parser, and
+ * before every scheduled run of a stored one, we click the controls that
+ * plausibly reveal a team list and wait for the content to arrive.
+ *
+ * SAFE AND GENERIC. Not hard-coded to ortop: it clicks radios, tabs, switches
+ * and buttons whose OWN accessible label reads as a team list
+ * (isTeamListRevealControl), across every frame, capped at a few clicks. It
+ * never touches an anchor or a submit control, so it cannot navigate away or
+ * submit a form; an already-selected control is left alone. The click runs in
+ * the page's own realm through evaluate, the same sandbox the parser uses.
+ */
+async function revealTeamListControls(page: Page): Promise<void> {
+  const clickExpr = `
+    (() => {
+      const RE = new RegExp(${JSON.stringify(REVEAL_INTENT.source)}, ${JSON.stringify(REVEAL_INTENT.flags)});
+      const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim();
+      const controls = document.querySelectorAll(
+        'input[type=radio], [role=radio], [role=tab], [role=switch], button, [role=button]'
+      );
+      const clicked = [];
+      for (const el of controls) {
+        if (clicked.length >= ${MAX_REVEAL_CLICKS}) break;
+        const tag = el.tagName.toLowerCase();
+        const type = (el.getAttribute('type') || '').toLowerCase();
+        // Never submit a form or follow a link: only toggle-like controls.
+        if (tag === 'button' && type === 'submit') continue;
+        if (el.closest('a[href]')) continue;
+        // The control's OWN label: aria-label, associated <label>s, its text, or
+        // the <label> it sits inside (a radio often has no text of its own).
+        let label = norm(el.getAttribute('aria-label'));
+        if (!label && el.labels && el.labels.length) label = norm(Array.from(el.labels).map((l) => l.textContent).join(' '));
+        if (!label) label = norm(el.textContent);
+        if (!label) { const p = el.closest('label'); if (p) label = norm(p.textContent); }
+        if (!label || label.length > 60) continue;
+        if (!RE.test(label)) continue;
+        // Leave an already-chosen option alone; clicking it can toggle it off.
+        const selected = el.checked === true || el.getAttribute('aria-selected') === 'true' || el.getAttribute('aria-checked') === 'true';
+        if (selected) continue;
+        try { el.click(); clicked.push(label); } catch {}
+      }
+      return clicked;
+    })()
+  `
+
+  const revealed: string[] = []
+  for (const frame of page.frames()) {
+    try {
+      const clicked = (await frame.evaluate(clickExpr)) as string[]
+      if (Array.isArray(clicked)) revealed.push(...clicked)
+    } catch {
+      // A frame that will not evaluate holds no control we can click.
+    }
+  }
+
+  if (revealed.length > 0) {
+    console.log(`[team-list-parser] revealed a gated team list by clicking: ${revealed.join(', ')}`)
+    // The table arrives asynchronously after the click; wait for it to settle,
+    // the same way withRenderedPage waits after the initial load.
+    await settleDynamicContent(page)
+  }
+}
+
 export type ParserRunResult =
   | { ok: true; teams: RosterTeam[] }
   | { ok: false; error: string }
@@ -132,7 +233,10 @@ export async function runTeamListParser(url: string, script: string): Promise<Pa
   const check = staticCheck(script)
   if (!check.ok) return { ok: false, error: check.error }
 
-  const teams = await withRenderedPage(url, (page) => runAcrossFrames(page, script))
+  const teams = await withRenderedPage(url, async (page) => {
+    await revealTeamListControls(page)
+    return runAcrossFrames(page, script)
+  })
   if (teams === null) return { ok: false, error: 'no browser, or the page did not load' }
   if (teams.length === 0) return { ok: false, error: 'parser found no teams on any frame' }
   return { ok: true, teams }
@@ -242,6 +346,9 @@ export async function generateTeamListParser(input: {
   if (!hasAnthropicCredentials()) return null
 
   return withRenderedPage(input.url, async (page) => {
+    // Reveal a gated list first, so the DOM the model is shown, and the DOM its
+    // parser is proven against, already holds the team table.
+    await revealTeamListControls(page)
     const html = await readRichestFrameHtml(page)
     if (html.trim().length < 40) {
       console.warn(`[team-list-parser] ${input.eventName}: no readable content on any frame`)

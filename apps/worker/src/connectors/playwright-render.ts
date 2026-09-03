@@ -109,7 +109,7 @@ async function getBrowser(): Promise<import('playwright').Browser | null> {
  * steady between checks, which is what a roster table does once it has finished
  * filling in. Bounded, so a page that never settles is not waited on forever.
  */
-async function settleDynamicContent(page: import('playwright').Page): Promise<void> {
+export async function settleDynamicContent(page: import('playwright').Page): Promise<void> {
   // Up to 30 seconds. A Wix data widget in a cross-origin iframe can take the
   // better part of ten seconds to fill, and a shorter wait catches a partial
   // list or, worse, a transient placeholder: MARC briefly showed a run of years
