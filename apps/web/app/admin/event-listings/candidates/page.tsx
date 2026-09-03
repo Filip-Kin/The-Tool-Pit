@@ -7,6 +7,7 @@ import { formatDate } from '@/lib/format/date'
 import {
   EVENT_LISTING_CANDIDATE_STATUSES,
   EVENT_PROGRAMS,
+  EVENT_STATUSES,
   REGISTRATION_STATUSES,
   VOLUNTEER_STATUSES,
   eventListingCandidates,
@@ -206,28 +207,35 @@ export default async function EventCandidatesPage({
                         acceptLabel="Accept and publish"
                         note="Publishes straight away when it has a pin, a date, a venue, an address, a program and a registration state. Anything short of that is saved and the missing field is named."
                         fields={[
+                          // Same field set and order as the published-event editor
+                          // (event-admin-row), so the two edit forms match.
                           { name: 'name', label: 'Name', value: ex.name ?? meta.title ?? '', wide: true, evidence: ev.name },
                           { name: 'program', label: 'Program', type: 'select', options: EVENT_PROGRAMS, value: ex.program, evidence: ev.program },
-                          { name: 'hostTeamNumber', label: 'Host team', type: 'number', value: ex.hostTeamNumber, evidence: ev.hostTeamNumber },
-                          { name: 'startDate', label: 'First day', type: 'date', value: ex.startDate, evidence: ev.startDate },
-                          { name: 'endDate', label: 'Last day', type: 'date', value: ex.endDate, evidence: ev.endDate },
-                          { name: 'venueName', label: 'Venue', value: ex.venueName, wide: true, evidence: ev.venueName },
-                          { name: 'address', label: 'Address', value: ex.address, wide: true, evidence: ev.address },
-                          { name: 'city', label: 'City', value: ex.city, evidence: ev.city },
-                          { name: 'region', label: 'State', value: ex.region, evidence: ev.region },
-                          { name: 'country', label: 'Country', value: ex.country, evidence: ev.country },
+                          { name: 'hostTeamNumber', label: 'Host team #', type: 'number', value: ex.hostTeamNumber, evidence: ev.hostTeamNumber },
+                          { name: 'startDate', label: 'Start date', type: 'date', value: ex.startDate, evidence: ev.startDate },
+                          { name: 'endDate', label: 'End date', type: 'date', value: ex.endDate, evidence: ev.endDate },
+                          { name: 'days', label: 'Days', type: 'number', value: ex.days, evidence: ev.days },
                           { name: 'capacity', label: 'Capacity', type: 'number', value: ex.capacity, evidence: ev.capacity },
                           { name: 'costUsd', label: 'Cost (USD)', type: 'number', value: ex.costUsd, evidence: ev.costUsd },
                           { name: 'costNote', label: 'Cost note', value: ex.costNote, evidence: ev.costNote },
+                          { name: 'eventStatus', label: 'Event status', type: 'select', options: EVENT_STATUSES },
                           { name: 'registrationStatus', label: 'Registration', type: 'select', options: REGISTRATION_STATUSES, value: ex.registrationStatus, evidence: ev.registrationStatus },
+                          { name: 'registrationOpensAt', label: 'Registration opens', type: 'date' },
                           { name: 'volunteerStatus', label: 'Volunteers', type: 'select', options: VOLUNTEER_STATUSES, value: ex.volunteerStatus, evidence: ev.volunteerStatus },
+                          { name: 'venueName', label: 'Venue', value: ex.venueName, wide: true, evidence: ev.venueName },
+                          { name: 'address', label: 'Address', value: ex.address, wide: true, evidence: ev.address },
+                          { name: 'city', label: 'City', value: ex.city, evidence: ev.city },
+                          { name: 'region', label: 'Region', value: ex.region, evidence: ev.region },
+                          { name: 'country', label: 'Country', value: ex.country, evidence: ev.country },
                           { name: 'website', label: 'Website', value: ex.website, wide: true, evidence: ev.website },
-                          { name: 'registrationUrl', label: 'Sign-up link', value: ex.registrationUrl, wide: true, evidence: ev.registrationUrl },
-                          { name: 'volunteerUrl', label: 'Volunteer link', value: ex.volunteerUrl, wide: true, evidence: ev.volunteerUrl },
+                          { name: 'registrationUrl', label: 'Registration URL', value: ex.registrationUrl, wide: true, evidence: ev.registrationUrl },
+                          { name: 'volunteerUrl', label: 'Volunteer URL', value: ex.volunteerUrl, wide: true, evidence: ev.volunteerUrl },
                           { name: 'teamListUrl', label: 'Team list page', value: ex.teamListUrl, wide: true, evidence: ev.teamListUrl },
-                          { name: 'contactEmail', label: 'Contact email', value: ex.contactEmail, wide: true, evidence: ev.contactEmail },
-                          { name: 'notes', label: 'Notes', type: 'textarea', value: ex.notes, wide: true, evidence: ev.notes },
+                          { name: 'chiefDelphiUrl', label: 'Chief Delphi URL', value: ex.chiefDelphiUrl, wide: true, evidence: ev.chiefDelphiUrl },
+                          { name: 'contactEmail', label: 'Organiser email', value: ex.contactEmail, wide: true, evidence: ev.contactEmail },
                           { name: 'tbaKey', label: 'TBA key', value: ex.tbaKey ?? row.tbaKey, evidence: ev.tbaKey },
+                          { name: 'parallelDivisions', label: 'Parallel divisions', type: 'checkbox' },
+                          { name: 'notes', label: 'Notes', type: 'textarea', value: ex.notes, wide: true, evidence: ev.notes },
                         ]}
                       />
                     ) : (

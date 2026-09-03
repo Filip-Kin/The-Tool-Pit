@@ -435,9 +435,14 @@ export async function reopenEventCandidate(candidateId: string): Promise<{ error
 function parseEventValues(values: Record<string, string>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   const numbers = new Set(['hostTeamNumber', 'capacity', 'costUsd', 'days'])
+  const booleans = new Set(['parallelDivisions'])
 
   for (const [key, raw] of Object.entries(values)) {
     const value = raw.trim()
+    if (booleans.has(key)) {
+      out[key] = value === 'true'
+      continue
+    }
     if (value === '') {
       out[key] = undefined
       continue
