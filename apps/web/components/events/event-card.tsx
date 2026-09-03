@@ -17,6 +17,7 @@ import {
   eventMarkerStyle,
   eventTiming,
   timingPhrase,
+  effectiveRegistrationStatus,
   eventDateRange,
   eventLocation,
   costLabel,
@@ -38,8 +39,8 @@ function PinDot({ ev, now }: { ev: PublicEvent; now: Date }) {
 }
 
 /** Registration chip, coloured green when open, amber for waitlist. */
-function RegBadge({ ev }: { ev: PublicEvent }) {
-  const s = ev.registrationStatus
+function RegBadge({ ev, now }: { ev: PublicEvent; now: Date }) {
+  const s = effectiveRegistrationStatus(ev, now)
   if (s === 'unknown') return null
   const tone =
     s === 'open' ? 'bg-rookie/15 text-rookie'
@@ -49,11 +50,11 @@ function RegBadge({ ev }: { ev: PublicEvent }) {
 }
 
 /** A slim fullness bar, shown only when we have a count against a capacity. */
-function FullnessBar({ ev }: { ev: PublicEvent }) {
+function FullnessBar({ ev, now }: { ev: PublicEvent; now: Date }) {
   // A waitlist IS the capacity signal. Most events never publish a team count,
   // so the bar used to be blank on exactly the events where "can I still get
   // in" matters most. If they are taking a waiting list, they are full.
-  const ratio = ev.registrationStatus === 'waitlist' ? 1 : fullnessRatio(ev)
+  const ratio = effectiveRegistrationStatus(ev, now) === 'waitlist' ? 1 : fullnessRatio(ev)
   if (ratio == null) return null
   const pct = Math.round(ratio * 100)
   const tone = ratio >= 1 ? 'bg-official' : ratio >= 0.85 ? 'bg-official' : 'bg-rookie'
@@ -134,11 +135,11 @@ export function EventCard({
         )}
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <RegBadge ev={ev} />
+          <RegBadge ev={ev} now={now} />
           {/* The count lives beside the fullness bar below. Only show it as a chip
               here when there is NO bar (no capacity and no waitlist), so an event
               that has a bar does not print the same "21 / 40 teams" twice. */}
-          {full && ev.registrationStatus !== 'waitlist' && fullnessRatio(ev) == null && (
+          {full && effectiveRegistrationStatus(ev, now) !== 'waitlist' && fullnessRatio(ev) == null && (
             <span className="flex items-center gap-1 rounded bg-surface-3 px-1.5 py-0.5 text-xs font-medium text-muted">
               <Users className="h-3 w-3" />
               {full}
@@ -153,7 +154,7 @@ export function EventCard({
           )}
         </div>
 
-        <FullnessBar ev={ev} />
+        <FullnessBar ev={ev} now={now} />
       </div>
     </button>
 
@@ -234,10 +235,10 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
       )}
 
       <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
-        {ev.registrationOpensAt && ev.registrationStatus === 'not_open' && (
+        {ev.registrationOpensAt && effectiveRegistrationStatus(ev, now) === 'not_open' && (
           <Row icon={<Clock className="h-4 w-4" />} label="Registration opens" value={eventDateRange({ startDate: ev.registrationOpensAt, endDate: null })} />
         )}
-        {ev.registrationClosesAt && ev.registrationStatus === 'open' && (
+        {ev.registrationClosesAt && effectiveRegistrationStatus(ev, now) === 'open' && (
           <Row icon={<Clock className="h-4 w-4" />} label="Registration closes" value={eventDateRange({ startDate: ev.registrationClosesAt, endDate: null })} />
         )}
         {cost && <Row icon={<DollarSign className="h-4 w-4" />} label="Cost" value={cost} />}

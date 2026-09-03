@@ -6,6 +6,7 @@ import type { Map as LeafletMap, Marker as LeafletMarker, DivIcon } from 'leafle
 import type { PublicEvent } from '@/lib/events/event-display'
 import {
   eventMarkerStyle,
+  effectiveEventStatus,
   eventDateRange,
   eventLocation,
   fullnessLabel,
@@ -38,7 +39,7 @@ function tooltipHtml(ev: PublicEvent, now: Date): string {
   // Tokens, not hexes. The tooltip used to be a white card with near-black text
   // whatever the theme, which under dark was a headlight over the map. It reads
   // --color-surface now like every other floating panel here.
-  const phraseColor = ev.eventStatus === 'cancelled' ? 'var(--color-reg-closed)' : 'var(--color-foreground)'
+  const phraseColor = effectiveEventStatus(ev, now) === 'cancelled' ? 'var(--color-reg-closed)' : 'var(--color-foreground)'
   return `<div style="min-width:130px">
     <div style="font-weight:600;color:var(--color-foreground)">${esc(ev.name)}</div>
     <div style="font-size:12px;font-weight:600;color:${phraseColor};margin-top:1px">${esc(phrase)}</div>

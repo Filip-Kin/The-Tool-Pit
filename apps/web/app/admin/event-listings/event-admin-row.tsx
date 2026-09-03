@@ -13,6 +13,8 @@ import {
   EVENT_STATUS_LABEL,
   REGISTRATION_STATUS_LABEL,
   VOLUNTEER_STATUS_LABEL,
+  effectiveEventStatus,
+  effectiveRegistrationStatus,
   eventDateRange,
   eventLocation,
   costLabel,
@@ -72,18 +74,13 @@ export function EventAdminRow({
   const cost = costLabel(pub)
   const hasCoords = listing.latitude != null && listing.longitude != null
 
-  // A past event that was not cancelled reads as Completed, automatically: the
-  // public card already derives this (timingPhrase), so the admin should not
-  // still show "Confirmed" for something that ran last month. The stored column
-  // is left as-is; this is a display derivation.
-  const eventLastDay = listing.endDate ?? listing.startDate
-  const isPastEvent = eventLastDay != null && eventLastDay < new Date().toISOString().slice(0, 10)
-  const statusLabel =
-    listing.eventStatus === 'cancelled'
-      ? EVENT_STATUS_LABEL.cancelled
-      : isPastEvent
-        ? EVENT_STATUS_LABEL.completed
-        : EVENT_STATUS_LABEL[listing.eventStatus as keyof typeof EVENT_STATUS_LABEL]
+  // The displayed status and registration are DERIVED, the same helpers the
+  // public card and map use, so the admin row never shows "Confirmed" for an
+  // event that ran last month or "open" for a full or finished one. The stored
+  // columns are left as-is: the edit form below still binds to them.
+  const now = new Date()
+  const statusLabel = EVENT_STATUS_LABEL[effectiveEventStatus(pub, now)]
+  const regLabel = REGISTRATION_STATUS_LABEL[effectiveRegistrationStatus(pub, now)]
   const scrape = teamListStatus(listing)
 
   // The one-time "we listed you" email. Three gates, and the button says which
@@ -125,7 +122,7 @@ export function EventAdminRow({
               </span>
             )}
             <span>{statusLabel}</span>
-            <span>{REGISTRATION_STATUS_LABEL[listing.registrationStatus as keyof typeof REGISTRATION_STATUS_LABEL]}</span>
+            <span>{regLabel}</span>
             {listing.capacity != null && <span>{listing.capacity} slots</span>}
             {cost && <span>{cost}</span>}
             {listing.tbaKey && <span className="text-primary">{listing.tbaKey}</span>}

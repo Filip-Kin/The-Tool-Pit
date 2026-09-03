@@ -15,6 +15,7 @@
  * server (submitter audit, crawl bookkeeping) cannot reach a builder here.
  */
 import type { PublicEvent } from '@/lib/events/event-display'
+import { effectiveEventStatus, effectiveRegistrationStatus } from '@/lib/events/event-display'
 import type { PublicField } from '@/lib/fields/field-display'
 import type { PublicGrant } from '@/lib/grants/grant-display'
 import type { ToolDetailData } from '@/lib/queries/tools'
@@ -88,6 +89,11 @@ export function toolJsonLd(tool: ToolDetailData): Record<string, unknown> {
 // ---------------------------------------------------------------------------
 
 export function eventJsonLd(ev: PublicEvent): Record<string, unknown> {
+  // Status and availability follow the same derivations the map and cards use,
+  // so a finished event is not advertised as taking registrations.
+  const now = new Date()
+  const regStatus = effectiveRegistrationStatus(ev, now)
+  const eventStatus = effectiveEventStatus(ev, now)
   // A Place with as much of the address as the listing carries. Built only when
   // there is a name or an address to hang it on.
   const placeName = ev.venueName ?? ev.city ?? ev.name
@@ -122,11 +128,11 @@ export function eventJsonLd(ev: PublicEvent): Record<string, unknown> {
       price: ev.costUsd != null ? String(ev.costUsd) : undefined,
       priceCurrency: ev.costUsd != null ? 'USD' : undefined,
       availability:
-        ev.registrationStatus === 'open'
+        regStatus === 'open'
           ? 'https://schema.org/InStock'
-          : ev.registrationStatus === 'closed'
+          : regStatus === 'closed'
             ? 'https://schema.org/SoldOut'
-            : ev.registrationStatus === 'waitlist'
+            : regStatus === 'waitlist'
               ? 'https://schema.org/BackOrder'
               : undefined,
     })
@@ -139,7 +145,7 @@ export function eventJsonLd(ev: PublicEvent): Record<string, unknown> {
     // The date columns are YYYY-MM-DD strings, which are valid ISO-8601 dates.
     startDate: ev.startDate ?? undefined,
     endDate: ev.endDate ?? undefined,
-    eventStatus: ev.eventStatus === 'cancelled' ? 'https://schema.org/EventCancelled' : undefined,
+    eventStatus: eventStatus === 'cancelled' ? 'https://schema.org/EventCancelled' : undefined,
     // Every off-season event is an in-person competition.
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location,

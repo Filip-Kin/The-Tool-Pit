@@ -162,6 +162,99 @@ export function eventTiming(ev: PublicEvent, now: Date): EventTiming {
   return d != null && d <= SOON_DAYS ? 'soon' : 'upcoming'
 }
 
+// ---------------------------------------------------------------------------
+// Effective status - what the event and its registration ARE right now
+//
+// The stored `eventStatus` and `registrationStatus` columns are what the admin
+// and owner forms edit. They do not move on their own, so a confirmed event
+// that ran last month still says "confirmed" in the row, and a registration
+// that closed by its own date still says "open". These two helpers derive the
+// status the reader should SEE from the facts on the row, computed fresh at
+// render, so the map, cards, detail and pins update as dates pass and team
+// counts change without a background job touching the database.
+//
+// Only the DISPLAY goes through here. The editable selects stay bound to the
+// stored columns.
+// ---------------------------------------------------------------------------
+
+/** True when a YYYY-MM-DD date's day is fully over. */
+function dayIsOver(iso: string, now: Date): boolean {
+  return new Date(`${iso}T23:59:59`).getTime() < now.getTime()
+}
+
+/** True when a YYYY-MM-DD date's day has started. */
+function dayHasArrived(iso: string, now: Date): boolean {
+  return new Date(`${iso}T00:00:00`).getTime() <= now.getTime()
+}
+
+/**
+ * The event status to show: 'cancelled' stays 'cancelled'; an event whose last
+ * day has passed reads 'completed'; otherwise the stored status. This is the
+ * one place the "past event is completed" rule lives, so the card, the map, the
+ * pin and the admin row all say the same word about the same event.
+ */
+export function effectiveEventStatus(
+  ev: Pick<PublicEvent, 'eventStatus' | 'startDate' | 'endDate'>,
+  now: Date,
+): EventStatus {
+  if (ev.eventStatus === 'cancelled') return 'cancelled'
+  const lastDay = ev.endDate ?? ev.startDate
+  if (lastDay && dayIsOver(lastDay, now)) return 'completed'
+  return ev.eventStatus
+}
+
+/**
+ * The registration status to show, derived in precedence order:
+ *   1. A cancelled or completed event has nothing to register for, so its
+ *      registration is moot: 'closed', or 'unknown' when that is all we ever
+ *      had. Never 'open' for an event that is over.
+ *   2. A registration whose close date has passed reads 'closed'.
+ *   3. A full event (registered teams at or over capacity) reads 'waitlist'.
+ *   4. A stored 'waitlist' that is no longer full (a team dropped out) reopens
+ *      to 'open'.
+ *   5. A stored 'not_open' whose open date has arrived reads 'open'.
+ *   6. Otherwise the stored status.
+ */
+export function effectiveRegistrationStatus(
+  ev: Pick<
+    PublicEvent,
+    | 'eventStatus'
+    | 'startDate'
+    | 'endDate'
+    | 'registrationStatus'
+    | 'registrationOpensAt'
+    | 'registrationClosesAt'
+    | 'capacity'
+    | 'registeredTeamCount'
+  >,
+  now: Date,
+): RegistrationStatus {
+  const eff = effectiveEventStatus(ev, now)
+  if (eff === 'cancelled' || eff === 'completed') {
+    return ev.registrationStatus === 'unknown' ? 'unknown' : 'closed'
+  }
+  if (ev.registrationClosesAt && dayIsOver(ev.registrationClosesAt, now)) return 'closed'
+  const full =
+    ev.capacity != null && ev.registeredTeamCount != null && ev.registeredTeamCount >= ev.capacity
+  if (full) return 'waitlist'
+  if (
+    ev.registrationStatus === 'waitlist' &&
+    ev.capacity != null &&
+    ev.registeredTeamCount != null &&
+    ev.registeredTeamCount < ev.capacity
+  ) {
+    return 'open'
+  }
+  if (
+    ev.registrationStatus === 'not_open' &&
+    ev.registrationOpensAt &&
+    dayHasArrived(ev.registrationOpensAt, now)
+  ) {
+    return 'open'
+  }
+  return ev.registrationStatus
+}
+
 /**
  * Where an event sits in its life: "Cancelled", "Completed", "Happening now",
  * "In 11 days", or its plain status.
@@ -173,15 +266,15 @@ export function eventTiming(ev: PublicEvent, now: Date): EventTiming {
  * the same words about the same event.
  */
 export function timingPhrase(ev: PublicEvent, now: Date): string {
-  if (ev.eventStatus === 'cancelled') return 'Cancelled'
-  const timing = eventTiming(ev, now)
+  const status = effectiveEventStatus(ev, now)
+  if (status === 'cancelled') return 'Cancelled'
+  if (status === 'completed') return 'Completed'
   const d = daysUntil(ev, now)
-  if (timing === 'past') return 'Completed'
-  if (d == null) return EVENT_STATUS_LABEL[ev.eventStatus]
+  if (d == null) return EVENT_STATUS_LABEL[status]
   if (d <= 0) return 'Happening now'
   if (d === 1) return 'Tomorrow'
   if (d <= 45) return `In ${d} days`
-  return EVENT_STATUS_LABEL[ev.eventStatus]
+  return EVENT_STATUS_LABEL[status]
 }
 
 // ---------------------------------------------------------------------------
@@ -213,8 +306,9 @@ const MOOT = 'var(--color-reg-moot)' // grey - already run, cancelled, or nobody
 export function eventMarkerStyle(ev: PublicEvent, now: Date): MarkerStyle {
   // Once an event is off the table there is nothing to register for, so a
   // cancelled or finished event never wears the open or closed colours.
-  if (ev.eventStatus === 'cancelled' || eventTiming(ev, now) === 'past') return { color: MOOT, size: 13 }
-  switch (ev.registrationStatus) {
+  const status = effectiveEventStatus(ev, now)
+  if (status === 'cancelled' || status === 'completed') return { color: MOOT, size: 13 }
+  switch (effectiveRegistrationStatus(ev, now)) {
     case 'open':
       return { color: OPEN, size: 20 }
     case 'not_open':

@@ -11,6 +11,7 @@ import type { PublicEvent, DistanceUnit, SeasonScope } from '@/lib/events/event-
 import type { ListingClaimState } from '@/lib/queries/listing-ownership'
 import {
   eventTiming,
+  effectiveRegistrationStatus,
   daysUntil,
   distanceKm,
   formatDistance,
@@ -163,7 +164,7 @@ export function EventsExplorer({
         const past = eventTiming(e, now) === 'past'
         if (effectiveWhen === 'upcoming' && past) return false
         if (effectiveWhen === 'past' && !past) return false
-        if (openOnly && e.registrationStatus !== 'open') return false
+        if (openOnly && effectiveRegistrationStatus(e, now) !== 'open') return false
         if (query) {
           const hay = [e.name, e.venueName, e.city, e.region].filter(Boolean).join(' ').toLowerCase()
           if (!hay.includes(query)) return false
@@ -217,7 +218,15 @@ export function EventsExplorer({
   const mapEvents = useMemo(() => filtered.map((r) => r.event), [filtered])
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[360px_1fr] lg:items-start">
+    // Column 1 holds the filters (row 1) then the results (row 2); the map is
+    // column 2, spanning both rows. The second row track is `1fr` on purpose:
+    // the tall row-spanning map would otherwise stretch BOTH column-1 tracks
+    // evenly, dropping a single result into the vertical middle with a gap above
+    // it. A flexible second row absorbs the map's extra height instead, so the
+    // filters row stays its natural height and the results sit right under it.
+    // DOM order (filters, map, results) is unchanged, so mobile still stacks the
+    // map between the filters and the list.
+    <div className="grid gap-4 lg:grid-cols-[360px_1fr] lg:grid-rows-[auto_1fr] lg:items-start">
       {/* Controls */}
       <div className="flex min-w-0 flex-col gap-3 lg:col-start-1 lg:row-start-1">
         <SegmentedControl
