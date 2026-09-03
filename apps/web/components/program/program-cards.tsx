@@ -3,6 +3,7 @@ import { cardClass } from '@/components/ui/card'
 import { getDb } from '@/lib/db'
 import { tools, toolPrograms, programs } from '@the-tool-pit/db'
 import { eq, and, sql } from 'drizzle-orm'
+import { NOT_TEAM_ARTIFACT } from '@/lib/queries/tools'
 
 const PROGRAMS = [
   {
@@ -34,7 +35,7 @@ async function getToolCountsByProgram(): Promise<Record<string, number>> {
     .select({ slug: programs.slug, count: sql<number>`count(distinct ${toolPrograms.toolId})::int` })
     .from(programs)
     .leftJoin(toolPrograms, eq(toolPrograms.programId, programs.id))
-    .leftJoin(tools, and(eq(tools.id, toolPrograms.toolId), eq(tools.status, 'published')))
+    .leftJoin(tools, and(eq(tools.id, toolPrograms.toolId), eq(tools.status, 'published'), NOT_TEAM_ARTIFACT))
     .groupBy(programs.slug)
   return Object.fromEntries(rows.map((r) => [r.slug, r.count]))
 }

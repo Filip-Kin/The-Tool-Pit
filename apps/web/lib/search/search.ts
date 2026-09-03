@@ -189,14 +189,15 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     sql` `,
   )} else 0.5 end * 0.15`
 
-  // Team-artifact penalty, demotes team code AND team CAD in general browsing without zeroing
-  // them. Disabled whenever the caller is explicitly after team artifacts (a team filter, or a
-  // "254 code" query that set one above), so the Robot Code Archive and team searches rank normally.
+  // Robot code and team CAD are their own vertical (/robot-code). They used to be
+  // demoted by -0.25 and left in general results; that still intermingled them
+  // with reusable tools, which is exactly what the separate vertical exists to
+  // avoid. Now they are excluded outright (see the WHERE below) UNLESS the caller
+  // is explicitly after team artifacts: a team filter, an isTeamCode/isTeamCad
+  // filter, or a "254 code" query that set one above. In that case the Robot Code
+  // Archive and team searches run normally.
   const teamFilterActive =
     isTeamCode !== undefined || isTeamCad !== undefined || teamArtifact !== undefined || teamNumber !== undefined
-  const teamCodePenalty = teamFilterActive
-    ? sql<number>`0`
-    : sql<number>`case when ${tools.isTeamCode} or ${tools.isTeamCad} then -0.25 else 0 end`
 
   const rankScore = sql<number>`(
     ${tsRank} * 1.0
@@ -206,7 +207,6 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
     + ${officialBoost}
     + ${popularityNorm}
     + ${typeWeightExpr}
-    + ${teamCodePenalty}
   )`
 
   // WHERE conditions
@@ -229,6 +229,10 @@ export async function searchTools(params: SearchParams): Promise<SearchResponse>
   if (teamArtifact) conditions.push(sql`(${tools.isTeamCode} or ${tools.isTeamCad})`)
   if (teamNumber !== undefined) conditions.push(eq(tools.teamNumber, teamNumber))
   if (seasonYear !== undefined) conditions.push(eq(tools.seasonYear, seasonYear))
+
+  // The tools vertical never shows robot code or CAD. Only a caller explicitly
+  // after team artifacts (handled just above) sees them.
+  if (!teamFilterActive) conditions.push(sql`not (${tools.isTeamCode} or ${tools.isTeamCad})`)
 
   if (program) {
     conditions.push(

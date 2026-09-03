@@ -122,6 +122,20 @@ async function enrichTools(rows: typeof tools.$inferSelect[]): Promise<ToolListR
 export const ALIVE_ENOUGH_TO_RECOMMEND = sql`coalesce(${tools.freshnessState}, 'unknown') not in ('inactive', 'archived')`
 
 /**
+ * The tools vertical, and only it.
+ *
+ * Robot code and team CAD sit in the same `tools` table but are a separate
+ * vertical on purpose (/robot-code). A team's season code and a CAD dump are not
+ * reusable tools, and mixing them in doubled the "FRC tools" count and buried the
+ * real tools under 660 team artifacts. Every tools-vertical list, count and the
+ * general search applies this; the robot-code queries apply its inverse. Keeping
+ * it in one place, next to ALIVE_ENOUGH_TO_RECOMMEND and asserted by
+ * tests/unit/tools-exclude-team-artifacts.test.ts, is what stops the divide from
+ * drifting the next time a row is added.
+ */
+export const NOT_TEAM_ARTIFACT = sql`not (${tools.isTeamCode} or ${tools.isTeamCad})`
+
+/**
  * The home page's "Discover" row.
  *
  * There is no first-party traffic data yet, so this is popularity (GitHub
@@ -157,6 +171,8 @@ export async function getDiscoverTools(limit = 6): Promise<ToolListRow[]> {
     .where(
       and(
         eq(tools.status, 'published'),
+        // Robot code and CAD are their own vertical, never the tools front page.
+        NOT_TEAM_ARTIFACT,
         // A dead tool is not a discovery by any definition.
         ALIVE_ENOUGH_TO_RECOMMEND,
         // FIRST's own resources have their own section, and they are popular by
@@ -192,6 +208,7 @@ export async function getFirstPartyTools(limit = 6): Promise<ToolListRow[]> {
     .where(
       and(
         eq(tools.status, 'published'),
+        NOT_TEAM_ARTIFACT,
         // Our own tools should still be alive to be worth featuring.
         ALIVE_ENOUGH_TO_RECOMMEND,
         sql`exists (
@@ -212,7 +229,7 @@ export async function getRecentlyUpdatedTools(limit = 6): Promise<ToolListRow[]>
   const rows = await db
     .select()
     .from(tools)
-    .where(and(eq(tools.status, 'published'), sql`${tools.lastActivityAt} is not null`))
+    .where(and(eq(tools.status, 'published'), NOT_TEAM_ARTIFACT, sql`${tools.lastActivityAt} is not null`))
     .orderBy(desc(tools.lastActivityAt))
     .limit(limit)
   return enrichTools(rows)
@@ -226,6 +243,7 @@ export async function getRookieFriendlyTools(limit = 6): Promise<ToolListRow[]> 
     .where(
       and(
         eq(tools.status, 'published'),
+        NOT_TEAM_ARTIFACT,
         eq(tools.isRookieFriendly, true),
         // A rookie cannot tell a dead tool from a live one, and this row is us
         // telling them where to start.
@@ -296,7 +314,7 @@ export async function getFeaturedTools(limit = 6): Promise<FeaturedTools> {
   const rows = await db
     .select()
     .from(tools)
-    .where(and(eq(tools.status, 'published'), eq(tools.isFeatured, true)))
+    .where(and(eq(tools.status, 'published'), NOT_TEAM_ARTIFACT, eq(tools.isFeatured, true)))
     .orderBy(desc(tools.popularityScore))
     .limit(limit)
 
@@ -313,7 +331,7 @@ export async function getOfficialTools(limit = 6): Promise<ToolListRow[]> {
   const rows = await db
     .select()
     .from(tools)
-    .where(and(eq(tools.status, 'published'), eq(tools.isOfficial, true)))
+    .where(and(eq(tools.status, 'published'), NOT_TEAM_ARTIFACT, eq(tools.isOfficial, true)))
     .orderBy(desc(tools.popularityScore))
     .limit(limit)
   return enrichTools(rows)
