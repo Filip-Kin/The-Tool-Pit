@@ -234,19 +234,21 @@ export interface ScrapedRosterDecision {
  * person".
  */
 /**
- * Keep only numbers that are real FRC teams. A generated parser can pick a stray
- * number out of a section's prose (a count like "8 host teams", a date, a price)
- * and hand it back as a team. Every number is checked against the TBA team-name
- * cache; the 9970-9999 off-season / demo range is allowed too, since TBA issues
- * those. If the cache is empty (never synced), the roster is returned unchanged
- * rather than emptied.
+ * Drop stray numbers a generated parser picks out of prose (a count like "8 host
+ * teams", a date, a price) while keeping every real team. A number is kept when
+ * TBA knows it, OR when it is >= 9000: that band is where the genuinely new teams
+ * live that TBA has not indexed yet — a pre-rookie 10xxx entered for its first
+ * event, or a 9970-9999 placeholder we assign a name-only team. Prose junk is
+ * almost always LOW (counts, slot indices, small years), and a real low team is
+ * always in the cache, so the low-and-unknown numbers are the ones to drop. If
+ * the cache is empty (never synced), the roster is returned unchanged.
  */
 async function filterToKnownTeams(teams: RosterTeam[]): Promise<RosterTeam[]> {
   if (teams.length === 0) return teams
   const numbers = [...new Set(teams.map((t) => t.number))]
   const known = await getTeamNames(numbers)
   if (known.size === 0) return teams
-  return teams.filter((t) => known.has(t.number) || (t.number >= 9970 && t.number <= 9999))
+  return teams.filter((t) => known.has(t.number) || t.number >= 9000)
 }
 
 export function decideScrapedRoster(previous: RosterTeam[], next: RosterTeam[]): ScrapedRosterDecision {

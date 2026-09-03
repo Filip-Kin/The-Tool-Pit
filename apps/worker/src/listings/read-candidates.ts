@@ -233,7 +233,7 @@ export async function processReadCandidatesJob(
               const teams: RosterTeam[] =
                 known.size === 0
                   ? gen.teams
-                  : gen.teams.filter((t) => known.has(t.number) || (t.number >= 9970 && t.number <= 9999))
+                  : gen.teams.filter((t) => known.has(t.number) || t.number >= 9000)
               merged.rosterTeams = teams
               merged.registeredTeamCount = teams.filter((t) => !t.waitlisted).length
             }
