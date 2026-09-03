@@ -2,10 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { eventListings } from '@the-tool-pit/db'
-import { eventListingUrl } from '@the-tool-pit/types'
+import { eventListings, practiceFields } from '@the-tool-pit/db'
+import { eventListingUrl, fieldUrl } from '@the-tool-pit/types'
 import { verifyOutreachRemove } from '@/lib/listings/outreach-token'
-import { confirmOutreachRemoval } from './actions'
+import { confirmOutreachRemoval, isRemoveTarget } from './actions'
 
 /**
  * The one-click "take this listing down" page an outreach email links to.
@@ -43,10 +43,10 @@ export default async function RemoveListingPage({
 }) {
   const { type, id, token, done, error } = await searchParams
 
-  // A bad or missing token, a non-event target, or an id that no longer exists
+  // A bad or missing token, an unknown vertical, or an id that no longer exists
   // all land here. One vague message on purpose: a guessed link learns nothing
   // about what does or does not exist.
-  if (error || type !== 'event' || !id || !verifyOutreachRemove('event', id, token)) {
+  if (error || !type || !isRemoveTarget(type) || !id || !verifyOutreachRemove(type, id, token)) {
     return (
       <Card>
         <h1 className="text-base font-semibold text-foreground">This link is not valid</h1>
@@ -59,11 +59,21 @@ export default async function RemoveListingPage({
   }
 
   const db = getDb()
-  const [row] = await db
-    .select({ id: eventListings.id, name: eventListings.name, status: eventListings.status })
-    .from(eventListings)
-    .where(eq(eventListings.id, id))
-    .limit(1)
+  const [row] =
+    type === 'event'
+      ? await db
+          .select({ id: eventListings.id, name: eventListings.name, status: eventListings.status })
+          .from(eventListings)
+          .where(eq(eventListings.id, id))
+          .limit(1)
+      : await db
+          .select({ id: practiceFields.id, name: practiceFields.name, status: practiceFields.status })
+          .from(practiceFields)
+          .where(eq(practiceFields.id, id))
+          .limit(1)
+
+  const keepUrl = type === 'event' ? eventListingUrl(id) : fieldUrl(id)
+  const listingWord = type === 'event' ? 'off-season events map and list' : 'practice field map'
 
   if (!row) {
     return (
@@ -94,12 +104,11 @@ export default async function RemoveListingPage({
     <Card>
       <h1 className="text-base font-semibold text-foreground">Remove this listing?</h1>
       <p className="mt-2 text-sm text-muted">
-        This takes <span className="font-medium text-foreground">{row.name}</span> off the frc.tools off-season events map
-        and list. Teams will no longer find it here. You can ask us to put it back at any time by replying to the
-        email.
+        This takes <span className="font-medium text-foreground">{row.name}</span> off the frc.tools {listingWord}.
+        Teams will no longer find it here. You can ask us to put it back at any time by replying to the email.
       </p>
       <form action={confirmOutreachRemoval} className="mt-5 flex flex-wrap items-center gap-3">
-        <input type="hidden" name="type" value="event" />
+        <input type="hidden" name="type" value={type} />
         <input type="hidden" name="id" value={row.id} />
         <input type="hidden" name="token" value={token} />
         <button
@@ -108,7 +117,7 @@ export default async function RemoveListingPage({
         >
           Remove this listing
         </button>
-        <Link href={eventListingUrl(row.id)} className="text-sm font-medium text-muted hover:text-foreground">
+        <Link href={keepUrl} className="text-sm font-medium text-muted hover:text-foreground">
           Keep it listed
         </Link>
       </form>

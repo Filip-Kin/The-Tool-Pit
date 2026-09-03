@@ -5,7 +5,14 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
+import { practiceFields, fieldPhotos, queueNotification, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
+import {
+  claimListingUrl,
+  removeListingUrl,
+  type ApprovalEmailPayload,
+  type EmailFact,
+} from '@the-tool-pit/types'
+import { signOutreachRemove } from '@/lib/listings/outreach-token'
 import { readPhotoFiles } from '@/lib/fields/form-parse'
 import { notifyFieldPublished, notifyFieldRejected } from '@/lib/notify/approvals'
 import { grantFieldOwnership } from '@/lib/listings/submitter-ownership'
@@ -93,6 +100,102 @@ export async function suppressField(id: string, reason: string): Promise<{ error
   revalidateAll()
   return {}
 }
+
+// #region outreach
+
+/**
+ * One outreach card row: a value we hold, or a muted "Not listed" prompt in its
+ * place. Same rule as the event card: show the gap, do not hide it.
+ */
+function fieldOutreachFact(label: string, value: string | null): EmailFact {
+  return value ? { label, value } : { label, value: 'Not listed - add it', muted: true }
+}
+
+/** The first email address inside a free-text blob, or null. */
+function firstEmail(text: string | null | undefined): string | null {
+  const m = text?.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)
+  return m ? m[0] : null
+}
+
+/**
+ * The one-time "we listed you" email for a practice field. The field version of
+ * sendEventOutreach, wired to the field's own contact and field set.
+ *
+ * A field's public contact is the free-text access details (contactInfo), not a
+ * dedicated column, so the address has to be FOUND in it before anything is
+ * sent: no email in the access details, no send. There is no past-event gate,
+ * because a field is not dated. Never twice (outreachSentAt), and the outbox
+ * dedupe key is a second guard behind it. The recipient has no account, so the
+ * row carries the raw address and the worker sends straight to it.
+ */
+export async function sendFieldOutreach(id: string): Promise<{ error?: string }> {
+  await assertAdmin()
+  const db = getDb()
+  const [row] = await db
+    .select({
+      id: practiceFields.id,
+      name: practiceFields.name,
+      address: practiceFields.address,
+      city: practiceFields.city,
+      region: practiceFields.region,
+      country: practiceFields.country,
+      hours: practiceFields.hours,
+      contactInfo: practiceFields.contactInfo,
+      contactUrl: practiceFields.contactUrl,
+      outreachSentAt: practiceFields.outreachSentAt,
+    })
+    .from(practiceFields)
+    .where(eq(practiceFields.id, id))
+    .limit(1)
+  if (!row) return { error: 'Field not found' }
+
+  if (row.outreachSentAt) return { error: 'Outreach has already been sent for this field.' }
+
+  const email = firstEmail(row.contactInfo)
+  if (!email) return { error: 'No contact email in this field’s access details to reach.' }
+
+  const where = [row.address, row.city, row.region, row.country].filter((p) => p && p.trim()).join(', ')
+  const facts: EmailFact[] = [
+    fieldOutreachFact('Where', where || null),
+    fieldOutreachFact('Days and hours', row.hours?.trim() || null),
+    fieldOutreachFact('Booking or contact link', row.contactUrl?.trim() || null),
+    fieldOutreachFact('How to arrange access', row.contactInfo?.trim() || null),
+  ]
+
+  const payload: ApprovalEmailPayload = {
+    title: row.name,
+    vertical: 'field',
+    url: claimListingUrl('field', row.id),
+    secondaryCta: {
+      label: 'Not right? Remove it',
+      url: removeListingUrl('field', row.id, signOutreachRemove('field', row.id)),
+    },
+    facts,
+  }
+
+  // Stamp the field first: it is the guard the button reads and the one that
+  // survives the outbox being pruned. Queueing is idempotent behind its dedupe
+  // key, so even a replayed action lands one email.
+  await db
+    .update(practiceFields)
+    .set({ outreachSentAt: new Date(), outreachSentTo: email, updatedAt: new Date() })
+    .where(eq(practiceFields.id, id))
+
+  await queueNotification({
+    userId: null,
+    recipientEmail: email,
+    kind: 'listing_outreach',
+    subjectType: 'practice_field',
+    subjectId: row.id,
+    dedupeKey: `listing_outreach:field:${row.id}`,
+    payload,
+  })
+
+  revalidateAll()
+  return {}
+}
+
+// #endregion
 
 export async function unsuppressField(id: string): Promise<void> {
   await assertAdmin()

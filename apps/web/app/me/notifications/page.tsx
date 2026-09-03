@@ -6,8 +6,16 @@ import { and, asc, desc, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { getDb } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth/session'
-import { grantWatches, grants, grantFunders, notificationChannels, users } from '@the-tool-pit/db'
-import { renderVerifyEmail } from '@the-tool-pit/types'
+import {
+  grantWatches,
+  grants,
+  grantFunders,
+  notificationChannels,
+  users,
+  getMutedCategories,
+  setCategoryMuted,
+} from '@the-tool-pit/db'
+import { renderVerifyEmail, LISTING_EMAIL_CATEGORIES } from '@the-tool-pit/types'
 import { MeShell } from '@/components/me/me-shell'
 import { GRANTS_ORIGIN } from '@/components/me/vertical-links'
 
@@ -377,6 +385,27 @@ async function unwatchGrant(formData: FormData): Promise<void> {
   done('unwatched')
 }
 
+/**
+ * Save which listing-email categories are on.
+ *
+ * A checkbox is ON when the reader wants that category. The form only submits
+ * the boxes that are ticked, so a category absent from the payload is one they
+ * turned off, and we mute it. One write per category either way; setCategoryMuted
+ * is idempotent.
+ */
+async function setListingEmailPrefs(formData: FormData): Promise<void> {
+  'use server'
+  const user = await getCurrentUser()
+  if (!user) done('expired')
+
+  const on = new Set(formData.getAll('category').map((c) => String(c)))
+  for (const cat of LISTING_EMAIL_CATEGORIES) {
+    await setCategoryMuted(user.id, cat.id, !on.has(cat.id))
+  }
+
+  done('saved')
+}
+
 // #endregion
 
 // #region page
@@ -392,7 +421,7 @@ export default async function NotificationsPage({
   const { msg, verify } = await searchParams
   const db = getDb()
 
-  const [channels, watches, account] = await Promise.all([
+  const [channels, watches, account, mutedCategories] = await Promise.all([
     db
       .select()
       .from(notificationChannels)
@@ -419,6 +448,7 @@ export default async function NotificationsPage({
       .from(users)
       .where(eq(users.id, user.id))
       .limit(1),
+    getMutedCategories(user.id),
   ])
 
   const emailChannels = channels.filter((c) => c.kind === 'email')
@@ -566,6 +596,52 @@ export default async function NotificationsPage({
               are held rather than thrown away, and they will be delivered once you confirm one.
             </p>
           )}
+        </section>
+        {/* #endregion */}
+
+        {/* #region listing emails */}
+        <section>
+          <h2 className="text-lg font-semibold text-foreground">Listing emails</h2>
+          <p className="mt-2 max-w-2xl text-sm text-muted">
+            Which emails we send about listings you submitted or manage. Turning one off stops that
+            kind for you; it does not touch anyone else who manages the same listing.
+          </p>
+
+          <form
+            action={setListingEmailPrefs}
+            className="mt-4 flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface p-4"
+          >
+            <div className="flex flex-col gap-3">
+              {LISTING_EMAIL_CATEGORIES.map((c) => (
+                <label key={c.id} className="flex items-start gap-3 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    name="category"
+                    value={c.id}
+                    defaultChecked={!mutedCategories.has(c.id)}
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  <span>
+                    <span className="font-medium">{c.label}</span>
+                    <span className="block text-xs text-muted-2">{c.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div>
+              <button
+                type="submit"
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+              >
+                Save
+              </button>
+            </div>
+          </form>
+
+          <p className="mt-3 text-xs text-muted-2">
+            Every email we send also carries a one-click link to stop all email to that address, no
+            sign-in needed.
+          </p>
         </section>
         {/* #endregion */}
 

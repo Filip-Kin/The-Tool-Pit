@@ -18,11 +18,19 @@
  * serial worker keeps one sender.
  */
 import { and, asc, eq, isNull, lt, lte, sql } from 'drizzle-orm'
-import { getDb, notificationOutbox } from '@the-tool-pit/db'
 import {
+  getDb,
+  getMutedCategories,
+  isEmailSuppressed,
+  notificationOutbox,
+  signUnsubscribe,
+} from '@the-tool-pit/db'
+import {
+  emailCategoryForKind,
   isApprovalEmailKind,
   preferencesUrl,
   renderApprovalEmail,
+  unsubscribeUrl,
   type ApprovalEmailPayload,
   type EmailBody,
 } from '@the-tool-pit/types'
@@ -67,6 +75,13 @@ const NO_CHANNEL_RETRY_MS = 12 * 60 * 60 * 1000
 /** Most rows one drain pass will handle. Anything left over goes next pass. */
 const DEFAULT_DRAIN_LIMIT = 200
 
+/**
+ * The address a reply lands in. Every email this drain sends carries it as
+ * Reply-To, so an outreach recipient disputing a listing, or anyone else, can
+ * just hit reply and reach a monitored inbox rather than the no-reply sender.
+ */
+const REPLY_TO = process.env.OUTREACH_REPLY_TO?.trim() || 'me@filipkin.com'
+
 // #endregion
 
 // #region rendering
@@ -78,14 +93,25 @@ const DEFAULT_DRAIN_LIMIT = 200
  * email. It happens for exactly two reasons: a kind that was queued by a newer
  * deploy than the one draining, and a payload with no title.
  */
-function renderRow(kind: string, payload: unknown): EmailBody | null {
+function renderRow(kind: string, payload: unknown, address: string): EmailBody | null {
+  // The no-login "stop all email" link for this exact address, minted here
+  // because the drain is the first place that knows who a row is going to. If
+  // signing is impossible (SESSION_SECRET unset), fall back to no link rather
+  // than throw and halt the whole batch: the preferences link still ships.
+  let unsub: string | undefined
+  try {
+    unsub = unsubscribeUrl(address, signUnsubscribe(address))
+  } catch {
+    unsub = undefined
+  }
+
   // The yearly offseason renewal ask. Queued, retried, parked and counted like
   // every other row in this table; it only renders somewhere else because it
   // is a question rather than a moderation outcome. See
   // ./season-renewal-email.ts.
   if (kind === SEASON_RENEWAL_EMAIL_KIND) {
     return isSeasonRenewalPayload(payload)
-      ? renderSeasonRenewalEmail(payload, preferencesUrl())
+      ? renderSeasonRenewalEmail(payload, preferencesUrl(), unsub)
       : null
   }
 
@@ -93,7 +119,7 @@ function renderRow(kind: string, payload: unknown): EmailBody | null {
   if (!payload || typeof payload !== 'object') return null
   const p = payload as ApprovalEmailPayload
   if (typeof p.title !== 'string' || !p.title.trim()) return null
-  return renderApprovalEmail({ ...p, kind, preferencesUrl: preferencesUrl() })
+  return renderApprovalEmail({ ...p, kind, preferencesUrl: preferencesUrl(), unsubscribeUrl: unsub })
 }
 
 // #endregion
@@ -104,6 +130,12 @@ export interface NotificationDrainStats {
   /** Rows selected as due this pass. */
   considered: number
   sent: number
+  /**
+   * Not sent because the reader chose not to hear it: the address is globally
+   * unsubscribed, or the user muted this email's category. A terminal, non-error
+   * outcome, so it is counted apart from both `sent` and `parked`.
+   */
+  suppressed: number
   /** Push rows held because push delivery is not built yet. */
   pushHeld: number
   /** Deferred: the user has no verified address yet. Retried later. */
@@ -132,6 +164,7 @@ function emptyStats(): NotificationDrainStats {
   return {
     considered: 0,
     sent: 0,
+    suppressed: 0,
     pushHeld: 0,
     deferredNoAddress: 0,
     retryable: 0,
@@ -190,6 +223,9 @@ export async function processNotificationDrainJob(
   /** One resolved address per user per pass, not per row. */
   const addressCache = new Map<string, string | null>()
 
+  /** One set of muted categories per user per pass, not per row. */
+  const mutedCache = new Map<string, Set<string>>()
+
   /** Recipients refused by the sandbox this pass, named once in the summary. */
   const sandboxRefused = new Set<string>()
 
@@ -200,6 +236,18 @@ export async function processNotificationDrainJob(
       .set({ attempts: Math.max(MAX_ATTEMPTS, attempts), error: reason })
       .where(eq(notificationOutbox.id, id))
     stats.parked++
+  }
+
+  /**
+   * Resolve a row the reader asked not to get. Not a failure and not a park: the
+   * row leaves the queue with the reason written on it and is counted as
+   * suppressed. sentAt is stamped so the SELECT never picks it up again, and the
+   * non-null error beside it is how the audit tells a suppressed row from a
+   * delivered one, which clears its error on success.
+   */
+  const resolveSuppressed = async (id: string, reason: string) => {
+    await db.update(notificationOutbox).set({ sentAt: new Date(), error: reason }).where(eq(notificationOutbox.id, id))
+    stats.suppressed++
   }
 
   for (const row of due) {
@@ -264,6 +312,28 @@ export async function processNotificationDrainJob(
       continue
     }
 
+    // Honor the reader's choices before spending anything. The universal
+    // unsubscribe wins over everything and reaches accountless outreach too,
+    // because it is keyed on the address. The per-category mute only applies to
+    // a row that belongs to a signed-in user; outreach has no user and no
+    // category, so only the global suppression can stop it.
+    if (await isEmailSuppressed(address)) {
+      await resolveSuppressed(row.id, 'not sent: recipient has unsubscribed from all email')
+      continue
+    }
+    const category = emailCategoryForKind(row.kind)
+    if (row.userId && category) {
+      let muted = mutedCache.get(row.userId)
+      if (muted === undefined) {
+        muted = await getMutedCategories(row.userId)
+        mutedCache.set(row.userId, muted)
+      }
+      if (muted.has(category)) {
+        await resolveSuppressed(row.id, `not sent: recipient turned off '${category}' emails`)
+        continue
+      }
+    }
+
     // Ask before spending an attempt. While RESEND_FROM is an unverified
     // sender, anyone other than the account owner is refused, and there is no
     // point discovering that once per attempt per recipient.
@@ -274,7 +344,7 @@ export async function processNotificationDrainJob(
       continue
     }
 
-    const body = renderRow(row.kind, row.payload)
+    const body = renderRow(row.kind, row.payload, address)
     if (!body) {
       await park(row.id, row.attempts, `no email body for kind '${row.kind}'`)
       stats.parkedBy.unrenderable++
@@ -286,6 +356,7 @@ export async function processNotificationDrainJob(
       subject: body.subject,
       html: body.html,
       text: body.text,
+      replyTo: REPLY_TO,
     })
 
     if (result.ok) {
@@ -331,8 +402,8 @@ export async function processNotificationDrainJob(
 
   if (stats.considered > 0 || stats.alreadyParked > 0) {
     console.log(
-      `[notify] drained ${stats.considered}: sent=${stats.sent} retry=${stats.retryable} ` +
-        `parked=${stats.parked} pushHeld=${stats.pushHeld} noAddress=${stats.deferredNoAddress}`,
+      `[notify] drained ${stats.considered}: sent=${stats.sent} suppressed=${stats.suppressed} ` +
+        `retry=${stats.retryable} parked=${stats.parked} pushHeld=${stats.pushHeld} noAddress=${stats.deferredNoAddress}`,
     )
   }
 

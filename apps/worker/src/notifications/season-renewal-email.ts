@@ -90,6 +90,7 @@ export function isSeasonRenewalPayload(value: unknown): value is SeasonRenewalEm
 export function renderSeasonRenewalEmail(
   payload: SeasonRenewalEmailPayload,
   preferencesUrl: string,
+  unsubscribeUrl?: string,
 ): EmailBody {
   const title = payload.title.trim()
   const subject = `Are you running ${title} in ${payload.seasonYear}?`
@@ -115,6 +116,7 @@ export function renderSeasonRenewalEmail(
     cta: { label: `Start the ${payload.seasonYear} listing`, url: payload.renewUrl },
     reason: `You are getting this because you manage the ${payload.previousSeasonYear} listing for ${title} on frc.tools.`,
     preferencesUrl,
+    unsubscribeUrl,
   })
 
   return { subject, html, text }

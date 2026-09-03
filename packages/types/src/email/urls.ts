@@ -30,6 +30,20 @@ export function preferencesUrl(): string {
   return `${siteUrl()}/me/notifications`
 }
 
+/**
+ * The no-login "stop all email to this address" link for a footer.
+ *
+ * Accountless on purpose: the recipient may be a scraped public contact with no
+ * frc.tools account, so this cannot sit behind sign-in. The `token` is a signed
+ * value the /unsubscribe route checks before it suppresses anything, so the link
+ * is safe to put in an inbox. Pure string building here; the signing and the
+ * suppression store live in @the-tool-pit/db, which has the secret and the
+ * crypto this package deliberately does not.
+ */
+export function unsubscribeUrl(email: string, token: string): string {
+  return `${siteUrl()}/unsubscribe?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`
+}
+
 /** Public URL of one grant listing. */
 export function grantListingUrl(slug: string): string {
   return `${siteUrl()}/grants/${slug}`

@@ -17,7 +17,6 @@ import type { RosterTeam } from '@the-tool-pit/db'
 import { queueNotification } from '@the-tool-pit/db'
 import {
   claimListingUrl,
-  eventListingUrl,
   removeListingUrl,
   type ApprovalEmailPayload,
   type EmailFact,
@@ -168,6 +167,15 @@ function outreachDateRange(start: string | null, end: string | null): string | n
 }
 
 /**
+ * One outreach card row. A value we hold reads as data; a blank reads as a
+ * muted "Not listed - add it" prompt rather than being hidden, because the gap
+ * is the thing that gets an organiser to sign in and fill it.
+ */
+function outreachFact(label: string, value: string | null): EmailFact {
+  return value ? { label, value } : { label, value: 'Not listed - add it', muted: true }
+}
+
+/**
  * Send the one-time outreach email for a listing: tell its scraped public
  * contact that the event is listed, show what we hold, and offer to claim or
  * remove it.
@@ -203,6 +211,11 @@ export async function sendEventOutreach(id: string): Promise<{ error?: string }>
       country: eventListings.country,
       startDate: eventListings.startDate,
       endDate: eventListings.endDate,
+      capacity: eventListings.capacity,
+      costUsd: eventListings.costUsd,
+      costNote: eventListings.costNote,
+      registrationUrl: eventListings.registrationUrl,
+      volunteerUrl: eventListings.volunteerUrl,
       contactEmail: eventListings.contactEmail,
       outreachSentAt: eventListings.outreachSentAt,
     })
@@ -223,21 +236,32 @@ export async function sendEventOutreach(id: string): Promise<{ error?: string }>
   if (!row.startDate) return { error: 'This event has no start date, so it cannot be confirmed as upcoming.' }
   if (row.startDate <= today) return { error: 'This event has already run, so no outreach is sent.' }
 
-  const facts: EmailFact[] = []
-  const dates = outreachDateRange(row.startDate, row.endDate)
-  if (dates) facts.push({ label: 'Dates', value: dates })
+  // The card shows the fields organisers most often leave blank, EVEN WHEN
+  // BLANK: seeing the gap is what makes them sign in to fix it. A missing value
+  // is a muted "Not listed" prompt, not a hidden row.
+  const cost =
+    row.costUsd != null
+      ? (row.costUsd === 0 ? 'Free' : `$${row.costUsd}`) + (row.costNote?.trim() ? ` (${row.costNote.trim()})` : '')
+      : row.costNote?.trim() || null
   const where = [row.venueName, row.city, row.region, row.country].filter((p) => p && p.trim()).join(', ')
-  if (where) facts.push({ label: 'Where', value: where })
-  facts.push({ label: 'Listing', value: eventListingUrl(row.id) })
+  const facts: EmailFact[] = [
+    outreachFact('When', outreachDateRange(row.startDate, row.endDate)),
+    outreachFact('Where', where || null),
+    outreachFact('Registration cost', cost),
+    outreachFact('Team sign-up link', row.registrationUrl?.trim() || null),
+    outreachFact('Volunteer sign-up link', row.volunteerUrl?.trim() || null),
+    outreachFact('Max number of teams', row.capacity != null ? String(row.capacity) : null),
+  ]
 
   const payload: ApprovalEmailPayload = {
     title: row.name,
+    vertical: 'event',
     url: claimListingUrl('event', row.id),
     // The one-click "take it down" button beside "Claim & fix it". The token is
     // signed for this listing so the public /listings/remove route can trust an
     // accountless click; suppressing is idempotent, so a re-click is harmless.
     secondaryCta: {
-      label: 'Remove this listing',
+      label: 'Not right? Remove it',
       url: removeListingUrl('event', row.id, signOutreachRemove('event', row.id)),
     },
     facts,

@@ -182,11 +182,83 @@ export type ApprovalEmailPayload = {
   changes?: string[]
   /** A reviewer's note. Always shown on a rejection, and on an approval if set. */
   reviewerNote?: string | null
+  /**
+   * Which vertical this email is about, so one template speaks for events,
+   * practice fields, tools and the rest by swapping the noun rather than
+   * hardcoding "event". Optional: when it is absent the kind implies it
+   * (field_published is a field, event_removed is an event), and the vertical
+   * only has to be passed for the kinds a single vertical does not fix, which
+   * are the claim, invite and outreach kinds that any vertical raises.
+   */
+  vertical?: EmailVertical
 }
 
 export interface ApprovalEmailInput extends ApprovalEmailPayload {
   kind: ApprovalEmailKind
   preferencesUrl: string
+  /**
+   * A no-login "stop all email to this address" link, minted per recipient by
+   * the drain and passed straight through to the footer. Optional so a caller
+   * that has no address in hand (a test, a preview) still renders.
+   */
+  unsubscribeUrl?: string
+}
+
+// #endregion
+
+// #region verticals
+
+/**
+ * The verticals an email can be about.
+ *
+ * One template, many nouns: the outreach, claim and invite copy reads the same
+ * for an event, a practice field or a tool, and the only thing that moves is
+ * what the thing is called. Keeping that in one place is what stops "your event"
+ * being hardcoded into an email a field organiser reads.
+ */
+export type EmailVertical = 'event' | 'field' | 'tool' | 'album' | 'grant'
+
+interface VerticalNouns {
+  /** Singular, lower case, as it reads mid-sentence: "your practice field". */
+  noun: string
+  /** Plural, for "so teams can find fields near them". */
+  nearNoun: string
+  /** What the index IS, for "a community index of FIRST off-season events". */
+  indexNoun: string
+}
+
+const VERTICAL_NOUNS: Record<EmailVertical, VerticalNouns> = {
+  event: { noun: 'event', nearNoun: 'events', indexNoun: 'FIRST off-season events' },
+  field: { noun: 'practice field', nearNoun: 'practice fields', indexNoun: 'FIRST practice fields' },
+  tool: { noun: 'tool', nearNoun: 'tools', indexNoun: 'FIRST robotics tools' },
+  album: { noun: 'photo album', nearNoun: 'event photos', indexNoun: 'FIRST event photos' },
+  grant: { noun: 'grant', nearNoun: 'grants', indexNoun: 'FIRST grants' },
+}
+
+/**
+ * The vertical a kind is about when the caller did not say.
+ *
+ * Every moderation-outcome kind names its vertical in its own string, so it is
+ * read off the prefix. The kinds that any vertical can raise (claims, invites,
+ * outreach) fall through to 'event' here and are expected to carry an explicit
+ * `vertical` on the payload; the fallback only matters to a caller that forgot.
+ */
+function defaultVertical(kind: ApprovalEmailKind): EmailVertical {
+  if (kind.startsWith('field')) return 'field'
+  if (kind.startsWith('event')) return 'event'
+  if (kind.startsWith('album')) return 'album'
+  if (kind.startsWith('grant')) return 'grant'
+  if (kind.startsWith('tool') || kind === 'submission_rejected') return 'tool'
+  return 'event'
+}
+
+/** Substitute {title} and the vertical nouns into one copy string. */
+function fill(template: string, title: string, v: VerticalNouns): string {
+  return template
+    .replace(/\{title\}/g, title)
+    .replace(/\{noun\}/g, v.noun)
+    .replace(/\{nearNoun\}/g, v.nearNoun)
+    .replace(/\{indexNoun\}/g, v.indexNoun)
 }
 
 // #endregion
@@ -194,12 +266,24 @@ export interface ApprovalEmailInput extends ApprovalEmailPayload {
 // #region copy
 
 interface KindCopy {
-  /** Subject and heading. `{title}` is substituted. */
+  /** Subject. `{title}` and the vertical nouns are substituted. */
   subject: string
-  /** Lead paragraph. `{title}` is substituted. */
+  /**
+   * Big line at the top of the card. Defaults to the subject, which is right
+   * for most kinds; outreach sets its own because its heading names the vertical
+   * ("Your event is listed") while its subject names the listing.
+   */
+  heading?: string
+  /** Lead paragraph. `{title}` and the vertical nouns are substituted. */
   lead: string
   /** Extra paragraphs after the lead. */
   extra?: string[]
+  /**
+   * One line rendered between the facts card and the buttons. Only outreach
+   * uses it, because only outreach shows a card the reader is meant to act on
+   * and then asks them to act.
+   */
+  ctaIntro?: string
   /** CTA label, used only when a url was passed. */
   cta: string
   /** The footer line explaining why this arrived in their inbox. */
@@ -262,7 +346,7 @@ const COPY: Record<ApprovalEmailKind, KindCopy> = {
     subject: 'Your claim on {title} was not approved',
     lead: 'An admin reviewed your claim on {title} and did not approve it, so nothing has changed about who can edit it.',
     extra: [
-      'If you can point at something that shows the connection, a repository you can commit to or a page that names you, start a new claim with that detail.',
+      'If you think that is wrong, reply to this email and tell us what connects you to it. A repository you can commit to or a page that names you is the kind of thing that settles it.',
     ],
     cta: 'Open your listings',
     reason: 'You are getting this because you claimed this listing.',
@@ -280,14 +364,12 @@ const COPY: Record<ApprovalEmailKind, KindCopy> = {
   },
   listing_outreach: {
     subject: '{title} is listed on FRC.tools',
-    lead: 'FRC.tools is a community index of FIRST off-season events, and {title} is on it. We built the listing from public sources so teams can find it, and we wanted the people who run it to know it is there.',
-    extra: [
-      'If this is your event, claim it and you can fix anything we got wrong: the dates, the venue, the cost, the registration link. The listing below shows what we currently hold.',
-      'If you would rather it was not listed, use Remove this listing below and it comes straight off. You can also just reply to this email.',
-    ],
+    heading: 'Your {noun} is listed on FRC.tools',
+    lead: 'FRC.tools is a community index of {indexNoun}, so teams can find {nearNoun} near them. We found {title} and made a listing for it. Here is what we have:',
+    ctaIntro: 'Is this yours? You can take it over and keep the details right:',
     cta: 'Claim & fix it',
     reason:
-      'You are getting this once because this address is the public contact for the event. We will not email it again unless you claim the listing.',
+      "You are getting this once because your {noun}'s contact address is listed publicly. We will not email you again unless you claim the listing. To take it down use Remove above, or just reply to this email.",
   },
 
   // #region the answer was no
@@ -415,9 +497,13 @@ const COPY: Record<ApprovalEmailKind, KindCopy> = {
 export function renderApprovalEmail(input: ApprovalEmailInput): EmailBody {
   const copy = COPY[input.kind]
   const title = input.title.trim() || 'your submission'
-  const subject = copy.subject.replace('{title}', title)
+  const nouns = VERTICAL_NOUNS[input.vertical ?? defaultVertical(input.kind)]
 
-  const paragraphs = [copy.lead.replace('{title}', title), ...(copy.extra ?? [])]
+  const subject = fill(copy.subject, title, nouns)
+  const heading = fill(copy.heading ?? copy.subject, title, nouns)
+  const ctaIntro = copy.ctaIntro ? fill(copy.ctaIntro, title, nouns) : undefined
+
+  const paragraphs = [fill(copy.lead, title, nouns), ...(copy.extra ?? []).map((p) => fill(p, title, nouns))]
 
   const facts: EmailFact[] = [...(input.facts ?? [])]
 
@@ -438,16 +524,18 @@ export function renderApprovalEmail(input: ApprovalEmailInput): EmailBody {
   if (note) facts.push({ label: copy.noteLabel ?? 'Reviewer’s note', value: note })
 
   const { html, text } = layout({
-    heading: subject,
+    heading,
     paragraphs,
     facts,
+    ctaIntro: input.url ? ctaIntro : undefined,
     cta: input.url ? { label: copy.cta, url: input.url } : undefined,
     // Only alongside a primary button: the shell renders it inside the primary's
     // block, so a secondary with no primary would silently vanish. Every kind
     // that carries one (outreach today) always carries a primary too.
     secondaryCta: input.url ? input.secondaryCta : undefined,
-    reason: copy.reason,
+    reason: fill(copy.reason, title, nouns),
     preferencesUrl: input.preferencesUrl,
+    unsubscribeUrl: input.unsubscribeUrl,
   })
 
   return { subject, html, text }

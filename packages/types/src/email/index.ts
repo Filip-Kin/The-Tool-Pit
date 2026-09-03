@@ -8,4 +8,5 @@
 export * from './layout'
 export * from './grant-alerts'
 export * from './approvals'
+export * from './notifications'
 export * from './urls'

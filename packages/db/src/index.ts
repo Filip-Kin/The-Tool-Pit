@@ -1,6 +1,7 @@
 export * from './schema/index'
 export * from './client'
 export * from './notifications'
+export * from './email-suppression'
 export * from './album-url'
 export * from './human-edited'
 export * from './listing-identity'

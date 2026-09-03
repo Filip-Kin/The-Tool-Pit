@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
-import { MapPin, Pencil, Check, X, Trash2, RotateCcw, UserRound } from 'lucide-react'
+import { MapPin, Pencil, Check, X, Trash2, RotateCcw, UserRound, Mail } from 'lucide-react'
 import type { PracticeField } from '@the-tool-pit/db'
 import type { FieldPhotoRef } from '@/lib/fields/field-display'
 import {
@@ -17,7 +17,7 @@ import type { FieldCoverage, FieldElements } from '@the-tool-pit/db'
 // Value tuples from the zero-dependency enum subpath (keeps the DB client out of the client bundle).
 import { FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db/field-enums'
 import { PinMap } from '@/components/fields/pin-map'
-import { approveField, suppressField, unsuppressField, deleteField, updateField, addFieldPhotos, removeFieldPhoto, type FieldEditInput } from './actions'
+import { approveField, sendFieldOutreach, suppressField, unsuppressField, deleteField, updateField, addFieldPhotos, removeFieldPhoto, type FieldEditInput } from './actions'
 import { ReasonButton } from '@/components/admin/reason-button'
 
 /**
@@ -45,6 +45,17 @@ export function FieldAdminRow({
 
   const loc = [field.city, field.region, field.country].filter(Boolean).join(', ')
   const hasCoords = field.latitude != null && field.longitude != null
+
+  // The one-time "we listed you" email. A field's contact is the free-text
+  // access details, so the gate is an address somewhere in them and never sent
+  // twice. The button says which gate is holding it back rather than greying out
+  // with no reason.
+  const hasContactEmail = !!field.contactInfo && field.contactInfo.includes('@')
+  const outreach = field.outreachSentAt
+    ? { disabled: true, label: `Sent ${field.outreachSentAt.toLocaleDateString()}`, reason: `Outreach sent to ${field.outreachSentTo ?? 'the contact'}` }
+    : !hasContactEmail
+      ? { disabled: true, label: 'Send outreach', reason: 'No contact email in the access details' }
+      : { disabled: false, label: 'Send outreach', reason: 'Email the field contact' }
 
   function run(fn: () => Promise<{ error?: string } | void>) {
     setMsg(null)
@@ -121,6 +132,17 @@ export function FieldAdminRow({
               disabled={pending}
               onConfirm={(reason) => suppressField(field.id, reason)}
             />
+          )}
+          {!editing && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => run(() => sendFieldOutreach(field.id))}
+              disabled={pending || outreach.disabled}
+              title={outreach.reason}
+            >
+              <Mail className="h-3 w-3" /> {outreach.label}
+            </Button>
           )}
           <Button
             variant="secondary"

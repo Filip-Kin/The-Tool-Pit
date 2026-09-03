@@ -114,3 +114,76 @@ export const notificationOutboxRelations = relations(notificationOutbox, ({ one 
 
 export type NotificationOutboxRow = typeof notificationOutbox.$inferSelect
 export type NewNotificationOutboxRow = typeof notificationOutbox.$inferInsert
+
+// ---------------------------------------------------------------------------
+// email_suppressions
+//
+// The universal, accountless "never email this address again". One row per
+// suppressed address, and both outbox drains check it before they send.
+//
+// KEYED ON THE ADDRESS, NOT A USER, and that is the whole point. The person who
+// clicks unsubscribe in an outreach email has no account: the address IS the
+// identity, so suppression has to live against the address or it cannot reach
+// them. A signed-in reader who clicks the same footer link is suppressed the
+// same way, by their address, which is why it is universal: it stops every kind
+// of email to that inbox at once, not one category of it.
+//
+// The address is stored lower-cased. The unsubscribe LINK carries no stored
+// secret: the /unsubscribe route re-derives a signature over the address with
+// SESSION_SECRET (see ../email-suppression.ts), so this table needs no token
+// column and a database dump hands nobody the ability to unsubscribe an address
+// they do not control.
+// ---------------------------------------------------------------------------
+
+export const emailSuppressions = pgTable(
+  'email_suppressions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Lower-cased email address. Unique: one suppression per inbox. */
+    email: text('email').notNull(),
+    /** Where it came from, e.g. 'unsubscribe_link' or 'admin'. For the audit. */
+    source: text('source').notNull().default('unsubscribe_link'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('email_suppressions_email_idx').on(table.email)],
+)
+
+export type EmailSuppression = typeof emailSuppressions.$inferSelect
+export type NewEmailSuppression = typeof emailSuppressions.$inferInsert
+
+// ---------------------------------------------------------------------------
+// notification_category_mutes
+//
+// One row per (user, category) a reader has switched OFF. Absence means on, so
+// the default is "we tell you", and a mute is an explicit opt-out the reader
+// took. Categories are LISTING_EMAIL_CATEGORIES in @the-tool-pit/types; the id
+// is a loose string here, not an enum, so adding a category is a UI change and
+// not a migration.
+//
+// This gates only email that belongs to a signed-in user. Outreach has no user,
+// so it is never muted here, only by the global suppression above.
+// ---------------------------------------------------------------------------
+
+export const notificationCategoryMutes = pgTable(
+  'notification_category_mutes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** LISTING_EMAIL_CATEGORIES id, e.g. 'listing_outcome'. */
+    category: text('category').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('notification_category_mutes_user_category_idx').on(table.userId, table.category),
+    index('notification_category_mutes_user_idx').on(table.userId),
+  ],
+)
+
+export const notificationCategoryMutesRelations = relations(notificationCategoryMutes, ({ one }) => ({
+  user: one(users, { fields: [notificationCategoryMutes.userId], references: [users.id] }),
+}))
+
+export type NotificationCategoryMute = typeof notificationCategoryMutes.$inferSelect
+export type NewNotificationCategoryMute = typeof notificationCategoryMutes.$inferInsert
