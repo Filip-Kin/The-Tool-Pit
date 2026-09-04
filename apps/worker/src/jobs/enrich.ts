@@ -6,7 +6,8 @@ import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate
 import type { PipelineLogEntry, CandidateClassification } from '@the-tool-pit/db'
 import { classifyCandidate } from '../pipeline/classify.js'
 import { resolveListingTitle, titleIsRepoDerived } from '../pipeline/title.js'
-import { fetchGitHubReadme, fetchGitHubRepo, parseGitHubUrl } from '../connectors/github.js'
+import { fetchGitHubReadme, fetchGitHubRepo, fetchGitHubTree, parseGitHubUrl } from '../connectors/github.js'
+import { detectRobotCode } from '../pipeline/detect-robot-code.js'
 import type { GitHubRepoInfo } from '../connectors/github.js'
 import { publishCandidate } from '../pipeline/publish.js'
 import { checkDuplicateByName } from '../pipeline/deduplicate.js'
@@ -448,6 +449,44 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
     const result = await publishCandidate(candidateId, sourceType)
     console.log(`[enrich] candidate ${candidateId} (github_team_code): ${result.action}`)
     return
+  }
+
+  // 2d-bis. Robot code by REPO SHAPE. A GitHub candidate whose file tree is a
+  //   team's FRC/FTC robot project (frc/robot, .wpilib, vendordeps; or the FTC
+  //   teamcode package), with a team number in its owner or repo name, is
+  //   classified and published deterministically. The shape is stronger evidence
+  //   than a model reading the description, and these kept landing in manual
+  //   review. github_team_code and spectrum_cad already returned above, so this
+  //   only sees the crawler/forum GitHub finds.
+  if (githubUrl && repoInfo) {
+    const ref = repoInfo.fullName?.includes('/')
+      ? { owner: repoInfo.fullName.split('/')[0], repo: repoInfo.fullName.split('/')[1] }
+      : parseGitHubUrl(githubUrl)
+    if (ref?.owner && ref.repo) {
+      const paths = await fetchGitHubTree(ref.owner, ref.repo, repoInfo.defaultBranch)
+      const detected = paths.length
+        ? detectRobotCode({ owner: ref.owner, repo: ref.repo, topics: repoInfo.topics, paths, pushedAt: repoInfo.pushedAt })
+        : null
+      if (detected) {
+        const robotClassification: CandidateClassification = {
+          toolType: 'github_project',
+          programs: [detected.program],
+          isTeamCode: true,
+          teamNumber: detected.teamNumber,
+          seasonYear: detected.seasonYear ?? undefined,
+          summary: ((enrichedMetadata.description as string | undefined) || (enrichedMetadata.title as string | undefined) || '').slice(0, 300),
+          confidence: 0.9,
+          reasoning: `Team ${detected.teamNumber} ${detected.program.toUpperCase()} robot code (WPILib/FRC project layout in the repo, team number from its name)`,
+        }
+        await db
+          .update(crawlCandidates)
+          .set({ rawMetadata: enrichedMetadata, classification: robotClassification, confidenceScore: 0.9, status: 'pending', rejectionReason: null, updatedAt: new Date() })
+          .where(eq(crawlCandidates.id, candidateId))
+        const result = await publishCandidate(candidateId, sourceType)
+        console.log(`[enrich] candidate ${candidateId} (robot-code shape): ${result.action}`)
+        return
+      }
+    }
   }
 
   // 2e. Name the listing.

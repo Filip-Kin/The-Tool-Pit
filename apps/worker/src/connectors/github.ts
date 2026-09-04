@@ -104,6 +104,31 @@ export async function fetchGitHubReadme(owner: string, repo: string): Promise<st
   }
 }
 
+/**
+ * The repo's file paths (recursive), for classifying WHAT a repo is by its
+ * shape rather than its blurb: an FRC robot project has src/main/java/frc/robot,
+ * a .wpilib folder and vendordeps, and no description has to say so. Best-effort
+ * and capped: returns [] on any error or rate limit, so a caller treats "no
+ * signal" and "could not look" the same, which is the safe direction.
+ */
+export async function fetchGitHubTree(owner: string, repo: string, branch: string): Promise<string[]> {
+  try {
+    const { res } = await githubApiFetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+      'application/vnd.github.v3+json',
+    )
+    if (!res.ok) return []
+    const data = (await res.json()) as { tree?: Array<{ path?: string; type?: string }> }
+    return (data.tree ?? [])
+      .map((n) => n.path)
+      .filter((p): p is string => typeof p === 'string')
+      .slice(0, 4000)
+  } catch (err) {
+    console.error(`[github] error fetching tree for ${owner}/${repo}:`, err)
+    return []
+  }
+}
+
 // #region outcomes
 //
 // A sweep needs to tell four things apart that fetchGitHubRepo collapses into
