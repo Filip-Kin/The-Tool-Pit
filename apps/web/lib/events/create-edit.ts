@@ -11,6 +11,7 @@ import {
 import type { EventEditProposalData } from '@the-tool-pit/db'
 import { wrapLongitude } from '@/lib/geo/longitude'
 import { cleanTeamNumbers } from '@/lib/events/event-display'
+import { eventEditChanges } from '@/lib/events/event-edit-diff'
 import { sendApprovalNotice, reviewEventEditUrl } from '@the-tool-pit/types'
 
 export interface CreateEventEditInput {
@@ -180,12 +181,22 @@ export async function createEventEditProposal(
     .returning({ id: eventEditProposals.id })
 
   // Ping the moderators. It deep-links /admin/event-edits, which now exists.
+  // The ping carries the same field-by-field diff the review dashboard shows, so
+  // a moderator sees WHAT changed without opening the row, not just the note.
+  const changes = eventEditChanges(listing, proposed)
+  const changeFacts = changes.slice(0, 20).map((c) => ({ label: c.label, value: `${c.from} → ${c.to}` }))
+  if (changes.length > changeFacts.length) {
+    changeFacts.push({ label: '…', value: `and ${changes.length - changeFacts.length} more` })
+  }
   sendApprovalNotice({
     vertical: 'event_edit',
     title: name,
     reviewUrl: reviewEventEditUrl(proposal.id),
     submitter: [input.submitterName, input.submitterContact].filter(Boolean).join(' · ') || null,
-    facts: [{ label: 'What changed', value: input.note ?? null }],
+    facts: [
+      { label: 'What changed', value: input.note ?? null },
+      ...changeFacts,
+    ],
   })
 
   return { status: 'pending', message: "Thanks! Your edit is in for review." }

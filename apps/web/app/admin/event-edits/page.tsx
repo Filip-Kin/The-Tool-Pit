@@ -5,55 +5,13 @@ import { getDb } from '@/lib/db'
 import { eventListings, eventEditProposals, users } from '@the-tool-pit/db'
 import type { EventListing, EventEditProposalData } from '@the-tool-pit/db'
 import { EventEditActions } from './edit-proposal-actions'
+import { EVENT_EDIT_KEY_LABELS as KEY_LABELS, fmtEditValue as fmt, eventEditChanges } from '@/lib/events/event-edit-diff'
 
 export const dynamic = 'force-dynamic'
 
-const KEY_LABELS: Record<keyof EventEditProposalData, string> = {
-  name: 'Name',
-  program: 'Program',
-  hostTeamNumber: 'Host team',
-  hostTeamNumbers: 'Host teams',
-  latitude: 'Latitude',
-  longitude: 'Longitude',
-  venueName: 'Venue',
-  address: 'Address',
-  city: 'City',
-  region: 'State',
-  country: 'Country',
-  startDate: 'First day',
-  endDate: 'Last day',
-  days: 'Competition days',
-  parallelDivisions: 'Two 1-day divisions',
-  capacity: 'Capacity',
-  costUsd: 'Cost (USD)',
-  costNote: 'Cost note',
-  registrationStatus: 'Registration',
-  registrationOpensAt: 'Registration opens',
-  registrationClosesAt: 'Registration closes',
-  volunteerStatus: 'Volunteers',
-  eventStatus: 'Event status',
-  website: 'Website',
-  registrationUrl: 'Sign-up link',
-  volunteerUrl: 'Volunteer link',
-  chiefDelphiUrl: 'Chief Delphi',
-  contactEmail: 'Contact email',
-  notes: 'Notes',
-}
-
-function fmt(v: unknown): string {
-  if (v === true) return 'yes'
-  if (v === false) return 'no'
-  if (v === null || v === undefined || v === '') return '-'
-  return String(v)
-}
-
 /** Keys whose proposed value differs from the current listing. */
 function changedKeys(listing: EventListing, proposed: EventEditProposalData): (keyof EventEditProposalData)[] {
-  const current = listing as unknown as Record<string, unknown>
-  return (Object.keys(KEY_LABELS) as (keyof EventEditProposalData)[]).filter((k) => {
-    if (proposed[k] === undefined) return false
-    return fmt(current[k]) !== fmt(proposed[k])
-  })
+  return eventEditChanges(listing, proposed).map((c) => c.key)
 }
 
 export default async function EventEditsAdminPage() {
