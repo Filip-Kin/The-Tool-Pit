@@ -13,10 +13,12 @@ export function CandidateActions({ candidateId, status }: { candidateId: string;
   }
 
   return (
-    <div className="flex gap-2 justify-end">
+    // Stop clicks bubbling to the ClickableRow, which would navigate to the
+    // detail page mid-approve and make the button look like it did nothing.
+    <div className="flex gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
       <button
         disabled={approvePending}
-        onClick={() => startApprove(() => { void approveCandidate(candidateId) })}
+        onClick={(e) => { e.stopPropagation(); startApprove(() => { void approveCandidate(candidateId) }) }}
         // Filled, not a tint. `bg-rookie/20 text-rookie` is 4.51:1 in light
         // and drops under AA the moment it is hovered; a solid fill with the
         // page colour on it is 7.80:1 dark and 5.74:1 light, and it stays put.
