@@ -78,7 +78,7 @@ export async function createEventEditProposal(
   const db = getDb()
 
   const [listing] = await db
-    .select({ id: eventListings.id, status: eventListings.status })
+    .select()
     .from(eventListings)
     .where(eq(eventListings.id, listingId))
     .limit(1)
@@ -144,6 +144,25 @@ export async function createEventEditProposal(
     chiefDelphiUrl: input.chiefDelphiUrl?.trim() || null,
     contactEmail: input.contactEmail?.trim() || null,
     notes: input.notes?.trim() || null,
+  }
+
+  // Reject a no-op. An edit that changes no field and carries no note is
+  // nothing for a moderator to act on, so it must not reach the queue. Every
+  // proposed key is compared to the listing as it stands; empty strings, nulls
+  // and empty arrays all read as "not set" so a blank box never looks changed.
+  const norm = (v: unknown): unknown => {
+    if (v == null) return null
+    if (Array.isArray(v)) return v.length > 0 ? JSON.stringify(v) : null
+    if (typeof v === 'string') return v.trim() === '' ? null : v.trim()
+    return v
+  }
+  const current = listing as Record<string, unknown>
+  const changed = Object.entries(proposed).some(([key, value]) => norm(value) !== norm(current[key]))
+  if (!changed && !input.note?.trim()) {
+    return {
+      status: 'error',
+      message: 'Nothing was changed. Edit a field, or add a note describing what should change.',
+    }
   }
 
   const [proposal] = await db
