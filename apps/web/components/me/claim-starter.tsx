@@ -22,6 +22,7 @@ export function ClaimStarter({
   target,
   verifyFilename,
   startAction,
+  verifyAction,
   claimToken,
 }: {
   target: ClaimableListing
@@ -31,7 +32,9 @@ export function ClaimStarter({
     entityId: string,
     note?: string,
     outreachToken?: string,
-  ) => Promise<{ error?: string; message?: string; verifyToken?: string; granted?: boolean }>
+  ) => Promise<{ error?: string; message?: string; verifyToken?: string; claimId?: string; granted?: boolean }>
+  /** Re-checks a repo_file claim: reads the committed file and grants on the spot. */
+  verifyAction?: (claimId: string) => Promise<{ error?: string; message?: string; granted?: boolean }>
   /** The signed outreach token from the email link, when the reader arrived that way. */
   claimToken?: string
 }) {
@@ -43,6 +46,8 @@ export function ClaimStarter({
   const [granted, setGranted] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(target.existingClaim?.token ?? null)
+  const [claimId, setClaimId] = useState<string | null>(target.existingClaim?.id ?? null)
+  const [rechecking, setRechecking] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
   // Which of the three paths this listing takes, worked out the same way the
@@ -68,6 +73,7 @@ export function ClaimStarter({
       }
       setMsg(res.message ?? null)
       if (res.verifyToken) setToken(res.verifyToken)
+      if (res.claimId) setClaimId(res.claimId)
       if (res.granted) setGranted(true)
       // The card becomes a receipt. Leaving the form up invited a second
       // request for a claim that is already open; the action refuses one, but
@@ -76,6 +82,23 @@ export function ClaimStarter({
       // Refresh so /me/listings reflects a new claim or a granted listing when
       // the user heads back.
       router.refresh()
+    })
+  }
+
+  function onRecheck() {
+    if (!verifyAction || !claimId) return
+    setErr(null)
+    setRechecking(true)
+    start(async () => {
+      try {
+        const res = await verifyAction(claimId!)
+        if (res.error) { setErr(res.error); return }
+        setMsg(res.message ?? null)
+        if (res.granted) setGranted(true)
+        router.refresh()
+      } finally {
+        setRechecking(false)
+      }
     })
   }
 
@@ -89,7 +112,7 @@ export function ClaimStarter({
     : path === 'self'
       ? 'You submitted this, so it becomes yours right away.'
       : path === 'repo'
-        ? 'Prove it by committing a token to the repo.'
+        ? 'Or, if linking GitHub above did not cover it: commit a token file to the repo and it is granted the moment we read it back.'
         : target.alreadyOwned
           ? 'Someone already manages this listing. A reviewer decides.'
           : 'Reviewed by hand.'
@@ -126,12 +149,23 @@ export function ClaimStarter({
               <p className="text-sm text-muted">
                 Add a file named{' '}
                 <code className="rounded bg-surface-2 px-1 py-0.5 text-foreground">{verifyFilename}</code>{' '}
-                containing this token to your default branch, then finish the check on your listings
-                page.
+                containing this token to your default branch, then press Re-check. Ownership is granted
+                the moment we read it back.
               </p>
               <code className="block break-all rounded-md border border-border-subtle bg-surface-2 p-2 text-xs text-foreground">
                 {token}
               </code>
+              {verifyAction && claimId && (
+                <button
+                  type="button"
+                  onClick={onRecheck}
+                  disabled={rechecking || pending}
+                  className="self-start rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-40"
+                >
+                  {rechecking ? 'Checking…' : 'Re-check repository'}
+                </button>
+              )}
+              {err && <p role="alert" className="text-sm text-frc">{err}</p>}
             </>
           ) : (
             <p className="text-sm text-muted">

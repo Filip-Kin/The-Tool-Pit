@@ -562,7 +562,7 @@ export interface ClaimableListing {
    * The action refuses a second one, but the UI has to say so before the click,
    * not after it.
    */
-  existingClaim: { status: string; method: string; token: string | null } | null
+  existingClaim: { id: string; status: string; method: string; token: string | null } | null
 }
 
 /**
@@ -594,7 +594,7 @@ export async function resolveClaimable(
   const open = hasUser
     ? (
         await db
-          .select({ status: listingClaims.status, method: listingClaims.method, evidence: listingClaims.evidence })
+          .select({ id: listingClaims.id, status: listingClaims.status, method: listingClaims.method, evidence: listingClaims.evidence })
           .from(listingClaims)
           .where(
             and(
@@ -609,7 +609,7 @@ export async function resolveClaimable(
     : undefined
 
   const existingClaim = open
-    ? { status: open.status, method: open.method, token: open.evidence?.token ?? null }
+    ? { id: open.id, status: open.status, method: open.method, token: open.evidence?.token ?? null }
     : null
 
   return { entityType, entityId, facts, alreadyOwned, repoUrl, isSelfSubmitted, existingClaim }

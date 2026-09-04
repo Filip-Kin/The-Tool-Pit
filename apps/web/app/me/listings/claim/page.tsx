@@ -5,7 +5,7 @@ import { ClaimStarter } from '@/components/me/claim-starter'
 import { GithubLinkCard } from '@/components/me/github-link-card'
 import { SignedInGate } from '@/components/auth/signed-in-gate'
 import { isListingEntityType, resolveClaimable, VERIFY_FILENAME } from '@/lib/queries/listing-ownership'
-import { startClaim } from '../actions'
+import { startClaim, verifyRepoClaim } from '../actions'
 
 export const metadata: Metadata = {
   title: 'Claim a listing',
@@ -44,7 +44,7 @@ export default async function ClaimPage({
                 person came to do. The card itself renders nothing once the
                 account is linked. */}
             {target.repoUrl && <GithubLinkCard purpose="claim" />}
-            <ClaimStarter target={target} verifyFilename={VERIFY_FILENAME} startAction={startClaim} claimToken={t} />
+            <ClaimStarter target={target} verifyFilename={VERIFY_FILENAME} startAction={startClaim} verifyAction={verifyRepoClaim} claimToken={t} />
           </div>
         </SignedInGate>
       ) : (

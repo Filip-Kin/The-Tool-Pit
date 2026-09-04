@@ -99,6 +99,8 @@ export interface OwnershipActionResult {
   message?: string
   /** repo_file: the token the user must commit, and where to put it. */
   verifyToken?: string
+  /** repo_file: the id of the pending claim, so the UI can re-check it in place. */
+  claimId?: string
   /**
    * A fallback invite link for the owner to pass on by hand. Only returned when
    * the invited email has no account we can send to; the normal path emails the
@@ -204,7 +206,7 @@ export async function startClaim(
     .limit(1)
   if (existing) {
     if (existing.method === 'repo_file' && existing.evidence?.token) {
-      return { verifyToken: existing.evidence.token, message: 'You already started this claim.' }
+      return { verifyToken: existing.evidence.token, claimId: existing.id, message: 'You already started this claim.' }
     }
     return { message: 'This claim is already waiting for review.' }
   }
@@ -287,18 +289,22 @@ export async function startClaim(
   if (entityType === 'tool' && target.repoUrl && !target.alreadyOwned) {
     const { raw } = mintToken()
     const evidence: ClaimEvidence = { repoUrl: target.repoUrl, token: raw }
-    await db.insert(listingClaims).values({
-      entityType,
-      entityId,
-      userId: user.id,
-      method: 'repo_file',
-      status: 'pending',
-      evidence,
-    })
+    const [filedRepo] = await db
+      .insert(listingClaims)
+      .values({
+        entityType,
+        entityId,
+        userId: user.id,
+        method: 'repo_file',
+        status: 'pending',
+        evidence,
+      })
+      .returning({ id: listingClaims.id })
     revalidatePath('/me/listings')
     return {
       verifyToken: raw,
-      message: `Add a file named ${VERIFY_FILENAME} containing this token to the default branch of your repo, then check it here.`,
+      claimId: filedRepo.id,
+      message: `Add a file named ${VERIFY_FILENAME} containing this token to the default branch of your repo, then press Re-check.`,
     }
   }
 
@@ -450,7 +456,7 @@ export async function verifyRepoClaim(claimId: string): Promise<OwnershipActionR
     .where(eq(listingClaims.id, claim.id))
 
   revalidatePath('/me/listings')
-  return { message: 'Verified. You now manage this listing.' }
+  return { message: 'Verified. You now manage this listing.', granted: true }
 }
 
 /** Fetch the raw well-known file on each candidate branch, looking for the token. */
