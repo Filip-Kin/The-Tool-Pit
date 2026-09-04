@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
@@ -94,12 +95,24 @@ export default async function EventListingsAdminPage({
 
   return (
     <div className="p-4 md:p-6">
-      <h1 className="text-xl font-semibold text-foreground">Off-Season Events</h1>
-      <p className="mt-1 text-sm text-muted">
-        {active === 'all'
-          ? 'Every event we hold. Use the sidebar to jump to Submissions, Published or Suppressed.'
-          : `Review ${active} events, place their pin, and publish to the map.`}
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Off-Season Events</h1>
+          <p className="mt-1 text-sm text-muted">
+            {active === 'all'
+              ? 'Every event we hold. Use the sidebar to jump to Submissions, Published or Suppressed.'
+              : `Review ${active} events, place their pin, and publish to the map.`}
+          </p>
+        </div>
+        {/* The way in for an event that arrives by email rather than through
+            the public form. */}
+        <Link
+          href="/admin/event-listings/new"
+          className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+        >
+          Add an event
+        </Link>
+      </div>
 
       <div className="mt-4 flex flex-col gap-3">
         {rows.length === 0 && <p className="text-sm text-muted-2">Nothing here.</p>}

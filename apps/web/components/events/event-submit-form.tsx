@@ -238,16 +238,35 @@ function fromEvent(ev: PublicEvent): FormState {
 export function EventSubmitForm({
   renewal,
   edit,
+  admin,
   onSubmitted,
 }: {
   renewal?: RenewalPrefill | null
   /** An existing listing to correct, rather than a new one to add. */
   edit?: { event: PublicEvent } | null
+  /**
+   * Admin mode, for /admin/event-listings/new. The fields are the same fields,
+   * so this is the same form rather than a second one that drifts from it.
+   *
+   * Three things go: the Turnstile check (an admin session already proved who
+   * this is), the private "You" box (nobody submitted it, an admin typed it)
+   * and the passing-along question (it is not the admin's event either way).
+   * One thing arrives: the choice to publish it now instead of filing it for
+   * review.
+   *
+   * The mode is a hint to the UI and NOT a permission. The route it posts to
+   * checks the admin session itself, so a reader who flips this prop in
+   * devtools gets a 401, not a listing.
+   */
+  admin?: boolean
   /** Called after a successful edit, so a host dialog can keep the confirmation up. */
   onSubmitted?: () => void
 } = {}) {
   const { user } = useSession()
   const editing = !!edit
+  const adminMode = !!admin && !editing
+  // An admin session stands in for the bot check. Nothing else turns it off.
+  const needsTurnstile = Boolean(SITE_KEY) && !adminMode
   const [form, setForm] = useState<FormState>(() =>
     edit ? fromEvent(edit.event) : renewal ? fromRenewal(renewal) : INITIAL,
   )
@@ -264,6 +283,10 @@ export function EventSubmitForm({
   const [submitting, setSubmitting] = useState(false)
   // Unticked, like every other submit form. See lib/listings/passing-along.ts.
   const [passingAlong, setPassingAlong] = useState(PASSING_ALONG_DEFAULT.event)
+  // Ticked by default: an admin filling this in has the event's page open and
+  // has just read it, so the review step they would otherwise queue up for
+  // themselves is one they have already done.
+  const [publishNow, setPublishNow] = useState(true)
   const [result, setResult] = useState<{ ok?: boolean; message: string } | null>(null)
 
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
@@ -288,7 +311,7 @@ export function EventSubmitForm({
   }, [user])
 
   useEffect(() => {
-    if (!SITE_KEY || !turnstileRef.current) return
+    if (!needsTurnstile || !turnstileRef.current) return
     function renderWidget() {
       if (!turnstileRef.current || !window.turnstile) return
       widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
@@ -320,7 +343,7 @@ export function EventSubmitForm({
       }, 100)
       return () => clearInterval(poll)
     }
-  }, [])
+  }, [needsTurnstile])
 
   function resetTurnstile() {
     if (window.turnstile && widgetIdRef.current) {
@@ -339,7 +362,7 @@ export function EventSubmitForm({
       setResult({ ok: false, message: 'Please pick a verified address so the event can be placed on the map.' })
       return
     }
-    if (SITE_KEY && !turnstileToken) {
+    if (needsTurnstile && !turnstileToken) {
       setResult({ ok: false, message: 'Please complete the “I’m not a robot” check.' })
       return
     }
@@ -354,7 +377,9 @@ export function EventSubmitForm({
       fd.set('latitude', String(coords.lat))
       fd.set('longitude', String(coords.lng))
       if (turnstileToken) fd.set('turnstileToken', turnstileToken)
-      if (editing) {
+      if (adminMode) {
+        fd.set('publish', publishNow ? 'true' : 'false')
+      } else if (editing) {
         if (editReason.trim()) fd.set('editReason', editReason.trim())
       } else {
         if (renewal) fd.set('previousListingId', renewal.previousListingId)
@@ -362,7 +387,11 @@ export function EventSubmitForm({
         fd.set('passingAlong', passingAlong ? 'true' : 'false')
       }
 
-      const url = editing ? `/api/events/${edit.event.id}/edit` : '/api/events/submit'
+      const url = adminMode
+        ? '/admin/api/event-listings'
+        : editing
+          ? `/api/events/${edit.event.id}/edit`
+          : '/api/events/submit'
       const res = await fetch(url, { method: 'POST', body: fd })
       const data = (await res.json()) as { message?: string; error?: string }
       if (res.ok) {
@@ -614,6 +643,7 @@ export function EventSubmitForm({
         </Field>
       </Section>
 
+      {!adminMode && (
       <Section title="You" hint="Private - only the moderators see this, never shown publicly.">
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="flex-1">
@@ -633,19 +663,38 @@ export function EventSubmitForm({
           <p className="text-xs text-muted-2">No account needed. Signing in just lets you find your {editing ? 'edit' : 'submission'} later.</p>
         )}
       </Section>
+      )}
 
       {/* Ownership only, so it belongs to a fresh listing. An edit is a
           correction to someone's event, not a claim on it. */}
-      {!editing && <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="event" />}
+      {!editing && !adminMode && (
+        <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="event" />
+      )}
 
-      {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
+      {adminMode && (
+        <Check
+          checked={publishNow}
+          onChange={setPublishNow}
+          label="Publish it now, without a second pass through the review queue"
+        />
+      )}
+
+      {needsTurnstile && <div ref={turnstileRef} className="min-h-[65px]" />}
 
       <Button
         type="submit"
-        disabled={submitting || !form.name.trim() || !coords || (Boolean(SITE_KEY) && !turnstileToken)}
+        disabled={submitting || !form.name.trim() || !coords || (needsTurnstile && !turnstileToken)}
         className="self-start"
       >
-        {submitting ? 'Submitting…' : editing ? 'Submit edit for review' : 'Submit event'}
+        {submitting
+          ? 'Submitting…'
+          : adminMode
+            ? publishNow
+              ? 'Create and publish'
+              : 'Create for review'
+            : editing
+              ? 'Submit edit for review'
+              : 'Submit event'}
       </Button>
 
       {result && <p className={result.ok ? 'text-sm text-rookie' : 'text-sm text-frc'}>{result.message}</p>}

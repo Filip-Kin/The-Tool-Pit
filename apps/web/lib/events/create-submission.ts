@@ -5,13 +5,14 @@ import {
   listingOwners,
   currentOffseasonSeason,
   offseasonSeasonYear,
+  EVENT_LISTING_SOURCES,
   EVENT_PROGRAMS,
   EVENT_STATUSES,
   LISTING_WRITE_ROLES,
   REGISTRATION_STATUSES,
   VOLUNTEER_STATUSES,
 } from '@the-tool-pit/db'
-import type { NewEventListing } from '@the-tool-pit/db'
+import type { EventListingSource, NewEventListing } from '@the-tool-pit/db'
 import { uniqueEventSlug } from '@/lib/queries/event-listings'
 import { sendApprovalNotice, reviewEventUrl } from '@the-tool-pit/types'
 import {
@@ -58,7 +59,12 @@ export interface CreateEventSubmissionInput {
   notes?: string
   submitterName?: string
   submitterContact?: string
-  submitterIpHash: string
+  /**
+   * Optional because not every caller is a request from the public internet.
+   * The admin create route has an admin session instead of an anonymous IP,
+   * and writing a hash of nothing would file a fake one.
+   */
+  submitterIpHash?: string
   /**
    * The signed-in user, when there was one. Optional on purpose: submitting an
    * event never requires an account (same as fields). An account only earns
@@ -82,6 +88,26 @@ export interface CreateEventSubmissionInput {
   previousListingId?: string
 }
 
+/**
+ * How the row is filed, for the callers that are not the public form.
+ *
+ * The public route never passes this and must not start: letting a request
+ * choose its own source is the hole a bot walks through to file a row that
+ * looks like staff entered it. Only code that has already checked an admin
+ * session passes these.
+ */
+export interface CreateEventListingOptions {
+  /** EVENT_LISTING_SOURCES. Default 'submission'. */
+  source?: EventListingSource
+  /**
+   * Send the "new submission, please review" notice. Default true.
+   *
+   * An admin who just typed the event is the person that notice would reach,
+   * and they are already looking at it.
+   */
+  notify?: boolean
+}
+
 export interface CreateEventSubmissionResult {
   listingId?: string
   status: 'pending' | 'error'
@@ -100,6 +126,7 @@ function cleanDate(value: string | undefined): string | null {
 
 export async function createEventSubmission(
   input: CreateEventSubmissionInput,
+  options: CreateEventListingOptions = {},
 ): Promise<CreateEventSubmissionResult> {
   const name = input.name?.trim()
   if (!name) return { status: 'error', message: 'An event name is required.' }
@@ -192,11 +219,11 @@ export async function createEventSubmission(
     notes: input.notes?.trim() || null,
     submitterName: input.submitterName?.trim() || null,
     submitterContact: input.submitterContact?.trim() || null,
-    submitterIpHash: input.submitterIpHash,
+    submitterIpHash: input.submitterIpHash ?? null,
     submittedByUserId: input.submittedByUserId ?? null,
     submitterOwns: input.submitterOwns ?? null,
     status: 'pending',
-    source: 'submission',
+    source: pickEnum(options.source, EVENT_LISTING_SOURCES, 'submission'),
   }
 
   const [row] = await db.insert(eventListings).values(values).returning({ id: eventListings.id })
@@ -229,24 +256,26 @@ export async function createEventSubmission(
     notes: values.notes ?? null,
   }
 
-  sendApprovalNotice({
-    vertical: 'event',
-    title: name,
-    reviewUrl: reviewEventUrl(row.id),
-    sourceUrl: values.website ?? null,
-    submitter: [values.submitterName, values.submitterContact].filter(Boolean).join(' · ') || null,
-    facts: [
-      { label: 'Program', value: display.program !== 'frc' ? display.program.toUpperCase() : null, inline: true },
-      { label: 'Status', value: EVENT_STATUS_LABEL[eventStatus], inline: true },
-      { label: 'Dates', value: eventDateRange(display), inline: true },
-      { label: 'Location', value: eventLocation(display) },
-      { label: 'Capacity', value: display.capacity != null ? `${display.capacity} teams` : null, inline: true },
-      { label: 'Cost', value: costLabel(display), inline: true },
-      { label: 'Registration', value: REGISTRATION_STATUS_LABEL[registrationStatus], inline: true },
-      { label: 'Notes', value: display.notes },
-      { label: 'Renewal of', value: previousListingId ? "last year's listing" : null, inline: true },
-    ],
-  })
+  if (options.notify !== false) {
+    sendApprovalNotice({
+      vertical: 'event',
+      title: name,
+      reviewUrl: reviewEventUrl(row.id),
+      sourceUrl: values.website ?? null,
+      submitter: [values.submitterName, values.submitterContact].filter(Boolean).join(' · ') || null,
+      facts: [
+        { label: 'Program', value: display.program !== 'frc' ? display.program.toUpperCase() : null, inline: true },
+        { label: 'Status', value: EVENT_STATUS_LABEL[eventStatus], inline: true },
+        { label: 'Dates', value: eventDateRange(display), inline: true },
+        { label: 'Location', value: eventLocation(display) },
+        { label: 'Capacity', value: display.capacity != null ? `${display.capacity} teams` : null, inline: true },
+        { label: 'Cost', value: costLabel(display), inline: true },
+        { label: 'Registration', value: REGISTRATION_STATUS_LABEL[registrationStatus], inline: true },
+        { label: 'Notes', value: display.notes },
+        { label: 'Renewal of', value: previousListingId ? "last year's listing" : null, inline: true },
+      ],
+    })
+  }
 
   return {
     listingId: row.id,
