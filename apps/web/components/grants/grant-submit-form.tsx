@@ -6,27 +6,10 @@ import { cardClass } from '@/components/ui/card'
 import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
 import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { SubmitConfirmation } from '@/components/ui/submit-confirmation'
+import { useTurnstile } from '@/components/ui/use-turnstile'
 import { useSession, type SessionUser } from '@/components/auth/session-provider'
 
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (
-        container: HTMLElement | string,
-        opts: {
-          sitekey: string
-          callback: (token: string) => void
-          'error-callback': () => void
-          'expired-callback': () => void
-          theme?: 'light' | 'dark' | 'auto'
-        },
-      ) => string
-      reset: (widgetId: string) => void
-    }
-  }
-}
 
-const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
 
 interface FormState {
   name: string
@@ -82,7 +65,7 @@ export function GrantSubmitForm({ admin }: {
 } = {}) {
   const adminMode = !!admin
   // An admin session stands in for the bot check. Nothing else turns it off.
-  const needsTurnstile = Boolean(SITE_KEY) && !adminMode
+  const turnstile = useTurnstile(!adminMode)
 
   const { user } = useSession()
   const [form, setForm] = useState<FormState>(INITIAL)
@@ -93,9 +76,6 @@ export function GrantSubmitForm({ admin }: {
   // which is a 200 but must NOT flip to the terminal thank-you.
   const [result, setResult] = useState<{ ok?: boolean; message: string; slug?: string; status?: string } | null>(null)
 
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
-  const turnstileRef = useRef<HTMLDivElement>(null)
-  const widgetIdRef = useRef<string | null>(null)
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -116,47 +96,7 @@ export function GrantSubmitForm({ admin }: {
     }))
   }, [user])
 
-  useEffect(() => {
-    if (!needsTurnstile || !turnstileRef.current) return
-    function renderWidget() {
-      if (!turnstileRef.current || !window.turnstile) return
-      widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
-        sitekey: SITE_KEY,
-        callback: (token) => setTurnstileToken(token),
-        'error-callback': () => setTurnstileToken(null),
-        'expired-callback': () => setTurnstileToken(null),
-        theme: 'auto',
-      })
-    }
-    if (window.turnstile) {
-      renderWidget()
-      return
-    }
-    if (!document.getElementById('cf-turnstile-script')) {
-      const script = document.createElement('script')
-      script.id = 'cf-turnstile-script'
-      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
-      script.async = true
-      script.defer = true
-      script.onload = renderWidget
-      document.head.appendChild(script)
-    } else {
-      const poll = setInterval(() => {
-        if (window.turnstile) {
-          clearInterval(poll)
-          renderWidget()
-        }
-      }, 100)
-      return () => clearInterval(poll)
-    }
-  }, [needsTurnstile])
 
-  function resetTurnstile() {
-    if (window.turnstile && widgetIdRef.current) {
-      window.turnstile.reset(widgetIdRef.current)
-      setTurnstileToken(null)
-    }
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -168,7 +108,7 @@ export function GrantSubmitForm({ admin }: {
       setResult({ ok: false, message: 'Please add the link to the funder page.' })
       return
     }
-    if (needsTurnstile && !turnstileToken) {
+    if (turnstile.required && !turnstile.token) {
       setResult({ ok: false, message: 'Please complete the “I’m not a robot” check.' })
       return
     }
@@ -177,7 +117,7 @@ export function GrantSubmitForm({ admin }: {
     try {
       const fd = new FormData()
       for (const [k, v] of Object.entries(form)) if (v) fd.set(k, v)
-      if (turnstileToken) fd.set('turnstileToken', turnstileToken)
+      if (turnstile.token) fd.set('turnstileToken', turnstile.token)
       // Always explicit, never left to a default the server would have to guess.
       fd.set('passingAlong', passingAlong ? 'true' : 'false')
 
@@ -190,10 +130,10 @@ export function GrantSubmitForm({ admin }: {
         if (data.status === 'pending') {
           setForm({ ...INITIAL, ...submitterDefaults(user) })
         }
-        resetTurnstile()
+        turnstile.reset()
       } else {
         setResult({ ok: false, message: data.error ?? 'Submission failed.' })
-        resetTurnstile()
+        turnstile.reset()
       }
     } catch {
       setResult({ ok: false, message: 'Network error. Please try again.' })
@@ -315,11 +255,11 @@ export function GrantSubmitForm({ admin }: {
 
       {!adminMode && <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="grant" />}
 
-      {needsTurnstile && <div ref={turnstileRef} className="min-h-[65px]" />}
+      {turnstile.required && <div ref={turnstile.containerRef} className="min-h-[65px]" />}
 
       <Button
         type="submit"
-        disabled={submitting || !form.name.trim() || !form.infoUrl.trim() || (needsTurnstile && !turnstileToken)}
+        disabled={submitting || !form.name.trim() || !form.infoUrl.trim() || (turnstile.required && !turnstile.token)}
         className="self-start"
       >
         {submitting ? 'Submitting…' : adminMode ? 'Add grant' : 'Submit grant'}
