@@ -57,6 +57,7 @@ import {
   type ListingFormContext,
 } from '@/components/me/listing-fields'
 import { saveExtraToolLinks } from '@/lib/listings/tool-links'
+import { verifyOutreachClaim } from '@/lib/listings/outreach-token'
 import {
   loadToolTaxonomy,
   saveToolTaxonomy,
@@ -166,6 +167,7 @@ export async function startClaim(
   entityTypeRaw: string,
   entityId: string,
   noteRaw?: string,
+  outreachToken?: string,
 ): Promise<OwnershipActionResult> {
   const user = await getCurrentUser()
   if (!user) return { error: 'Your session expired. Sign in again and retry.' }
@@ -203,6 +205,42 @@ export async function startClaim(
       return { verifyToken: existing.evidence.token, message: 'You already started this claim.' }
     }
     return { message: 'This claim is already waiting for review.' }
+  }
+
+  // PATH 0: a click from an outreach email WE sent. The signed token proves the
+  // link came from that specific email, which went to the event's own public
+  // contact, and a moderator vetting the listing is what sent it. So the click
+  // IS the review: an unowned listing is granted on the spot, method 'invite'.
+  // An already-owned listing is never taken this way; it drops to the dispute
+  // path below. (The token names only the listing, not a person, so a recipient
+  // who forwards their own email hands over their own listing - the same trust
+  // the accountless "remove this listing" link already assumes.)
+  if (outreachToken && !target.alreadyOwned && verifyOutreachClaim(entityType, entityId, outreachToken)) {
+    await grantOwnership(entityType, entityId, user.id, 'owner', 'invite', null)
+    const [granted] = await db
+      .insert(listingClaims)
+      .values({
+        entityType,
+        entityId,
+        userId: user.id,
+        method: 'invite',
+        status: 'verified',
+        decidedByUserId: user.id,
+        decidedAt: new Date(),
+      })
+      .returning({ id: listingClaims.id })
+    sendApprovalNotice({
+      vertical: 'claim',
+      title: `Outreach claimed: ${target.facts.title}`,
+      reviewUrl: reviewClaimUrl(granted.id),
+      submitter: user.displayName ?? user.email ?? null,
+      facts: [
+        { label: 'Listing', value: target.facts.subtitle },
+        { label: 'Signal', value: 'Auto-granted from the outreach email we sent the organiser' },
+      ],
+    })
+    revalidatePath('/me/listings')
+    return { message: 'This is your listing, so you now manage it.' }
   }
 
   // PATH 1: you submitted this listing while signed in, and did not tick "I am

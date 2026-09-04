@@ -17,9 +17,9 @@ export const dynamic = 'force-dynamic'
 export default async function ClaimPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; id?: string }>
+  searchParams: Promise<{ type?: string; id?: string; t?: string }>
 }) {
-  const { type, id } = await searchParams
+  const { type, id, t } = await searchParams
   const user = await getCurrentUser()
 
   // Resolve for display with a best-effort user id when signed out: the page
@@ -44,7 +44,7 @@ export default async function ClaimPage({
                 person came to do. The card itself renders nothing once the
                 account is linked. */}
             {target.repoUrl && <GithubLinkCard purpose="claim" />}
-            <ClaimStarter target={target} verifyFilename={VERIFY_FILENAME} startAction={startClaim} />
+            <ClaimStarter target={target} verifyFilename={VERIFY_FILENAME} startAction={startClaim} claimToken={t} />
           </div>
         </SignedInGate>
       ) : (

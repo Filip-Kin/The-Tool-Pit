@@ -21,7 +21,7 @@ import {
   type ApprovalEmailPayload,
   type EmailFact,
 } from '@the-tool-pit/types'
-import { signOutreachRemove } from '@/lib/listings/outreach-token'
+import { signOutreachRemove, signOutreachClaim } from '@/lib/listings/outreach-token'
 import { notifyEventPublished, notifyEventRejected } from '@/lib/notify/approvals'
 import { grantEventOwnership } from '@/lib/listings/submitter-ownership'
 import { eventPublishBlockers } from '@/lib/events/publish-bar'
@@ -256,7 +256,7 @@ export async function sendEventOutreach(id: string): Promise<{ error?: string }>
   const payload: ApprovalEmailPayload = {
     title: row.name,
     vertical: 'event',
-    url: claimListingUrl('event', row.id),
+    url: claimListingUrl('event', row.id, signOutreachClaim('event', row.id)),
     // The one-click "take it down" button beside "Claim & fix it". The token is
     // signed for this listing so the public /listings/remove route can trust an
     // accountless click; suppressing is idempotent, so a re-click is harmless.

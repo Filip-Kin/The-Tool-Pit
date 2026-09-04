@@ -88,8 +88,13 @@ export function myListingsUrl(): string {
  * to the same claim, which is the correct door for an organiser we emailed:
  * proving they run the event is exactly what a claim is for.
  */
-export function claimListingUrl(entityType: string, entityId: string): string {
-  return `${siteUrl()}/me/listings/claim?type=${encodeURIComponent(entityType)}&id=${encodeURIComponent(entityId)}`
+export function claimListingUrl(entityType: string, entityId: string, token?: string): string {
+  const base = `${siteUrl()}/me/listings/claim?type=${encodeURIComponent(entityType)}&id=${encodeURIComponent(entityId)}`
+  // The signed outreach-claim token, when this link goes in an email WE sent the
+  // organiser. It is what makes their click an instant grant instead of a claim
+  // in the review queue: the outreach was the review. Absent on the public
+  // "Claim this listing" control, which is a cold claim and must be vetted.
+  return token ? `${base}&t=${encodeURIComponent(token)}` : base
 }
 
 /**

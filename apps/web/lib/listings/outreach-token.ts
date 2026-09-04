@@ -49,3 +49,31 @@ export function verifyOutreachRemove(
   if (expected.length !== given.length) return false
   return timingSafeEqual(expected, given)
 }
+
+/**
+ * The signed token behind an outreach "Claim this listing" link.
+ *
+ * Same stateless HMAC as the remove token, but a SEPARATE namespace so a remove
+ * link can never be replayed as a claim. Its presence is what turns a claim from
+ * the outreach email into an instant grant: the moderator already vetted the
+ * listing when they sent the email to the event's own contact, so a click from
+ * that email is the review, not the start of one. The claim page reads it off
+ * the URL and hands it to startClaim, which re-derives the signature before
+ * granting anything.
+ */
+export function signOutreachClaim(entityType: string, entityId: string): string {
+  return createHmac('sha256', secret()).update(`outreach-claim:${entityType}:${entityId}`).digest('base64url')
+}
+
+/** Constant-time check that a claim token was signed for exactly this listing. */
+export function verifyOutreachClaim(
+  entityType: string,
+  entityId: string,
+  token: string | null | undefined,
+): boolean {
+  if (!token) return false
+  const expected = Buffer.from(signOutreachClaim(entityType, entityId))
+  const given = Buffer.from(token)
+  if (expected.length !== given.length) return false
+  return timingSafeEqual(expected, given)
+}

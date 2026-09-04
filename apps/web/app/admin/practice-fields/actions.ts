@@ -12,7 +12,7 @@ import {
   type ApprovalEmailPayload,
   type EmailFact,
 } from '@the-tool-pit/types'
-import { signOutreachRemove } from '@/lib/listings/outreach-token'
+import { signOutreachRemove, signOutreachClaim } from '@/lib/listings/outreach-token'
 import { readPhotoFiles } from '@/lib/fields/form-parse'
 import { notifyFieldPublished, notifyFieldRejected } from '@/lib/notify/approvals'
 import { grantFieldOwnership } from '@/lib/listings/submitter-ownership'
@@ -165,7 +165,7 @@ export async function sendFieldOutreach(id: string): Promise<{ error?: string }>
   const payload: ApprovalEmailPayload = {
     title: row.name,
     vertical: 'field',
-    url: claimListingUrl('field', row.id),
+    url: claimListingUrl('field', row.id, signOutreachClaim('field', row.id)),
     secondaryCta: {
       label: 'Not right? Remove it',
       url: removeListingUrl('field', row.id, signOutreachRemove('field', row.id)),

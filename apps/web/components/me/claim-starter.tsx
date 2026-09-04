@@ -22,6 +22,7 @@ export function ClaimStarter({
   target,
   verifyFilename,
   startAction,
+  claimToken,
 }: {
   target: ClaimableListing
   verifyFilename: string
@@ -29,7 +30,10 @@ export function ClaimStarter({
     entityType: string,
     entityId: string,
     note?: string,
+    outreachToken?: string,
   ) => Promise<{ error?: string; message?: string; verifyToken?: string }>
+  /** The signed outreach token from the email link, when the reader arrived that way. */
+  claimToken?: string
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
@@ -56,7 +60,7 @@ export function ClaimStarter({
     setMsg(null)
     setErr(null)
     start(async () => {
-      const res = await startAction(target.entityType, target.entityId)
+      const res = await startAction(target.entityType, target.entityId, undefined, claimToken)
       if (res.error) {
         setErr(res.error)
         return
@@ -75,8 +79,12 @@ export function ClaimStarter({
 
   const { user } = useSession()
 
-  const how =
-    path === 'self'
+  // Arrived from the outreach email we sent the organiser: the click grants the
+  // listing on the spot, so the copy promises that rather than a review.
+  const invited = Boolean(claimToken) && !target.alreadyOwned
+  const how = invited
+    ? 'We emailed you this listing, so claiming it makes it yours right away.'
+    : path === 'self'
       ? 'You submitted this, so it becomes yours right away.'
       : path === 'repo'
         ? 'Prove it by committing a token to the repo.'
