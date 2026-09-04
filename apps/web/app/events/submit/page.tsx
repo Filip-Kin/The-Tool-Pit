@@ -37,6 +37,7 @@ async function buildRenewal(id: string | undefined): Promise<RenewalPrefill | nu
     name: prev.name,
     program: prev.program,
     hostTeamNumber: prev.hostTeamNumber,
+    hostTeamNumbers: prev.hostTeamNumbers,
     latitude: prev.latitude,
     longitude: prev.longitude,
     venueName: prev.venueName,

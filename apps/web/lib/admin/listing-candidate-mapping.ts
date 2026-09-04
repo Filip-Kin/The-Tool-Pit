@@ -117,6 +117,16 @@ export function eventListingFromCandidate(
   const spanned = start && end ? Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000) + 1 : null
   const days = ex.days === 1 || ex.days === 2 ? ex.days : spanned === 1 ? 1 : null
 
+  // Host teams, deduped and validated. The reader may hand over an array (a
+  // co-hosted event) or just the legacy single; both fold into one list.
+  const hostTeams = [
+    ...new Set(
+      [...(ex.hostTeamNumbers ?? []), ex.hostTeamNumber]
+        .map((n) => teamNumber(n ?? undefined))
+        .filter((n): n is number => n != null),
+    ),
+  ]
+
   return {
     // Cleaned even when the reader already did it, because a candidate read
     // before that instruction existed still carries the whole thread title,
@@ -129,7 +139,10 @@ export function eventListingFromCandidate(
     // see it.
     seasonYear: start ? Number(start.slice(0, 4)) : null,
     program: program(ex.program, EVENT_PROGRAMS),
-    hostTeamNumber: teamNumber(ex.hostTeamNumber),
+    // Host teams as an array, with the legacy single kept as the first of it so
+    // rows and readers that still reach for hostTeamNumber keep working.
+    hostTeamNumber: hostTeams[0] ?? null,
+    hostTeamNumbers: hostTeams.length > 0 ? hostTeams : null,
     // Looked up from the venue during the read, so accepting puts the event on
     // the map instead of handing the reviewer a school to find themselves.
     latitude: coordinate(ex.latitude, 90),

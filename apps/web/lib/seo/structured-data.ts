@@ -15,7 +15,7 @@
  * server (submitter audit, crawl bookkeeping) cannot reach a builder here.
  */
 import type { PublicEvent } from '@/lib/events/event-display'
-import { effectiveEventStatus, effectiveRegistrationStatus } from '@/lib/events/event-display'
+import { effectiveEventStatus, effectiveRegistrationStatus, eventHostTeams } from '@/lib/events/event-display'
 import type { PublicField } from '@/lib/fields/field-display'
 import type { PublicGrant } from '@/lib/grants/grant-display'
 import type { ToolDetailData } from '@/lib/queries/tools'
@@ -150,9 +150,13 @@ export function eventJsonLd(ev: PublicEvent): Record<string, unknown> {
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location,
     url: eventListingUrl(ev.slug),
-    organizer: ev.hostTeamNumber
-      ? { '@type': 'Organization', name: `FIRST Robotics Competition Team ${ev.hostTeamNumber}` }
-      : undefined,
+    organizer: (() => {
+      const orgs = eventHostTeams(ev).map((n) => ({
+        '@type': 'Organization',
+        name: `FIRST Robotics Competition Team ${n}`,
+      }))
+      return orgs.length === 0 ? undefined : orgs.length === 1 ? orgs[0] : orgs
+    })(),
     offers,
     description: ev.notes ?? undefined,
   })

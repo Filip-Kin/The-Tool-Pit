@@ -3,7 +3,7 @@ import { getIpHash } from '@/lib/utils/ip'
 import { getCurrentUser } from '@/lib/auth/session'
 import { checkSubmissionRateLimit } from '@/lib/rate-limit'
 import { createEventEditProposal } from '@/lib/events/create-edit'
-import { formStr as str, formNum as num, formBool as bool } from '@/lib/events/form-parse'
+import { formStr as str, formNum as num, formBool as bool, formNumList as numList } from '@/lib/events/form-parse'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -33,6 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       name: str(form, 'name'),
       program: str(form, 'program'),
       hostTeamNumber: num(form, 'hostTeamNumber'),
+      hostTeamNumbers: numList(form, 'hostTeamNumbers'),
       latitude: num(form, 'latitude'),
       longitude: num(form, 'longitude'),
       venueName: str(form, 'venueName'),

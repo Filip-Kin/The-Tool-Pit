@@ -253,6 +253,13 @@
       "when": 1788458348530,
       "tag": "0035_overrated_forgotten_one",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788482983947,
+      "tag": "0036_blushing_cerise",
+      "breakpoints": true
     }
   ]
 }

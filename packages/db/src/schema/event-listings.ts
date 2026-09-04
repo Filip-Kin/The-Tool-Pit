@@ -66,8 +66,20 @@ export const eventListings = pgTable(
     program: text('program').notNull().default('frc'),
     /** Event name shown on the pin and card, e.g. "Kettering Kickoff". */
     name: text('name').notNull(),
-    /** Team number of the host org, when a single team runs it. Optional. */
+    /**
+     * Team number of the host org, when a single team runs it. Optional.
+     *
+     * @deprecated Kept in sync as the first of `hostTeamNumbers` while the
+     * codebase moves to the array. Read `hostTeamNumbers` instead; a later
+     * migration drops this column.
+     */
     hostTeamNumber: integer('host_team_number'),
+    /**
+     * Every team that hosts the event. Most events have one, but co-hosted
+     * events (two or three teams running it together) have several, and a single
+     * host number could not say so. Ordered as entered, first is the lead host.
+     */
+    hostTeamNumbers: integer('host_team_numbers').array(),
 
     // Place
     latitude: doublePrecision('latitude'),
@@ -443,6 +455,7 @@ export interface EventEditProposalData {
   name?: string
   program?: string
   hostTeamNumber?: number | null
+  hostTeamNumbers?: number[] | null
   latitude?: number | null
   longitude?: number | null
   venueName?: string | null

@@ -22,7 +22,10 @@ export interface PublicEvent {
   slug: string
   program: string
   name: string
+  /** @deprecated Read via eventHostTeams(). First of hostTeamNumbers. */
   hostTeamNumber: number | null
+  /** Every host team, in order. Empty/null when nobody hosts it. */
+  hostTeamNumbers: number[] | null
   latitude: number | null
   longitude: number | null
   venueName: string | null
@@ -140,6 +143,41 @@ export function seasonRangeLabel(years: number[]): string {
 // ---------------------------------------------------------------------------
 
 export type EventTiming = 'soon' | 'upcoming' | 'past'
+
+/**
+ * The host teams for an event, in order. Reads the `hostTeamNumbers` array and
+ * falls back to the legacy single `hostTeamNumber` for rows written before the
+ * array existed, so every caller gets one consistent shape. Empty when nobody
+ * hosts it.
+ */
+export function eventHostTeams(
+  ev: Pick<PublicEvent, 'hostTeamNumber' | 'hostTeamNumbers'>,
+): number[] {
+  if (ev.hostTeamNumbers && ev.hostTeamNumbers.length > 0) return ev.hostTeamNumbers
+  return ev.hostTeamNumber != null ? [ev.hostTeamNumber] : []
+}
+
+/**
+ * Valid FRC/FTC team numbers from a mixed list, deduped and in order. Anything
+ * that is not a positive whole number under 100000 is dropped. Shared by the
+ * submit and edit paths so a host-team list is validated one way.
+ */
+export function cleanTeamNumbers(values: Array<number | null | undefined>): number[] {
+  const out: number[] = []
+  for (const v of values) {
+    if (typeof v === 'number' && Number.isInteger(v) && v > 0 && v < 100_000 && !out.includes(v)) out.push(v)
+  }
+  return out
+}
+
+/** "Team 254", "Teams 254 & 1678", "Teams 254, 1678 & 3184". */
+export function hostTeamsLabel(teams: number[]): string {
+  if (teams.length === 0) return ''
+  const noun = teams.length === 1 ? 'Team' : 'Teams'
+  if (teams.length === 1) return `${noun} ${teams[0]}`
+  const head = teams.slice(0, -1).join(', ')
+  return `${noun} ${head} & ${teams[teams.length - 1]}`
+}
 
 /** Days from `now` until the event's start (negative once it has started). */
 export function daysUntil(ev: Pick<PublicEvent, 'startDate'>, now: Date): number | null {

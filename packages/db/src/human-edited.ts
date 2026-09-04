@@ -226,6 +226,7 @@ export const HUMAN_EDITABLE_EVENT_KEYS = [
   'name',
   'program',
   'hostTeamNumber',
+  'hostTeamNumbers',
   'latitude',
   'longitude',
   'venueName',

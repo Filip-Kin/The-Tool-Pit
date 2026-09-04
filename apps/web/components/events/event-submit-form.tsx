@@ -20,6 +20,7 @@ import {
   EVENT_STATUS_LABEL,
   REGISTRATION_STATUS_LABEL,
   VOLUNTEER_STATUS_LABEL,
+  eventHostTeams,
 } from '@/lib/events/event-display'
 import type { PublicEvent } from '@/lib/events/event-display'
 import { useSession } from '@/components/auth/session-provider'
@@ -48,7 +49,8 @@ type Program = 'frc' | 'ftc' | 'fll'
 interface FormState {
   name: string
   program: Program
-  hostTeamNumber: string
+  /** One or more host team numbers, comma or space separated. */
+  hostTeamNumbers: string
   venueName: string
   address: string
   city: string
@@ -92,6 +94,7 @@ export interface RenewalPrefill {
   name: string
   program: string
   hostTeamNumber: number | null
+  hostTeamNumbers: number[] | null
   latitude: number | null
   longitude: number | null
   venueName: string | null
@@ -115,7 +118,7 @@ export interface RenewalPrefill {
 const INITIAL: FormState = {
   name: '',
   program: 'frc',
-  hostTeamNumber: '',
+  hostTeamNumbers: '',
   venueName: '',
   address: '',
   city: '',
@@ -152,7 +155,7 @@ function fromRenewal(r: RenewalPrefill): FormState {
     ...INITIAL,
     name: r.name,
     program: (['frc', 'ftc', 'fll'] as const).includes(r.program as Program) ? (r.program as Program) : 'frc',
-    hostTeamNumber: n(r.hostTeamNumber),
+    hostTeamNumbers: (r.hostTeamNumbers ?? (r.hostTeamNumber != null ? [r.hostTeamNumber] : [])).join(', '),
     venueName: s(r.venueName),
     address: s(r.address),
     city: s(r.city),
@@ -187,7 +190,7 @@ function fromEvent(ev: PublicEvent): FormState {
     ...INITIAL,
     name: ev.name,
     program: (['frc', 'ftc', 'fll'] as const).includes(ev.program as Program) ? (ev.program as Program) : 'frc',
-    hostTeamNumber: n(ev.hostTeamNumber),
+    hostTeamNumbers: eventHostTeams(ev).join(', '),
     venueName: s(ev.venueName),
     address: s(ev.address),
     city: s(ev.city),
@@ -433,9 +436,9 @@ export function EventSubmitForm({
               </select>
             </Field>
           </div>
-          <div className="w-32">
-            <Field label="Host team #">
-              <input type="number" inputMode="numeric" min={1} value={form.hostTeamNumber} onChange={(e) => set('hostTeamNumber', e.target.value)} placeholder="e.g. 3538" className="input" />
+          <div className="w-48">
+            <Field label="Host team(s)">
+              <input type="text" inputMode="numeric" value={form.hostTeamNumbers} onChange={(e) => set('hostTeamNumbers', e.target.value)} placeholder="e.g. 3538, 1678" className="input" />
             </Field>
           </div>
           <div className="flex-1">

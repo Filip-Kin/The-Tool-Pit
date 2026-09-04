@@ -239,6 +239,8 @@ export interface ExtractedEventListingFields {
   /** EVENT_STATUSES. What the site says about whether the event is happening (cancelled / tentative / confirmed). */
   eventStatus?: string
   hostTeamNumber?: number
+  /** Every host team the source named. `hostTeamNumber` stays as the first. */
+  hostTeamNumbers?: number[]
   venueName?: string
   address?: string
   city?: string

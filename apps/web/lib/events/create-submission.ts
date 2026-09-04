@@ -20,6 +20,7 @@ import {
   costLabel,
   EVENT_STATUS_LABEL,
   REGISTRATION_STATUS_LABEL,
+  cleanTeamNumbers,
 } from '@/lib/events/event-display'
 import { wrapLongitude } from '@/lib/geo/longitude'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
@@ -28,6 +29,7 @@ export interface CreateEventSubmissionInput {
   name: string
   program?: string
   hostTeamNumber?: number
+  hostTeamNumbers?: number[]
   latitude?: number
   longitude?: number
   venueName?: string
@@ -120,10 +122,7 @@ export async function createEventSubmission(
   // is the one that matters because an API caller never touches the picker.
   const lng = typeof input.longitude === 'number' ? wrapLongitude(input.longitude) : null
 
-  const hostTeamNumber =
-    typeof input.hostTeamNumber === 'number' && Number.isInteger(input.hostTeamNumber) && input.hostTeamNumber > 0
-      ? input.hostTeamNumber
-      : null
+  const hostTeams = cleanTeamNumbers([...(input.hostTeamNumbers ?? []), input.hostTeamNumber])
 
   const days = input.days === 1 || input.days === 2 ? input.days : null
   const capacity =
@@ -159,7 +158,8 @@ export async function createEventSubmission(
     name,
     slug,
     program: pickEnum(input.program, EVENT_PROGRAMS, 'frc'),
-    hostTeamNumber,
+    hostTeamNumber: hostTeams[0] ?? null,
+    hostTeamNumbers: hostTeams.length > 0 ? hostTeams : null,
     latitude: lat,
     longitude: lng,
     venueName: input.venueName?.trim() || null,

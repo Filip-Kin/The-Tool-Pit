@@ -24,6 +24,8 @@ import {
   daysLabel,
   fullnessLabel,
   fullnessRatio,
+  eventHostTeams,
+  hostTeamsLabel,
   REGISTRATION_STATUS_SHORT,
 } from '@/lib/events/event-display'
 
@@ -247,7 +249,9 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
         {!full && ev.capacity != null && !cancelled && eventTiming(ev, now) !== 'past' && (
           <Row icon={<Users className="h-4 w-4" />} label="Capacity" value={`${ev.capacity} teams`} />
         )}
-        {ev.hostTeamNumber != null && <Row icon={<Users className="h-4 w-4" />} label="Hosted by" value={`Team ${ev.hostTeamNumber}`} />}
+        {eventHostTeams(ev).length > 0 && (
+          <Row icon={<Users className="h-4 w-4" />} label="Hosted by" value={hostTeamsLabel(eventHostTeams(ev))} />
+        )}
       </dl>
 
       {ev.notes && <p className="whitespace-pre-wrap text-sm text-muted">{ev.notes}</p>}

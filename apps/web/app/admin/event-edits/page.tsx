@@ -12,6 +12,7 @@ const KEY_LABELS: Record<keyof EventEditProposalData, string> = {
   name: 'Name',
   program: 'Program',
   hostTeamNumber: 'Host team',
+  hostTeamNumbers: 'Host teams',
   latitude: 'Latitude',
   longitude: 'Longitude',
   venueName: 'Venue',

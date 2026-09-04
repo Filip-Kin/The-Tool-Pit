@@ -12,6 +12,7 @@ const publicColumns = {
   program: eventListings.program,
   name: eventListings.name,
   hostTeamNumber: eventListings.hostTeamNumber,
+  hostTeamNumbers: eventListings.hostTeamNumbers,
   seasonYear: eventListings.seasonYear,
   previousListingId: eventListings.previousListingId,
   latitude: eventListings.latitude,

@@ -10,12 +10,14 @@ import {
 } from '@the-tool-pit/db'
 import type { EventEditProposalData } from '@the-tool-pit/db'
 import { wrapLongitude } from '@/lib/geo/longitude'
+import { cleanTeamNumbers } from '@/lib/events/event-display'
 import { sendApprovalNotice, reviewEventEditUrl } from '@the-tool-pit/types'
 
 export interface CreateEventEditInput {
   name?: string
   program?: string
   hostTeamNumber?: number
+  hostTeamNumbers?: number[]
   latitude?: number
   longitude?: number
   venueName?: string
@@ -93,10 +95,7 @@ export async function createEventEditProposal(
   // record with no coordinates so the pin vanished. The client normalises too;
   // this is the backstop for a caller that never touched the picker.
   const lng = typeof input.longitude === 'number' ? wrapLongitude(input.longitude) : null
-  const hostTeamNumber =
-    typeof input.hostTeamNumber === 'number' && Number.isInteger(input.hostTeamNumber) && input.hostTeamNumber > 0
-      ? input.hostTeamNumber
-      : null
+  const hostTeams = cleanTeamNumbers([...(input.hostTeamNumbers ?? []), input.hostTeamNumber])
   const days = input.days === 1 || input.days === 2 ? input.days : null
   const capacity =
     typeof input.capacity === 'number' && Number.isInteger(input.capacity) && input.capacity > 0 && input.capacity < 1000
@@ -115,7 +114,8 @@ export async function createEventEditProposal(
   const proposed: EventEditProposalData & { teamListUrl?: string | null } = {
     name,
     program: pickEnum(input.program, EVENT_PROGRAMS, 'frc'),
-    hostTeamNumber,
+    hostTeamNumber: hostTeams[0] ?? null,
+    hostTeamNumbers: hostTeams.length > 0 ? hostTeams : null,
     latitude: lat,
     longitude: lng,
     venueName: input.venueName?.trim() || null,

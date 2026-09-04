@@ -4,7 +4,7 @@ import { getCurrentUser } from '@/lib/auth/session'
 import { submitterOwnsFromForm } from '@/lib/listings/passing-along'
 import { checkSubmissionRateLimit } from '@/lib/rate-limit'
 import { createEventSubmission } from '@/lib/events/create-submission'
-import { formStr as str, formNum as num, formBool as bool } from '@/lib/events/form-parse'
+import { formStr as str, formNum as num, formBool as bool, formNumList as numList } from '@/lib/events/form-parse'
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
       name,
       program: str(form, 'program'),
       hostTeamNumber: num(form, 'hostTeamNumber'),
+      hostTeamNumbers: numList(form, 'hostTeamNumbers'),
       latitude: num(form, 'latitude'),
       longitude: num(form, 'longitude'),
       venueName: str(form, 'venueName'),
