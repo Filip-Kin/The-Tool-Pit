@@ -72,6 +72,10 @@
     "./event-name": {
       "bun": "./src/event-name.ts",
       "default": "./dist/event-name.js"
+    },
+    "./hate-filter": {
+      "bun": "./src/hate-filter.ts",
+      "default": "./dist/hate-filter.js"
     }
   },
   "main": "./dist/index.js",

@@ -12,6 +12,7 @@ import {
   isLowCeiling,
 } from '@/lib/fields/field-display'
 import { wrapLongitude } from '@/lib/geo/longitude'
+import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 
 export interface CreateFieldSubmissionInput {
   name: string
@@ -72,6 +73,13 @@ export async function createFieldSubmission(
 ): Promise<CreateFieldSubmissionResult> {
   const name = input.name?.trim()
   if (!name) return { status: 'error', message: 'A field name is required.' }
+
+  if (
+    containsHateSpeech(input.name, input.notes, input.teamName, input.city, input.contactInfo, input.submitterName) ||
+    urlContainsHateSpeech(input.website)
+  ) {
+    return { status: 'error', message: "This submission can't be accepted." }
+  }
 
   const db = getDb()
 

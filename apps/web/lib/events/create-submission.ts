@@ -22,6 +22,7 @@ import {
   REGISTRATION_STATUS_LABEL,
 } from '@/lib/events/event-display'
 import { wrapLongitude } from '@/lib/geo/longitude'
+import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 
 export interface CreateEventSubmissionInput {
   name: string
@@ -100,6 +101,14 @@ export async function createEventSubmission(
 ): Promise<CreateEventSubmissionResult> {
   const name = input.name?.trim()
   if (!name) return { status: 'error', message: 'An event name is required.' }
+
+  if (
+    containsHateSpeech(input.name, input.notes, input.venueName, input.city, input.submitterName) ||
+    urlContainsHateSpeech(input.website) ||
+    urlContainsHateSpeech(input.registrationUrl)
+  ) {
+    return { status: 'error', message: "This submission can't be accepted." }
+  }
 
   const db = getDb()
 

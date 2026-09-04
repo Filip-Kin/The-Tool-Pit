@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { submissions } from '@the-tool-pit/db'
 import { getSubmissionQueue } from './queue'
+import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 import { sendApprovalNotice, reviewSubmissionUrl, type SubmitToolResponse } from '@the-tool-pit/types'
 
 interface CreateSubmissionInput {
@@ -27,6 +28,10 @@ interface CreateSubmissionInput {
  * The actual processing is done by the worker service.
  */
 export async function createSubmission(input: CreateSubmissionInput): Promise<SubmitToolResponse> {
+  if (urlContainsHateSpeech(input.url) || containsHateSpeech(input.note)) {
+    return { submissionId: '', status: 'rejected', message: "This submission can't be accepted." }
+  }
+
   const db = getDb()
 
   // Check for recent duplicate URL

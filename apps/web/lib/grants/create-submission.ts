@@ -3,6 +3,7 @@ import { getDb } from '@/lib/db'
 import { grantCandidates, grantSources, grants } from '@the-tool-pit/db'
 import type { RawGrantMetadata } from '@the-tool-pit/db'
 import { sendApprovalNotice, reviewGrantUrl } from '@the-tool-pit/types'
+import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 
 /**
  * Public grant submissions.
@@ -125,6 +126,14 @@ export async function createGrantSubmission(
 ): Promise<CreateGrantSubmissionResult> {
   const name = input.name?.trim()
   if (!name) return { status: 'error', message: 'Please give the grant a name.' }
+
+  if (
+    containsHateSpeech(input.name, input.funderName, input.summary, input.notes, input.submitterName) ||
+    urlContainsHateSpeech(input.infoUrl) ||
+    urlContainsHateSpeech(input.applicationUrl)
+  ) {
+    return { status: 'error', message: "This submission can't be accepted." }
+  }
 
   const rawUrl = input.infoUrl?.trim()
   const canonicalUrl = rawUrl ? canonicalGrantUrl(rawUrl) : null

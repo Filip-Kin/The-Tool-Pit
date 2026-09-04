@@ -4,6 +4,7 @@ import { submissions } from '@the-tool-pit/db'
 import { ARTIFACT_KINDS, MIN_SEASON_YEAR, maxSeasonYear, type ArtifactKind } from '@the-tool-pit/db/robot-code-enums'
 import { FIELD_PROGRAMS, type FieldProgram } from '@the-tool-pit/db/field-enums'
 import { getSubmissionQueue } from '@/lib/submissions/queue'
+import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 import { sendApprovalNotice, reviewSubmissionUrl } from '@the-tool-pit/types'
 
 /**
@@ -74,6 +75,10 @@ export async function createRobotCodeSubmission(
   const url = validUrl(input.url ?? '')
   if (!url) {
     return { status: 'error', message: 'Please give a full link, starting with https://' }
+  }
+
+  if (urlContainsHateSpeech(url) || containsHateSpeech(input.note)) {
+    return { status: 'error', message: "This submission can't be accepted." }
   }
 
   if (!FIELD_PROGRAMS.includes(input.program as FieldProgram)) {

@@ -2,6 +2,7 @@ import { and, eq, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import { crawlCandidates, crawlJobs, submissions, toolLinks, tools } from '@the-tool-pit/db'
 import { isHumanEdited } from '@the-tool-pit/db'
+import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 import type { PipelineLogEntry, CandidateClassification } from '@the-tool-pit/db'
 import { classifyCandidate } from '../pipeline/classify.js'
 import { resolveListingTitle, titleIsRepoDerived } from '../pipeline/title.js'
@@ -338,6 +339,21 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
       .set({ status: 'suppressed', rejectionReason: reason, updatedAt: new Date() })
       .where(eq(crawlCandidates.id, candidateId))
     console.log(`[enrich] candidate ${candidateId}: suppressed (${reason})`)
+    if (submissionId) await resolveSubmission(submissionId, 'needs_review', undefined, reason)
+    return
+  }
+
+  // 2a-ii. Hate-speech gate. A slur in the title or the URL is never a real
+  //        tool, and it must never sit in the queue for a moderator to read.
+  //        Backstops the intake filter and covers crawler-found candidates.
+  if (containsHateSpeech(qualityTitle) || urlContainsHateSpeech(url)) {
+    const reason = 'Rejected: prohibited content'
+    await db
+      .update(crawlCandidates)
+      .set({ status: 'suppressed', confidenceScore: 0, rejectionReason: reason, updatedAt: new Date() })
+      .where(eq(crawlCandidates.id, candidateId))
+    console.log(`[enrich] candidate ${candidateId}: suppressed (${reason})`)
+    if (candidate.matchedToolId) await suppressMatchedTool(candidate.matchedToolId, reason)
     if (submissionId) await resolveSubmission(submissionId, 'needs_review', undefined, reason)
     return
   }
