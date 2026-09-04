@@ -40,7 +40,22 @@ interface EventOption {
   stateProv: string | null
 }
 
-export function AlbumSubmitForm() {
+export function AlbumSubmitForm({ admin }: {
+  /**
+   * Admin mode, for /admin/new/album. Same form, because the fields are the
+   * same fields and a second one would drift from this one. The Turnstile
+   * check goes (an admin session already proved who this is), and so do the
+   * private submitter box and the passing-along question where they exist.
+   *
+   * A hint to the UI and NOT a permission: the route it posts to checks the
+   * admin session itself, so flipping this in devtools gets a 401.
+   */
+  admin?: boolean
+} = {}) {
+  const adminMode = !!admin
+  // An admin session stands in for the bot check. Nothing else turns it off.
+  const needsTurnstile = Boolean(SITE_KEY) && !adminMode
+
   const [url, setUrl] = useState('')
   const [program, setProgram] = useState<Program>('frc')
   const [eventName, setEventName] = useState('')
@@ -61,7 +76,7 @@ export function AlbumSubmitForm() {
 
   // Render the Cloudflare Turnstile widget (spam protection) when configured.
   useEffect(() => {
-    if (!SITE_KEY || !turnstileRef.current) return
+    if (!needsTurnstile || !turnstileRef.current) return
     function renderWidget() {
       if (!turnstileRef.current || !window.turnstile) return
       widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
@@ -93,7 +108,7 @@ export function AlbumSubmitForm() {
       }, 100)
       return () => clearInterval(poll)
     }
-  }, [])
+  }, [needsTurnstile])
 
   const [options, setOptions] = useState<EventOption[]>([])
   const [showOptions, setShowOptions] = useState(false)
@@ -157,14 +172,14 @@ export function AlbumSubmitForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!url.trim()) return
-    if (SITE_KEY && !turnstileToken) {
+    if (needsTurnstile && !turnstileToken) {
       setResult({ ok: false, message: 'Please complete the “I’m not a robot” check.' })
       return
     }
     setSubmitting(true)
     setResult(null)
     try {
-      const res = await fetch('/api/albums/submit', {
+      const res = await fetch(adminMode ? '/admin/api/listings/album' : '/api/albums/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -304,16 +319,16 @@ export function AlbumSubmitForm() {
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className="input resize-y" />
       </Field>
 
-      <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="album" />
+      {!adminMode && <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="album" />}
 
-      {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
+      {needsTurnstile && <div ref={turnstileRef} className="min-h-[65px]" />}
 
       <Button
         type="submit"
-        disabled={submitting || !url.trim() || (Boolean(SITE_KEY) && !turnstileToken)}
+        disabled={submitting || !url.trim() || (needsTurnstile && !turnstileToken)}
         className="self-start"
       >
-        {submitting ? 'Submitting…' : 'Submit album'}
+        {submitting ? 'Submitting…' : adminMode ? 'Add album' : 'Submit album'}
       </Button>
 
       {result && <p className={result.ok ? 'text-sm text-official' : 'text-sm text-frc'}>{result.message}</p>}

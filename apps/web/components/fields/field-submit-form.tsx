@@ -139,7 +139,32 @@ function submitterDefaults(user: SessionUser | null): Pick<FormState, 'submitter
  * submission is a first-class submission. Getting a field on the map must not
  * depend on having an account.
  */
-export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicField }; onSubmitted?: () => void } = {}) {
+export function FieldSubmitForm({
+  edit,
+  admin,
+  onSubmitted,
+}: {
+  edit?: { field: PublicField }
+  /**
+   * Admin mode, for /admin/new/field. Same form, because the fields are the
+   * same fields and a second one would drift from this one. The Turnstile
+   * check goes (an admin session already proved who this is), and so do the
+   * private "You" box and the passing-along question. The choice to publish it
+   * now instead of queueing it for review arrives.
+   *
+   * A hint to the UI and NOT a permission: the route it posts to checks the
+   * admin session itself, so flipping this in devtools gets a 401.
+   */
+  admin?: boolean
+  onSubmitted?: () => void
+} = {}) {
+  const adminMode = !!admin && !edit
+  // An admin session stands in for the bot check. Nothing else turns it off.
+  const needsTurnstile = Boolean(SITE_KEY) && !adminMode
+  // Ticked by default: an admin filling this in has just read the source, so
+  // the review they would otherwise queue up for themselves is one they have
+  // already done.
+  const [publishNow, setPublishNow] = useState(true)
   const editing = !!edit
   const { user } = useSession()
   const [signInOpen, setSignInOpen] = useState(false)
@@ -182,7 +207,7 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
   }, [user])
 
   useEffect(() => {
-    if (!SITE_KEY || !turnstileRef.current) return
+    if (!needsTurnstile || !turnstileRef.current) return
     function renderWidget() {
       if (!turnstileRef.current || !window.turnstile) return
       widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
@@ -214,7 +239,7 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
       }, 100)
       return () => clearInterval(poll)
     }
-  }, [])
+  }, [needsTurnstile])
 
   function resetTurnstile() {
     if (window.turnstile && widgetIdRef.current) {
@@ -233,7 +258,7 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
       setResult({ ok: false, message: 'Please drop a pin on the map so the field can be placed.' })
       return
     }
-    if (SITE_KEY && !turnstileToken) {
+    if (needsTurnstile && !turnstileToken) {
       setResult({ ok: false, message: 'Please complete the “I’m not a robot” check.' })
       return
     }
@@ -254,9 +279,14 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
       }
       if (turnstileToken) fd.set('turnstileToken', turnstileToken)
       // Always explicit, never left to a default the server would have to guess.
-      if (!editing) fd.set('passingAlong', passingAlong ? 'true' : 'false')
+      if (adminMode) fd.set('publish', publishNow ? 'true' : 'false')
+      else if (!editing) fd.set('passingAlong', passingAlong ? 'true' : 'false')
 
-      const url = editing ? `/api/fields/${edit.field.id}/edit` : '/api/fields/submit'
+      const url = adminMode
+        ? '/admin/api/listings/field'
+        : editing
+          ? `/api/fields/${edit.field.id}/edit`
+          : '/api/fields/submit'
       const res = await fetch(url, { method: 'POST', body: fd })
       const data = (await res.json()) as { message?: string; error?: string }
       if (res.ok) {
@@ -477,6 +507,7 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
           </Field>
         </Section>
 
+        {!adminMode && (
         <Section title="You" hint="Private - only the moderators see this, never shown publicly.">
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="flex-1">
@@ -507,19 +538,36 @@ export function FieldSubmitForm({ edit, onSubmitted }: { edit?: { field: PublicF
             </p>
           )}
         </Section>
+        )}
 
-        {!editing && (
+        {!editing && !adminMode && (
           <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="practice field" />
         )}
 
-        {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
+        {adminMode && (
+          <Check
+            checked={publishNow}
+            onChange={setPublishNow}
+            label="Publish it now, without a second pass through the review queue"
+          />
+        )}
+
+        {needsTurnstile && <div ref={turnstileRef} className="min-h-[65px]" />}
 
         <Button
           type="submit"
-          disabled={submitting || !form.name.trim() || !coords || (Boolean(SITE_KEY) && !turnstileToken)}
+          disabled={submitting || !form.name.trim() || !coords || (needsTurnstile && !turnstileToken)}
           className="self-start"
         >
-          {submitting ? 'Submitting…' : editing ? 'Submit edit for review' : 'Submit field'}
+          {submitting
+            ? 'Submitting…'
+            : adminMode
+              ? publishNow
+                ? 'Create and publish'
+                : 'Create for review'
+              : editing
+                ? 'Submit edit for review'
+                : 'Submit field'}
         </Button>
 
         {result && <p className={result.ok ? 'text-sm text-rookie' : 'text-sm text-frc'}>{result.message}</p>}

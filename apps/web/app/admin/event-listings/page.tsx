@@ -107,7 +107,7 @@ export default async function EventListingsAdminPage({
         {/* The way in for an event that arrives by email rather than through
             the public form. */}
         <Link
-          href="/admin/event-listings/new"
+          href="/admin/new/event"
           className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
         >
           Add an event

@@ -157,7 +157,15 @@ export default async function AdminAlbumCandidatesPage({
     <div className="flex flex-col gap-6 p-4 md:p-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Album Candidates</h1>
-        <p className="text-sm text-muted">{total.toLocaleString()} {TAB_LABELS[status]}</p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-muted">{total.toLocaleString()} {TAB_LABELS[status]}</p>
+          <Link
+          href="/admin/new/album"
+          className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+        >
+          Add an album
+        </Link>
+        </div>
       </div>
 
       <form method="get" className="flex gap-2">

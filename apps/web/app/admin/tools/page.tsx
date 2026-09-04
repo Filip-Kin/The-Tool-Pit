@@ -64,7 +64,7 @@ export default async function AdminToolsPage({
     <div className="p-4 md:p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold capitalize text-foreground">{status} tools</h1>
-        <ButtonLink href="/admin/tools/new" size="sm">
+        <ButtonLink href="/admin/new/tool" size="sm">
           + New Tool
         </ButtonLink>
       </div>

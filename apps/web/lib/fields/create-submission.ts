@@ -1,6 +1,6 @@
 import { getDb } from '@/lib/db'
-import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
-import type { NewPracticeField } from '@the-tool-pit/db'
+import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS, FIELD_SOURCES } from '@the-tool-pit/db'
+import type { FieldSource, NewPracticeField } from '@the-tool-pit/db'
 import { uniqueFieldSlug } from '@/lib/queries/fields'
 import { sendApprovalNotice, reviewFieldUrl } from '@the-tool-pit/types'
 import {
@@ -39,7 +39,12 @@ export interface CreateFieldSubmissionInput {
   notes?: string
   submitterName?: string
   submitterContact?: string
-  submitterIpHash: string
+  /**
+   * Optional because not every caller is a request from the public internet.
+   * The admin create route has an admin session instead of an anonymous IP,
+   * and writing a hash of nothing would file a fake one.
+   */
+  submitterIpHash?: string
   /**
    * The signed-in user, when there was one. Optional on purpose: submitting a
    * field never requires an account, an account only earns attribution and
@@ -68,8 +73,21 @@ function pickEnum<T extends readonly string[]>(value: string | undefined, allowe
 
 const CURRENT_YEAR = new Date().getFullYear()
 
+/**
+ * How the row is filed, for the callers that are not the public form. Same
+ * contract as the events one, and for the same reason: only code that has
+ * already checked an admin session passes these.
+ */
+export interface CreateFieldListingOptions {
+  /** FIELD_SOURCES. Default 'submission'. */
+  source?: FieldSource
+  /** Send the "new submission, please review" notice. Default true. */
+  notify?: boolean
+}
+
 export async function createFieldSubmission(
   input: CreateFieldSubmissionInput,
+  options: CreateFieldListingOptions = {},
 ): Promise<CreateFieldSubmissionResult> {
   const name = input.name?.trim()
   if (!name) return { status: 'error', message: 'A field name is required.' }
@@ -140,11 +158,13 @@ export async function createFieldSubmission(
     notes: input.notes?.trim() || null,
     submitterName: input.submitterName?.trim() || null,
     submitterContact: input.submitterContact?.trim() || null,
-    submitterIpHash: input.submitterIpHash,
+    submitterIpHash: input.submitterIpHash ?? null,
     submittedByUserId: input.submittedByUserId ?? null,
     submitterOwns: input.submitterOwns ?? null,
     status: 'pending',
-    source: 'submission',
+    source: FIELD_SOURCES.includes((options.source ?? '') as FieldSource)
+      ? (options.source as FieldSource)
+      : 'submission',
   }
 
   const [row] = await db.insert(practiceFields).values(values).returning({ id: practiceFields.id })
@@ -164,7 +184,7 @@ export async function createFieldSubmission(
   // The photo is served from the public fields host, which serves it whatever
   // the moderation state, so the embed shows the uploaded picture while the
   // field is still pending. That is most of the review right there.
-  sendApprovalNotice({
+  if (options.notify !== false) sendApprovalNotice({
     vertical: 'field',
     title: name,
     reviewUrl: reviewFieldUrl(row.id),

@@ -27,7 +27,12 @@ export interface CreateGrantSubmissionInput {
   notes?: string
   submitterName?: string
   submitterContact?: string
-  submitterIpHash: string
+  /**
+   * Optional because not every caller is a request from the public internet.
+   * The admin create route has an admin session instead of an anonymous IP,
+   * and writing a hash of nothing would file a fake one.
+   */
+  submitterIpHash?: string
   /**
    * The signed-in user, when there was one. Optional on purpose: sign-in is
    * never a wall in front of a submission. It only buys attribution and an

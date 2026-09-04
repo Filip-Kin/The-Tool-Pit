@@ -388,7 +388,7 @@ export function EventSubmitForm({
       }
 
       const url = adminMode
-        ? '/admin/api/event-listings'
+        ? '/admin/api/listings/event'
         : editing
           ? `/api/events/${edit.event.id}/edit`
           : '/api/events/submit'

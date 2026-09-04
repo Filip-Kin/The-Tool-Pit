@@ -68,7 +68,22 @@ function submitterDefaults(user: SessionUser | null): Pick<FormState, 'submitter
  * an award range they are unsure of would put a guess in front of a reviewer
  * dressed up as a fact.
  */
-export function GrantSubmitForm() {
+export function GrantSubmitForm({ admin }: {
+  /**
+   * Admin mode, for /admin/new/grant. Same form, because the fields are the
+   * same fields and a second one would drift from this one. The Turnstile
+   * check goes (an admin session already proved who this is), and so do the
+   * private submitter box and the passing-along question where they exist.
+   *
+   * A hint to the UI and NOT a permission: the route it posts to checks the
+   * admin session itself, so flipping this in devtools gets a 401.
+   */
+  admin?: boolean
+} = {}) {
+  const adminMode = !!admin
+  // An admin session stands in for the bot check. Nothing else turns it off.
+  const needsTurnstile = Boolean(SITE_KEY) && !adminMode
+
   const { user } = useSession()
   const [form, setForm] = useState<FormState>(INITIAL)
   const [submitting, setSubmitting] = useState(false)
@@ -102,7 +117,7 @@ export function GrantSubmitForm() {
   }, [user])
 
   useEffect(() => {
-    if (!SITE_KEY || !turnstileRef.current) return
+    if (!needsTurnstile || !turnstileRef.current) return
     function renderWidget() {
       if (!turnstileRef.current || !window.turnstile) return
       widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
@@ -134,7 +149,7 @@ export function GrantSubmitForm() {
       }, 100)
       return () => clearInterval(poll)
     }
-  }, [])
+  }, [needsTurnstile])
 
   function resetTurnstile() {
     if (window.turnstile && widgetIdRef.current) {
@@ -153,7 +168,7 @@ export function GrantSubmitForm() {
       setResult({ ok: false, message: 'Please add the link to the funder page.' })
       return
     }
-    if (SITE_KEY && !turnstileToken) {
+    if (needsTurnstile && !turnstileToken) {
       setResult({ ok: false, message: 'Please complete the “I’m not a robot” check.' })
       return
     }
@@ -166,7 +181,7 @@ export function GrantSubmitForm() {
       // Always explicit, never left to a default the server would have to guess.
       fd.set('passingAlong', passingAlong ? 'true' : 'false')
 
-      const res = await fetch('/api/grants/submit', { method: 'POST', body: fd })
+      const res = await fetch(adminMode ? '/admin/api/listings/grant' : '/api/grants/submit', { method: 'POST', body: fd })
       const data = (await res.json()) as { message?: string; error?: string; status?: string; slug?: string }
       if (res.ok) {
         setResult({ ok: true, message: data.message ?? 'Submitted.', slug: data.slug, status: data.status })
@@ -272,6 +287,7 @@ export function GrantSubmitForm() {
         </Field>
       </Section>
 
+      {!adminMode && (
       <Section title="You" hint="Private. Only the moderators see this, and it is never shown publicly.">
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="flex-1">
@@ -295,17 +311,18 @@ export function GrantSubmitForm() {
           </p>
         )}
       </Section>
+      )}
 
-      <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="grant" />
+      {!adminMode && <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="grant" />}
 
-      {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
+      {needsTurnstile && <div ref={turnstileRef} className="min-h-[65px]" />}
 
       <Button
         type="submit"
-        disabled={submitting || !form.name.trim() || !form.infoUrl.trim() || (Boolean(SITE_KEY) && !turnstileToken)}
+        disabled={submitting || !form.name.trim() || !form.infoUrl.trim() || (needsTurnstile && !turnstileToken)}
         className="self-start"
       >
-        {submitting ? 'Submitting…' : 'Submit grant'}
+        {submitting ? 'Submitting…' : adminMode ? 'Add grant' : 'Submit grant'}
       </Button>
 
       {result && (
