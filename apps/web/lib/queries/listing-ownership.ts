@@ -581,21 +581,32 @@ export async function resolveClaimable(
   const alreadyOwned = (await countOwners(entityType, entityId)) > 0
 
   const repoUrl = entityType === 'tool' ? await findToolRepoUrl(entityId) : null
-  const isSelfSubmitted = await submittedByThisUser(entityType, entityId, userId)
+
+  // Signed out, userId is '' (the page resolves for display before the sign-in
+  // gate). The two lookups below filter on a uuid column, and Postgres rejects
+  // '' as a uuid, which 500'd the whole claim page for anyone opening the link
+  // before logging in - exactly what an emailed "claim your listing" link does.
+  // With no user there is nothing user-scoped to find, so skip both.
+  const hasUser = Boolean(userId)
+  const isSelfSubmitted = hasUser ? await submittedByThisUser(entityType, entityId, userId) : false
 
   const db = getDb()
-  const [open] = await db
-    .select({ status: listingClaims.status, method: listingClaims.method, evidence: listingClaims.evidence })
-    .from(listingClaims)
-    .where(
-      and(
-        eq(listingClaims.userId, userId),
-        eq(listingClaims.entityType, entityType),
-        eq(listingClaims.entityId, entityId),
-        eq(listingClaims.status, 'pending'),
-      ),
-    )
-    .limit(1)
+  const open = hasUser
+    ? (
+        await db
+          .select({ status: listingClaims.status, method: listingClaims.method, evidence: listingClaims.evidence })
+          .from(listingClaims)
+          .where(
+            and(
+              eq(listingClaims.userId, userId),
+              eq(listingClaims.entityType, entityType),
+              eq(listingClaims.entityId, entityId),
+              eq(listingClaims.status, 'pending'),
+            ),
+          )
+          .limit(1)
+      )[0]
+    : undefined
 
   const existingClaim = open
     ? { status: open.status, method: open.method, token: open.evidence?.token ?? null }
