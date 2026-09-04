@@ -105,6 +105,8 @@ export interface OwnershipActionResult {
    * invitation and returns none.
    */
   inviteUrl?: string
+  /** True when ownership was granted on the spot (self-submitted or outreach), so the UI shows "you manage this" rather than "a reviewer will look". */
+  granted?: boolean
 }
 
 /** The file we ask a repo owner to add, and the branches we look on. */
@@ -207,15 +209,32 @@ export async function startClaim(
     return { message: 'This claim is already waiting for review.' }
   }
 
-  // PATH 0: a click from an outreach email WE sent. The signed token proves the
-  // link came from that specific email, which went to the event's own public
-  // contact, and a moderator vetting the listing is what sent it. So the click
-  // IS the review: an unowned listing is granted on the spot, method 'invite'.
-  // An already-owned listing is never taken this way; it drops to the dispute
-  // path below. (The token names only the listing, not a person, so a recipient
-  // who forwards their own email hands over their own listing - the same trust
-  // the accountless "remove this listing" link already assumes.)
-  if (outreachToken && !target.alreadyOwned && verifyOutreachClaim(entityType, entityId, outreachToken)) {
+  // PATH 0: a click from an outreach email WE sent. Sending an organiser their
+  // listing IS the review, so their claim grants on the spot (method 'invite'),
+  // not in the queue. Two ways to trust the click, both only for an unowned
+  // listing (an owned one is a dispute and drops through):
+  //
+  //  - a signed outreach token on the link. Proves it came from that email; the
+  //    token names only the listing, the same trust the accountless "remove"
+  //    link already assumes.
+  //  - NO token, but the listing was outreached and the claimer signed in with
+  //    the SAME verified email we sent it to. This is what makes the links sent
+  //    before the token existed still grant instantly, bound to the exact
+  //    address we mailed. emailVerified gates out an unverified email/password
+  //    signup of someone else's address; only event and field are outreached.
+  let outreachOk = false
+  if (!target.alreadyOwned) {
+    if (outreachToken && verifyOutreachClaim(entityType, entityId, outreachToken)) {
+      outreachOk = true
+    } else if (user.email && user.emailVerified && (entityType === 'event' || entityType === 'field')) {
+      const sentTo =
+        entityType === 'event'
+          ? (await db.select({ to: eventListings.outreachSentTo }).from(eventListings).where(eq(eventListings.id, entityId)).limit(1))[0]?.to
+          : (await db.select({ to: practiceFields.outreachSentTo }).from(practiceFields).where(eq(practiceFields.id, entityId)).limit(1))[0]?.to
+      outreachOk = Boolean(sentTo) && sentTo!.trim().toLowerCase() === user.email.trim().toLowerCase()
+    }
+  }
+  if (outreachOk) {
     await grantOwnership(entityType, entityId, user.id, 'owner', 'invite', null)
     const [granted] = await db
       .insert(listingClaims)
@@ -240,7 +259,7 @@ export async function startClaim(
       ],
     })
     revalidatePath('/me/listings')
-    return { message: 'This is your listing, so you now manage it.' }
+    return { message: 'This is your listing, so you now manage it.', granted: true }
   }
 
   // PATH 1: you submitted this listing while signed in, and did not tick "I am
@@ -260,7 +279,7 @@ export async function startClaim(
       decidedAt: new Date(),
     })
     revalidatePath('/me/listings')
-    return { message: 'This is your submission, so you now manage it.' }
+    return { message: 'This is your submission, so you now manage it.', granted: true }
   }
 
   // PATH 2: a tool with a GitHub repo, and nobody owns it yet. Issue a token to
