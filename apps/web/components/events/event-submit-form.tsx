@@ -302,6 +302,10 @@ export function EventSubmitForm({
       setResult({ ok: false, message: 'Please pick a verified address so the event can be placed on the map.' })
       return
     }
+    if (![form.registrationUrl, form.website, form.chiefDelphiUrl, form.contactEmail].some((v) => v.trim() !== '')) {
+      setResult({ ok: false, message: 'Add a way for teams to act on this: a sign-up link, a website, a Chief Delphi thread, or a contact email.' })
+      return
+    }
     if (turnstile.required && !turnstile.token) {
       setResult({ ok: false, message: 'Please complete the “I’m not a robot” check.' })
       return
@@ -548,6 +552,10 @@ export function EventSubmitForm({
       </Section>
 
       <Section title="Links">
+        <p className="text-sm text-muted">
+          Give teams at least one way to act on this <span className="text-frc">*</span> - a sign-up link, a
+          website, a Chief Delphi thread, or a contact email. An event with none of these cannot be published.
+        </p>
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="flex-1">
             <Field label="Website">
@@ -623,7 +631,13 @@ export function EventSubmitForm({
 
       <Button
         type="submit"
-        disabled={submitting || !form.name.trim() || !coords || (turnstile.required && !turnstile.token)}
+        disabled={
+          submitting ||
+          !form.name.trim() ||
+          !coords ||
+          ![form.registrationUrl, form.website, form.chiefDelphiUrl, form.contactEmail].some((v) => v.trim() !== '') ||
+          (turnstile.required && !turnstile.token)
+        }
         className="self-start"
       >
         {submitting

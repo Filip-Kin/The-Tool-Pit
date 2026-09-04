@@ -99,6 +99,20 @@ export async function createFieldSubmission(
     return { status: 'error', message: "This submission can't be accepted." }
   }
 
+  // A field with no way to reach whoever runs it is not worth listing: a team
+  // sees a pin and cannot ask to visit. This is also the publish bar
+  // (fieldPublishBlockers), enforced here so an unreachable field is never
+  // filed - a signed-out submitter leaves no email of their own to chase.
+  const fieldContactable = [input.contactInfo, input.contactUrl, input.website].some(
+    (v) => typeof v === 'string' && v.trim() !== '',
+  )
+  if (!fieldContactable) {
+    return {
+      status: 'error',
+      message: 'Add a way for teams to reach whoever runs the field: how to arrange access, a sign-up link, or a website.',
+    }
+  }
+
   const db = getDb()
 
   const coverage = pickEnum(input.coverage, FIELD_COVERAGE, 'full')

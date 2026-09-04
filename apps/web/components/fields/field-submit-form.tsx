@@ -198,6 +198,10 @@ export function FieldSubmitForm({
       setResult({ ok: false, message: 'Please drop a pin on the map so the field can be placed.' })
       return
     }
+    if (![form.contactInfo, form.contactUrl, form.website].some((v) => v.trim() !== '')) {
+      setResult({ ok: false, message: 'Add a way for teams to reach whoever runs the field: how to arrange access, a sign-up link, or a website.' })
+      return
+    }
     if (turnstile.required && !turnstile.token) {
       setResult({ ok: false, message: 'Please complete the “I’m not a robot” check.' })
       return
@@ -405,6 +409,10 @@ export function FieldSubmitForm({
               </Field>
             </div>
           </div>
+          <p className="text-sm text-muted">
+            Give at least one way for teams to get in touch <span className="text-frc">*</span> - how to arrange
+            access below, a sign-up link, or a website. A field nobody can reach cannot be published.
+          </p>
           <Field label="How to arrange access" hint="Most fields are by arrangement - say what a visiting team should do to book time.">
             <textarea value={form.contactInfo} onChange={(e) => set('contactInfo', e.target.value)} rows={2} className="input resize-y" />
           </Field>
@@ -496,7 +504,13 @@ export function FieldSubmitForm({
 
         <Button
           type="submit"
-          disabled={submitting || !form.name.trim() || !coords || (turnstile.required && !turnstile.token)}
+          disabled={
+            submitting ||
+            !form.name.trim() ||
+            !coords ||
+            ![form.contactInfo, form.contactUrl, form.website].some((v) => v.trim() !== '') ||
+            (turnstile.required && !turnstile.token)
+          }
           className="self-start"
         >
           {submitting

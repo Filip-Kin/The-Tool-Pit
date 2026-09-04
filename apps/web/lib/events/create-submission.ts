@@ -139,6 +139,19 @@ export async function createEventSubmission(
     return { status: 'error', message: "This submission can't be accepted." }
   }
 
+  // An event teams cannot act on is not worth listing: there has to be a way to
+  // sign up or at least somewhere to read more. Require one of a sign-up link, a
+  // website, a Chief Delphi thread, or a contact email.
+  const eventReachable = [input.registrationUrl, input.website, input.chiefDelphiUrl, input.contactEmail].some(
+    (v) => typeof v === 'string' && v.trim() !== '',
+  )
+  if (!eventReachable) {
+    return {
+      status: 'error',
+      message: 'Add a way for teams to act on this: a sign-up link, a website, a Chief Delphi thread, or a contact email.',
+    }
+  }
+
   const db = getDb()
 
   const lat = typeof input.latitude === 'number' && Math.abs(input.latitude) <= 90 ? input.latitude : null
