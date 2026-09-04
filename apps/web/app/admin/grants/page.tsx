@@ -67,7 +67,15 @@ export default async function AdminGrantsPage({
     <div className="flex flex-col gap-6 p-4 md:p-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Grants</h1>
-        <p className="text-sm text-muted">{total.toLocaleString()} {status}</p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-muted">{total.toLocaleString()} {status}</p>
+          <Link
+          href="/admin/new/grant"
+          className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+        >
+          Add a grant
+        </Link>
+        </div>
       </div>
 
       {params.published && (

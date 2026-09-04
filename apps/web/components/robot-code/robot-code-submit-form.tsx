@@ -74,7 +74,22 @@ function initialState(): FormState {
  * worse than the entry being missing. The submitter knows all four without
  * looking anything up, so the form asks instead of inferring.
  */
-export function RobotCodeSubmitForm() {
+export function RobotCodeSubmitForm({ admin }: {
+  /**
+   * Admin mode, for /admin/new/robot_code. Same form, because the fields are the
+   * same fields and a second one would drift from this one. The Turnstile
+   * check goes (an admin session already proved who this is), and so do the
+   * private submitter box and the passing-along question where they exist.
+   *
+   * A hint to the UI and NOT a permission: the route it posts to checks the
+   * admin session itself, so flipping this in devtools gets a 401.
+   */
+  admin?: boolean
+} = {}) {
+  const adminMode = !!admin
+  // An admin session stands in for the bot check. Nothing else turns it off.
+  const needsTurnstile = Boolean(SITE_KEY) && !adminMode
+
   const [form, setForm] = useState<FormState>(initialState)
   const [submitting, setSubmitting] = useState(false)
   // Unticked, like every other submit form. See lib/listings/passing-along.ts.
@@ -92,7 +107,7 @@ export function RobotCodeSubmitForm() {
   }
 
   useEffect(() => {
-    if (!SITE_KEY || !turnstileRef.current) return
+    if (!needsTurnstile || !turnstileRef.current) return
     function renderWidget() {
       if (!turnstileRef.current || !window.turnstile) return
       widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
@@ -124,7 +139,7 @@ export function RobotCodeSubmitForm() {
       }, 100)
       return () => clearInterval(poll)
     }
-  }, [])
+  }, [needsTurnstile])
 
   function resetTurnstile() {
     if (window.turnstile && widgetIdRef.current) {
@@ -154,7 +169,7 @@ export function RobotCodeSubmitForm() {
       setResult({ ok: false, message: `Please give a season between ${MIN_SEASON_YEAR} and ${maxYear}.` })
       return
     }
-    if (SITE_KEY && !turnstileToken) {
+    if (needsTurnstile && !turnstileToken) {
       setResult({ ok: false, message: 'Please complete the “I’m not a robot” check.' })
       return
     }
@@ -167,7 +182,7 @@ export function RobotCodeSubmitForm() {
       // Always explicit, never left to a default the server would have to guess.
       fd.set('passingAlong', passingAlong ? 'true' : 'false')
 
-      const res = await fetch('/api/robot-code/submit', { method: 'POST', body: fd })
+      const res = await fetch(adminMode ? '/admin/api/listings/robot_code' : '/api/robot-code/submit', { method: 'POST', body: fd })
       const data = (await res.json()) as { message?: string; error?: string; status?: string }
       if (res.ok) {
         setResult({ ok: true, message: data.message ?? 'Submitted.', status: data.status })
@@ -301,12 +316,12 @@ export function RobotCodeSubmitForm() {
         </Field>
       </Section>
 
-      <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="repository" />
+      {!adminMode && <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="repository" />}
 
-      {SITE_KEY && <div ref={turnstileRef} className="min-h-[65px]" />}
+      {needsTurnstile && <div ref={turnstileRef} className="min-h-[65px]" />}
 
-      <Button type="submit" disabled={submitting || !ready || (Boolean(SITE_KEY) && !turnstileToken)} className="self-start">
-        {submitting ? 'Submitting…' : 'Submit'}
+      <Button type="submit" disabled={submitting || !ready || (needsTurnstile && !turnstileToken)} className="self-start">
+        {submitting ? 'Submitting…' : adminMode ? 'Add repository' : 'Submit'}
       </Button>
 
       {result && <p className={result.ok ? 'text-sm text-rookie' : 'text-sm text-frc'}>{result.message}</p>}

@@ -88,9 +88,23 @@ export default async function AdminSubmissionsPage({
     <div className="p-4 md:p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Submissions</h1>
-        <p className="text-sm text-muted">
-          {total.toLocaleString()} {TAB_LABELS[status].toLowerCase()}
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-muted">
+            {total.toLocaleString()} {TAB_LABELS[status].toLowerCase()}
+          </p>
+          <Link
+          href="/admin/new/tool"
+          className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+        >
+          Add a tool
+        </Link>
+          <Link
+          href="/admin/new/robot_code"
+          className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+        >
+          Add code or CAD
+        </Link>
+        </div>
       </div>
 
       {/* Status tabs */}

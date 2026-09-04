@@ -26,7 +26,22 @@ declare global {
 
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
 
-export function SubmitForm() {
+export function SubmitForm({ admin }: {
+  /**
+   * Admin mode, for /admin/new/tool. Same form, because the fields are the
+   * same fields and a second one would drift from this one. The Turnstile
+   * check goes (an admin session already proved who this is), and so do the
+   * private submitter box and the passing-along question where they exist.
+   *
+   * A hint to the UI and NOT a permission: the route it posts to checks the
+   * admin session itself, so flipping this in devtools gets a 401.
+   */
+  admin?: boolean
+} = {}) {
+  const adminMode = !!admin
+  // An admin session stands in for the bot check. Nothing else turns it off.
+  const needsTurnstile = Boolean(SITE_KEY) && !adminMode
+
   const [url, setUrl] = useState('')
   const [note, setNote] = useState('')
   const [result, setResult] = useState<{ submissionId?: string; status: string; message: string } | null>(null)
@@ -40,7 +55,7 @@ export function SubmitForm() {
   const widgetIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!SITE_KEY || !turnstileRef.current) return
+    if (!needsTurnstile || !turnstileRef.current) return
 
     function renderWidget() {
       if (!turnstileRef.current || !window.turnstile) return
@@ -77,7 +92,7 @@ export function SubmitForm() {
       }, 100)
       return () => clearInterval(poll)
     }
-  }, [])
+  }, [needsTurnstile])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -89,14 +104,14 @@ export function SubmitForm() {
       return
     }
 
-    if (SITE_KEY && !turnstileToken) {
+    if (needsTurnstile && !turnstileToken) {
       setError('Please complete the CAPTCHA.')
       return
     }
 
     startTransition(async () => {
       try {
-        const res = await fetch('/api/submit', {
+        const res = await fetch(adminMode ? '/admin/api/listings/tool' : '/api/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -181,10 +196,10 @@ export function SubmitForm() {
         />
       </div>
 
-      <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="tool" />
+      {!adminMode && <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="tool" />}
 
       {/* Cloudflare Turnstile widget, only rendered when site key is configured */}
-      {SITE_KEY && (
+      {needsTurnstile && (
         <div ref={turnstileRef} className="min-h-[65px]" />
       )}
 
@@ -195,9 +210,9 @@ export function SubmitForm() {
         </div>
       )}
 
-      <Button type="submit" disabled={isPending || (!!SITE_KEY && !turnstileToken)}>
+      <Button type="submit" disabled={isPending || (needsTurnstile && !turnstileToken)}>
         {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-        {isPending ? 'Submitting…' : 'Submit Tool'}
+        {isPending ? 'Submitting…' : adminMode ? 'Add tool' : 'Submit Tool'}
       </Button>
 
       <p className="text-xs text-muted-2">
