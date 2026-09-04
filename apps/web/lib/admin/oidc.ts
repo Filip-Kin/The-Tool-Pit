@@ -1,7 +1,8 @@
 /**
  * Authelia OIDC config for the admin "Log in with Authelia" flow. Confidential
  * client (authorization code + PKCE); admin access is granted when the resolved
- * user is in the `admins` LLDAP group.
+ * user is in one of ADMIN_GROUPS (`admins` or the frc.tools-only
+ * `toolpit-admins`).
  */
 export const OIDC = {
   issuer: process.env.OIDC_ISSUER || 'https://auth.filipkin.com',
@@ -16,8 +17,13 @@ export const OIDC_ENDPOINTS = {
   userinfo: `${OIDC.issuer}/api/oidc/userinfo`,
 }
 
-/** LLDAP group that grants admin access. */
-export const ADMIN_GROUP = 'admins'
+/**
+ * LLDAP groups that grant frc.tools admin access, lowercased to match the
+ * callback (which lowercases the userinfo `groups` claim). `admins` is the full
+ * homelab admin group; `toolpit-admins` grants the frc.tools admin panel and
+ * nothing else. Kept in sync with the Authelia `toolpit_policy`.
+ */
+export const ADMIN_GROUPS = ['admins', 'toolpit-admins']
 
 /**
  * Build a public URL for a redirect. Behind Coolify/Traefik, request.url reports

@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import {
   OIDC,
   OIDC_ENDPOINTS,
-  ADMIN_GROUP,
+  ADMIN_GROUPS,
   OIDC_STATE_COOKIE,
   OIDC_VERIFIER_COOKIE,
   publicUrl,
@@ -16,8 +16,8 @@ function fail(_req: NextRequest, reason: string) {
 
 /**
  * Authelia OIDC callback. Verifies state, exchanges the code, checks the user is
- * in the admins group, and grants an admin session. Admin access is gated on the
- * `admins` group - no password anywhere.
+ * in one of ADMIN_GROUPS, and grants an admin session. Admin access is gated on
+ * group membership (`admins` or `toolpit-admins`) - no password anywhere.
  */
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code')
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     if (!uiRes.ok) return fail(req, 'userinfo')
     const claims = (await uiRes.json()) as { groups?: string[] }
     const groups = (claims.groups ?? []).map((g) => g.toLowerCase())
-    if (!groups.includes(ADMIN_GROUP)) return fail(req, 'denied')
+    if (!groups.some((g) => ADMIN_GROUPS.includes(g))) return fail(req, 'denied')
 
     // 3. Grant the admin session (same cookie isAdmin/middleware already trust).
     const res = NextResponse.redirect(publicUrl('/admin'))
