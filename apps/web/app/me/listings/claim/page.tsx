@@ -36,7 +36,7 @@ export default async function ClaimPage({
       active="listings"
     >
       {target ? (
-        <SignedInGate reason="Sign in to claim a listing you run.">
+        <SignedInGate reason="Sign in, or create a free account, to claim a listing you run. It takes a moment and lets you edit the listing directly - Google, GitHub or an email and password all work.">
           <div className="flex flex-col gap-6">
             {/* The fast path, and only where it IS one. A listing with no
                 GitHub repository behind it cannot be claimed this way, so the

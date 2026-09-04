@@ -24,7 +24,7 @@ export function SignedInGate({ reason, children }: { reason: string; children: R
     <Card pad="lg">
       <p className="text-sm text-muted">{reason}</p>
       <Button onClick={() => setDialogOpen(true)} disabled={loading} className="mt-4">
-        Sign in
+        Sign in or create an account
       </Button>
       <SignInDialog open={dialogOpen} onOpenChange={setDialogOpen} reason={reason} />
     </Card>
