@@ -6,27 +6,10 @@ import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox
 import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { SubmitConfirmation } from '@/components/ui/submit-confirmation'
+import { useTurnstile } from '@/components/ui/use-turnstile'
 
 // Cloudflare Turnstile API injected by their script (shared shape with the tools form).
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (
-        container: HTMLElement | string,
-        opts: {
-          sitekey: string
-          callback: (token: string) => void
-          'error-callback': () => void
-          'expired-callback': () => void
-          theme?: 'light' | 'dark' | 'auto'
-        },
-      ) => string
-      reset: (widgetId: string) => void
-    }
-  }
-}
 
-const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
 const CURRENT_YEAR = new Date().getFullYear()
 type Program = 'frc' | 'ftc'
 
@@ -54,7 +37,7 @@ export function AlbumSubmitForm({ admin }: {
 } = {}) {
   const adminMode = !!admin
   // An admin session stands in for the bot check. Nothing else turns it off.
-  const needsTurnstile = Boolean(SITE_KEY) && !adminMode
+  const turnstile = useTurnstile(!adminMode)
 
   const [url, setUrl] = useState('')
   const [program, setProgram] = useState<Program>('frc')
@@ -70,45 +53,8 @@ export function AlbumSubmitForm({ admin }: {
   const [passingAlong, setPassingAlong] = useState(PASSING_ALONG_DEFAULT.album)
   const [result, setResult] = useState<{ ok?: boolean; message: string } | null>(null)
 
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
-  const turnstileRef = useRef<HTMLDivElement>(null)
-  const widgetIdRef = useRef<string | null>(null)
 
   // Render the Cloudflare Turnstile widget (spam protection) when configured.
-  useEffect(() => {
-    if (!needsTurnstile || !turnstileRef.current) return
-    function renderWidget() {
-      if (!turnstileRef.current || !window.turnstile) return
-      widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
-        sitekey: SITE_KEY,
-        callback: (token) => setTurnstileToken(token),
-        'error-callback': () => setTurnstileToken(null),
-        'expired-callback': () => setTurnstileToken(null),
-        theme: 'auto',
-      })
-    }
-    if (window.turnstile) {
-      renderWidget()
-      return
-    }
-    if (!document.getElementById('cf-turnstile-script')) {
-      const script = document.createElement('script')
-      script.id = 'cf-turnstile-script'
-      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
-      script.async = true
-      script.defer = true
-      script.onload = renderWidget
-      document.head.appendChild(script)
-    } else {
-      const poll = setInterval(() => {
-        if (window.turnstile) {
-          clearInterval(poll)
-          renderWidget()
-        }
-      }, 100)
-      return () => clearInterval(poll)
-    }
-  }, [needsTurnstile])
 
   const [options, setOptions] = useState<EventOption[]>([])
   const [showOptions, setShowOptions] = useState(false)
@@ -162,17 +108,11 @@ export function AlbumSubmitForm({ admin }: {
     setShowOptions(false)
   }
 
-  function resetTurnstile() {
-    if (window.turnstile && widgetIdRef.current) {
-      window.turnstile.reset(widgetIdRef.current)
-      setTurnstileToken(null)
-    }
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!url.trim()) return
-    if (needsTurnstile && !turnstileToken) {
+    if (turnstile.required && !turnstile.token) {
       setResult({ ok: false, message: 'Please complete the “I’m not a robot” check.' })
       return
     }
@@ -193,7 +133,7 @@ export function AlbumSubmitForm({ admin }: {
           note: note.trim(),
           // Always explicit, never left to a default the server would have to guess.
           passingAlong,
-          turnstileToken: turnstileToken ?? undefined,
+          turnstileToken: turnstile.token ?? undefined,
         }),
       })
       const data = (await res.json()) as { message?: string; error?: string }
@@ -206,10 +146,10 @@ export function AlbumSubmitForm({ admin }: {
         setTbaKey(null)
         setPhotographer('')
         setNote('')
-        resetTurnstile()
+        turnstile.reset()
       } else {
         setResult({ ok: false, message: data.error ?? 'Submission failed.' })
-        resetTurnstile()
+        turnstile.reset()
       }
     } catch {
       setResult({ ok: false, message: 'Network error. Please try again.' })
@@ -321,11 +261,11 @@ export function AlbumSubmitForm({ admin }: {
 
       {!adminMode && <PassingAlongCheckbox checked={passingAlong} onChange={setPassingAlong} noun="album" />}
 
-      {needsTurnstile && <div ref={turnstileRef} className="min-h-[65px]" />}
+      {turnstile.required && <div ref={turnstile.containerRef} className="min-h-[65px]" />}
 
       <Button
         type="submit"
-        disabled={submitting || !url.trim() || (needsTurnstile && !turnstileToken)}
+        disabled={submitting || !url.trim() || (turnstile.required && !turnstile.token)}
         className="self-start"
       >
         {submitting ? 'Submitting…' : adminMode ? 'Add album' : 'Submit album'}

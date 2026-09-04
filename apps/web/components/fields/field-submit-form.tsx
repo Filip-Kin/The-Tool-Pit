@@ -6,6 +6,7 @@ import { cardClass } from '@/components/ui/card'
 import { PassingAlongCheckbox } from '@/components/submit/passing-along-checkbox'
 import { PASSING_ALONG_DEFAULT } from '@/lib/listings/passing-along'
 import { SubmitConfirmation } from '@/components/ui/submit-confirmation'
+import { useTurnstile } from '@/components/ui/use-turnstile'
 import { X, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { PinMap } from './pin-map'
@@ -22,25 +23,7 @@ import { FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY } f
 import { useSession, type SessionUser } from '@/components/auth/session-provider'
 import { SignInDialog } from '@/components/auth/sign-in-dialog'
 
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (
-        container: HTMLElement | string,
-        opts: {
-          sitekey: string
-          callback: (token: string) => void
-          'error-callback': () => void
-          'expired-callback': () => void
-          theme?: 'light' | 'dark' | 'auto'
-        },
-      ) => string
-      reset: (widgetId: string) => void
-    }
-  }
-}
 
-const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
 type Program = 'frc' | 'ftc' | 'fll'
 
 interface FormState {
@@ -160,7 +143,7 @@ export function FieldSubmitForm({
 } = {}) {
   const adminMode = !!admin && !edit
   // An admin session stands in for the bot check. Nothing else turns it off.
-  const needsTurnstile = Boolean(SITE_KEY) && !adminMode
+  const turnstile = useTurnstile(!adminMode)
   // Ticked by default: an admin filling this in has just read the source, so
   // the review they would otherwise queue up for themselves is one they have
   // already done.
@@ -182,9 +165,6 @@ export function FieldSubmitForm({
   const [passingAlong, setPassingAlong] = useState(PASSING_ALONG_DEFAULT.field)
   const [result, setResult] = useState<{ ok?: boolean; message: string } | null>(null)
 
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
-  const turnstileRef = useRef<HTMLDivElement>(null)
-  const widgetIdRef = useRef<string | null>(null)
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -206,47 +186,7 @@ export function FieldSubmitForm({
     }))
   }, [user])
 
-  useEffect(() => {
-    if (!needsTurnstile || !turnstileRef.current) return
-    function renderWidget() {
-      if (!turnstileRef.current || !window.turnstile) return
-      widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
-        sitekey: SITE_KEY,
-        callback: (token) => setTurnstileToken(token),
-        'error-callback': () => setTurnstileToken(null),
-        'expired-callback': () => setTurnstileToken(null),
-        theme: 'auto',
-      })
-    }
-    if (window.turnstile) {
-      renderWidget()
-      return
-    }
-    if (!document.getElementById('cf-turnstile-script')) {
-      const script = document.createElement('script')
-      script.id = 'cf-turnstile-script'
-      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
-      script.async = true
-      script.defer = true
-      script.onload = renderWidget
-      document.head.appendChild(script)
-    } else {
-      const poll = setInterval(() => {
-        if (window.turnstile) {
-          clearInterval(poll)
-          renderWidget()
-        }
-      }, 100)
-      return () => clearInterval(poll)
-    }
-  }, [needsTurnstile])
 
-  function resetTurnstile() {
-    if (window.turnstile && widgetIdRef.current) {
-      window.turnstile.reset(widgetIdRef.current)
-      setTurnstileToken(null)
-    }
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -258,7 +198,7 @@ export function FieldSubmitForm({
       setResult({ ok: false, message: 'Please drop a pin on the map so the field can be placed.' })
       return
     }
-    if (needsTurnstile && !turnstileToken) {
+    if (turnstile.required && !turnstile.token) {
       setResult({ ok: false, message: 'Please complete the “I’m not a robot” check.' })
       return
     }
@@ -277,7 +217,7 @@ export function FieldSubmitForm({
         if (editReason.trim()) fd.set('editReason', editReason.trim())
         fd.set('removePhotoIds', JSON.stringify(removePhotoIds))
       }
-      if (turnstileToken) fd.set('turnstileToken', turnstileToken)
+      if (turnstile.token) fd.set('turnstileToken', turnstile.token)
       // Always explicit, never left to a default the server would have to guess.
       if (adminMode) fd.set('publish', publishNow ? 'true' : 'false')
       else if (!editing) fd.set('passingAlong', passingAlong ? 'true' : 'false')
@@ -294,7 +234,7 @@ export function FieldSubmitForm({
         if (editing) {
           setNewPhotos([])
           setRemovePhotoIds([])
-          resetTurnstile()
+          turnstile.reset()
           onSubmitted?.()
         } else {
           // Clearing back to blank would drop the account prefill, so put it
@@ -302,11 +242,11 @@ export function FieldSubmitForm({
           setForm({ ...INITIAL, ...submitterDefaults(user) })
           setCoords(null)
           setNewPhotos([])
-          resetTurnstile()
+          turnstile.reset()
         }
       } else {
         setResult({ ok: false, message: data.error ?? 'Submission failed.' })
-        resetTurnstile()
+        turnstile.reset()
       }
     } catch {
       setResult({ ok: false, message: 'Network error. Please try again.' })
@@ -552,11 +492,11 @@ export function FieldSubmitForm({
           />
         )}
 
-        {needsTurnstile && <div ref={turnstileRef} className="min-h-[65px]" />}
+        {turnstile.required && <div ref={turnstile.containerRef} className="min-h-[65px]" />}
 
         <Button
           type="submit"
-          disabled={submitting || !form.name.trim() || !coords || (needsTurnstile && !turnstileToken)}
+          disabled={submitting || !form.name.trim() || !coords || (turnstile.required && !turnstile.token)}
           className="self-start"
         >
           {submitting
