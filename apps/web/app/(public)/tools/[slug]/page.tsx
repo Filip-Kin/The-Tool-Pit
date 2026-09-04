@@ -19,13 +19,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!tool) return { title: 'Tool Not Found' }
   const url = toolUrl(tool.slug)
   const description = tool.summary ?? tool.description ?? tool.name
-  const image = { url: `${url}/opengraph-image`, width: 1200, height: 630, alt: tool.name }
+  // Do NOT hardcode `${url}/opengraph-image`. This route lives in the (public)
+  // route group, and Next.js gives metadata image routes inside a route group a
+  // hashed path segment (…/opengraph-image-<hash>), so a hand-built URL 404s.
+  // Leaving images unset lets Next auto-merge this segment's opengraph-image.tsx
+  // at its real hashed, absolute URL (resolved against metadataBase).
   return {
     title: tool.name,
     description,
     alternates: { canonical: url },
-    openGraph: { title: tool.name, description, url, type: 'article', images: [image] },
-    twitter: { card: 'summary_large_image', title: tool.name, description, images: [image] },
+    openGraph: { title: tool.name, description, url, type: 'article' },
+    twitter: { card: 'summary_large_image', title: tool.name, description },
   }
 }
 
