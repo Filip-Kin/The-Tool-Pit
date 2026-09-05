@@ -29,6 +29,13 @@ interface OgCardInput {
   title: string
   /** One or two lines of key facts under the title. Empty strings are skipped. */
   facts: string[]
+  /**
+   * An ABSOLUTE image URL to show beside the text, for listings that have a
+   * cover photo (practice fields, photo albums). When set, the card becomes two
+   * columns: the branded text panel on the left, the photo filling the right.
+   * When absent the card is the full-width text layout.
+   */
+  photoUrl?: string
 }
 
 /**
@@ -39,23 +46,28 @@ interface OgCardInput {
  * as a final guard. Facts are the muted supporting line(s): a date and a
  * place, an award and a deadline, whatever the route passed.
  */
-export function renderOgCard({ eyebrow, title, facts }: OgCardInput): ImageResponse {
-  const titleSize = title.length > 64 ? 60 : title.length > 40 ? 74 : 88
+export function renderOgCard({ eyebrow, title, facts, photoUrl }: OgCardInput): ImageResponse {
+  const hasPhoto = Boolean(photoUrl)
+  // The photo takes ~45% of the width, so the title has to step down sooner
+  // when it is present to keep fitting the narrower text panel.
+  const titleSize = hasPhoto
+    ? title.length > 48 ? 46 : title.length > 28 ? 56 : 66
+    : title.length > 64 ? 60 : title.length > 40 ? 74 : 88
   const lines = facts.filter((f) => f && f.trim().length > 0)
 
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          height: '100%',
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          backgroundColor: BG,
-          padding: '72px 80px',
-        }}
-      >
+  const panel = (
+    <div
+      style={{
+        height: '100%',
+        width: hasPhoto ? '660px' : '100%',
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        backgroundColor: BG,
+        padding: '72px 80px',
+      }}
+    >
         {/* Wordmark + category, the frc.tools lockup from the site card. */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div
@@ -110,6 +122,22 @@ export function renderOgCard({ eyebrow, title, facts }: OgCardInput): ImageRespo
 
         {/* Accent bar, same as the site card. */}
         <div style={{ display: 'flex', height: 10, width: 220, borderRadius: 999, backgroundColor: ACCENT }} />
+    </div>
+  )
+
+  return new ImageResponse(
+    (
+      <div style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'row', backgroundColor: BG }}>
+        {panel}
+        {hasPhoto && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={photoUrl}
+            width={540}
+            height={630}
+            style={{ width: '540px', height: '630px', objectFit: 'cover' }}
+          />
+        )}
       </div>
     ),
     { ...OG_SIZE },
