@@ -4,6 +4,10 @@ import { OG_CONTENT_TYPE, OG_SIZE, renderOgCard, renderOgFallback } from '@/lib/
 import { ogPhotoDataUri } from '@/lib/og/photo'
 
 export const runtime = 'nodejs'
+// Always reflect the field's current cover. Next caches OG images as immutable,
+// so a field shared before it had a photo would otherwise serve the text-only
+// card forever, even after a cover is added.
+export const dynamic = 'force-dynamic'
 export const alt = 'Practice field on frc.tools'
 export const size = OG_SIZE
 export const contentType = OG_CONTENT_TYPE

@@ -3,6 +3,9 @@ import { OG_CONTENT_TYPE, OG_SIZE, renderOgCard, renderOgFallback } from '@/lib/
 import { ogPhotoDataUri } from '@/lib/og/photo'
 
 export const runtime = 'nodejs'
+// Always reflect the event's current album covers; Next would otherwise cache
+// the first render (and its cover, or lack of one) as immutable.
+export const dynamic = 'force-dynamic'
 export const alt = 'Event photos on frc.tools'
 export const size = OG_SIZE
 export const contentType = OG_CONTENT_TYPE
