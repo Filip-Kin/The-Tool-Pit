@@ -1,7 +1,8 @@
 import { getEventPage, displayEventName } from '@/lib/queries/albums'
 import { OG_CONTENT_TYPE, OG_SIZE, renderOgCard, renderOgFallback } from '@/lib/og/card'
-import { absoluteOgPhotoUrl } from '@/lib/og/photo'
+import { ogPhotoDataUri } from '@/lib/og/photo'
 
+export const runtime = 'nodejs'
 export const alt = 'Event photos on frc.tools'
 export const size = OG_SIZE
 export const contentType = OG_CONTENT_TYPE
@@ -27,6 +28,6 @@ export default async function EventPhotosOgImage({ params }: { params: Promise<{
       `${data.event.eventCode} · ${data.event.year}`,
       `${total} photo album${total === 1 ? '' : 's'}`,
     ],
-    photoUrl: absoluteOgPhotoUrl(cover),
+    photoUrl: await ogPhotoDataUri(cover),
   })
 }

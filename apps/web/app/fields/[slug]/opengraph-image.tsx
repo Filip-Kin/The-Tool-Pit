@@ -1,8 +1,9 @@
 import { getPublishedFieldBySlug, getPublishedFieldById } from '@/lib/queries/fields'
 import { fieldSpecSummary } from '@/lib/fields/field-display'
 import { OG_CONTENT_TYPE, OG_SIZE, renderOgCard, renderOgFallback } from '@/lib/og/card'
-import { absoluteOgPhotoUrl } from '@/lib/og/photo'
+import { ogPhotoDataUri } from '@/lib/og/photo'
 
+export const runtime = 'nodejs'
 export const alt = 'Practice field on frc.tools'
 export const size = OG_SIZE
 export const contentType = OG_CONTENT_TYPE
@@ -26,7 +27,8 @@ export default async function FieldOgImage({ params }: { params: Promise<{ slug:
     eyebrow,
     title: field.name,
     facts: [location, spec],
-    // The gallery's first photo is the cover; show it beside the card.
-    photoUrl: absoluteOgPhotoUrl(field.photos[0]?.url),
+    // The gallery's first photo is the cover; transcode it to PNG (uploads are
+    // WebP, which the card renderer can't decode) and show it beside the card.
+    photoUrl: await ogPhotoDataUri(field.photos[0]?.url),
   })
 }
