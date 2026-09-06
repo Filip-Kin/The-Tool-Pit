@@ -478,6 +478,15 @@ export async function scheduleRecurringJobs() {
     data: { connector: 'grant_chief_delphi' },
   })
 
+  // Mine the list pages the classifier flagged as aggregators. Daily, after the
+  // other angles have filed their finds and the enrich pass has auto-routed
+  // the confident lists into grant_sources; cadenceHours on each row keeps a
+  // list from being re-read more than weekly.
+  await grantDiscoverQueue.upsertJobScheduler('grant-discover-aggregator', { pattern: '10 6 * * *' }, {
+    name: 'grant-discover-aggregator',
+    data: { connector: 'grant_aggregator' },
+  })
+
   // Monitor due-check every hour. The hourly tick is only a trigger: each grant
   // carries its own checkCadenceHours, from daily inside a deadline window down
   // to monthly when nothing is close, and enqueueDueGrantMonitors returns only

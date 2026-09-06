@@ -59,6 +59,8 @@ import {
   type GrantEvidence,
 } from './candidate-extract.js'
 import { braveSearch, BraveBudgetExhausted } from './brave.js'
+import { routeAggregatorToSource, AUTO_ROUTE_CONFIDENCE } from './route-aggregator.js'
+import { findApplyLinks } from './apply-links.js'
 import {
   loadSuppressionExamples,
   pickSuppressionExamples,
@@ -133,6 +135,19 @@ async function fetchCandidateText(url: string): Promise<string | null> {
 export interface GrantEnrichOutcome {
   /** True when this candidate is an applicable grant worth extracting. */
   extract: boolean
+}
+
+/** Raw HTML of the candidate's page, for link finding. Null on any failure. */
+async function fetchCandidateHtml(url: string): Promise<string | null> {
+  try {
+    const res = await politeFetch(url)
+    if (!res.ok) return null
+    const contentType = res.headers.get('content-type') ?? ''
+    if (contentType && !READABLE_CONTENT.test(contentType)) return null
+    return await res.text()
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -311,6 +326,15 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
     })
     .where(eq(grantCandidates.id, candidateId))
 
+  // 5. A confident list page becomes a crawl source on the spot. It used to
+  //    wait in the queue for a human to press "route to source"; with the
+  //    aggregator connector now mining these, the pending inbox should hold
+  //    real grants only. Below the bar it stays pending for the button.
+  if (classification.isAggregator && (classification.confidence ?? 0) >= AUTO_ROUTE_CONFIDENCE) {
+    const routed = await routeAggregatorToSource({ ...candidate, rawMetadata: meta }, classification)
+    console.log(`[grant-enrich] ${candidateId} aggregator auto-routed to grant_sources: ${routed} (${url})`)
+  }
+
   // A list page is not a listing, it is a source. Log it distinctly so the
   // admin queue can route it to grant_sources instead of to a grant.
   const verdict = classification.isAggregator
@@ -414,11 +438,37 @@ async function gatherEvidence(
     .filter((s, i, all) => all.indexOf(s) === i)
   let aggregator = blurbs.join('\n\n')
 
+  // The application link, found on the page itself, in EVERY pass. The way in
+  // is one click away (Submittable, a Google Form, /apply), and that page is
+  // where the deadline and the eligibility are stated in full; reading only
+  // the landing page left applicationUrl empty on 94% of extractions. One
+  // extra fetch, first-hand evidence, and the URL is quoted so the presence
+  // check on applicationUrl passes.
+  const followed = new Set<string>()
+  const html = await fetchCandidateHtml(url)
+  if (html) {
+    const [best] = findApplyLinks(html, url)
+    if (best && best.url !== url) {
+      followed.add(best.url)
+      const applyText = await fetchCandidateText(best.url)
+      if (applyText) {
+        urls.push(best.url)
+        funderPage = `${funderPage}\n\nApply at: ${best.url}\n\n${applyText}`
+        notes.push(`followed the "${best.text}" link to ${best.url}`)
+      } else {
+        // Still name it: a portal that refuses a bot is still where the funder
+        // sends applicants, and the URL alone is a real field.
+        funderPage = `${funderPage}\n\nApply at: ${best.url}`
+        notes.push(`apply link ${best.url} could not be read, recorded by URL only`)
+      }
+    }
+  }
+
   if (deep) {
     // 1. The application link, when the page names one. A funder's own form is
     //    where the deadline and the eligibility usually live in full.
     const applicationUrl = meta.applicationUrl ?? candidate.extraction?.fields.applicationUrl.value ?? null
-    if (applicationUrl && applicationUrl !== url) {
+    if (applicationUrl && applicationUrl !== url && !followed.has(applicationUrl)) {
       const applicationText = await fetchCandidateText(applicationUrl)
       if (applicationText) {
         // First-hand either way. An off-site portal (a Google Form, Submittable)

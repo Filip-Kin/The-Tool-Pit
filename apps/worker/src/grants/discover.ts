@@ -35,6 +35,7 @@ import { GrantSeedConnector } from './connectors/seed.js'
 import { GrantWebSearchConnector } from './connectors/web-search.js'
 import { GrantTeamSponsorsConnector } from './connectors/team-sponsors.js'
 import { GrantChiefDelphiConnector } from './connectors/chief-delphi.js'
+import { GrantAggregatorConnector } from './connectors/aggregator.js'
 import { canonicalGrantUrl } from './connectors/shared.js'
 import type { GrantConnector } from './connectors/types.js'
 
@@ -64,6 +65,8 @@ export const GRANT_DISCOVER_CONNECTORS: Record<string, () => GrantConnector> = {
   team_sponsors: () => new GrantTeamSponsorsConnector(),
   grant_chief_delphi: () => new GrantChiefDelphiConnector(),
   chief_delphi: () => new GrantChiefDelphiConnector(),
+  grant_aggregator: () => new GrantAggregatorConnector(),
+  aggregator: () => new GrantAggregatorConnector(),
 }
 
 /**
