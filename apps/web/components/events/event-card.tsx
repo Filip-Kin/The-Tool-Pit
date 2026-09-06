@@ -7,6 +7,7 @@ import {
   Mail,
   HandHeart,
   Clock,
+  MessageSquare,
 } from 'lucide-react'
 import { ButtonLink } from '@/components/ui/button'
 import { Card, cardClass } from '@/components/ui/card'
@@ -274,11 +275,16 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
         </div>
       )}
 
-      {(ev.website || ev.tbaKey) && (
+      {(ev.website || ev.tbaKey || ev.chiefDelphiUrl) && (
         <div className="flex flex-wrap gap-3">
           {ev.website && (
             <ButtonLink href={ev.website} external variant="secondary">
               Event website <ExternalLink className="h-3.5 w-3.5" />
+            </ButtonLink>
+          )}
+          {ev.chiefDelphiUrl && (
+            <ButtonLink href={ev.chiefDelphiUrl} external variant="secondary">
+              <MessageSquare className="h-4 w-4" /> Chief Delphi <ExternalLink className="h-3.5 w-3.5" />
             </ButtonLink>
           )}
           {ev.tbaKey && (
