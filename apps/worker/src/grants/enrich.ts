@@ -61,6 +61,7 @@ import {
 import { braveSearch, BraveBudgetExhausted } from './brave.js'
 import { routeAggregatorToSource, AUTO_ROUTE_CONFIDENCE } from './route-aggregator.js'
 import { findApplyLinks } from './apply-links.js'
+import { deterministicGrantPrefilter } from './prefilter.js'
 import {
   loadSuppressionExamples,
   pickSuppressionExamples,
@@ -269,6 +270,28 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
       `[grant-enrich] ${candidateId} decided by shape gate (${shape.shape}), no model call, ` +
         `${rejectionKind ? `suppressed (${rejectionKind})` : 'pending'}: ${url}`,
     )
+    return { extract: false }
+  }
+
+  // 2c. Deterministic grant-signal gate. Free, and the one that keeps the
+  //     aggregator crawl affordable: a link scraped off a list page has to READ
+  //     like a grant a team can apply for (money words plus an application
+  //     route, eligibility or a deadline) before it earns a model call. It also
+  //     drops secondhand grant databases and index/archive URL shapes. Every
+  //     rejection is written with its reason and is reversible from the admin.
+  const prefilter = deterministicGrantPrefilter({ url, title, body, discoveredVia: meta.discoveredVia })
+  if (!prefilter.keep) {
+    await db
+      .update(grantCandidates)
+      .set({
+        status: 'suppressed',
+        confidenceScore: 0,
+        rejectionReason: prefilter.reason ?? 'Prefilter: rejected',
+        rejectionKind: 'not_a_grant',
+        updatedAt: new Date(),
+      })
+      .where(eq(grantCandidates.id, candidateId))
+    console.log(`[grant-enrich] ${candidateId} suppressed by prefilter, no model call: ${prefilter.reason} (${url})`)
     return { extract: false }
   }
 
