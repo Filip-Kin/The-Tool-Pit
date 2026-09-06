@@ -91,6 +91,26 @@ function readableText(meta: RawGrantMetadata): { title: string; body: string } {
 
 /** Content types we can read text out of. Anything else needs a person. */
 const READABLE_CONTENT = /^(text\/html|application\/xhtml)/i
+/**
+ * Grant guidelines are PDFs more often than not: a state department of
+ * education publishes the deadline and the award in "Guidelines FY26.pdf" and
+ * the HTML page just links to it. Read them as text. A PDF is read whole (there
+ * is no boilerplate to strip) and capped like a page. Anything over PDF_MAX_BYTES
+ * is a scanned brochure, not guidelines, and is skipped rather than decoded.
+ */
+const PDF_CONTENT = /^application\/pdf/i
+const PDF_URL = /\.pdf(\?|#|$)/i
+const PDF_MAX_BYTES = 15 * 1024 * 1024
+
+async function pdfText(res: Response): Promise<string | null> {
+  const length = Number(res.headers.get('content-length') ?? 0)
+  if (length > PDF_MAX_BYTES) return null
+  const bytes = new Uint8Array(await res.arrayBuffer())
+  if (bytes.byteLength > PDF_MAX_BYTES) return null
+  const { extractText } = await import('unpdf')
+  const { text } = await extractText(bytes, { mergePages: true })
+  return text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n')
+}
 
 /**
  * Longest page text we keep on the candidate. Enough for the classifier to
@@ -117,6 +137,10 @@ async function fetchCandidateText(url: string): Promise<string | null> {
     const res = await politeFetch(url)
     if (!res.ok) return null
     const contentType = res.headers.get('content-type') ?? ''
+    if (PDF_CONTENT.test(contentType) || (!contentType && PDF_URL.test(url))) {
+      const text = await pdfText(res)
+      return text?.trim() ? text.slice(0, CANDIDATE_TEXT_LIMIT) : null
+    }
     if (contentType && !READABLE_CONTENT.test(contentType)) return null
     const text = stripToMainContent(await res.text())
     return text.trim() ? text.slice(0, CANDIDATE_TEXT_LIMIT) : null
