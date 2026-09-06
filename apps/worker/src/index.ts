@@ -240,9 +240,11 @@ const grantEnrichWorker = new Worker<GrantEnrichPayload>(
       await grantExtractQueue.add('grant-extract', { candidateId: job.data.candidateId })
     }
   },
-  // One Haiku call per job. Low concurrency keeps a discovery run that inserted
-  // a few hundred candidates from emptying a pay-as-you-go balance in a minute.
-  { connection, concurrency: 2 },
+  // One Haiku call per job. Kept modest so a discovery run that inserted a few
+  // thousand candidates cannot empty a pay-as-you-go balance in a minute, but
+  // 2 meant the aggregator crawl's 4,500 finds took two days to classify.
+  // Haiku is cheap per call; 4 halves that without changing the risk shape.
+  { connection, concurrency: 4 },
 )
 
 const grantExtractWorker = new Worker<GrantExtractPayload>(
