@@ -80,7 +80,7 @@ export function grantLinksOnPage(html: string, pageUrl: string): ScoredLink[] {
     // applied here so the row is never written at all.
     if (isSecondhandGrantHost(canonical)) continue
     // Index, archive and pagination shapes are lists, not listings.
-    if (/\/(category|categories|tag|tags|topic|topics|archive|archives|search|page\/\d+|author|feed|rss)(\/|$)/i.test(canonical)) continue
+    if (/\/(category|categories|tag|tags|tagged|topic|topics|archive|archives|search|page\/\d+|author|feed|rss)(\/|$)/i.test(canonical)) continue
     if (/[?&](page|paged|p|s|q|search|tag|cat|category)=/i.test(canonical)) continue
     // A bare site root is a homepage, not a grant page.
     if (/^https?:\/\/[^/]+\/?$/i.test(canonical)) continue
