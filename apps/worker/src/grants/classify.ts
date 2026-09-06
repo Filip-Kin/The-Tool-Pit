@@ -25,6 +25,7 @@
  * worse than no deadline. A classification is only ever a routing decision
  * for the review queue.
  */
+import { parseModelJson } from '../model/json.js'
 import Anthropic from '@anthropic-ai/sdk'
 import { anthropic } from '../anthropic.js'
 import type { SuppressionExample } from './suppression-feedback.js'
@@ -514,9 +515,7 @@ export function validateGrantClassification(
 function parseClassification(text: string): GrantClassification {
   // The prompt forbids fences, but Haiku adds them anyway often enough that
   // stripping them is cheaper than a retry.
-  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  const jsonText = (fenceMatch ? fenceMatch[1] : text).trim()
-  return validateGrantClassification(JSON.parse(jsonText) as Partial<GrantClassification>)
+  return validateGrantClassification(parseModelJson<Partial<GrantClassification>>(text))
 }
 
 // #endregion

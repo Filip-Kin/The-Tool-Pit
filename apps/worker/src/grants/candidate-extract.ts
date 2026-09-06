@@ -52,6 +52,7 @@ import {
 import { parseLooseDate } from './extract.js'
 import { GRANT_AWARD_MAX } from '@the-tool-pit/db/grant-enums'
 import { normaliseForQuoteMatch, quoteSource, urlSource } from '../model/evidence.js'
+import { parseModelJson } from '../model/json.js'
 
 /** Bumped when the field set changes, so an old row reads as old. */
 export const GRANT_EXTRACTION_VERSION = 1
@@ -714,8 +715,7 @@ function getClient(): Anthropic {
 }
 
 function parsePayload(text: string): RawExtractionPayload {
-  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  return JSON.parse((fence ? fence[1] : text).trim()) as RawExtractionPayload
+  return parseModelJson<RawExtractionPayload>(text)
 }
 
 /**
@@ -740,7 +740,7 @@ export async function extractGrantCandidate(input: ExtractionInput): Promise<Gra
       model: EXTRACTION_MODEL,
       // The record is ~34 fields with a quote each, so the ceiling has to be
       // well clear of the classifier's 1024 or the JSON comes back truncated.
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
     })
