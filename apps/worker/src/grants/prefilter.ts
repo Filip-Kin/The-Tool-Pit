@@ -59,11 +59,16 @@ const SECONDHAND_HOSTS = [
   'grantsalert.com',
   'getgrants.com',
   'grantgopher.com',
+  'grantexec.com',
+  'fundsforngos.org',
+  'grantwriterteam.com',
+  'philanthropynewsdigest.org',
+  'tgci.com',
 ]
 
-const INDEX_PATH_RE = /\/(category|categories|tag|tags|topic|topics|archive|archives|search|page\/\d+|author|feed|rss|sitemap)(\/|$)/i
+const INDEX_PATH_RE = /\/(category|categories|tag|tags|tagged|topic|topics|archive|archives|search|page\/\d+|author|feed|rss|sitemap)(\/|$)/i
 const INDEX_QUERY_RE = /[?&](page|paged|p|s|q|search|tag|cat|category)=/i
-const NOT_GRANT_PATH_RE = /\/(login|signin|sign-in|register|account|cart|checkout|privacy|terms|cookie|careers?|jobs?|job-openings|press-releases?|press-room|newsroom|media-kit)(\/|$|\.)/i
+const NOT_GRANT_PATH_RE = /\/(login|signin|sign-in|register|account|cart|checkout|privacy|terms|cookie|careers?|jobs?|job-openings|press-releases?|press-room|newsroom|media-kit|giving|give|donate|donations?|training|courses?|webinars?|workshops?|open-a-fund|types-of-funds)(\/|$|\.)/i
 
 const MONEY_RE = /\b(grants?|scholarships?|fellowships?|stipends?|mini-?grants?|funding opportunit(y|ies)|financial (aid|support|assistance)|award(s| amount| program)?)\b/i
 const APPLY_RE = /\b(apply|application|applications|applicants?|submit (a |an |your )?(proposal|application|request)|request for proposals?|rfp|nominate|nomination)\b/i
