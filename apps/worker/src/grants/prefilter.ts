@@ -64,7 +64,18 @@ const SECONDHAND_HOSTS = [
   'grantwriterteam.com',
   'philanthropynewsdigest.org',
   'tgci.com',
+  'grantsights.com',
+  'grantsmarts.com',
+  'grantreadyky.org',
+  'linkprotect.cudasvc.com',
 ]
+
+/**
+ * Application portals. The funder sends applicants here to log in and submit;
+ * the page itself never describes the grant, so as a candidate it is a login
+ * screen. (apply-links.ts still follows these as the way IN from a real page.)
+ */
+const PORTAL_HOSTS = ['grantinterface.com', 'submittable.com', 'fluxx.io', 'smartsimple.com', 'foundant.com', 'grantrequest.com', 'cybergrants.com']
 
 const INDEX_PATH_RE = /\/(category|categories|tag|tags|tagged|topic|topics|archive|archives|search|page\/\d+|author|feed|rss|sitemap)(\/|$)/i
 const INDEX_QUERY_RE = /[?&](page|paged|p|s|q|search|tag|cat|category)=/i
@@ -92,6 +103,10 @@ export function deterministicGrantPrefilter(input: PrefilterInput): PrefilterVer
   const { url, title } = input
   const body = input.body ?? ''
 
+  const portalHost = hostOf(url)
+  if (PORTAL_HOSTS.some((h) => portalHost === h || portalHost.endsWith(`.${h}`))) {
+    return { keep: false, reason: `Prefilter: ${portalHost} is an application portal (a login screen), not a grant listing.` }
+  }
   if (isSecondhandGrantHost(url)) {
     return {
       keep: false,
