@@ -208,7 +208,17 @@ export default async function AdminSubmissionsPage({
                                 {/* Submitter note */}
                                 <td className="px-4 py-3 max-w-[180px]">
                                   {row.submitterNote ? (
-                                    <p className="text-xs text-muted line-clamp-3">{row.submitterNote}</p>
+                                    <div>
+                                      {log.some((e) => e.stage === 'note' && e.status === 'warn') && (
+                                        <span
+                                          className="mb-1 inline-block rounded bg-frc/10 px-1.5 py-0.5 text-[10px] font-medium text-frc"
+                                          title="This note reads like instructions to an AI or a shell. It was shown to no model; only you see it."
+                                        >
+                                          note withheld from the classifier
+                                        </span>
+                                      )}
+                                      <p className="text-xs text-muted line-clamp-3">{row.submitterNote}</p>
+                                    </div>
                                   ) : (
                                     <span className="text-xs text-muted-2">-</span>
                                   )}

@@ -5,6 +5,7 @@ import { isHumanEdited } from '@the-tool-pit/db'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 import type { PipelineLogEntry, CandidateClassification } from '@the-tool-pit/db'
 import { classifyCandidate } from '../pipeline/classify.js'
+import { screenForInstructions } from '@the-tool-pit/db/untrusted-text'
 import { resolveListingTitle, titleIsRepoDerived } from '../pipeline/title.js'
 import { fetchGitHubReadme, fetchGitHubRepo, fetchGitHubTree, parseGitHubUrl } from '../connectors/github.js'
 import { detectRobotCode } from '../pipeline/detect-robot-code.js'
@@ -208,6 +209,42 @@ async function suppressMatchedTool(matchedToolId: string, reason: string): Promi
 }
 
 /** Updates the originating submission record when a candidate-backed submission resolves. */
+/**
+ * The submitter's note, or null when there is none or when it must not reach a
+ * model. Withholding is logged on the submission (stage "note", warn) and the
+ * spam score is raised, so the admin page can badge it.
+ */
+async function submitterNoteForPrompt(submissionId: string): Promise<string | null> {
+  const db = getDb()
+  const [sub] = await db
+    .select({ note: submissions.submitterNote, pipelineLog: submissions.pipelineLog, spamScore: submissions.spamScore })
+    .from(submissions)
+    .where(eq(submissions.id, submissionId))
+    .limit(1)
+  const note = sub?.note?.trim()
+  if (!note) return null
+
+  const screen = screenForInstructions(note)
+  if (!screen.suspicious) return note
+
+  const existingLog = (sub?.pipelineLog ?? []) as PipelineLogEntry[]
+  const alreadyLogged = existingLog.some((e) => e.stage === 'note' && e.status === 'warn')
+  if (!alreadyLogged) {
+    const entry: PipelineLogEntry = {
+      stage: 'note',
+      status: 'warn',
+      message: `Submitter note withheld from the classifier: ${screen.reasons.join('; ')}.`,
+      timestamp: new Date().toISOString(),
+    }
+    await db
+      .update(submissions)
+      .set({ pipelineLog: [...existingLog, entry], spamScore: Math.max(sub?.spamScore ?? 0, 1), updatedAt: new Date() })
+      .where(eq(submissions.id, submissionId))
+  }
+  console.warn(`[enrich] submission ${submissionId}: note withheld from the model (${screen.reasons.join('; ')})`)
+  return null
+}
+
 async function resolveSubmission(
   submissionId: string,
   status: 'published' | 'needs_review',
@@ -523,10 +560,16 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
     enrichedMetadata.titleSource = decision.source
   }
 
-  // 3. AI classification — now has full enriched context
+  // 3. AI classification — now has full enriched context, plus the submitter's
+  //    note when there is one and it reads like a note. A note that reads like
+  //    instructions (to an AI, a shell, a deploy) is withheld: the human sees
+  //    it on the submissions page, the model never does. The screen is in
+  //    @the-tool-pit/db/untrusted-text; classify.ts fences whatever passes.
+  const submitterNote = submissionId ? await submitterNoteForPrompt(submissionId) : null
   const classification = await classifyCandidate(
     enrichedMetadata,
     url,
+    { submitterNote },
   )
 
   // 4a. Hard-reject team websites — no point processing further

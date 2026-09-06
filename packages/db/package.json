@@ -76,6 +76,10 @@
     "./hate-filter": {
       "bun": "./src/hate-filter.ts",
       "default": "./dist/hate-filter.js"
+    },
+    "./untrusted-text": {
+      "bun": "./src/untrusted-text.ts",
+      "default": "./dist/untrusted-text.js"
     }
   },
   "main": "./dist/index.js",
