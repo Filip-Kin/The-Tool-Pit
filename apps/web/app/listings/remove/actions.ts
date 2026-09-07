@@ -7,6 +7,7 @@ import { getDb } from '@/lib/db'
 import { eventListings, practiceFields } from '@the-tool-pit/db'
 import { verifyOutreachRemove } from '@/lib/listings/outreach-token'
 import { isRemoveTarget } from './targets'
+import { notifyListingRemovedByContact } from '@/lib/notify/removals'
 
 /**
  * The verticals outreach goes out for, and where each one lives. Outreach is
@@ -89,6 +90,11 @@ export async function confirmOutreachRemoval(formData: FormData): Promise<void> 
   if (!found) redirect('/listings/remove?error=1')
 
   for (const path of target.revalidate(entityId)) revalidatePath(path)
+
+  // The admin hears about every use of this link. The listing is already off
+  // the map by now; this is how that stops being silent. Awaited on purpose: a
+  // server action ends at the redirect, and a floating promise may not finish.
+  await notifyListingRemovedByContact(entityType, entityId)
 
   redirect(
     `/listings/remove?type=${encodeURIComponent(entityType)}&id=${encodeURIComponent(entityId)}` +
