@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { CalendarSearch, ChevronDown, ExternalLink } from 'lucide-react'
 
 /**
  * The registered teams for one event, drawn as a scrollable table in the public
@@ -98,6 +101,60 @@ function SectionRow({ label, count }: { label: string; count: number }) {
   )
 }
 
+/** Item classes match components/ui/card-menu.tsx, the reference menu. */
+const MENU_ITEM =
+  'flex w-full cursor-pointer items-center gap-2 rounded px-3 py-2 text-left text-sm text-foreground outline-none data-[highlighted]:bg-surface'
+
+/**
+ * The team number is a menu: "View other events" lands on the offseason list
+ * filtered to this team with EVERY event showing, not only upcoming (the
+ * question is "where else does 254 go", and last month counts); "TBA page"
+ * opens the team on The Blue Alliance. A second robot ("4145B") shares the
+ * team's number, so its menu is the team's menu.
+ */
+function TeamMenu({ team }: { team: RosterTeamRow }) {
+  return (
+    <DropdownMenu.Root modal={false}>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          aria-label={`Team ${team.number} options`}
+          className="group inline-flex items-center gap-1 rounded px-1 -mx-1 font-medium tabular-nums text-foreground hover:bg-surface-2 data-[state=open]:bg-surface-2"
+        >
+          <span>
+            {team.number}
+            {team.robot && <span className="font-normal text-muted">{team.robot}</span>}
+          </span>
+          <ChevronDown className="h-3 w-3 text-muted-2 opacity-0 transition-opacity group-hover:opacity-100 group-data-[state=open]:opacity-100" aria-hidden />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="start"
+          sideOffset={4}
+          className="z-50 min-w-48 rounded-md border border-border-subtle bg-background p-1 shadow-xl"
+        >
+          <DropdownMenu.Item asChild>
+            <Link href={`/events?team=${team.number}&when=all`} className={MENU_ITEM}>
+              <CalendarSearch className="h-4 w-4 text-muted" aria-hidden /> View other events
+            </Link>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item asChild>
+            <a
+              href={`https://www.thebluealliance.com/team/${team.number}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={MENU_ITEM}
+            >
+              <ExternalLink className="h-4 w-4 text-muted" aria-hidden /> TBA page
+            </a>
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  )
+}
+
 function TeamRow({ team }: { team: RosterTeamRow }) {
   return (
     <tr className="border-t border-border-subtle">
@@ -113,11 +170,8 @@ function TeamRow({ team }: { team: RosterTeamRow }) {
           )}
           {/* Number and robot letter read as one token, "4145B", with no space
               between them: the letter is a second robot from the same team, not
-              a separate column. */}
-          <span>
-            {team.number}
-            {team.robot && <span className="font-normal text-muted">{team.robot}</span>}
-          </span>
+              a separate column. The token is the menu trigger. */}
+          <TeamMenu team={team} />
         </span>
       </td>
       <td className="w-full break-words py-1.5 pr-3 text-muted">{team.name ?? '-'}</td>

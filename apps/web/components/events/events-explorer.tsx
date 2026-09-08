@@ -76,9 +76,15 @@ export function EventsExplorer({
   currentSeason,
   archivedCount = 0,
   claimStates,
+  initialWhen,
+  initialTeam = null,
 }: {
   events: PublicEvent[]
   now: Date
+  /** From the URL (?when=all): a link from a team's roster row lands on every event, not just upcoming. */
+  initialWhen?: When
+  /** From the URL (?team=254): the team filter, pre-set. */
+  initialTeam?: number | null
   /** Which seasons the server sent. Set by the page from the URL. */
   scope?: SeasonScope
   /** The calendar year the offseason is currently in. */
@@ -99,7 +105,7 @@ export function EventsExplorer({
   // where to go next, and an event that has already run is a distraction on the
   // map as much as in the list. Past is one tap away and the archive link is
   // still there.
-  const [when, setWhen] = useState<When>('upcoming')
+  const [when, setWhen] = useState<When>(initialWhen ?? 'upcoming')
   const [openOnly, setOpenOnly] = useState(false)
   // Nearest by default, because almost nobody travels out of their region for
   // an off-season event. It falls back to date ordering on its own until a
@@ -112,7 +118,7 @@ export function EventsExplorer({
   const [geo, setGeo] = useState<GeoState>('idle')
   const [unit, setUnit] = useState<DistanceUnit>('km')
   // Distance, cost, team number, second robots and dates, all behind one menu.
-  const [filters, setFilters] = useState<EventFilters>(NO_FILTERS)
+  const [filters, setFilters] = useState<EventFilters>(initialTeam ? { ...NO_FILTERS, teamNumber: initialTeam } : NO_FILTERS)
   // Team numbers per event, fetched once and only if somebody filters by team.
   // Null means "not asked for yet", which is different from an empty answer.
   const [rosterTeams, setRosterTeams] = useState<Record<string, number[]> | null>(null)

@@ -28,10 +28,14 @@ function parseScope(value: string | undefined): SeasonScope {
 export default async function EventsHomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ seasons?: string }>
+  searchParams: Promise<{ seasons?: string; team?: string; when?: string }>
 }) {
-  const { seasons } = await searchParams
+  const { seasons, team, when } = await searchParams
   const scope = parseScope(seasons)
+  // A roster row links here as /events?team=254&when=all: that team's events,
+  // every one of them, not only the upcoming ones.
+  const initialTeam = /^\d{1,5}$/.test(team ?? '') ? Number(team) : null
+  const initialWhen = when === 'all' || when === 'past' || when === 'upcoming' ? when : undefined
 
   // One instant for the whole render, handed to the client explorer so its
   // timing maths (what is "upcoming", how many days away) matches this HTML.
@@ -84,6 +88,8 @@ export default async function EventsHomePage({
           currentSeason={currentSeason}
           archivedCount={archivedCount}
           claimStates={claimStates}
+          initialTeam={initialTeam}
+          initialWhen={initialWhen}
         />
       )}
     </div>
