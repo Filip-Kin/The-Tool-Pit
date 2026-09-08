@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { CalendarSearch, ChevronDown, ExternalLink } from 'lucide-react'
+import { CalendarSearch, ExternalLink } from 'lucide-react'
 
 /**
  * The registered teams for one event, drawn as a scrollable table in the public
@@ -106,33 +106,52 @@ const MENU_ITEM =
   'flex w-full cursor-pointer items-center gap-2 rounded px-3 py-2 text-left text-sm text-foreground outline-none data-[highlighted]:bg-surface'
 
 /**
- * The team number is a menu: "View other events" lands on the offseason list
- * filtered to this team with EVERY event showing, not only upcoming (the
- * question is "where else does 254 go", and last month counts); "TBA page"
- * opens the team on The Blue Alliance. A second robot ("4145B") shares the
- * team's number, so its menu is the team's menu.
+ * The whole row is a menu: click anywhere on a team and two options open under
+ * the pointer. "View other events" lands on the offseason list filtered to
+ * this team with EVERY event showing, not only upcoming (the question is
+ * "where else does 254 go", and last month counts); "TBA page" opens the team
+ * on The Blue Alliance. No chevron, no button styling: it is a row that opens
+ * a menu. A second robot ("4145B") shares the team's number, so its menu is
+ * the team's menu.
  */
-function TeamMenu({ team }: { team: RosterTeamRow }) {
+function TeamRow({ team }: { team: RosterTeamRow }) {
   return (
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger asChild>
-        <button
-          type="button"
-          aria-label={`Team ${team.number} options`}
-          className="group inline-flex items-center gap-1 rounded px-1 -mx-1 font-medium tabular-nums text-foreground hover:bg-surface-2 data-[state=open]:bg-surface-2"
+        <tr
+          className="cursor-pointer border-t border-border-subtle outline-none transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 data-[state=open]:bg-surface-2"
+          tabIndex={0}
+          aria-label={`Team ${team.number}${team.robot ?? ''} options`}
         >
-          <span>
-            {team.number}
-            {team.robot && <span className="font-normal text-muted">{team.robot}</span>}
-          </span>
-          <ChevronDown className="h-3 w-3 text-muted-2 opacity-0 transition-opacity group-hover:opacity-100 group-data-[state=open]:opacity-100" aria-hidden />
-        </button>
+          <td className="w-10 min-w-10 py-1.5 pl-3 pr-2">
+            <TeamAvatar number={team.number} />
+          </td>
+          <td className="whitespace-nowrap py-1.5 pr-3 font-medium tabular-nums text-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              {team.waitlisted && team.waitlistPosition != null && (
+                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded bg-reg-waitlist/15 px-1 text-[10px] font-semibold text-reg-waitlist tabular-nums">
+                  {team.waitlistPosition}
+                </span>
+              )}
+              {/* Number and robot letter read as one token, "4145B", with no space
+                  between them: the letter is a second robot from the same team, not
+                  a separate column. */}
+              <span>
+                {team.number}
+                {team.robot && <span className="font-normal text-muted">{team.robot}</span>}
+              </span>
+            </span>
+          </td>
+          <td className="w-full break-words py-1.5 pr-3 text-muted">{team.name ?? '-'}</td>
+        </tr>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           align="start"
-          sideOffset={4}
-          className="z-50 min-w-48 rounded-md border border-border-subtle bg-background p-1 shadow-xl"
+          sideOffset={2}
+          // Above the event dialog (Dialog.Content is z-[2001]); at the default
+          // z-50 the menu opened underneath the overlay and looked like nothing.
+          className="z-[2100] min-w-48 rounded-md border border-border-subtle bg-background p-1 shadow-xl"
         >
           <DropdownMenu.Item asChild>
             <Link href={`/events?team=${team.number}&when=all`} className={MENU_ITEM}>
@@ -152,30 +171,6 @@ function TeamMenu({ team }: { team: RosterTeamRow }) {
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
-  )
-}
-
-function TeamRow({ team }: { team: RosterTeamRow }) {
-  return (
-    <tr className="border-t border-border-subtle">
-      <td className="w-10 min-w-10 py-1.5 pl-3 pr-2">
-        <TeamAvatar number={team.number} />
-      </td>
-      <td className="whitespace-nowrap py-1.5 pr-3 font-medium tabular-nums text-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          {team.waitlisted && team.waitlistPosition != null && (
-            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded bg-reg-waitlist/15 px-1 text-[10px] font-semibold text-reg-waitlist tabular-nums">
-              {team.waitlistPosition}
-            </span>
-          )}
-          {/* Number and robot letter read as one token, "4145B", with no space
-              between them: the letter is a second robot from the same team, not
-              a separate column. The token is the menu trigger. */}
-          <TeamMenu team={team} />
-        </span>
-      </td>
-      <td className="w-full break-words py-1.5 pr-3 text-muted">{team.name ?? '-'}</td>
-    </tr>
   )
 }
 
