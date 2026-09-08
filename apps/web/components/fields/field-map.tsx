@@ -2,10 +2,10 @@
 
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef } from 'react'
-import type { Map as LeafletMap, Marker as LeafletMarker, DivIcon } from 'leaflet'
+import type { Map as LeafletMap, Marker as LeafletMarker } from 'leaflet'
 import type { PublicField } from '@/lib/fields/field-display'
 import { fieldMarkerStyle, fieldSpecSummary } from '@/lib/fields/field-display'
-import { markerHtml } from './marker-html'
+import { installPins, type PinLayer } from '@/lib/map/pin-layer'
 import { attachBasemap } from '@/lib/map/basemap'
 import { userMarkerHtml } from '@/lib/map/user-marker'
 
@@ -45,8 +45,7 @@ function tooltipHtml(f: PublicField): string {
 export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }: FieldMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<LeafletMap | null>(null)
-  const markersRef = useRef<Map<string, LeafletMarker>>(new Map())
-  const iconsRef = useRef<Map<string, { base: DivIcon; selected: DivIcon }>>(new Map())
+  const pinsRef = useRef<PinLayer | null>(null)
   const userMarkerRef = useRef<LeafletMarker | null>(null)
   // Detaches the basemap's theme watcher. Held so the observer cannot outlive
   // the map it is watching for.
@@ -83,37 +82,26 @@ export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }
       const map = mapRef.current
 
       // Clear existing markers before re-plotting.
-      markersRef.current.forEach((m) => m.remove())
-      markersRef.current.clear()
-      iconsRef.current.clear()
+      pinsRef.current?.destroy()
 
       const latlngs: [number, number][] = []
+      const pins = []
       for (const f of fields) {
         if (f.latitude == null || f.longitude == null) continue
-        const style = fieldMarkerStyle(f.coverage, f.elements)
-        const base = L.divIcon({
-          html: markerHtml(style),
-          className: '',
-          iconSize: [style.size, style.size],
-          iconAnchor: [style.size / 2, style.size / 2],
-        })
-        const selected = L.divIcon({
-          html: markerHtml(style, { selected: true }),
-          className: '',
-          iconSize: [style.size, style.size],
-          iconAnchor: [style.size / 2, style.size / 2],
-        })
-        const marker = L.marker([f.latitude, f.longitude], { icon: base, riseOnHover: true })
-          .addTo(map)
-          .bindTooltip(tooltipHtml(f), { direction: 'top', offset: [0, -style.size / 2], opacity: 1 })
-        marker.on('click', () => {
-          selectedFromMapRef.current = true
-          onSelectRef.current(f.id)
-        })
-        markersRef.current.set(f.id, marker)
-        iconsRef.current.set(f.id, { base, selected })
+        pins.push({ id: f.id, lat: f.latitude, lng: f.longitude, style: fieldMarkerStyle(f.coverage, f.elements), tooltipHtml: tooltipHtml(f) })
         latlngs.push([f.latitude, f.longitude])
       }
+      // Pins scale with zoom, and pins on one spot spread into a ring so each
+      // stays a separate target. See lib/map/pin-layer.
+      pinsRef.current = installPins({
+        L,
+        map,
+        pins,
+        onSelect: (id) => {
+          selectedFromMapRef.current = true
+          onSelectRef.current(id)
+        },
+      })
 
       // Drop (or move) the "you are here" marker once we know the visitor's spot.
       userMarkerRef.current?.remove()
@@ -150,10 +138,10 @@ export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }
     return () => {
       detachBasemapRef.current?.()
       detachBasemapRef.current = null
+      pinsRef.current?.destroy()
+      pinsRef.current = null
       mapRef.current?.remove()
       mapRef.current = null
-      markersRef.current.clear()
-      iconsRef.current.clear()
       userMarkerRef.current = null
     }
   }, [])
@@ -162,21 +150,17 @@ export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    markersRef.current.forEach((marker, id) => {
-      const icons = iconsRef.current.get(id)
-      if (!icons) return
-      marker.setIcon(id === selectedId ? icons.selected : icons.base)
-    })
+    pinsRef.current?.setSelected(selectedId)
     if (selectedId) {
       if (selectedFromMapRef.current) {
         // Clicked a pin on the map: highlight only, leave zoom and position as-is.
         selectedFromMapRef.current = false
       } else {
-        const marker = markersRef.current.get(selectedId)
+        const at = pinsRef.current?.drawnLatLng(selectedId)
         // Selected from the list: pan only far enough to get the pin on screen
         // and leave the zoom alone, so stepping down the list never throws away
         // the view the visitor set.
-        if (marker) map.panInside(marker.getLatLng(), { padding: [48, 48], animate: true })
+        if (at) map.panInside(at, { padding: [48, 48], animate: true })
       }
     }
   }, [selectedId])

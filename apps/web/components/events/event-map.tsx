@@ -2,7 +2,7 @@
 
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef } from 'react'
-import type { Map as LeafletMap, Marker as LeafletMarker, DivIcon } from 'leaflet'
+import type { Map as LeafletMap, Marker as LeafletMarker } from 'leaflet'
 import type { PublicEvent } from '@/lib/events/event-display'
 import {
   eventMarkerStyle,
@@ -12,7 +12,7 @@ import {
   fullnessLabel,
   timingPhrase,
 } from '@/lib/events/event-display'
-import { markerHtml } from './marker-html'
+import { installPins, type PinLayer } from '@/lib/map/pin-layer'
 import { attachBasemap } from '@/lib/map/basemap'
 import { userMarkerHtml } from '@/lib/map/user-marker'
 
@@ -59,8 +59,7 @@ function tooltipHtml(ev: PublicEvent, now: Date): string {
 export function EventMap({ events, now, selectedId, onSelect, userLoc, height = 560 }: EventMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<LeafletMap | null>(null)
-  const markersRef = useRef<Map<string, LeafletMarker>>(new Map())
-  const iconsRef = useRef<Map<string, { base: DivIcon; selected: DivIcon }>>(new Map())
+  const pinsRef = useRef<PinLayer | null>(null)
   const userMarkerRef = useRef<LeafletMarker | null>(null)
   // Detaches the basemap's theme watcher. Held so the observer cannot outlive
   // the map it is watching for.
@@ -92,37 +91,26 @@ export function EventMap({ events, now, selectedId, onSelect, userLoc, height = 
       }
       const map = mapRef.current
 
-      markersRef.current.forEach((m) => m.remove())
-      markersRef.current.clear()
-      iconsRef.current.clear()
+      pinsRef.current?.destroy()
 
       const latlngs: [number, number][] = []
+      const pins = []
       for (const ev of events) {
         if (ev.latitude == null || ev.longitude == null) continue
-        const style = eventMarkerStyle(ev, now)
-        const base = L.divIcon({
-          html: markerHtml(style),
-          className: '',
-          iconSize: [style.size, style.size],
-          iconAnchor: [style.size / 2, style.size / 2],
-        })
-        const selected = L.divIcon({
-          html: markerHtml(style, { selected: true }),
-          className: '',
-          iconSize: [style.size, style.size],
-          iconAnchor: [style.size / 2, style.size / 2],
-        })
-        const marker = L.marker([ev.latitude, ev.longitude], { icon: base, riseOnHover: true })
-          .addTo(map)
-          .bindTooltip(tooltipHtml(ev, now), { direction: 'top', offset: [0, -style.size / 2], opacity: 1 })
-        marker.on('click', () => {
-          selectedFromMapRef.current = true
-          onSelectRef.current(ev.id)
-        })
-        markersRef.current.set(ev.id, marker)
-        iconsRef.current.set(ev.id, { base, selected })
+        pins.push({ id: ev.id, lat: ev.latitude, lng: ev.longitude, style: eventMarkerStyle(ev, now), tooltipHtml: tooltipHtml(ev, now) })
         latlngs.push([ev.latitude, ev.longitude])
       }
+      // Pins scale with zoom, and pins on one spot spread into a ring so each
+      // stays a separate target. See lib/map/pin-layer.
+      pinsRef.current = installPins({
+        L,
+        map,
+        pins,
+        onSelect: (id) => {
+          selectedFromMapRef.current = true
+          onSelectRef.current(id)
+        },
+      })
 
       userMarkerRef.current?.remove()
       userMarkerRef.current = null
@@ -154,10 +142,10 @@ export function EventMap({ events, now, selectedId, onSelect, userLoc, height = 
     return () => {
       detachBasemapRef.current?.()
       detachBasemapRef.current = null
+      pinsRef.current?.destroy()
+      pinsRef.current = null
       mapRef.current?.remove()
       mapRef.current = null
-      markersRef.current.clear()
-      iconsRef.current.clear()
       userMarkerRef.current = null
     }
   }, [])
@@ -165,20 +153,16 @@ export function EventMap({ events, now, selectedId, onSelect, userLoc, height = 
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    markersRef.current.forEach((marker, id) => {
-      const icons = iconsRef.current.get(id)
-      if (!icons) return
-      marker.setIcon(id === selectedId ? icons.selected : icons.base)
-    })
+    pinsRef.current?.setSelected(selectedId)
     if (selectedId) {
       if (selectedFromMapRef.current) {
         selectedFromMapRef.current = false
       } else {
-        const marker = markersRef.current.get(selectedId)
+        const at = pinsRef.current?.drawnLatLng(selectedId)
         // Selected from the list: highlight it, and pan only far enough to get
         // it on screen. Zoom stays where the visitor put it, so picking through
         // the list never yanks them out of the area they were looking at.
-        if (marker) map.panInside(marker.getLatLng(), { padding: [48, 48], animate: true })
+        if (at) map.panInside(at, { padding: [48, 48], animate: true })
       }
     }
   }, [selectedId])
