@@ -32,13 +32,11 @@ interface GrantDiscoverPayload {
  * these are the keys of GRANT_DISCOVER_CONNECTORS in
  * apps/worker/src/grants/discover.ts, which throws "Unknown grant discover
  * connector" on anything else. GRANT_SOURCE_KINDS is deliberately longer than
- * this list: 'aggregator' rows exist (the candidate queue creates them, see
- * ../candidates/actions.ts routeGrantCandidateToSource) but nothing crawls them
- * yet, and 'submission' and 'admin' are provenance labels rather than crawlers.
+ * this list: 'submission' and 'admin' are provenance labels rather than crawlers.
  * Checking here turns a job that fails in a worker log into a sentence on the
  * screen the admin is already looking at.
  */
-const RUNNABLE_SOURCE_KINDS = new Set(['seed', 'web_search', 'team_sponsors', 'chief_delphi'])
+const RUNNABLE_SOURCE_KINDS = new Set(['seed', 'web_search', 'team_sponsors', 'chief_delphi', 'aggregator', 'sheet'])
 
 let _queue: Queue<GrantDiscoverPayload> | undefined
 

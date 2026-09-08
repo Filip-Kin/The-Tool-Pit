@@ -36,6 +36,7 @@ import { GrantWebSearchConnector } from './connectors/web-search.js'
 import { GrantTeamSponsorsConnector } from './connectors/team-sponsors.js'
 import { GrantChiefDelphiConnector } from './connectors/chief-delphi.js'
 import { GrantAggregatorConnector } from './connectors/aggregator.js'
+import { GrantSheetConnector } from './connectors/sheet.js'
 import { canonicalGrantUrl } from './connectors/shared.js'
 import type { GrantConnector } from './connectors/types.js'
 
@@ -67,6 +68,8 @@ export const GRANT_DISCOVER_CONNECTORS: Record<string, () => GrantConnector> = {
   chief_delphi: () => new GrantChiefDelphiConnector(),
   grant_aggregator: () => new GrantAggregatorConnector(),
   aggregator: () => new GrantAggregatorConnector(),
+  grant_sheet: () => new GrantSheetConnector(),
+  sheet: () => new GrantSheetConnector(),
 }
 
 /**
@@ -204,6 +207,7 @@ export async function processGrantDiscoverJob(
       }
 
       const rawMetadata: RawGrantMetadata = {
+        ...(candidate.metadata ?? {}),
         title: candidate.title,
         description: candidate.description,
         funderName: candidate.funderName,

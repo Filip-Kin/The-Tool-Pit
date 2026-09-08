@@ -1,3 +1,4 @@
+import type { RawGrantMetadata } from '@the-tool-pit/db'
 /**
  * Shared shape for every grant DISCOVER connector.
  *
@@ -36,6 +37,8 @@ export interface GrantCandidateInput {
   discoveredVia: string
   /** grant_sources row this came from, when the connector walked curated rows. */
   sourceId?: string
+  /** Extra rawMetadata a connector already knows (a spreadsheet's own columns). */
+  metadata?: Partial<RawGrantMetadata>
 }
 
 export interface GrantConnectorResult {

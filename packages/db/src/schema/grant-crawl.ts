@@ -325,6 +325,20 @@ export interface RawGrantMetadata {
   discoveredVia?: string
   /** Truncated stripped page text handed to the classifier. */
   contentText?: string
+  /**
+   * Facts a curated spreadsheet row carried, kept verbatim so the extractor
+   * has them as evidence and the reviewer sees what the sheet's author knew.
+   * Free text throughout: the sheet says "Closed", "August 17", "Unsure".
+   */
+  sheet?: {
+    isOpen?: string
+    openDate?: string
+    closeDate?: string
+    employeeRequired?: string
+    restrictions?: string
+    requires501c3?: string
+    notes?: string
+  }
 }
 
 /**

@@ -484,6 +484,13 @@ export async function scheduleRecurringJobs() {
     data: { connector: 'grant_chief_delphi' },
   })
 
+  // Filip's hand-kept grant spreadsheet, read as CSV. The strongest leads the
+  // vertical gets; weekly like every other crawl, Monday, in the grants block.
+  await grantDiscoverQueue.upsertJobScheduler('grant-discover-sheet', { pattern: '40 2 * * 1' }, {
+    name: 'grant-discover-sheet',
+    data: { connector: 'grant_sheet' },
+  })
+
   // Mine the list pages the classifier flagged as aggregators. Daily, after the
   // other angles have filed their finds and the enrich pass has auto-routed
   // the confident lists into grant_sources; cadenceHours on each row keeps a

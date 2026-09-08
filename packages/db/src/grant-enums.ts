@@ -58,6 +58,7 @@ export const GRANT_SOURCE_KINDS = [
   'chief_delphi',
   'team_sponsors',
   'aggregator',
+  'sheet',
   'submission',
   'admin',
 ] as const

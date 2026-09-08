@@ -41,6 +41,10 @@ export function discoverySourceKind(discoveredVia: string | null | undefined): G
       return 'chief_delphi'
     case 'seed':
       return 'seed'
+    case 'sheet':
+      return 'sheet'
+    case 'aggregator':
+      return 'aggregator'
     case 'public submission':
       return 'submission'
     default:
