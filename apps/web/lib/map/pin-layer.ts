@@ -5,11 +5,12 @@
  *    kickoff and its Week 0 on the same campus; a school hosts a field and an
  *    event) geocode to the same point, and the second pin sits exactly under
  *    the first: invisible, unclickable, and the map lies about how many things
- *    are there. Pins that would overlap AT THE CURRENT ZOOM are pushed apart
- *    into a small ring around their shared spot, a fixed number of pixels, so
- *    at any zoom each one is a separate target. Zoom in on two places that are
- *    genuinely a street apart and they fall back to their true positions on
- *    their own, because the test is pixel distance, not coordinates.
+ *    are there. Pins AT THE SAME VENUE (within SAME_SPOT_M of each other) are
+ *    pushed apart into a small ring around their shared spot, a fixed number
+ *    of pixels, so at any zoom each one is a separate target. The grouping is
+ *    GEOGRAPHIC on purpose: the first version grouped by pixel overlap, and at
+ *    continent zoom every pin in the eastern US overlaps its neighbour, so the
+ *    whole region chained into one group and drew as a single giant ring.
  *
  * 2. PIN SIZE FOLLOWS ZOOM. A 14 px dot is right at continent zoom, where
  *    hundreds of pins share the view, and mean at street zoom, where one pin
@@ -41,20 +42,35 @@ export interface PinLayer {
   destroy(): void
 }
 
-/** Diameter multiplier for a zoom level: 0.8x at zoom 4 and below, 1.9x at zoom 15 and above. */
+/** Diameter multiplier for a zoom level: 0.6x at zoom 4 and below, 1.4x at zoom 15 and above. */
 export function pinScale(zoom: number): number {
   const t = Math.min(1, Math.max(0, (zoom - 4) / 11))
-  return 0.8 + 1.1 * t
+  return 0.6 + 0.8 * t
+}
+
+/** Two pins closer than this are "the same venue": one campus, one gym, one car park. */
+export const SAME_SPOT_M = 150
+
+/** Metres between two points; good enough at venue scale. */
+export function metresBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(b.lat - a.lat)
+  const dLng = toRad(b.lng - a.lng)
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2
+  return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(h)))
 }
 
 /**
- * Where to draw each pin so none overlap. Pins are grouped greedily by pixel
- * distance (any two closer than `overlapPx` share a group, transitively), and a
- * group of two or more is laid out on a ring of `overlapPx * 0.55` px around
- * its centroid. Pure over container points; the caller projects and unprojects.
+ * Where to draw each pin. Pins at the same venue (SAME_SPOT_M, transitively,
+ * which at 150 m can only ever chain across one campus) are laid out on a ring
+ * of `overlapPx * 0.55` px around their centroid, but only while they would
+ * actually overlap on screen; zoomed in far enough that two buildings 100 m
+ * apart draw as two separate dots, they get their true positions. Everything
+ * else is drawn where it is. Pure over container points plus coordinates; the
+ * caller projects and unprojects.
  */
 export function spreadPoints(
-  points: Array<{ id: string; x: number; y: number }>,
+  points: Array<{ id: string; x: number; y: number; lat: number; lng: number }>,
   overlapPx: number,
 ): Map<string, { x: number; y: number }> {
   const out = new Map<string, { x: number; y: number }>()
@@ -71,9 +87,7 @@ export function spreadPoints(
       members.push(a)
       for (let b = 0; b < n; b++) {
         if (groupOf[b] !== -1) continue
-        const dx = points[a].x - points[b].x
-        const dy = points[a].y - points[b].y
-        if (dx * dx + dy * dy < overlapPx * overlapPx) {
+        if (metresBetween(points[a], points[b]) <= SAME_SPOT_M) {
           groupOf[b] = groups.length
           stack.push(b)
         }
@@ -82,9 +96,19 @@ export function spreadPoints(
     groups.push(members)
   }
   for (const members of groups) {
-    if (members.length === 1) {
-      const p = points[members[0]]
-      out.set(p.id, { x: p.x, y: p.y })
+    // Alone, or far enough apart on screen already: true positions.
+    const overlapping =
+      members.length > 1 &&
+      members.some((a) =>
+        members.some((b) => {
+          if (a === b) return false
+          const dx = points[a].x - points[b].x
+          const dy = points[a].y - points[b].y
+          return dx * dx + dy * dy < overlapPx * overlapPx
+        }),
+      )
+    if (!overlapping) {
+      for (const i of members) out.set(points[i].id, { x: points[i].x, y: points[i].y })
       continue
     }
     const cx = members.reduce((s, i) => s + points[i].x, 0) / members.length
@@ -127,7 +151,7 @@ export function installPins(opts: {
     const scale = pinScale(zoom)
     const points = pins.map((p) => {
       const pt = map.latLngToContainerPoint([p.lat, p.lng])
-      return { id: p.id, x: pt.x, y: pt.y }
+      return { id: p.id, x: pt.x, y: pt.y, lat: p.lat, lng: p.lng }
     })
     // Overlap threshold = the drawn diameter plus a little air.
     const maxSize = Math.max(...pins.map((p) => p.style.size), 1) * scale
