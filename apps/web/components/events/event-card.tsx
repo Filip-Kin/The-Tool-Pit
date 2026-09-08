@@ -107,7 +107,7 @@ function BarRow({ label, ratio, text }: { label?: string; ratio: number | null; 
   const tone = ratio != null && ratio >= 0.85 ? 'bg-official' : 'bg-rookie'
   return (
     <div className="flex items-center gap-2">
-      {label && <span className="w-16 shrink-0 text-xs text-muted">{label}</span>}
+      {label && <span className="w-20 shrink-0 whitespace-nowrap text-xs text-muted">{label}</span>}
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
         <div className={cn('h-full rounded-full', tone)} style={{ width: `${pct}%` }} />
       </div>
@@ -261,7 +261,33 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
         )}
       </div>
 
-      {full && fullnessRatio(ev) != null && (
+      {ev.parallelDivisions && (ev.registeredTeamCount != null || ev.registeredTeamCountDay2 != null) ? (
+        // A 2x 1-day event fills per day, so the count box is one row per day
+        // against the per-day capacity, same as the card in the list.
+        <Card>
+          <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <Users className="h-4 w-4" /> Registered teams
+          </div>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {([1, 2] as const).map((day) => {
+              const count = day === 1 ? ev.registeredTeamCount : ev.registeredTeamCountDay2
+              return (
+                <BarRow
+                  key={day}
+                  label={eventDayShort(ev, day)}
+                  ratio={ratioFor(count, ev.capacity)}
+                  text={count == null ? 'No list yet' : ev.capacity ? `${count} / ${ev.capacity} teams` : `${count} teams`}
+                />
+              )
+            })}
+          </div>
+          {ev.teamCountUpdatedAt && (
+            <p className="mt-2 text-xs text-muted-2">
+              Team count last checked {formatDate(ev.teamCountUpdatedAt)}
+            </p>
+          )}
+        </Card>
+      ) : full && fullnessRatio(ev) != null ? (
         <Card>
           <div className="flex items-center justify-between text-sm">
             <span className="flex items-center gap-1.5 font-medium text-foreground">
@@ -280,7 +306,7 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
             </p>
           )}
         </Card>
-      )}
+      ) : null}
 
       <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
         {ev.registrationOpensAt && effectiveRegistrationStatus(ev, now) === 'not_open' && (
