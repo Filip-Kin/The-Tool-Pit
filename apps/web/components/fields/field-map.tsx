@@ -124,7 +124,10 @@ export function FieldMap({ fields, selectedId, onSelect, userLoc, height = 560 }
       } else if (latlngs.length === 1) {
         map.setView(latlngs[0], 13)
       } else if (latlngs.length > 1) {
-        map.fitBounds(L.latLngBounds(latlngs).pad(0.15))
+        // maxZoom: a set of pins on ONE spot (a search that leaves only the four
+        // events at one campus) has zero-size bounds, and an uncapped fit dives
+        // to street zoom on a car park. 15 still shows the ring of pins apart.
+        map.fitBounds(L.latLngBounds(latlngs).pad(0.15), { maxZoom: 15 })
       }
     })()
 
