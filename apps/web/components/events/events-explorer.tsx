@@ -119,6 +119,19 @@ export function EventsExplorer({
   const [unit, setUnit] = useState<DistanceUnit>('km')
   // Distance, cost, team number, second robots and dates, all behind one menu.
   const [filters, setFilters] = useState<EventFilters>(initialTeam ? { ...NO_FILTERS, teamNumber: initialTeam } : NO_FILTERS)
+
+  // "View other events" in a roster menu links to /events?team=N&when=all. That
+  // is THIS route, so the page re-renders with new props instead of remounting:
+  // useState above only read them once. Apply the URL's team and when whenever
+  // they change, and close whatever dialog the link was clicked from, so the
+  // reader lands on the filtered list rather than on the dialog they left.
+  useEffect(() => {
+    if (initialTeam == null && initialWhen == null) return
+    if (initialTeam != null) setFilters((f) => (f.teamNumber === initialTeam ? f : { ...f, teamNumber: initialTeam }))
+    if (initialWhen) setWhen(initialWhen)
+    setOpenId(null)
+    setSelectedId(null)
+  }, [initialTeam, initialWhen])
   // Team numbers per event, fetched once and only if somebody filters by team.
   // Null means "not asked for yet", which is different from an empty answer.
   const [rosterTeams, setRosterTeams] = useState<Record<string, number[]> | null>(null)

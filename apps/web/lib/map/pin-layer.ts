@@ -7,7 +7,8 @@
  *    the first: invisible, unclickable, and the map lies about how many things
  *    are there. Pins AT THE SAME VENUE (within SAME_SPOT_M of each other) are
  *    pushed apart into a small ring around their shared spot, a fixed number
- *    of pixels, so at any zoom each one is a separate target. The grouping is
+ *    of pixels, from city zoom (SPREAD_MIN_ZOOM) inward; zoomed out they stay
+ *    stacked, which is what that scale honestly shows. The grouping is
  *    GEOGRAPHIC on purpose: the first version grouped by pixel overlap, and at
  *    continent zoom every pin in the eastern US overlaps its neighbour, so the
  *    whole region chained into one group and drew as a single giant ring.
@@ -43,17 +44,24 @@ export interface PinLayer {
 }
 
 /**
- * Diameter multiplier for a zoom level. 0.45x at zoom 4 and below, 1.2x at
- * zoom 15 and above, and the curve is eased so pins stay small through the
- * regional zooms (0.6x at 8, 0.9x at 12) and only grow near street level.
+ * Diameter multiplier for a zoom level. 0.55x at zoom 4 and below, 1.2x at
+ * zoom 15 and above, eased so pins grow slowly through the regional zooms
+ * (0.62x at 6, 0.75x at 9, 0.95x at 12) and reach full size near street level.
  */
 export function pinScale(zoom: number): number {
   const t = Math.min(1, Math.max(0, (zoom - 4) / 11))
-  return 0.45 + 0.75 * Math.pow(t, 1.6)
+  return 0.55 + 0.65 * Math.pow(t, 1.3)
 }
 
-/** Two pins closer than this are "the same venue": one campus, one gym, one car park. */
-export const SAME_SPOT_M = 150
+/** Two pins closer than this are "legitimately the same location": one campus, one gym. */
+export const SAME_SPOT_M = 300
+
+/**
+ * Below this zoom nothing is spread, ever. Zoomed out, a stack of pins on one
+ * campus is one dot and that is the truth of the map at that scale; pulling
+ * them apart there just draws flowers. City zoom and in, they get their ring.
+ */
+export const SPREAD_MIN_ZOOM = 10
 
 /** Metres between two points; good enough at venue scale. */
 export function metresBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -157,9 +165,13 @@ export function installPins(opts: {
       const pt = map.latLngToContainerPoint([p.lat, p.lng])
       return { id: p.id, x: pt.x, y: pt.y, lat: p.lat, lng: p.lng }
     })
-    // Overlap threshold = the drawn diameter plus a little air.
+    // Overlap threshold = the drawn diameter plus a little air. Zoomed out,
+    // every pin stays exactly where it is.
     const maxSize = Math.max(...pins.map((p) => p.style.size), 1) * scale
-    const placed = spreadPoints(points, maxSize + 4)
+    const placed =
+      zoom >= SPREAD_MIN_ZOOM
+        ? spreadPoints(points, maxSize + 4)
+        : new Map(points.map((pt) => [pt.id, { x: pt.x, y: pt.y }]))
     for (const p of pins) {
       const m = markers.get(p.id)
       if (!m) continue
