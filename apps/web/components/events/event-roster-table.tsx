@@ -73,7 +73,10 @@ function TeamAvatar({ number }: { number: number }) {
       alt=""
       loading="lazy"
       onError={() => (src === DEFAULT_AVATAR ? setFailed(true) : setSrc(DEFAULT_AVATAR))}
-      className="h-8 w-8 shrink-0 rounded-md bg-surface-3 object-contain"
+      // max-w-none: the name column is w-full, so auto table layout squeezes
+      // this cell toward zero and preflight's max-width:100% then shrinks the
+      // image into it. Rendered 0 x 32 px, loaded but invisible, until this.
+      className="h-8 w-8 max-w-none shrink-0 rounded-md bg-surface-3 object-contain"
     />
   )
 }
@@ -98,7 +101,7 @@ function SectionRow({ label, count }: { label: string; count: number }) {
 function TeamRow({ team }: { team: RosterTeamRow }) {
   return (
     <tr className="border-t border-border-subtle">
-      <td className="py-1.5 pl-3 pr-2">
+      <td className="w-10 min-w-10 py-1.5 pl-3 pr-2">
         <TeamAvatar number={team.number} />
       </td>
       <td className="whitespace-nowrap py-1.5 pr-3 font-medium tabular-nums text-foreground">
