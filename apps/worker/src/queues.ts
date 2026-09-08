@@ -331,8 +331,8 @@ export async function scheduleRecurringJobs() {
   // spelled out above the freshness block: `every` counts from the upsert, which
   // is worker startup, so `every: 6h` fired a full crawl on every deploy on top of
   // its four-a-day cadence. fta.tools is a hand-curated list that barely changes,
-  // so daily is plenty. 23:40 UTC sits clear of the 22:15 freshness pass, the
-  // 02:10-06:40 discovery block and the 07:20 popularity sweep.
+  // so weekly (Monday) is plenty. 23:40 UTC sits clear of the 22:15 freshness
+  // pass, the 02:10-06:40 discovery block and the 07:20 popularity sweep.
   // CRAWLS RUN ONCE A WEEK (Filip, 2026-09-07). Everything that goes out and
   // reads somebody else's site for NEW candidates is weekly, spread Mon-Sun so
   // no two land on the same night. What stays daily is what serves an existing
@@ -351,13 +351,13 @@ export async function scheduleRecurringJobs() {
   // on every boot. Re-add a scheduler here once the connector is switched on.
   await crawlQueue.removeJobScheduler('crawl-volunteer-systems')
 
-  // GitHub topics crawl — once per day (respects API rate limits)
+  // GitHub topics crawl — weekly, Tuesday night (respects API rate limits)
   await crawlQueue.upsertJobScheduler('crawl-github-topics', { pattern: '0 22 * * 2' }, {
     name: 'crawl-github-topics',
     data: { connector: 'github_topics', jobId: 'scheduled' },
   })
 
-  // Awesome-list crawl — once per day
+  // Awesome-list crawl — weekly, Wednesday night
   await crawlQueue.upsertJobScheduler('crawl-awesome-list', { pattern: '0 22 * * 3' }, {
     name: 'crawl-awesome-list',
     data: { connector: 'awesome_list', jobId: 'scheduled' },
@@ -424,25 +424,25 @@ export async function scheduleRecurringJobs() {
     data: { connector: 'toa_events', year: currentSeasonYear, jobId: 'scheduled' },
   })
 
-  // Scrape First in Michigan event photo links — twice per day
+  // Scrape First in Michigan event photo links — weekly, Thursday
   await albumIngestQueue.upsertJobScheduler('album-crawl-fim', { pattern: '0 0 * * 4' }, {
     name: 'album-crawl-fim',
     data: { connector: 'fim_albums', year: currentSeasonYear, jobId: 'scheduled' },
   })
 
-  // Search Chief Delphi for album links - once per day
+  // Search Chief Delphi for album links - weekly, Friday
   await albumIngestQueue.upsertJobScheduler('album-crawl-cd', { pattern: '30 0 * * 5' }, {
     name: 'album-crawl-cd',
     data: { connector: 'chief_delphi_albums', year: currentSeasonYear, jobId: 'scheduled' },
   })
 
-  // Scrape curated Flickr photographer accounts - once per day
+  // Scrape curated Flickr photographer accounts - weekly, Saturday
   await albumIngestQueue.upsertJobScheduler('album-crawl-flickr', { pattern: '0 1 * * 6' }, {
     name: 'album-crawl-flickr',
     data: { connector: 'flickr_albums', year: currentSeasonYear, jobId: 'scheduled' },
   })
 
-  // Walk curated SmugMug photographer sites - once per day
+  // Walk curated SmugMug photographer sites - weekly, Saturday
   await albumIngestQueue.upsertJobScheduler('album-crawl-smugmug', { pattern: '30 1 * * 6' }, {
     name: 'album-crawl-smugmug',
     data: { connector: 'smugmug_albums', year: currentSeasonYear, jobId: 'scheduled' },
@@ -463,14 +463,15 @@ export async function scheduleRecurringJobs() {
   })
 
   // Brave web search. Bounded twice over, by its own per-run query cap and by
-  // the hard monthly Brave budget in Redis, so daily is safe.
+  // the hard monthly Brave budget in Redis. Weekly (Tuesday) since 2026-09-07.
   await grantDiscoverQueue.upsertJobScheduler('grant-discover-web-search', { pattern: '10 3 * * 2' }, {
     name: 'grant-discover-web-search',
     data: { connector: 'grant_web_search' },
   })
 
   // Sponsor logos and thank-you pages off team sites, a rotating slice of teams
-  // per run. Daily is what makes the rotation cover the roster in a season.
+  // per run. Weekly (Wednesday) since 2026-09-07: the rotation now covers a
+  // seventh of the teams it used to in a season, which is the accepted trade.
   await grantDiscoverQueue.upsertJobScheduler('grant-discover-team-sponsors', { pattern: '10 4 * * 3' }, {
     name: 'grant-discover-team-sponsors',
     data: { connector: 'grant_team_sponsors' },
@@ -527,8 +528,8 @@ export async function scheduleRecurringJobs() {
   // hours and slotted between the grant sweeps rather than on top of them.
 
   // TBA off-season events. One request per season, structured JSON, no model
-  // call, and the tbaKey dedupe means a repeat run inserts nothing. Daily is
-  // what makes an event that was registered yesterday reviewable today.
+  // call, and the tbaKey dedupe means a repeat run inserts nothing. Weekly
+  // (Friday) since 2026-09-07: a newly registered event waits up to a week.
   await listingDiscoverQueue.upsertJobScheduler('listing-discover-tba-offseason', { pattern: '40 2 * * 5' }, {
     name: 'listing-discover-tba-offseason',
     data: { connector: 'tba_offseason_events' },
