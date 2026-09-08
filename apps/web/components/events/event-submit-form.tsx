@@ -449,7 +449,7 @@ export function EventSubmitForm({
         <Check
           checked={form.parallelDivisions}
           onChange={(v) => set('parallelDivisions', v)}
-          label="Two separate 1-day events the same weekend"
+          label="Each day is its own 1-day event (its own team list and TBA code)"
         />
       </Section>
 

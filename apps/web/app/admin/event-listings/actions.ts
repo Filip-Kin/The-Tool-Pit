@@ -337,6 +337,8 @@ export interface EventEditInput {
   contactEmail?: string | null
   notes?: string | null
   tbaKey?: string | null
+  tbaKeyDay2?: string | null
+  registrationUrlDay2?: string | null
 }
 
 function inEnum<T extends readonly string[]>(v: string | undefined, allowed: T): T[number] | undefined {
@@ -388,6 +390,8 @@ export async function updateEvent(id: string, input: EventEditInput): Promise<{ 
   if (input.contactEmail !== undefined) patch.contactEmail = input.contactEmail?.trim() || null
   if (input.notes !== undefined) patch.notes = input.notes?.trim() || null
   if (input.tbaKey !== undefined) patch.tbaKey = input.tbaKey?.trim().toLowerCase() || null
+  if (input.tbaKeyDay2 !== undefined) patch.tbaKeyDay2 = input.tbaKeyDay2?.trim().toLowerCase() || null
+  if (input.registrationUrlDay2 !== undefined) patch.registrationUrlDay2 = input.registrationUrlDay2?.trim() || null
 
   // Record what the moderator actually MOVED, so a later refresh leaves it be.
   // Earned by changing a value, never by pressing Save: marking every field on

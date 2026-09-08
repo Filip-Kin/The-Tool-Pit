@@ -275,6 +275,8 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
     contactEmail: listing.contactEmail,
     notes: listing.notes,
     tbaKey: listing.tbaKey,
+    tbaKeyDay2: listing.tbaKeyDay2,
+    registrationUrlDay2: listing.registrationUrlDay2,
   })
 
   function set<K extends keyof EventEditInput>(k: K, v: EventEditInput[K]) {
@@ -371,14 +373,20 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
         <L label="Team list page"><input className="input" value={form.teamListUrl ?? ''} onChange={(e) => set('teamListUrl', e.target.value)} placeholder="the event's own team list" /></L>
         <L label="Chief Delphi URL"><input className="input" value={form.chiefDelphiUrl ?? ''} onChange={(e) => set('chiefDelphiUrl', e.target.value)} /></L>
         <L label="Organiser email"><input className="input" value={form.contactEmail ?? ''} onChange={(e) => set('contactEmail', e.target.value)} /></L>
-        <L label="TBA key" ><input className="input" value={form.tbaKey ?? ''} onChange={(e) => set('tbaKey', e.target.value)} placeholder="e.g. 2026mifli1" /></L>
+        <L label={form.parallelDivisions ? 'TBA key, day 1' : 'TBA key'} ><input className="input" value={form.tbaKey ?? ''} onChange={(e) => set('tbaKey', e.target.value)} placeholder="e.g. 2026mifli1" /></L>
+        {form.parallelDivisions && (
+          <>
+            <L label="TBA key, day 2" ><input className="input" value={form.tbaKeyDay2 ?? ''} onChange={(e) => set('tbaKeyDay2', e.target.value)} placeholder="e.g. 2026ketwkz2" /></L>
+            <L label="Registration link, day 2" ><input className="input" value={form.registrationUrlDay2 ?? ''} onChange={(e) => set('registrationUrlDay2', e.target.value)} placeholder="Only when day 2 has its own form" /></L>
+          </>
+        )}
       </div>
 
       <L label="Notes"><textarea rows={2} className="input resize-y" value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></L>
 
       <label className="flex items-center gap-2 text-sm text-foreground">
         <input type="checkbox" checked={!!form.parallelDivisions} onChange={(e) => set('parallelDivisions', e.target.checked)} className="h-4 w-4 accent-[var(--color-primary)]" />
-        Two parallel 1-day events (the sheet&apos;s &quot;2x&quot; format)
+        Each day is its own 1-day event (the sheet&apos;s &quot;2x&quot; format): own team list, own TBA code, slots per day
       </label>
 
       <div className="flex flex-wrap gap-2">

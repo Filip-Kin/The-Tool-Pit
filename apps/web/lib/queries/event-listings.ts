@@ -36,12 +36,15 @@ const publicColumns = {
   eventStatus: eventListings.eventStatus,
   website: eventListings.website,
   registrationUrl: eventListings.registrationUrl,
+  registrationUrlDay2: eventListings.registrationUrlDay2,
   volunteerUrl: eventListings.volunteerUrl,
   chiefDelphiUrl: eventListings.chiefDelphiUrl,
   contactEmail: eventListings.contactEmail,
   notes: eventListings.notes,
   tbaKey: eventListings.tbaKey,
+  tbaKeyDay2: eventListings.tbaKeyDay2,
   registeredTeamCount: eventListings.registeredTeamCount,
+  registeredTeamCountDay2: eventListings.registeredTeamCountDay2,
   teamCountUpdatedAt: eventListings.teamCountUpdatedAt,
 } as const
 

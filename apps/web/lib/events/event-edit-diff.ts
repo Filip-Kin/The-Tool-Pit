@@ -21,7 +21,7 @@ export const EVENT_EDIT_KEY_LABELS: Record<keyof EventEditProposalData, string> 
   startDate: 'First day',
   endDate: 'Last day',
   days: 'Competition days',
-  parallelDivisions: 'Two 1-day divisions',
+  parallelDivisions: 'Each day is its own 1-day event',
   capacity: 'Capacity',
   costUsd: 'Cost (USD)',
   costNote: 'Cost note',

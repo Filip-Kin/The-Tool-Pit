@@ -54,13 +54,18 @@ export interface PublicEvent {
   eventStatus: EventStatus
   website: string | null
   registrationUrl: string | null
+  /** Day 2's own sign-up form on a 2x 1-day event; null when one form covers both days. */
+  registrationUrlDay2: string | null
   volunteerUrl: string | null
   chiefDelphiUrl: string | null
   contactEmail: string | null
   notes: string | null
   tbaKey: string | null
+  tbaKeyDay2: string | null
   /** Team count from the latest approved roster snapshot (TBA or a vetted scrape). */
   registeredTeamCount: number | null
+  /** Day 2's count on a 2x 1-day event (registeredTeamCount is then day 1's). */
+  registeredTeamCountDay2: number | null
   teamCountUpdatedAt: string | null
 }
 
@@ -488,9 +493,26 @@ export function eventLocation(ev: Pick<PublicEvent, 'venueName' | 'city' | 'regi
   return [ev.venueName, ev.city, ev.region, ev.country].filter(Boolean).join(', ')
 }
 
-/** Day-count phrase: "1 day", "2 days", "two 1-day events" for the parallel split. */
+/** Day-count phrase: "1 day", "2 days", "2x 1-day events" when each day is its own event. */
 export function daysLabel(ev: Pick<PublicEvent, 'days' | 'parallelDivisions'>): string | null {
-  if (ev.parallelDivisions) return `Two ${ev.days ?? 1}-day events`
+  if (ev.parallelDivisions) return `2x ${ev.days ?? 1}-day events`
   if (!ev.days) return null
   return ev.days === 1 ? '1 day' : `${ev.days} days`
+}
+
+/**
+ * "Sat Sep 12" for one day of a two-1-day-events listing: day 1 is startDate,
+ * day 2 is endDate (or the day after start). "Day N" when there are no dates.
+ */
+export function eventDayShort(ev: Pick<PublicEvent, 'startDate' | 'endDate'>, day: 1 | 2): string {
+  let iso: string | null = null
+  if (day === 1) iso = ev.startDate ?? null
+  else if (ev.endDate && ev.endDate !== ev.startDate) iso = ev.endDate
+  else if (ev.startDate) {
+    const d = new Date(`${ev.startDate}T00:00:00Z`)
+    d.setUTCDate(d.getUTCDate() + 1)
+    iso = d.toISOString().slice(0, 10)
+  }
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return `Day ${day}`
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
 }

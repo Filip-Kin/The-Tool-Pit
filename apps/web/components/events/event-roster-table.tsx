@@ -35,6 +35,17 @@ interface RosterTeamRow {
 
 type LoadState = 'loading' | 'ready' | 'error'
 
+/**
+ * One day's roster of a "2x 1-day" event (one event, two days, each day its
+ * own tournament with its own team list). The API sends `days` only for those;
+ * an ordinary event sends `teams` alone.
+ */
+interface DayRosterRow {
+  day: number
+  label: string
+  teams: RosterTeamRow[]
+}
+
 /** Avatars come from the shared team-avatar service. 404 is normal (many
  * off-season teams have none), so a team without one falls back to the service's
  * default avatar; only if THAT also fails do we show the number in a tile. */
@@ -124,6 +135,8 @@ function byWaitlistOrder(a: RosterTeamRow, b: RosterTeamRow): number {
 
 export function EventRosterTable({ eventId }: { eventId: string }) {
   const [teams, setTeams] = useState<RosterTeamRow[]>([])
+  const [days, setDays] = useState<DayRosterRow[]>([])
+  const [activeDay, setActiveDay] = useState<number>(1)
   const [state, setState] = useState<LoadState>('loading')
 
   useEffect(() => {
@@ -131,11 +144,16 @@ export function EventRosterTable({ eventId }: { eventId: string }) {
     const ctrl = new AbortController()
     setState('loading')
     setTeams([])
+    setDays([])
     fetch(`/api/events/${eventId}/roster`, { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((data: { teams?: RosterTeamRow[] }) => {
+      .then((data: { teams?: RosterTeamRow[]; days?: DayRosterRow[] }) => {
         if (!active) return
         setTeams(Array.isArray(data.teams) ? data.teams : [])
+        const d = Array.isArray(data.days) ? data.days.filter((x) => Array.isArray(x.teams)) : []
+        setDays(d)
+        // Open on the first day that has anyone in it.
+        setActiveDay(d.find((x) => x.teams.length > 0)?.day ?? d[0]?.day ?? 1)
         setState('ready')
       })
       .catch((err: unknown) => {
@@ -154,8 +172,12 @@ export function EventRosterTable({ eventId }: { eventId: string }) {
   // half-built table.
   if (state !== 'ready' || teams.length === 0) return null
 
-  const waitlist = teams.filter((t) => t.waitlisted).sort(byWaitlistOrder)
-  const registered = teams.filter((t) => !t.waitlisted)
+  // A 2x 1-day event shows one list per day behind tabs; the heading count is
+  // then the DAY's count, and each tab carries its own day's size.
+  const twoDay = days.length > 1
+  const shown = twoDay ? (days.find((d) => d.day === activeDay)?.teams ?? []) : teams
+  const waitlist = shown.filter((t) => t.waitlisted).sort(byWaitlistOrder)
+  const registered = shown.filter((t) => !t.waitlisted)
 
   return (
     <section className="flex flex-col gap-2 border-t border-border-subtle pt-4">
@@ -163,6 +185,31 @@ export function EventRosterTable({ eventId }: { eventId: string }) {
         Registered teams
         <span className="ml-1.5 font-normal text-muted">{registered.length}</span>
       </h3>
+      {twoDay && (
+        <div role="tablist" aria-label="Day" className="flex gap-1 rounded-lg bg-surface-2 p-1">
+          {days.map((d) => {
+            const on = d.day === activeDay
+            return (
+              <button
+                key={d.day}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => setActiveDay(d.day)}
+                className={
+                  'flex-1 rounded-md px-3 py-1.5 text-sm transition-colors ' +
+                  (on ? 'bg-surface font-medium text-foreground shadow-sm' : 'text-muted hover:text-foreground')
+                }
+              >
+                {d.label}
+                <span className={'ml-1.5 tabular-nums ' + (on ? 'text-muted' : 'text-muted-2')}>
+                  {d.teams.filter((t) => !t.waitlisted).length}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
       {/* The body scrolls on its own (capped height + overflow), with a sticky
           header, so a 30-plus team roster stays inside the dialog. The dialog
           itself is capped at 85vh and scrolls, so nothing runs off-screen on

@@ -255,6 +255,10 @@ export const HUMAN_EDITABLE_EVENT_KEYS = [
   'contactEmail',
   'notes',
   'tbaKey',
+  'registrationUrlDay2',
+  'tbaKeyDay2',
+  'teamListUrlDay2',
+  'manualTeamListTextDay2',
 ] as const
 
 export type HumanEditableEventKey = (typeof HUMAN_EDITABLE_EVENT_KEYS)[number]

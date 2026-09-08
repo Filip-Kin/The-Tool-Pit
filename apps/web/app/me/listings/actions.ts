@@ -32,6 +32,7 @@ import {
   type ListingEntityType,
   type ListingOwnerRole,
 } from '@the-tool-pit/db'
+import { latestRosterForDay } from '@the-tool-pit/db/roster-days'
 import { getCurrentUser } from '@/lib/auth/session'
 import { isAdmin } from '@/lib/admin/auth'
 import {

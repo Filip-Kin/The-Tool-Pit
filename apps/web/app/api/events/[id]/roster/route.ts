@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { and, desc, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { eventListings, eventRosterSnapshots, getTeamNames } from '@the-tool-pit/db'
+import { eventListings, getTeamNames } from '@the-tool-pit/db'
+import { eventDayLabel, latestApprovedRosters } from '@the-tool-pit/db/roster-days'
 import type { RosterTeam } from '@the-tool-pit/db'
 import { mergeRosterNames } from '@/lib/listings/roster-names'
 
@@ -32,33 +33,53 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const db = getDb()
-  const [snap] = await db
-    .select({ teams: eventRosterSnapshots.teams })
-    .from(eventRosterSnapshots)
-    .innerJoin(eventListings, eq(eventListings.id, eventRosterSnapshots.eventListingId))
-    .where(
-      and(
-        eq(eventRosterSnapshots.eventListingId, id),
-        eq(eventRosterSnapshots.status, 'approved'),
-        eq(eventListings.status, 'published'),
-      ),
-    )
-    .orderBy(desc(eventRosterSnapshots.fetchedAt))
+  const [listing] = await db
+    .select({
+      status: eventListings.status,
+      twoDay: eventListings.parallelDivisions,
+      startDate: eventListings.startDate,
+      endDate: eventListings.endDate,
+    })
+    .from(eventListings)
+    .where(eq(eventListings.id, id))
     .limit(1)
+  if (!listing || listing.status !== 'published') return NextResponse.json({ teams: [] })
 
-  const teams: RosterTeam[] = snap?.teams ?? []
-
+  const rosters = await latestApprovedRosters(db, id)
   // Fill the names the scrape did not carry. A roster often reads only numbers
   // (CORI hands back 48, 144, 379 with no names), so the team-name cache turns
   // those back into names at render time. ONE batched query for every number on
   // the card. A name the snapshot already has is kept, because a scraped name is
   // what the event chose to call the team; the cache only fills the gaps, and a
   // team the cache has never seen stays a bare number.
-  if (teams.length > 0) {
-    const cache = await getTeamNames(teams.map((t) => t.number))
-    const enriched = mergeRosterNames(teams, cache)
-    return NextResponse.json({ teams: enriched })
+  const numbers = rosters.flatMap((r) => r.teams.map((t) => t.number))
+  const cache = numbers.length > 0 ? await getTeamNames(numbers) : null
+  const named = (teams: RosterTeam[]) => (cache && teams.length > 0 ? mergeRosterNames(teams, cache) : teams)
+
+  // A two-1-day-events listing answers one list PER DAY (each day is its own
+  // tournament), plus `teams` as the union so an older reader still gets a
+  // roster. An ordinary listing answers `teams` alone.
+  if (listing.twoDay) {
+    const days = [1, 2]
+      .map((day) => {
+        const r = rosters.find((x) => x.day === day)
+        return { day, label: eventDayLabel(day, listing.startDate, listing.endDate), teams: named(r?.teams ?? []) }
+      })
+      .filter((d) => d.teams.length > 0 || rosters.some((x) => x.day != null))
+    const seen = new Set<string>()
+    const union: RosterTeam[] = []
+    for (const d of days) for (const t of d.teams) {
+      const k = `${t.number}:${t.robot ?? ''}`
+      if (!seen.has(k)) { seen.add(k); union.push(t) }
+    }
+    // Nothing per day yet but an older whole-event snapshot exists: show that.
+    if (days.length === 0) {
+      const whole = rosters.find((x) => x.day == null)
+      return NextResponse.json({ teams: named(whole?.teams ?? []) })
+    }
+    return NextResponse.json({ teams: union.sort((a, b) => a.number - b.number), days })
   }
 
-  return NextResponse.json({ teams })
+  const whole = rosters.find((x) => x.day == null) ?? rosters[0]
+  return NextResponse.json({ teams: named(whole?.teams ?? []) })
 }

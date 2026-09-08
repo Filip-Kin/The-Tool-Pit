@@ -27,8 +27,7 @@ import {
   fullnessRatio,
   eventHostTeams,
   hostTeamsLabel,
-  REGISTRATION_STATUS_SHORT,
-} from '@/lib/events/event-display'
+  REGISTRATION_STATUS_SHORT, eventDayShort } from '@/lib/events/event-display'
 
 /** A small round swatch matching this event's pin colour. */
 function PinDot({ ev, now }: { ev: PublicEvent; now: Date }) {
@@ -57,22 +56,62 @@ function FullnessBar({ ev, now }: { ev: PublicEvent; now: Date }) {
   // A waitlist IS the capacity signal. Most events never publish a team count,
   // so the bar used to be blank on exactly the events where "can I still get
   // in" matters most. If they are taking a waiting list, they are full.
-  const ratio = effectiveRegistrationStatus(ev, now) === 'waitlist' ? 1 : fullnessRatio(ev)
+  const waitlisted = effectiveRegistrationStatus(ev, now) === 'waitlist'
+  // A 2x 1-day event fills per day: two bars, each against the per-day
+  // capacity, labelled with the day, so "Saturday is full, Sunday has room"
+  // reads at a glance. One bar otherwise.
+  if (ev.parallelDivisions && (ev.registeredTeamCount != null || ev.registeredTeamCountDay2 != null)) {
+    const rows: Array<{ day: 1 | 2; count: number | null }> = [
+      { day: 1, count: ev.registeredTeamCount },
+      { day: 2, count: ev.registeredTeamCountDay2 },
+    ]
+    return (
+      <div className="mt-1.5 flex flex-col gap-1">
+        {rows.map(({ day, count }) => (
+          <BarRow
+            key={day}
+            label={eventDayShort(ev, day)}
+            ratio={waitlisted ? 1 : ratioFor(count, ev.capacity)}
+            text={count == null ? (waitlisted ? 'Full' : 'No list yet') : ev.capacity ? `${count} / ${ev.capacity}` : `${count} teams`}
+          />
+        ))}
+      </div>
+    )
+  }
+  const ratio = waitlisted ? 1 : fullnessRatio(ev)
   if (ratio == null) return null
-  const pct = Math.round(ratio * 100)
-  const tone = ratio >= 1 ? 'bg-official' : ratio >= 0.85 ? 'bg-official' : 'bg-rookie'
   return (
-    <div className="mt-1.5 flex items-center gap-2">
+    <div className="mt-1.5">
+      <BarRow
+        ratio={ratio}
+        text={
+          ev.registeredTeamCount == null
+            ? 'Full'
+            : ev.capacity
+              ? `${ev.registeredTeamCount} / ${ev.capacity} teams`
+              : `${ev.registeredTeamCount} teams`
+        }
+      />
+    </div>
+  )
+}
+
+function ratioFor(count: number | null, capacity: number | null | undefined): number | null {
+  if (count == null || !capacity) return null
+  return Math.min(1, count / capacity)
+}
+
+/** One slim bar with its caption; the day label leads it on a two-day event. */
+function BarRow({ label, ratio, text }: { label?: string; ratio: number | null; text: string }) {
+  const pct = ratio == null ? 0 : Math.round(ratio * 100)
+  const tone = ratio != null && ratio >= 0.85 ? 'bg-official' : 'bg-rookie'
+  return (
+    <div className="flex items-center gap-2">
+      {label && <span className="w-16 shrink-0 text-xs text-muted">{label}</span>}
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
         <div className={cn('h-full rounded-full', tone)} style={{ width: `${pct}%` }} />
       </div>
-      <span className="shrink-0 text-xs text-muted-2">
-        {ev.registeredTeamCount == null
-          ? 'Full'
-          : ev.capacity
-            ? `${ev.registeredTeamCount} / ${ev.capacity} teams`
-            : `${ev.registeredTeamCount} teams`}
-      </span>
+      <span className="shrink-0 text-xs text-muted-2">{text}</span>
     </div>
   )
 }
@@ -179,6 +218,12 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
   // that is really just the event page is not a distinct register link.
   const registerHref =
     ev.registrationUrl && ev.registrationUrl !== ev.website ? ev.registrationUrl : null
+  // Day 2's own form on a 2x 1-day event, when it has one. When the two days
+  // share one form there is one button, as before.
+  const registerHref2 =
+    ev.parallelDivisions && ev.registrationUrlDay2 && ev.registrationUrlDay2 !== ev.website && ev.registrationUrlDay2 !== registerHref
+      ? ev.registrationUrlDay2
+      : null
   // Volunteering falls back the same way registration does: the dedicated link
   // if there is one, otherwise the event's own page, which is where the form
   // usually lives. Null when nobody is asking for volunteers or we have no
@@ -264,7 +309,12 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
         <div className="flex flex-wrap gap-3">
           {registerHref && (
             <ButtonLink href={registerHref} external>
-              Register <ExternalLink className="h-3.5 w-3.5" />
+              Register{registerHref2 ? ` ${eventDayShort(ev, 1)}` : ''} <ExternalLink className="h-3.5 w-3.5" />
+            </ButtonLink>
+          )}
+          {registerHref2 && (
+            <ButtonLink href={registerHref2} external>
+              Register {eventDayShort(ev, 2)} <ExternalLink className="h-3.5 w-3.5" />
             </ButtonLink>
           )}
           {volunteerHref && (

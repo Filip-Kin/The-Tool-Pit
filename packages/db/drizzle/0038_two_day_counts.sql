@@ -1,0 +1,1 @@
+ALTER TABLE "event_listings" ADD COLUMN "registered_team_count_day2" integer;

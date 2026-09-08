@@ -136,11 +136,25 @@ export const eventListings = pgTable(
     /** Competition days: 1 or 2. Null when unknown. */
     days: integer('days'),
     /**
-     * The sheet's "2x 1" / "2x 32" shape: two independent single-day
-     * tournaments run in parallel the same weekend, each with its own capacity.
-     * True marks that split so the UI can say "two 1-day events".
+     * The sheet's "2x 1" shape: ONE event over two days where EACH DAY IS ITS
+     * OWN 1-DAY TOURNAMENT. Day 1 and day 2 each have their own team list, their
+     * own TBA event key, and sometimes their own registration form (the
+     * volunteer form is usually one for both days, so it stays single).
+     *
+     * Day 1 lives in the ordinary columns (tbaKey, teamListUrl,
+     * manualTeamListText, registrationUrl); day 2 in the *Day2 columns below.
+     * Roster snapshots carry `day` so the public page can show one list per
+     * day. The column keeps its old name; it is not, and never was, parallel.
      */
     parallelDivisions: boolean('parallel_divisions').notNull().default(false),
+    /** Day 2's own registration form, when the two days register separately. */
+    registrationUrlDay2: text('registration_url_day2'),
+    /** Day 2's own TBA event key (day 1 is tbaKey). */
+    tbaKeyDay2: text('tba_key_day2'),
+    /** Day 2's own team list page on the event site (day 1 is teamListUrl). */
+    teamListUrlDay2: text('team_list_url_day2'),
+    /** Day 2's hand-typed team list (day 1 is manualTeamListText). */
+    manualTeamListTextDay2: text('manual_team_list_text_day2'),
 
     // Capacity + cost
     /** Team slots (sheet "Slots"). The denominator for the fullness signal. */
@@ -188,8 +202,15 @@ export const eventListings = pgTable(
 
     // Fullness signal (denormalised from the latest approved roster snapshot,
     // so the map/list can render counts without joining every snapshot).
-    /** Team count from the latest APPROVED roster snapshot. Null = none yet. */
+    /**
+     * Team count from the latest APPROVED roster snapshot. Null = none yet.
+     * For a two-1-day-events listing this is DAY 1's count; day 2 has its own
+     * column, so the card can draw one fill bar per day against `capacity`,
+     * which is per day on those events (the sheet's "2x 32").
+     */
     registeredTeamCount: integer('registered_team_count'),
+    /** Day 2's team count on a two-1-day-events listing. Null otherwise. */
+    registeredTeamCountDay2: integer('registered_team_count_day2'),
     /** When that approved count was scraped. */
     teamCountUpdatedAt: timestamp('team_count_updated_at', { withTimezone: true }),
 
@@ -412,6 +433,12 @@ export const eventRosterSnapshots = pgTable(
     /** ROSTER_SNAPSHOT_STATUSES. Only 'approved' feeds the public listing. */
     status: text('status').notNull().default('pending'),
     error: text('error'),
+    /**
+     * Which day of a two-1-day-events listing this roster is for: 1 or 2.
+     * Null for an ordinary event (one roster for the whole thing). The public
+     * roster picks the latest approved snapshot PER DAY.
+     */
+    day: integer('day'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

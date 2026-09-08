@@ -260,6 +260,20 @@
       "when": 1788482983947,
       "tag": "0036_blushing_cerise",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788886967538,
+      "tag": "0037_two_day_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788887087850,
+      "tag": "0038_two_day_counts",
+      "breakpoints": true
     }
   ]
 }

@@ -38,6 +38,7 @@
  */
 import { createHash } from 'node:crypto'
 import { and, desc, eq, gte, inArray, isNull, ne, or } from 'drizzle-orm'
+import { latestRosterForDay } from '@the-tool-pit/db/roster-days'
 import { getDb, eventListings, eventRosterSnapshots, isHumanEdited, getTeamNames, type RosterTeam } from '@the-tool-pit/db'
 import { delay } from '../connectors/base.js'
 import { TbaEventsConnector, type TbaEventUpsert } from '../connectors/tba-events.js'
@@ -294,6 +295,8 @@ export async function processRosterRefreshJob(
       id: eventListings.id,
       name: eventListings.name,
       tbaKey: eventListings.tbaKey,
+      tbaKeyDay2: eventListings.tbaKeyDay2,
+      parallelDivisions: eventListings.parallelDivisions,
       teamListUrl: eventListings.teamListUrl,
       teamListMode: eventListings.teamListMode,
       startDate: eventListings.startDate,
@@ -311,68 +314,78 @@ export async function processRosterRefreshJob(
   const wanted = listings.filter(
     (l) =>
       l.teamListMode !== 'manual' &&
-      (l.tbaKey || l.teamListUrl) &&
+      (l.tbaKey || l.teamListUrl || l.tbaKeyDay2) &&
       (!payload.listingId || l.id === payload.listingId),
   )
   // Source per listing decided by timing, not by "does it have a key". A listing
   // with both a tbaKey and a teamListUrl reads from its own site until it starts
   // and from TBA after. See chooseRosterSource.
   const today = new Date().toISOString().slice(0, 10)
-  const withKey = wanted.filter((l) => chooseRosterSource(l, today) === 'tba')
+  // A listing with only a day-2 TBA key (day 1 not coded yet) still reads TBA.
+  const withKey = wanted.filter(
+    (l) => chooseRosterSource(l, today) === 'tba' || (!l.tbaKey && !l.teamListUrl && l.tbaKeyDay2),
+  )
   const siteOnly = wanted.filter((l) => chooseRosterSource(l, today) === 'site')
   stats.considered = wanted.length
 
+  // ONE READ PER DAY on a two-1-day-events listing (each day is its own TBA
+  // event with its own key); one read per listing otherwise. Snapshots carry the
+  // day, the previous-hash check is per day, and the count lands in the day's
+  // own column so the card can draw a fill bar per day.
   for (const listing of withKey) {
-    const tbaKey = listing.tbaKey as string
-    try {
-      const { teams, httpStatus } = await fetchRoster(tbaKey, apiKey)
-      const hash = hashTeams(teams)
-
-      const [previous] = await db
-        .select({ contentHash: eventRosterSnapshots.contentHash })
-        .from(eventRosterSnapshots)
-        .where(eq(eventRosterSnapshots.eventListingId, listing.id))
-        .orderBy(desc(eventRosterSnapshots.fetchedAt))
-        .limit(1)
-
-      const didChange = previous?.contentHash !== hash
-
-      await db.insert(eventRosterSnapshots).values({
-        eventListingId: listing.id,
-        sourceUrl: `${TBA_BASE}/event/${tbaKey}/teams/simple`,
-        httpStatus,
-        teamCount: teams.length,
-        teams,
-        contentHash: hash,
-        changed: didChange,
-        // TBA is authoritative, so its snapshots need no human review. A future
-        // per-site scrape would land 'pending' instead.
-        status: 'approved',
-      })
-
-      if (teams.length > 0) {
-        await db
-          .update(eventListings)
-          .set({ registeredTeamCount: teams.length, teamCountUpdatedAt: new Date(), updatedAt: new Date() })
-          .where(eq(eventListings.id, listing.id))
-      } else {
-        // An event TBA has not populated keeps whatever count it had rather
-        // than being reset to zero, which would read as "nobody signed up".
-        stats.empty++
+    const units: Array<{ day: number | null; tbaKey: string }> = listing.parallelDivisions
+      ? [
+          ...(listing.tbaKey ? [{ day: 1, tbaKey: listing.tbaKey }] : []),
+          ...(listing.tbaKeyDay2 ? [{ day: 2, tbaKey: listing.tbaKeyDay2 }] : []),
+        ]
+      : [{ day: null, tbaKey: listing.tbaKey as string }]
+    for (const unit of units) {
+      const { day, tbaKey } = unit
+      const tag = day ? `${tbaKey}, day ${day}` : tbaKey
+      try {
+        const { teams, httpStatus } = await fetchRoster(tbaKey, apiKey)
+        const hash = hashTeams(teams)
+        const previous = await latestRosterForDay(db, listing.id, day, ['approved', 'pending', 'rejected'])
+        const didChange = previous?.contentHash !== hash
+        await db.insert(eventRosterSnapshots).values({
+          eventListingId: listing.id,
+          sourceUrl: `${TBA_BASE}/event/${tbaKey}/teams/simple`,
+          httpStatus,
+          teamCount: teams.length,
+          teams,
+          contentHash: hash,
+          changed: didChange,
+          day,
+          // TBA is authoritative, so its snapshots need no human review. A future
+          // per-site scrape would land 'pending' instead.
+          status: 'approved',
+        })
+        if (teams.length > 0) {
+          await db
+            .update(eventListings)
+            .set({
+              ...(day === 2 ? { registeredTeamCountDay2: teams.length } : { registeredTeamCount: teams.length }),
+              teamCountUpdatedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(eventListings.id, listing.id))
+        } else {
+          // An event TBA has not populated keeps whatever count it had rather
+          // than being reset to zero, which would read as "nobody signed up".
+          stats.empty++
+        }
+        if (didChange) {
+          stats.changed++
+          console.log(`[roster-refresh] ${listing.name} (${tag}): ${teams.length} teams`)
+        } else {
+          stats.unchanged++
+        }
+      } catch (err) {
+        stats.failed++
+        console.error(`[roster-refresh] ${listing.name} (${tag}): ${String(err)}`)
       }
-
-      if (didChange) {
-        stats.changed++
-        console.log(`[roster-refresh] ${listing.name} (${tbaKey}): ${teams.length} teams`)
-      } else {
-        stats.unchanged++
-      }
-    } catch (err) {
-      stats.failed++
-      console.error(`[roster-refresh] ${listing.name} (${tbaKey}): ${String(err)}`)
+      await delay(250)
     }
-
-    await delay(250)
   }
 
   // #region the event's own team list
@@ -412,17 +425,11 @@ export async function processRosterRefreshJob(
       // The roster last known to be real: the newest non-empty snapshot that is
       // approved or pending review. A garbage run is stored REJECTED, so it can
       // never become the baseline the suspect guard compares against.
-      const [previousSnap] = await db
-        .select({ teams: eventRosterSnapshots.teams, contentHash: eventRosterSnapshots.contentHash })
-        .from(eventRosterSnapshots)
-        .where(
-          and(
-            eq(eventRosterSnapshots.eventListingId, listing.id),
-            inArray(eventRosterSnapshots.status, ['approved', 'pending']),
-          ),
-        )
-        .orderBy(desc(eventRosterSnapshots.fetchedAt))
-        .limit(1)
+      // On a two-1-day-events listing the team-list page is DAY 1's (day 2's
+      // own page, teamListUrlDay2, is stored but not scraped yet: the parser
+      // store is one per listing). Baseline and snapshots are per day.
+      const siteDay: number | null = listing.parallelDivisions ? 1 : null
+      const previousSnap = await latestRosterForDay(db, listing.id, siteDay)
       const previousTeams = (previousSnap?.teams ?? []) as RosterTeam[]
 
       const hasParser = Boolean(listing.teamListParser)
@@ -482,6 +489,7 @@ export async function processRosterRefreshJob(
               teams: badTeams,
               contentHash: hashTeams(badTeams),
               changed: false,
+              day: siteDay,
               status: 'rejected',
               error: `suspect roster kept out: ${freshSuspect.reason ?? suspect.reason}`,
             })
@@ -519,6 +527,7 @@ export async function processRosterRefreshJob(
         teams,
         contentHash: hash,
         changed: didChange,
+        day: siteDay,
         // Clean scrape: trusted like TBA and auto-approved. The public count is
         // written below, so the snapshot and the listing agree in one pass.
         status: decision.status,

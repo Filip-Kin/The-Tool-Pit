@@ -80,6 +80,10 @@
     "./untrusted-text": {
       "bun": "./src/untrusted-text.ts",
       "default": "./dist/untrusted-text.js"
+    },
+    "./roster-days": {
+      "bun": "./src/roster-days.ts",
+      "default": "./dist/roster-days.js"
     }
   },
   "main": "./dist/index.js",
