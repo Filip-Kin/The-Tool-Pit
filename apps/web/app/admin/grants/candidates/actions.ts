@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { eq, or } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
 import { grantCandidates, grantCycles, grantRequirements, grants, grantSources } from '@the-tool-pit/db'
@@ -20,6 +20,7 @@ import {
 } from '@/lib/admin/grants'
 import { notifyGrantPublished, notifyGrantCandidateRejected } from '@/lib/notify/approvals'
 import { grantGrantOwnership } from '@/lib/listings/submitter-ownership'
+import { discoverySourceKind, findGrant, loadCandidate, publishCandidateFromForm } from '@/lib/admin/grant-publish'
 
 const QUEUE_PATH = '/admin/grants/candidates'
 
@@ -29,54 +30,6 @@ const QUEUE_PATH = '/admin/grants/candidates'
  * just read and corrected. The other three actions are the ways of saying no.
  */
 
-/**
- * The real discovery angle that found this candidate, as a grants.source value.
- *
- * The connector writes it to rawMetadata.discoveredVia as `<connector>:<detail>`
- * (`web_search:...`, `team_sponsors:...`, `seed:...`, `chief_delphi:...`) or the
- * bare `public submission`. sourceId is NOT this signal: a web_search find has
- * no source row and a curated seed does, so keying the label off sourceId
- * inverted it, labelling a crawler find 'admin' and a seed 'web_search'.
- * Anything unrecognised was typed into the admin by hand, which is 'admin'.
- */
-function discoverySourceKind(discoveredVia: string | null | undefined): GrantSourceKind {
-  const via = discoveredVia ?? ''
-  const connector = (via.includes(':') ? via.slice(0, via.indexOf(':')) : via).trim().toLowerCase()
-  switch (connector) {
-    case 'web_search':
-      return 'web_search'
-    case 'team_sponsors':
-      return 'team_sponsors'
-    case 'chief_delphi':
-      return 'chief_delphi'
-    case 'seed':
-      return 'seed'
-    case 'public submission':
-      return 'submission'
-    default:
-      return 'admin'
-  }
-}
-
-/** Look a grant up by uuid or slug. Admins paste either. */
-async function findGrant(ref: string) {
-  const clean = ref.trim().toLowerCase()
-  if (!clean) return null
-  const db = getDb()
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(clean)
-  const [row] = await db
-    .select({ id: grants.id, slug: grants.slug, name: grants.name })
-    .from(grants)
-    .where(isUuid ? or(eq(grants.id, clean), eq(grants.slug, clean)) : eq(grants.slug, clean))
-    .limit(1)
-  return row ?? null
-}
-
-async function loadCandidate(candidateId: string) {
-  const db = getDb()
-  const [row] = await db.select().from(grantCandidates).where(eq(grantCandidates.id, candidateId)).limit(1)
-  return row ?? null
-}
 
 /**
  * Publish a candidate as a new grant, from the corrected editor form.
@@ -91,109 +44,16 @@ export async function publishGrantCandidate(
   form: FormData,
 ): Promise<{ error?: string; slug?: string }> {
   await assertAdmin()
-  const db = getDb()
-
-  const candidate = await loadCandidate(candidateId)
-  if (!candidate) return { error: 'Candidate not found.' }
-  if (candidate.matchedGrantId) return { error: 'This candidate is already attached to a grant.' }
-
-  const parsed = parseGrantFields(form)
-  if (parsed.error) return { error: parsed.error }
-
   const who = await adminIdentity()
-  const now = new Date()
-  const slug = await uniqueGrantSlug(parsed.values.name!)
-  const funderId = parsed.funderName ? await resolveFunderByName(parsed.funderName) : null
-  const status = parsed.values.status ?? 'pending'
-
-  const [created] = await db
-    .insert(grants)
-    .values({
-      ...parsed.values,
-      name: parsed.values.name!,
-      infoUrl: parsed.values.infoUrl!,
-      slug,
-      funderId,
-      // Provenance: the discovery angle that found it, not the moderator.
-      source: discoverySourceKind(candidate.rawMetadata?.discoveredVia),
-      verifiedAt: now,
-      verifiedBy: who,
-      publishedAt: status === 'published' ? now : null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .returning({ id: grants.id, slug: grants.slug })
-
-  // An opening cycle is optional. A grant with no confirmed dates is still
-  // worth listing; an invented date is not, so the cycle is only written when
-  // the admin actually filled the year in.
-  if (String(form.get('cycleYear') ?? '').trim()) {
-    const cycle = parseCycleFields(form)
-    if (cycle.error) {
-      // The grant is already in, so fail loudly rather than rolling back and
-      // making the admin retype the whole listing.
-      revalidatePath(QUEUE_PATH)
-      return { error: `Grant saved, but the cycle was not: ${cycle.error}. Add it in the editor.`, slug: created.slug }
-    }
-    await db.insert(grantCycles).values({
-      grantId: created.id,
-      ...cycle.values,
-      verifiedAt: now,
-      verifiedBy: who,
-    })
-  }
-
-  // Eligibility the moderator confirmed on the deck. Only 'yes' answers write
-  // a rule: a requirement row can rule a team OUT, and "the funder does not
-  // require this" is not a rule. The 'no' and 'unknown' answers stay readable
-  // on the candidate's extraction, which is where "not stated" belongs.
-  const requirements = reviewRequirements(form)
-  if (requirements.length > 0) {
-    await db.insert(grantRequirements).values(
-      requirements.map((r) => ({
-        grantId: created.id,
-        kind: r.kind,
-        operator: r.operator,
-        value: r.value,
-        label: r.label,
-        isBlocking: r.isBlocking,
-        sortOrder: r.sortOrder,
-      })),
-    )
-  }
-
-  await db
-    .update(grantCandidates)
-    .set({
-      status: 'published',
-      matchedGrantId: created.id,
-      rejectionReason: null,
-      rejectionKind: null,
-      reviewNote: null,
-      updatedAt: now,
-    })
-    .where(eq(grantCandidates.id, candidateId))
-  await bumpSourceCounter(candidate.sourceId, 'yield')
-
-  // Same rule as every other vertical: whoever submitted it runs it, unless
-  // they ticked "I am only passing this along". A grant a team administers, or
-  // a programme officer's own, is a real case and is what this is for.
-  await grantGrantOwnership(candidateId, created.id)
-
-  // The name that goes in the email is the one on the LISTING, not the one that
-  // was submitted: a moderator has just read the funder's page and corrected
-  // the form, so telling the submitter what they typed would be telling them
-  // something that is no longer true.
-  await notifyGrantPublished(candidateId, {
-    name: parsed.values.name!,
-    slug: created.slug,
-    funderName: parsed.funderName ?? null,
-  })
-
+  const out = await publishCandidateFromForm(candidateId, form, who)
+  if (out.error) return { error: out.error }
   revalidatePath(QUEUE_PATH)
+  if (out.cycleError) {
+    return { error: `Grant saved, but the cycle was not: ${out.cycleError}. Add it in the editor.`, slug: out.slug }
+  }
   revalidatePath('/admin/grants')
-  revalidateGrantPublic(created.slug)
-  return { slug: created.slug }
+  revalidateGrantPublic(out.slug!)
+  return { slug: out.slug }
 }
 
 /**
