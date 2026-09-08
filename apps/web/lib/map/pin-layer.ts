@@ -42,10 +42,14 @@ export interface PinLayer {
   destroy(): void
 }
 
-/** Diameter multiplier for a zoom level: 0.6x at zoom 4 and below, 1.4x at zoom 15 and above. */
+/**
+ * Diameter multiplier for a zoom level. 0.45x at zoom 4 and below, 1.2x at
+ * zoom 15 and above, and the curve is eased so pins stay small through the
+ * regional zooms (0.6x at 8, 0.9x at 12) and only grow near street level.
+ */
 export function pinScale(zoom: number): number {
   const t = Math.min(1, Math.max(0, (zoom - 4) / 11))
-  return 0.6 + 0.8 * t
+  return 0.45 + 0.75 * Math.pow(t, 1.6)
 }
 
 /** Two pins closer than this are "the same venue": one campus, one gym, one car park. */
