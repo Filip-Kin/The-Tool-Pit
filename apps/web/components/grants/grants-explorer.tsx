@@ -240,7 +240,7 @@ export function GrantsExplorer({ grants, now }: { grants: PublicGrant[]; now: Da
 
   return (
     <div className="grid gap-6 lg:grid-cols-[280px_1fr] lg:items-start">
-      <div className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-20">
+      <div className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-2" />
           <input
