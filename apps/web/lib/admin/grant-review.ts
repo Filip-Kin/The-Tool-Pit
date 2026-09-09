@@ -1,4 +1,5 @@
 import { isJunkRequirementLabel, restatesRequirement } from '@/lib/grants/listing-lint'
+import { eligibilityNotesFrom } from '@/lib/admin/grants'
 import type { GrantProgram } from '@the-tool-pit/db/grant-enums'
 /**
  * The review deck's pure half: what the deck shows, and what it writes.
@@ -273,6 +274,13 @@ export function reviewRequirements(form: FormData): ReviewRequirementRow[] {
   // instead, once, in reviewDefaults.
   if (eligibility && !isJunkRequirementLabel(eligibility) && !restatesRequirement(eligibility, rows.filter((r) => r.isBlocking)) && !repeatsProse(eligibility, prose)) {
     push({ kind: 'other', operator: 'exists', value: null, label: trimLabel(eligibility), isBlocking: false })
+  }
+  // "Priority for teams with a BAE mentor or within 75 miles of a BAE
+  // location" was filed under the amount because it sat next to it on the
+  // page. It is about who gets picked, so it is a note here.
+  for (const sentence of eligibilityNotesFrom(value('awardNotes'))) {
+    if (repeatsProse(sentence, `${prose} ${eligibility}`) || rows.some((r) => r.label === sentence)) continue
+    push({ kind: 'other', operator: 'exists', value: null, label: trimLabel(sentence), isBlocking: false })
   }
 
   return rows

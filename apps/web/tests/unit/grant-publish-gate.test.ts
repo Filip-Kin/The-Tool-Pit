@@ -39,3 +39,21 @@ describe('normalizeGrantName', () => {
     expect(normalizeGrantName('BAE Systems FIRST Team Grant')).not.toBe(normalizeGrantName('BAE Systems Scholarship'))
   })
 })
+
+import { cleanAwardNotes, eligibilityNotesFrom } from '@/lib/admin/grants'
+describe('award notes keep the money and hand the rest on', () => {
+  const bae = 'Priority for teams with a BAE mentor or within 75 miles of a BAE location. The FLL/FTC grant closed July 8, 2026. FRC teams receive up to $5,000.'
+  it('keeps only the amount sentence', () => {
+    // awardMax is unset here; with 5000 on the card the one-figure sentence would restate it and go too.
+    expect(cleanAwardNotes(bae, '', null, null)).toBe('FRC teams receive up to $5,000')
+  })
+  it('hands the priority sentence to who can apply and drops the closed round', () => {
+    expect(eligibilityNotesFrom(bae)).toEqual(['Priority for teams with a BAE mentor or within 75 miles of a BAE location.'])
+  })
+  it('drops a note that is only a priority sentence', () => {
+    expect(cleanAwardNotes('Priority for rookie teams.', '', null, null)).toBeNull()
+  })
+  it('leaves a plain money note alone', () => {
+    expect(cleanAwardNotes('Typically up to $10,000; larger gifts by prior arrangement.', '', null, 10000)).toBe('Typically up to $10,000; larger gifts by prior arrangement')
+  })
+})

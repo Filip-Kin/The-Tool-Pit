@@ -212,8 +212,40 @@ function pick<T extends readonly string[]>(raw: FormDataEntryValue | null, allow
  * range on the card ("up to $5,000" under "up to $5,000") says it twice; a
  * note that repeats the summary is padding. Null is a clean card.
  */
+/** A sentence about money: an amount, a range, what the award is made of. */
+const MONEY_RE = /(\$|€|£|\d[\d,]*\s?(dollars|usd|cad)|\b(award|amount|grant of|grants of|up to|per team|per school|per year|match(ing)?|in-kind|product credit|store credit|registration fee|stipend|reimburse|funding of|range|tier|maximum|minimum|cap(ped)?)\b)/i
+/** A sentence about who gets picked, not how much: it belongs under "who can apply". */
+const PRIORITY_RE = /\b(priority|preference|preferred|eligib|must be|located|within \d+ miles|near (a|our)|mentor|employee|serving|open to|limited to|only (teams|schools|nonprofits)|rookie|title i|underserved|first-time)\b/i
+/** A sentence about a round being closed or a date: it belongs to the round, not the amount. */
+const ROUND_RE = /\b(closed|closes|deadline|due|opens?|reopen|applications? (are|is) (now )?(open|closed))\b.*\b(20\d\d|january|february|march|april|may|june|july|august|september|october|november|december)\b|\b(closed|deadline)\b/i
+
+/**
+ * The sentences in an award note that are about who gets picked rather than
+ * how much. The requirements builder turns them into a "good to know" row so
+ * "Priority for teams with a BAE mentor" sits under who can apply, not under
+ * the amount.
+ */
+export function eligibilityNotesFrom(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  return raw
+    .replace(/\s+/g, ' ')
+    .split(/(?<=[.!?])\s+/)
+    .map((x) => x.trim())
+    .filter((x) => x.length >= 12 && PRIORITY_RE.test(x) && !MONEY_RE.test(x))
+}
+
 export function cleanAwardNotes(raw: string, prose: string, awardMin: number | null, awardMax: number | null): string | null {
   let note = scrubNarration(raw.replace(/\s+/g, ' ').trim(), 1) ?? ''
+  // Only the money stays under the amount. Who gets picked goes under who
+  // can apply (eligibilityNotesFrom); a closed round or a date goes to the
+  // round. One-sentence notes without a money word stay whole: "varies" and
+  // friends are refused below, and the rest is the funder describing the award.
+  const parts = note.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean)
+  if (parts.length > 1) {
+    note = parts.filter((x) => MONEY_RE.test(x) || !(PRIORITY_RE.test(x) || ROUND_RE.test(x))).join(' ')
+  } else if (parts.length === 1 && (PRIORITY_RE.test(parts[0]) || ROUND_RE.test(parts[0])) && !MONEY_RE.test(parts[0])) {
+    note = ''
+  }
   // The sheet's own facts were appended as "Restrictions: Yes"; strip them.
   note = note.replace(/\b(restrictions?|window per the sheet)\s*:\s*[^.]*\.?/gi, ' ').replace(/\s+/g, ' ').replace(/^[.\s]+|[\s.]+$/g, '').trim()
   if (!note) return null
