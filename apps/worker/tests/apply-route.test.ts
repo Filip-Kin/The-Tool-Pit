@@ -31,3 +31,24 @@ describe('judge (apply route)', () => {
     expect(r).toBeNull()
   })
 })
+
+describe('judge (apply route), second pass rules', () => {
+  const page = (body: string) => `<html><body>${body}</body></html>`
+  it('a sponsorship form behind a sign-in link is a portal', () => {
+    const r = judge('https://www.fabworks.com/sponsorships', page('<h1>Sponsorship request form</h1><p>Sign in to your account or create an account to continue.</p><a href="/login">Sign in</a>'), 'browser')
+    expect(r?.status).toBe('portal')
+  })
+  it('an apply path that lands on a login is a portal', () => {
+    const r = judge('https://www.aiaa-awards.org/a/solicitations/1624/home', page('<h1>Login required</h1><form><input type="email" name="u"><input type="password" name="p"><button type="submit">Log in</button></form>'), 'fetch')
+    expect(r?.status).toBe('portal')
+  })
+  it('a PDF that reads like an application is the form', () => {
+    const r = judge('http://sdspacegrant.sdsmt.edu/RoboticsMaterialsAward2026.pdf', '<pdf-form>Robotics Materials Award Application. Name of team: ____ Signature: ____</pdf-form>', 'pdf')
+    expect(r?.status).toBe('form')
+  })
+  it("Michigan's MiLogin gateway is a known portal", () => {
+    const r = judge('https://milogintp.michigan.gov/eai/tplogin/authenticate?URL=/', page('<h1>MiLogin</h1>'), 'browser')
+    expect(r?.status).toBe('portal')
+    expect(r?.evidence).toContain('MiLogin')
+  })
+})

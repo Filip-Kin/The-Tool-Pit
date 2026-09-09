@@ -63,6 +63,8 @@ const PORTAL_HOSTS: Array<[RegExp, string]> = [
   [/(^|\.)allegiancetech\.com$/i, 'Allegiance'],
   [/(^|\.)openwater\.com$/i, 'OpenWater'],
   [/(^|\.)hubspot\.com$/i, 'HubSpot form'],
+  [/(^|\.)milogin(tp)?\.michigan\.gov$/i, 'MiLogin (Michigan NexSys)'],
+  [/(^|\.)netforum\.aiaa\.org$/i, 'AIAA member portal'],
 ]
 
 /** Google Forms is only a form on its /forms/ path; docs.google.com hosts documents too. */
@@ -117,7 +119,7 @@ function gatedInput(html: string): boolean {
   return /<input[^>]+type="(password|email|text)"/i.test(html) && /<(button|input)[^>]*(type="submit"|>\s*(log ?in|sign ?in|continue|submit|next)\s*<)/i.test(html)
 }
 
-async function readHtml(url: string): Promise<{ html: string; status: number; how: 'fetch' | 'browser' | 'walled' | 'gone' }> {
+async function readHtml(url: string): Promise<{ html: string; status: number; how: 'fetch' | 'browser' | 'walled' | 'gone' | 'pdf' }> {
   try {
     const res = await politeFetch(url)
     const ct = res.headers.get('content-type') ?? ''
@@ -125,6 +127,17 @@ async function readHtml(url: string): Promise<{ html: string; status: number; ho
       const html = await res.text()
       // A JS shell says nothing; render it.
       if (html.replace(/<script[\s\S]*?<\/script>/gi, '').length > 2500) return { html, status: res.status, how: 'fetch' }
+    }
+    if (res.ok && /pdf/i.test(ct)) {
+      // A PDF at the application link is the form when it reads like one.
+      try {
+        const { extractText } = await import('unpdf')
+        const { text } = await extractText(new Uint8Array(await res.arrayBuffer()), { mergePages: true })
+        if (/(application|apply|applicant|signature|name of (team|school|organization))/i.test(text)) return { html: `<pdf-form>${text.slice(0, 2000).replace(/</g, ' ')}</pdf-form>`, status: res.status, how: 'pdf' }
+      } catch {
+        // unreadable PDF: fall through
+      }
+      return { html: '', status: res.status, how: 'fetch' }
     }
     if (res.ok && !/html/i.test(ct)) return { html: '', status: res.status, how: 'fetch' }
     // A 404 to curl is not always a 404 to a browser (Michigan's MiLogin answers
@@ -173,6 +186,9 @@ export function judge(url: string, html: string, how: string): Omit<ApplyRoute, 
   } catch {
     return { status: 'unverified', url: null, email: null, evidence: `not a URL: ${url}` }
   }
+  if (how === 'pdf') {
+    return { status: 'form', url, email: null, evidence: `a PDF application form (submit it as the page instructs)` }
+  }
   const text = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
   const closed = text.match(CLOSED_RE)
   const portal = portalName(parsed)
@@ -182,8 +198,12 @@ export function judge(url: string, html: string, how: string): Omit<ApplyRoute, 
   if (portal) {
     return { status: 'portal', url, email: null, evidence: `${portal} at ${parsed.hostname}${LOGIN_RE.test(text.slice(0, 4000)) ? ' (behind an account login)' : ''}, read via ${how}` }
   }
-  if (OWN_PORTAL_RE.test(text.slice(0, 6000)) && gatedInput(html)) {
-    return { status: 'portal', url, email: null, evidence: `the funder's own application system at ${parsed.hostname} (login or access gate on a page about applying), read via ${how}` }
+  if (OWN_PORTAL_RE.test(text.slice(0, 6000)) && (gatedInput(html) || /href="[^"]*(login|sign-?in|signin|account)[^"]*"/i.test(html))) {
+    return { status: 'portal', url, email: null, evidence: `the funder's own application system at ${parsed.hostname} (behind a login on a page about applying), read via ${how}` }
+  }
+  // Reached an apply path and landed on a login: the application is behind it.
+  if (/(apply|application|solicitation|submit|portal)/i.test(parsed.pathname) && gatedInput(html) && LOGIN_RE.test(text.slice(0, 4000))) {
+    return { status: 'portal', url, email: null, evidence: `login-gated application at ${parsed.hostname}${parsed.pathname.slice(0, 40)}, read via ${how}` }
   }
   const form = formOnPage(html)
   if (form) {
