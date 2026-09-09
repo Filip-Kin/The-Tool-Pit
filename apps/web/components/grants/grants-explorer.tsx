@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { GRANT_EFFORT_LEVELS, GRANT_PROGRAMS } from '@the-tool-pit/db/grant-enums'
@@ -30,10 +30,65 @@ import { GrantCard } from './grant-card'
  * render is byte-identical to the HTML and the page load cannot hydrate into a
  * different ordering than it painted.
  */
+/**
+ * Filters persist per browser. A Michigan team picking MI on every visit is
+ * the kind of friction that makes a page feel unowned. Kept in localStorage
+ * under a namespaced key (six verticals share this origin), restored AFTER
+ * mount so the first client render still matches the server HTML, and the
+ * search text is deliberately not kept: a stale query on arrival reads as a
+ * broken page. An account-level copy can come later; the shape is the same.
+ */
+const FILTERS_KEY = 'frc.tools:grants:filters'
+interface StoredFilters {
+  filters: Omit<GrantFilters, 'q'>
+  awardBand: string | null
+  deadlineWindow: string | null
+}
+function readStoredFilters(): StoredFilters | null {
+  try {
+    const raw = window.localStorage.getItem(FILTERS_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<StoredFilters>
+    return { filters: parsed.filters ?? {}, awardBand: parsed.awardBand ?? null, deadlineWindow: parsed.deadlineWindow ?? null }
+  } catch {
+    return null
+  }
+}
+function writeStoredFilters(value: StoredFilters): void {
+  try {
+    const { filters, awardBand, deadlineWindow } = value
+    const empty = Object.values(filters).every((v) => v === undefined || (Array.isArray(v) && v.length === 0)) && !awardBand && !deadlineWindow
+    if (empty) window.localStorage.removeItem(FILTERS_KEY)
+    else window.localStorage.setItem(FILTERS_KEY, JSON.stringify(value))
+  } catch {
+    // Storage closed (private browsing, quota): the page still works, it just forgets.
+  }
+}
+
 export function GrantsExplorer({ grants, now }: { grants: PublicGrant[]; now: Date }) {
   const [filters, setFilters] = useState<GrantFilters>({})
   const [awardBand, setAwardBand] = useState<string | null>(null)
   const [deadlineWindow, setDeadlineWindow] = useState<string | null>(null)
+  const [restored, setRestored] = useState(false)
+
+  // Restore what this browser used last time, once, after mount.
+  useEffect(() => {
+    const stored = readStoredFilters()
+    if (stored) {
+      setFilters((f) => ({ ...stored.filters, q: f.q }))
+      setAwardBand(stored.awardBand)
+      setDeadlineWindow(stored.deadlineWindow)
+    }
+    setRestored(true)
+  }, [])
+
+  // Remember every change after that. Not before: writing the empty initial
+  // state on mount would wipe the stored one before it was read.
+  useEffect(() => {
+    if (!restored) return
+    const { q: _q, ...rest } = filters
+    writeStoredFilters({ filters: rest, awardBand, deadlineWindow })
+  }, [restored, filters, awardBand, deadlineWindow])
 
   // Facets come from the grants actually in the list, not from a fixed list of
   // every country and state. A filter for a place with no grants in it is a
