@@ -160,15 +160,17 @@ export function reviewDefaults(input: {
     awardCurrency: text(fields?.awardCurrency, 'USD') || 'USD',
     awardNotes,
     renewable: tri(fields?.renewable),
-    deadlineType: text(fields?.deadlineType, cls.deadlineType ?? sub.deadlineType ?? 'unknown') || 'unknown',
+    deadlineType: (text(fields?.deadlineType, cls.deadlineType ?? sub.deadlineType ?? 'unknown') || 'unknown') === 'unknown' && input.extraction?.deadlineProof?.kind === 'rolling' ? 'rolling' : (text(fields?.deadlineType, cls.deadlineType ?? sub.deadlineType ?? 'unknown') || 'unknown') === 'unknown' && input.extraction?.deadlineProof?.kind === 'dated' ? 'fixed' : (text(fields?.deadlineType, cls.deadlineType ?? sub.deadlineType ?? 'unknown') || 'unknown'),
     effortLevel: text(fields?.effortLevel, sub.effortLevel ?? 'unknown') || 'unknown',
     // The year a cycle closes in is not a guess when a date is already in
     // hand: it is the year printed on that date. Only ever read off a date the
     // extraction supported with a quote.
-    cycleYear: fields?.cycleYear.value ?? yearOf(fields?.deadlineAt.value ?? fields?.opensAt.value ?? null),
+    cycleYear: fields?.cycleYear.value ?? yearOf(fields?.deadlineAt.value ?? fields?.opensAt.value ?? (input.extraction?.deadlineProof?.kind === 'dated' ? input.extraction.deadlineProof.date ?? null : null)),
     opensAt: text(fields?.opensAt),
-    deadlineAt: text(fields?.deadlineAt, sub.deadlineAt ?? ''),
-    deadlineNote: text(fields?.deadlineNote),
+    // The extractor's date, else the submitter's, else the funder's own dated
+    // sentence the proof pass found (dates are the fact a team needs most).
+    deadlineAt: text(fields?.deadlineAt, sub.deadlineAt ?? (input.extraction?.deadlineProof?.kind === 'dated' ? input.extraction.deadlineProof.date ?? '' : '')),
+    deadlineNote: text(fields?.deadlineNote) || (!fields?.deadlineAt.value && input.extraction?.deadlineProof?.kind === 'dated' && input.extraction.deadlineProof.quote ? `"${input.extraction.deadlineProof.quote.slice(0, 200)}"` : ''),
     decisionAt: text(fields?.decisionAt),
     eligibility: {
       requires501c3: tri(fields?.requires501c3),

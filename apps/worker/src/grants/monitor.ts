@@ -819,27 +819,36 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
       await db.update(grants).set({ ...fill, updatedAt: now }).where(eq(grants.id, grant.id))
       notes.push(`filled from the funder's page: ${Object.keys(fill).join(', ')}`)
     }
-    const newDeadline = proposed.find((c) => /^cycle\.\d{4}\.deadlineAt$/.test(c.field) && c.oldValue === null && typeof c.newValue === 'string')
-    if (newDeadline && proof && proof.kind === 'dated' && proof.date && String(proof.date).slice(0, 10) === String(newDeadline.newValue).slice(0, 10)) {
-      const year = Number(newDeadline.field.split('.')[1])
-      const deadlineAt = new Date(String(newDeadline.newValue))
+    // The funder's own dated sentence IS the deadline. Written as the round
+    // for that year when none is on file (future: open; past: closed, so the
+    // pattern shows). The extractor's proposal for the same year is then
+    // already applied; a differing extractor date waits for a person.
+    const dated: Array<{ date: string; quote: string; url: string }> = []
+    if (proof?.kind === 'dated' && proof.date && proof.quote) dated.push({ date: proof.date, quote: proof.quote, url: proof.url ?? grant.infoUrl })
+    if (proof?.past && now.getTime() - Date.parse(proof.past.date) < 15 * 30 * 86_400_000) dated.push(proof.past)
+    for (const d of dated) {
+      const year = Number(d.date.slice(0, 4))
+      if (!Number.isFinite(year) || cycles.some((c) => c.cycleYear === year)) continue
+      const deadlineAt = new Date(`${d.date}T23:59:59Z`)
+      if (Number.isNaN(deadlineAt.getTime())) continue
       const opens = proposed.find((c) => c.field === `cycle.${year}.opensAt`)
-      const note = proposed.find((c) => c.field === `cycle.${year}.deadlineNote`)
       await db.insert(grantCycles).values({
         grantId: grant.id,
         cycleYear: year,
         deadlineAt,
         opensAt: typeof opens?.newValue === 'string' ? opens.newValue : null,
-        deadlineNote: typeof note?.newValue === 'string' ? note.newValue : null,
+        deadlineNote: `The funder states the date; no time of day given. "${d.quote.slice(0, 200)}"`,
         status: deadlineAt.getTime() < now.getTime() ? 'closed' : 'open',
-        sourceUrl: proof.url ?? grant.infoUrl,
+        sourceUrl: d.url,
         isEstimated: false,
         verifiedAt: now,
         verifiedBy: 'system:deadline-proof',
       })
-      for (const c of proposed) if (c.field.startsWith(`cycle.${year}.`)) c.alreadyApplied = true
-      notes.push(`${year} deadline written: the funder's page says "${(proof.quote ?? '').slice(0, 100)}"`)
-      console.log(`[grant-monitor] ${grant.slug}: ${year} deadline ${deadlineAt.toISOString().slice(0, 10)} written from the funder's own sentence`)
+      cycles.push({ cycleYear: year } as (typeof cycles)[number])
+      for (const c of proposed) if (c.field.startsWith(`cycle.${year}.`) && (c.field.endsWith('.opensAt') || (c.field.endsWith('.deadlineAt') && String(c.newValue).slice(0, 10) === d.date))) c.alreadyApplied = true
+      if (grant.deadlineType === 'unknown') await db.update(grants).set({ deadlineType: 'fixed', updatedAt: now }).where(eq(grants.id, grant.id))
+      notes.push(`${year} round written from the funder's own sentence: "${d.quote.slice(0, 100)}"`)
+      console.log(`[grant-monitor] ${grant.slug}: ${year} deadline ${d.date} written from the funder's own sentence`)
     }
   }
 
