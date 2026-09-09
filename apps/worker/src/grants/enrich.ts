@@ -239,6 +239,14 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
 
   const { title, body } = readableText(meta)
 
+  // A CURATED lead: a row of the site owner's hand-kept grant sheet. The human
+  // already decided this funder is real and worth listing, so none of the
+  // deterministic gates below get a vote: a login portal at the link is the
+  // way in, a bot-walled page is still a grant, an index of the funder's
+  // programmes is the listing. The model still classifies it (a merchandise
+  // vendor on the sheet is still a vendor) but is told where it came from.
+  const curated = Boolean(meta.discoveredVia?.startsWith('sheet:'))
+
   // 1. Deterministic junk gate. Free, and it runs before any paid call because
   //    the Anthropic account is pay as you go and has run dry before.
   //
@@ -249,7 +257,7 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
   //    an unread candidate goes to a human instead.
   const readThePage = Boolean(meta.contentText?.trim())
   const junkReason = detectGrantJunkPage(title, body, { allowShortBody: !readThePage })
-  if (junkReason) {
+  if (junkReason && !curated) {
     await db
       .update(grantCandidates)
       .set({
@@ -276,7 +284,7 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
   //    suppressed with its kind, so it leaves the human queue and teaches the
   //    suppression-feedback loop instead of being rejected by hand every crawl.
   const shape = detectGrantPageShape(url)
-  if (shape) {
+  if (shape && !curated) {
     const shaped = shapeClassification(shape)
     const rejectionKind = machineRejectionKind(shaped)
     await db
@@ -304,7 +312,7 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
   //     drops secondhand grant databases and index/archive URL shapes. Every
   //     rejection is written with its reason and is reversible from the admin.
   const prefilter = deterministicGrantPrefilter({ url, title, body, discoveredVia: meta.discoveredVia })
-  if (!prefilter.keep) {
+  if (!prefilter.keep && !curated) {
     await db
       .update(grantCandidates)
       .set({
@@ -377,7 +385,7 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
   //    wait in the queue for a human to press "route to source"; with the
   //    aggregator connector now mining these, the pending inbox should hold
   //    real grants only. Below the bar it stays pending for the button.
-  if (classification.isAggregator && (classification.confidence ?? 0) >= AUTO_ROUTE_CONFIDENCE) {
+  if (classification.isAggregator && (classification.confidence ?? 0) >= AUTO_ROUTE_CONFIDENCE && !curated) {
     const routed = await routeAggregatorToSource({ ...candidate, rawMetadata: meta }, classification)
     console.log(`[grant-enrich] ${candidateId} aggregator auto-routed to grant_sources: ${routed} (${url})`)
   }

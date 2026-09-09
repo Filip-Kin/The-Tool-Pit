@@ -311,6 +311,7 @@ function getClient(): Anthropic {
 }
 
 const SYSTEM_PROMPT = `You are triaging web pages for a grants directory used by FIRST robotics teams (FRC, FTC, FLL) and other youth STEM teams.
+Some pages arrive as CURATED LEADS from the site owner's own list; the user message says so and states the rules that change for them.
 
 The ONLY question you answer is: can a robotics team APPLY for money (or in-kind goods) described on this page, now or in a future cycle?
 
@@ -379,6 +380,17 @@ function buildUserContent(
   // The discovery angle is real evidence: a search for "grant recipients" and a
   // Chief Delphi thread both push hard towards the announcement rejection.
   if (meta.discoveredVia) lines.push(`Discovered via: ${meta.discoveredVia}`)
+  if (meta.discoveredVia?.startsWith('sheet:')) {
+    lines.push(
+      '',
+      'CURATED LEAD. This row comes from the site owner\'s hand-kept spreadsheet of grants and sponsorships that FIRST teams apply to. ' +
+        'Treat it as a real grant or sponsorship programme unless the page shows it is clearly something else (a merchandise vendor, a dead domain, a page about an unrelated topic). ' +
+        'Rules that differ from a crawled page: a sheet status of "Closed" means the current cycle is closed, NOT that this is not a grant; ' +
+        'a login portal (Submittable, Fluxx, CyberGrants, SmartSimple) at the link is the way in, not a reason to reject; ' +
+        'a funder\'s own index of its giving programmes counts as the grant page here, so do not mark it isAggregator; ' +
+        'and missing page text is not evidence against it. The sheet\'s facts in the description are first-hand.',
+    )
+  }
 
   // What a human rejected recently, ranked against this page. A suppression
   // that only lives as free text teaches nothing, and the same list pages kept
