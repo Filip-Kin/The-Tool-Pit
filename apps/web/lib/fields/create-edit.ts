@@ -3,6 +3,9 @@ import { getDb } from '@/lib/db'
 import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import type { FieldEditProposalData } from '@the-tool-pit/db'
 import { sendApprovalNotice, reviewFieldEditUrl } from '@the-tool-pit/types'
+import { revalidatePath } from 'next/cache'
+import { adminSubmitter } from '@/lib/admin/auto-approve'
+import { applyFieldEditProposal } from '@/lib/fields/apply-edit'
 import { wrapLongitude } from '@/lib/geo/longitude'
 
 export interface CreateFieldEditInput {
@@ -45,7 +48,8 @@ export interface CreateFieldEditInput {
 }
 
 export interface CreateFieldEditResult {
-  status: 'pending' | 'error'
+  /** 'applied' only for an admin's own suggestion, written to the field on the spot. */
+  status: 'pending' | 'applied' | 'error'
   message: string
 }
 
@@ -139,6 +143,20 @@ export async function createFieldEditProposal(
     await db.insert(fieldEditProposalPhotos).values(
       newPhotos.map((p) => ({ proposalId: proposal.id, contentType: p.contentType, data: p.data })),
     )
+  }
+
+  // An admin's own suggestion is applied now with the same code the Apply
+  // button runs, photos included. No Discord notice and no "your edit was
+  // applied" email to themselves. The proposal table has no reviewer column,
+  // so the row records 'applied' and nothing more.
+  if (await adminSubmitter(input.submittedByUserId)) {
+    const applied = await applyFieldEditProposal(proposal.id, { notifySubmitter: false })
+    if (applied.error) {
+      return { status: 'pending', message: `Saved, but not applied: ${applied.error}. Finish it in the review queue.` }
+    }
+    revalidatePath('/admin/field-edits')
+    revalidatePath('/fields')
+    return { status: 'applied', message: 'Applied. You are an admin, so the edit went live without review.' }
   }
 
   const photoChange = [

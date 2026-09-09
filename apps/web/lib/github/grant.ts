@@ -188,9 +188,41 @@ export async function applyGithubGrants(
       continue
     }
 
-    // outcome === 'dispute'. Somebody else set this listing up. Real proof
-    // against an owned listing is the sharpest thing the claims queue gets, so
-    // it is filed and a person is told, and nothing is taken.
+    // outcome === 'dispute'. Somebody else set this listing up.
+    //
+    // An admin's own dispute is settled the way an admin settles any claim:
+    // approve, which adds them as an owner beside whoever is there
+    // (adminResolveClaim is additive too). Recorded as decided by them, and no
+    // Discord notice.
+    if (user.isAdmin) {
+      await db
+        .insert(listingOwners)
+        .values({
+          entityType: 'tool',
+          entityId: match.entityId,
+          userId: user.id,
+          role: 'owner',
+          verifiedVia: 'admin',
+          invitedBy: null,
+        })
+        .onConflictDoNothing()
+      await db.insert(listingClaims).values({
+        entityType: 'tool',
+        entityId: match.entityId,
+        userId: user.id,
+        method: 'github_account',
+        status: 'verified',
+        evidence,
+        reviewerNote: 'GitHub namespace matched an owned listing. Approved on the spot: the claimant is an admin.',
+        decidedByUserId: user.id,
+        decidedAt: new Date(),
+      })
+      summary.granted.push({ entityId: match.entityId, title: facts.title, href: facts.href })
+      continue
+    }
+
+    // Real proof against an owned listing is the sharpest thing the claims
+    // queue gets, so it is filed and a person is told, and nothing is taken.
     summary.disputed.push({ entityId: match.entityId, title: facts.title, href: facts.href })
     if (openClaimIds.has(match.entityId)) continue
 

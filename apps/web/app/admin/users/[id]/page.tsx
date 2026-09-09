@@ -8,6 +8,7 @@ import { listOwnedListings } from '@/lib/queries/listing-ownership'
 import { formatDate, formatDateTime } from '@/lib/format/date'
 import { Badge } from '@/components/ui/badge'
 import { OwnershipPanel } from './ownership-panel'
+import { AdminToggle } from './admin-toggle'
 
 /**
  * One account, and the listings it owns. The admin can revoke any ownership row
@@ -65,6 +66,9 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
           {user.blockedReason && <Badge variant="vendor">Blocked</Badge>}
         </div>
         <p className="mt-1 text-sm text-muted">{user.email || 'No email'}</p>
+        <div className="mt-3">
+          <AdminToggle userId={user.id} isAdmin={user.isAdmin} />
+        </div>
       </div>
 
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border border-border bg-surface p-4 text-sm sm:grid-cols-4">

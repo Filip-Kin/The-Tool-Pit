@@ -13,6 +13,9 @@ import { wrapLongitude } from '@/lib/geo/longitude'
 import { cleanTeamNumbers } from '@/lib/events/event-display'
 import { eventEditChanges } from '@/lib/events/event-edit-diff'
 import { sendApprovalNotice, reviewEventEditUrl } from '@the-tool-pit/types'
+import { revalidatePath } from 'next/cache'
+import { adminSubmitter } from '@/lib/admin/auto-approve'
+import { applyEventEditProposal } from '@/lib/events/apply-edit'
 
 export interface CreateEventEditInput {
   name?: string
@@ -58,7 +61,8 @@ export interface CreateEventEditInput {
 }
 
 export interface CreateEventEditResult {
-  status: 'pending' | 'error'
+  /** 'applied' only for an admin's own suggestion, written to the listing on the spot. */
+  status: 'pending' | 'applied' | 'error'
   message: string
 }
 
@@ -179,6 +183,19 @@ export async function createEventEditProposal(
       status: 'pending',
     })
     .returning({ id: eventEditProposals.id })
+
+  // An admin's own suggestion is applied now with the same code the Apply
+  // button runs. No Discord notice. The proposal table has no reviewer
+  // column, so the row records 'applied' and nothing more.
+  if (await adminSubmitter(input.submittedByUserId)) {
+    const applied = await applyEventEditProposal(proposal.id)
+    if (applied.error) {
+      return { status: 'pending', message: `Saved, but not applied: ${applied.error}. Finish it in the review queue.` }
+    }
+    revalidatePath('/admin/event-edits')
+    revalidatePath('/events')
+    return { status: 'applied', message: 'Applied. You are an admin, so the edit went live without review.' }
+  }
 
   // Ping the moderators. It deep-links /admin/event-edits, which now exists.
   // The ping carries the same field-by-field diff the review dashboard shows, so

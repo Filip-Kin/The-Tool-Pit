@@ -13,6 +13,9 @@ import {
 } from '@/lib/fields/field-display'
 import { wrapLongitude } from '@/lib/geo/longitude'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
+import { revalidatePath } from 'next/cache'
+import { adminSubmitter } from '@/lib/admin/auto-approve'
+import { publishPracticeField } from '@/lib/fields/publish'
 
 export interface CreateFieldSubmissionInput {
   name: string
@@ -63,7 +66,8 @@ export interface CreateFieldSubmissionInput {
 
 export interface CreateFieldSubmissionResult {
   fieldId?: string
-  status: 'pending' | 'error'
+  /** 'published' only for an admin's own submission, which goes on the map on the spot. */
+  status: 'pending' | 'published' | 'error'
   message: string
 }
 
@@ -193,6 +197,20 @@ export async function createFieldSubmission(
       .values(photos.map((p, i) => ({ fieldId: row.id, contentType: p.contentType, data: p.data, sortOrder: i })))
       .returning({ id: fieldPhotos.id })
     firstPhotoId = inserted[0]?.id ?? null
+  }
+
+  // An admin's own submission is published now, with the same function the
+  // Approve button calls, so the publish bar still applies. Not ready means it
+  // stays pending, with the reason. No Discord notice and no "your field is
+  // live" email to themselves.
+  if (await adminSubmitter(input.submittedByUserId)) {
+    const published = await publishPracticeField(row.id, { notifySubmitter: false })
+    if (published.error) {
+      return { fieldId: row.id, status: 'pending', message: `Saved, but not published: ${published.error}` }
+    }
+    revalidatePath('/admin/practice-fields')
+    revalidatePath('/fields')
+    return { fieldId: row.id, status: 'published', message: 'Published. You are an admin, so it went live without review.' }
   }
 
   // The photo is served from the public fields host, which serves it whatever

@@ -8,7 +8,6 @@
  */
 import { scrubNarration } from '@the-tool-pit/db/listing-text'
 import type { GrantDeadlineType } from '@the-tool-pit/db/grant-enums'
-import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { and, eq, ne, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
@@ -32,22 +31,10 @@ import {
 
 // #region identity
 
-/**
- * Who is doing the moderating, for the `verifiedBy` / `reviewedBy` stamps.
- *
- * Authelia's forward-auth sets Remote-User on /admin and Traefik overwrites any
- * client-supplied copy, so the header is trustworthy here for the same reason
- * lib/admin/auth.ts trusts Remote-Groups. The break-glass ADMIN_SECRET cookie
- * carries no identity, so it stamps 'admin' rather than pretending to know.
- */
-export async function adminIdentity(): Promise<string> {
-  const h = await headers()
-  const user = h.get('remote-user')?.trim()
-  if (user) return user
-  const email = h.get('remote-email')?.trim()
-  if (email) return email
-  return 'admin'
-}
+// Who is doing the moderating, for the `verifiedBy` / `reviewedBy` stamps.
+// Lives in lib/admin/auth.ts with the rest of the admin identity; re-exported
+// here because every grants screen imports it from this module.
+export { adminIdentity } from '@/lib/admin/auth'
 
 // #endregion
 

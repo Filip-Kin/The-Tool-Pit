@@ -25,6 +25,9 @@ import {
 } from '@/lib/events/event-display'
 import { wrapLongitude } from '@/lib/geo/longitude'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
+import { revalidatePath } from 'next/cache'
+import { adminSubmitter } from '@/lib/admin/auto-approve'
+import { publishEventListing } from '@/lib/events/publish'
 
 export interface CreateEventSubmissionInput {
   name: string
@@ -110,7 +113,8 @@ export interface CreateEventListingOptions {
 
 export interface CreateEventSubmissionResult {
   listingId?: string
-  status: 'pending' | 'error'
+  /** 'published' only for an admin's own submission, which goes on the map on the spot. */
+  status: 'pending' | 'published' | 'error'
   message: string
 }
 
@@ -246,6 +250,20 @@ export async function createEventSubmission(
   // they are still the same person.
   if (previousListingId && input.submittedByUserId) {
     await carryOwnershipForward(previousListingId, row.id, input.submittedByUserId)
+  }
+
+  // An admin's own submission is published now, with the same function the
+  // Approve button calls, so the publish bar (coordinates) still applies. Not
+  // ready means it stays pending, with the reason. No Discord notice and no
+  // "your listing is live" email to themselves.
+  if (await adminSubmitter(input.submittedByUserId)) {
+    const published = await publishEventListing(row.id, { notifySubmitter: false })
+    if (published.error) {
+      return { listingId: row.id, status: 'pending', message: `Saved, but not published: ${published.error}` }
+    }
+    revalidatePath('/admin/event-listings')
+    revalidatePath('/events')
+    return { listingId: row.id, status: 'published', message: 'Published. You are an admin, so it went live without review.' }
   }
 
   // The display helpers do the formatting, so the embed says a date range and a

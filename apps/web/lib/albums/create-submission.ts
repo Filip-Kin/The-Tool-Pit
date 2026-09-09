@@ -4,6 +4,7 @@ import { albums, albumSubmissions, albumCandidates, events, canonicalizeAlbumUrl
 import { getAlbumEnrichQueue } from './queue'
 import { sendApprovalNotice, reviewAlbumUrl } from '@the-tool-pit/types'
 import { fetchOgImage } from './og'
+import { adminSubmitter } from '@/lib/admin/auto-approve'
 
 interface CreateAlbumSubmissionInput {
   url: string
@@ -164,6 +165,18 @@ export async function createAlbumSubmission(
     resolvedName || input.eventHint
       ? [resolvedName ?? input.eventHint, targetEventYear].filter(Boolean).join(' · ')
       : null
+
+  // An admin's own submission gets no Discord notice. It cannot be published
+  // here: adminPublishAlbum needs the candidate's matchedEventId and cover,
+  // and both are written by the enrich job that was just queued. It stays
+  // pending until the admin approves the enriched candidate.
+  if (await adminSubmitter(input.submittedByUserId)) {
+    return {
+      submissionId: submission.id,
+      status: 'pending',
+      message: 'Queued. Approve the candidate once it has been matched to its event.',
+    }
+  }
 
   void (async () => {
     const cover = await fetchOgImage(canon.canonicalUrl || input.url).catch(() => null)

@@ -6,6 +6,7 @@ import { FIELD_PROGRAMS, type FieldProgram } from '@the-tool-pit/db/field-enums'
 import { getSubmissionQueue } from '@/lib/submissions/queue'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 import { sendApprovalNotice, reviewSubmissionUrl } from '@the-tool-pit/types'
+import { adminSubmitter } from '@/lib/admin/auto-approve'
 
 /**
  * Public robot code / CAD submissions.
@@ -156,6 +157,17 @@ export async function createRobotCodeSubmission(
   // classification because there is nothing left to decide, and leaves a
   // pending candidate for a human.
   await getSubmissionQueue().add('process-submission', { submissionId: created.id })
+
+  // An admin's own submission gets no Discord notice. It cannot be published
+  // here: the worker has to fetch the repo into a candidate first, and that is
+  // what the admin approves. It stays pending until then.
+  if (await adminSubmitter(input.submittedByUserId)) {
+    return {
+      status: 'pending',
+      submissionId: created.id,
+      message: `Queued. The worker reads the repo first; approve the candidate when it appears.`,
+    }
+  }
 
   // Team, season and kind lead, because they are the three the reviewer checks
   // against the repo rather than reads off the page.

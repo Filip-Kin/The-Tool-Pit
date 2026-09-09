@@ -4,6 +4,7 @@ import { submissions } from '@the-tool-pit/db'
 import { getSubmissionQueue } from './queue'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 import { sendApprovalNotice, reviewSubmissionUrl, type SubmitToolResponse } from '@the-tool-pit/types'
+import { adminSubmitter } from '@/lib/admin/auto-approve'
 
 interface CreateSubmissionInput {
   url: string
@@ -77,9 +78,22 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Su
   // Enqueue worker job: worker handles extract → classify → publish
   await getSubmissionQueue().add('process-submission', { submissionId: created.id })
 
-  // NEWLY WIRED. The oldest submit form on the site and the only one that never
-  // pinged anybody: a tool submitted here sat in the queue until somebody
-  // thought to open it.
+  // An admin's own submission gets no Discord notice. It cannot be published
+  // here either: a tool submission is only a URL, and the worker has to fetch
+  // and classify the page into a candidate before there is anything to
+  // publish. It stays pending and the admin approves the candidate once the
+  // worker has built it.
+  if (await adminSubmitter(input.submittedByUserId)) {
+    return {
+      submissionId: created.id,
+      status: 'pending',
+      message: 'Queued. The worker reads the page first; approve the candidate when it appears.',
+    }
+  }
+
+  // The oldest submit form on the site and the only one that never pinged
+  // anybody: a tool submitted here sat in the queue until somebody thought to
+  // open it.
   sendApprovalNotice({
     vertical: 'tool',
     title: input.url,

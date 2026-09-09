@@ -147,7 +147,7 @@ export function GrantSubmitForm({ admin }: {
         setResult({ ok: true, message: data.message ?? 'Submitted.', slug: data.slug, status: data.status })
         // A duplicate is not a failure, but it is also not a new submission, so
         // leave what they typed on screen rather than clearing it.
-        if (data.status === 'pending') {
+        if (data.status === 'pending' || data.status === 'published') {
           setForm({ ...INITIAL, ...submitterDefaults(user) })
         }
         turnstile.reset()
@@ -165,7 +165,7 @@ export function GrantSubmitForm({ admin }: {
   // A real new submission ('pending') replaces the form with a terminal
   // confirmation, so there is nothing left to resubmit. A duplicate stays on the
   // filled form with the small line below, since it is not a new submission.
-  if (result?.ok && result.status === 'pending') {
+  if (result?.ok && (result.status === 'pending' || result.status === 'published')) {
     return (
       <SubmitConfirmation
         message={result.message}

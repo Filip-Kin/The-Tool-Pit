@@ -6,16 +6,12 @@ import { ListingClaimReview } from '@/components/me/listing-claim-review'
 /**
  * Listing claim review, in the admin dashboard where it belongs.
  *
- * It used to render only at the bottom of /me/listings, behind the `is_admin`
- * flag on the signed-in Firebase user. That was the wrong place twice over.
- * An admin looking for a review queue looks in the dashboard, and the two admin
- * identities are not the same thing: /admin is gated by the Authelia OIDC
- * cookie, while `users.is_admin` is a column on the Firebase-linked account, so
- * being an admin of this dashboard did not make the queue appear on /me at all.
+ * It used to render only at the bottom of /me/listings. An admin looking for a
+ * review queue looks in the dashboard, so it lives here too.
  *
- * This page gates on assertAdmin, the same check every other admin page uses,
- * so the dashboard is self-consistent. The /me copy stays for an admin who
- * happens to be there, and both call the same server action.
+ * This page gates on assertAdmin, the same check every other admin page uses
+ * (users.is_admin on the signed-in account). The /me copy stays for an admin
+ * who happens to be there, and both call the same server action.
  */
 export const dynamic = 'force-dynamic'
 

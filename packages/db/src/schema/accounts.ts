@@ -25,8 +25,7 @@ export const users = pgTable(
     /**
      * Site admin. Deliberately NOT derived from a Firebase custom claim, so
      * granting admin is a DB change and cannot be self-asserted by a client.
-     * The existing Authelia-based /admin gate stays as-is; this is for
-     * per-vertical moderation later.
+     * This flag is what /admin checks (lib/admin/auth.ts isAdmin()).
      */
     isAdmin: boolean('is_admin').notNull().default(false),
     /** Free-text ban reason. Non-null = signed in but blocked from writing. */

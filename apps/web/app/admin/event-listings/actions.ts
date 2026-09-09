@@ -22,9 +22,8 @@ import {
   type EmailFact,
 } from '@the-tool-pit/types'
 import { signOutreachRemove, signOutreachClaim } from '@/lib/listings/outreach-token'
-import { notifyEventPublished, notifyEventRejected } from '@/lib/notify/approvals'
-import { grantEventOwnership } from '@/lib/listings/submitter-ownership'
-import { eventPublishBlockers } from '@/lib/events/publish-bar'
+import { notifyEventRejected } from '@/lib/notify/approvals'
+import { publishEventListing } from '@/lib/events/publish'
 import { addHumanEdits, changedKeys, HUMAN_EDITABLE_EVENT_KEYS } from '@the-tool-pit/db/human-edited'
 
 async function assertAdmin() {
@@ -39,35 +38,8 @@ function revalidateAll() {
 /** Publish a listing. Requires coordinates so it can actually be placed on the map. */
 export async function approveEvent(id: string): Promise<{ error?: string }> {
   await assertAdmin()
-  const db = getDb()
-  const [e] = await db
-    .select({
-      latitude: eventListings.latitude,
-      longitude: eventListings.longitude,
-      startDate: eventListings.startDate,
-      venueName: eventListings.venueName,
-      address: eventListings.address,
-      program: eventListings.program,
-      registrationStatus: eventListings.registrationStatus,
-    })
-    .from(eventListings)
-    .where(eq(eventListings.id, id))
-    .limit(1)
-  if (!e) return { error: 'Event not found' }
-
-  const missing = eventPublishBlockers(e)
-  if (missing.length > 0) {
-    // Name everything missing at once. A reviewer who fixes one item, presses
-    // the button and is told about the next one learns to dread the button.
-    return { error: `Not ready to publish. Add ${missing.join(', and ')}.` }
-  }
-  await db
-    .update(eventListings)
-    .set({ status: 'published', publishedAt: new Date(), rejectionReason: null, updatedAt: new Date() })
-    .where(eq(eventListings.id, id))
-  // The organiser who filled this in now runs it, unless they said otherwise.
-  await grantEventOwnership(id)
-  await notifyEventPublished(id)
+  const result = await publishEventListing(id)
+  if (result.error) return result
   revalidateAll()
   return {}
 }

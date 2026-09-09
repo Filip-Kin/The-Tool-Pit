@@ -30,11 +30,18 @@ export function SignInDialog({
   open,
   onOpenChange,
   reason,
+  returnTo,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   /** Optional line explaining why sign-in is being asked for right now. */
   reason?: string
+  /**
+   * Where to go once signed in. Unset means stay on the page that opened the
+   * dialog, which is right for every public page. The admin login page sets
+   * it to /admin so the dashboard opens without a second click.
+   */
+  returnTo?: string
 }) {
   const { refresh } = useSession()
   const router = useRouter()
@@ -68,6 +75,7 @@ export function SignInDialog({
     // this the page you signed in from keeps showing the signed-out answer.
     router.refresh()
     onOpenChange(false)
+    if (returnTo) router.push(returnTo)
   }
 
   return (

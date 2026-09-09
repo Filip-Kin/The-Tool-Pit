@@ -98,20 +98,19 @@ export function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Protect all /admin routes except the login page and auth API.
-  // Primary auth is Authelia forward-auth (Remote-Groups header, set by Traefik).
-  // The ADMIN_SECRET cookie stays as a break-glass fallback.
+  // /admin, except the login page and /admin/api/*: send a visitor with no
+  // session at all to the login page. This is only the cheap check. The
+  // middleware cannot reach the database, so the real one (users.is_admin, or
+  // the break-glass ADMIN_SECRET cookie) is isAdmin() in every admin page and
+  // action. A signed-in non-admin gets through here and is turned away there.
   if (
     pathname.startsWith('/admin') &&
     pathname !== '/admin/login' &&
-    !pathname.startsWith('/admin/api/auth')
+    !pathname.startsWith('/admin/api/')
   ) {
-    const groups = (req.headers.get('remote-groups') ?? '')
-      .split(',')
-      .map((g) => g.trim().toLowerCase())
-    const isAutheliaAdmin = groups.includes('admins')
-    const token = req.cookies.get('admin_token')?.value
-    if (!isAutheliaAdmin && token !== process.env.ADMIN_SECRET) {
+    const hasSession = Boolean(req.cookies.get('ttp_session')?.value)
+    const hasBreakGlass = Boolean(req.cookies.get('admin_token')?.value)
+    if (!hasSession && !hasBreakGlass) {
       return NextResponse.redirect(new URL('/admin/login', req.url))
     }
   }

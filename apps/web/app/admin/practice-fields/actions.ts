@@ -14,9 +14,8 @@ import {
 } from '@the-tool-pit/types'
 import { signOutreachRemove, signOutreachClaim } from '@/lib/listings/outreach-token'
 import { readPhotoFiles } from '@/lib/fields/form-parse'
-import { notifyFieldPublished, notifyFieldRejected } from '@/lib/notify/approvals'
-import { grantFieldOwnership } from '@/lib/listings/submitter-ownership'
-import { fieldPublishBlockers } from '@/lib/fields/publish-bar'
+import { notifyFieldRejected } from '@/lib/notify/approvals'
+import { publishPracticeField } from '@/lib/fields/publish'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -27,42 +26,11 @@ function revalidateAll() {
   revalidatePath('/fields')
 }
 
-/** Publish a field, if it clears the bar above. */
+/** Publish a field, if it clears the bar. */
 export async function approveField(id: string): Promise<{ error?: string }> {
   await assertAdmin()
-  const db = getDb()
-  const [f] = await db
-    .select({
-      latitude: practiceFields.latitude,
-      longitude: practiceFields.longitude,
-      contactInfo: practiceFields.contactInfo,
-      contactUrl: practiceFields.contactUrl,
-      website: practiceFields.website,
-    })
-    .from(practiceFields)
-    .where(eq(practiceFields.id, id))
-    .limit(1)
-  if (!f) return { error: 'Field not found' }
-
-  const missing = fieldPublishBlockers(f)
-  if (missing.length > 0) {
-    // Name what is missing. "Cannot publish" with no reason is how a reviewer
-    // ends up guessing, or editing the wrong field until the button works.
-    return { error: `Not ready to publish. Add ${missing.join(', and ')}.` }
-  }
-  await db
-    .update(practiceFields)
-    .set({ status: 'published', publishedAt: new Date(), rejectionReason: null, updatedAt: new Date() })
-    .where(eq(practiceFields.id, id))
-  // After the publish, never before, and never in a way that can fail it. A
-  // second click on Approve re-runs this and the outbox dedupe key collapses it
-  // to the one email that already went.
-  //
-  // Ownership first, so Listings is already true when the email lands.
-  // It does nothing for an anonymous submission or for somebody who ticked the
-  // "just passing it along" box on the form.
-  await grantFieldOwnership(id)
-  await notifyFieldPublished(id)
+  const result = await publishPracticeField(id)
+  if (result.error) return result
   revalidateAll()
   return {}
 }

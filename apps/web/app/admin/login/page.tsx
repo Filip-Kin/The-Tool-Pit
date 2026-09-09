@@ -1,21 +1,20 @@
+import { redirect } from 'next/navigation'
 import { ThemeToggle } from '@/components/layout/theme-toggle'
+import { UserMenu } from '@/components/auth/user-menu'
+import { getCurrentUser } from '@/lib/auth/session'
+import { isAdmin } from '@/lib/admin/auth'
+import { AdminSignIn } from './admin-sign-in'
 
-const ERRORS: Record<string, string> = {
-  denied: 'That account is not an admin.',
-  state: 'Login session expired. Please try again.',
-  token: 'Could not complete sign-in. Please try again.',
-  userinfo: 'Could not read your account. Please try again.',
-  config: 'Sign-in is not configured. Contact the site owner.',
-  error: 'Something went wrong. Please try again.',
-}
+export const dynamic = 'force-dynamic'
 
-export default async function AdminLoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>
-}) {
-  const { error } = await searchParams
-  const message = error ? (ERRORS[error] ?? ERRORS.error) : null
+/**
+ * Admin login is the site's own account. A signed-in admin is sent straight to
+ * the dashboard; a signed-in non-admin is told so and gets the account menu so
+ * they can sign out and switch; a visitor gets the sign-in dialog.
+ */
+export default async function AdminLoginPage() {
+  if (await isAdmin()) redirect('/admin')
+  const user = await getCurrentUser()
 
   return (
     <div className="flex min-h-screen items-center justify-center">
@@ -27,14 +26,18 @@ export default async function AdminLoginPage({
           <h1 className="flex-1 text-lg font-semibold text-foreground">Admin</h1>
           <ThemeToggle />
         </div>
-        <p className="text-sm text-muted">Sign in with your Authelia account.</p>
-        {message && <p className="text-xs text-frc">{message}</p>}
-        <a
-          href="/admin/api/auth/oidc/login"
-          className="flex h-10 items-center justify-center rounded-lg bg-primary text-sm font-medium text-white transition-colors hover:bg-primary-hover"
-        >
-          Log in with Authelia
-        </a>
+        <p className="text-sm text-muted">Admins only.</p>
+        {user ? (
+          <>
+            <p className="text-xs text-frc">This account is not an admin.</p>
+            <div className="flex items-center justify-between text-xs text-muted">
+              <span className="truncate">{user.email ?? user.displayName ?? 'Signed in'}</span>
+              <UserMenu />
+            </div>
+          </>
+        ) : (
+          <AdminSignIn />
+        )}
       </div>
     </div>
   )

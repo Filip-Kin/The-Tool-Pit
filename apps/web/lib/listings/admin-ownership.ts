@@ -32,9 +32,9 @@ import { listingFacts, type ListingFacts } from '@/lib/queries/listing-ownership
  *
  * Mirrors the grantOwnership choke point in app/me/listings/actions.ts: one
  * insert, verifiedVia carries how it was earned so the audit trail is never
- * blank. `invitedBy` is the acting admin's app-user id when there is one (an
- * Authelia/cookie admin has no app user row, so it may be null; it is an audit
- * stamp, not an FK).
+ * blank. `invitedBy` is the acting admin's app-user id when there is one (the
+ * break-glass cookie admin has no app user row, so it may be null; it is an
+ * audit stamp, not an FK).
  *
  * A row already exists for this (entity, user)? The admin has just picked a
  * role, so honour it: update the role and re-stamp the method rather than

@@ -15,6 +15,10 @@ import { grantChanges, grantCycles, grants } from '@the-tool-pit/db'
 import { GRANT_APPLY_METHODS, GRANT_DEADLINE_TYPES, GRANT_EFFORT_LEVELS, GRANT_GEO_SCOPES, GRANT_PROGRAMS } from '@the-tool-pit/db/grant-enums'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 import { sendApprovalNotice, reviewQueueUrl, grantListingUrl } from '@the-tool-pit/types'
+import { adminSubmitter } from '@/lib/admin/auto-approve'
+import { adminName } from '@/lib/admin/auth'
+import { applyGrantChangeRow } from '@/lib/admin/grant-changes'
+import { revalidateGrantPublic } from '@/lib/admin/grants'
 
 export interface GrantEditSuggestion {
   /** Raw form values, by the same names the page shows them under. */
@@ -29,6 +33,8 @@ export interface SuggestOutcome {
   ok: boolean
   error?: string
   filed?: number
+  /** Rows written to the listing on the spot, which only happens for an admin. */
+  applied?: number
 }
 
 const URL_RE = /^https?:\/\/\S+$/i
@@ -48,7 +54,8 @@ export async function createGrantEditSuggestion(grantId: string, input: GrantEdi
     return { ok: false, error: 'That text cannot be submitted.' }
   }
 
-  const who = input.userId ? 'a signed-in visitor' : 'a visitor'
+  const admin = await adminSubmitter(input.userId)
+  const who = admin ? `an admin (${adminName(admin)})` : input.userId ? 'a signed-in visitor' : 'a visitor'
   const note = text('note')
   const email = text('email')
   const reasoning = [`Suggested by ${who} on ${new Date().toISOString().slice(0, 10)}.`, `Evidence: ${evidenceUrl}`, note ? `Note: ${note.slice(0, 600)}` : null, email ? `Contact: ${email.slice(0, 120)}` : null]
@@ -130,9 +137,26 @@ export async function createGrantEditSuggestion(grantId: string, input: GrantEdi
     rows.push({ field: 'eligibilityText', oldValue: null, newValue: note.slice(0, 600) })
   }
 
-  await db.insert(grantChanges).values(
-    rows.map((r) => ({ grantId: grant.id, field: r.field, oldValue: r.oldValue, newValue: r.newValue, reasoning, autoApplicable: false, status: 'pending' })),
-  )
+  const filed = await db
+    .insert(grantChanges)
+    .values(
+      rows.map((r) => ({ grantId: grant.id, field: r.field, oldValue: r.oldValue, newValue: r.newValue, reasoning, autoApplicable: false, status: 'pending' })),
+    )
+    .returning({ id: grantChanges.id })
+
+  // An admin's own suggestion is applied now, with the same code the Apply
+  // button runs, and stamped with their name. Advisory rows (eligibilityText,
+  // a bare note) have no column and stay pending for the admin to act on. No
+  // Discord notice.
+  if (admin) {
+    let applied = 0
+    for (const row of filed) {
+      const out = await applyGrantChangeRow(row.id, adminName(admin), { confirmed: true })
+      if (!out.error) applied++
+    }
+    if (applied > 0) revalidateGrantPublic(grant.slug)
+    return { ok: true, filed: rows.length, applied }
+  }
 
   sendApprovalNotice({
     vertical: 'grant',

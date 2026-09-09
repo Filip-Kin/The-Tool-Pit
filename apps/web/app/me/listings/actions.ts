@@ -251,7 +251,8 @@ export async function startClaim(
         decidedAt: new Date(),
       })
       .returning({ id: listingClaims.id })
-    sendApprovalNotice({
+    // The notice is for a reviewer to glance at. An admin's own claim needs no reviewer.
+    if (!user.isAdmin) sendApprovalNotice({
       vertical: 'claim',
       title: `Outreach claimed: ${target.facts.title}`,
       reviewUrl: reviewClaimUrl(granted.id),
@@ -324,6 +325,27 @@ export async function startClaim(
   // themselves (it proved nothing and added friction), and an admin approves
   // every claim by hand anyway. Kept for the rare path that still passes one.
   const note = (noteRaw ?? '').trim().slice(0, 1000)
+
+  // An admin's own claim is settled the way adminResolveClaim settles one:
+  // approved, additive (a co-owner on an owned listing), decided by them. No
+  // Discord notice and no "your claim was approved" email to themselves.
+  if (user.isAdmin) {
+    await grantOwnership(entityType, entityId, user.id, 'owner', 'admin', null)
+    await db.insert(listingClaims).values({
+      entityType,
+      entityId,
+      userId: user.id,
+      method: 'manual_review',
+      status: 'verified',
+      evidence: { note },
+      reviewerNote: 'Approved on the spot: the claimant is an admin.',
+      decidedByUserId: user.id,
+      decidedAt: new Date(),
+    })
+    revalidatePath('/me/listings')
+    return { message: 'You are an admin, so you now manage this listing.', granted: true }
+  }
+
   const [filed] = await db
     .insert(listingClaims)
     .values({
@@ -419,8 +441,10 @@ export async function verifyRepoClaim(claimId: string): Promise<OwnershipActionR
   }
 
   // Only grant when still unowned. If someone else got verified first, keep this
-  // as a dispute rather than silently adding a second owner.
-  if ((await countOwners(claim.entityType, claim.entityId)) > 0) {
+  // as a dispute rather than silently adding a second owner. An admin's own
+  // dispute is approved the way an admin approves any claim: additive, decided
+  // by them, no Discord notice.
+  if ((await countOwners(claim.entityType, claim.entityId)) > 0 && !user.isAdmin) {
     await db
       .update(listingClaims)
       .set({
@@ -748,11 +772,10 @@ export async function removeOwner(
 
 /**
  * Admin resolves a pending claim. Admin identity is the same one the rest of
- * the admin panel trusts: isAdmin() from lib/admin/auth, which reads the
- * Authelia forward-auth group (Traefik overwrites any client-supplied header)
- * and falls back to the break-glass ADMIN_SECRET cookie. A cookie- or
- * Authelia-authenticated admin has no app user row, so decidedByUserId is left
- * null in that case; it is an audit stamp, not an authorization gate.
+ * the admin panel trusts: isAdmin() from lib/admin/auth, which reads
+ * users.is_admin on the signed-in account and falls back to the break-glass
+ * ADMIN_SECRET cookie. A cookie admin has no app user row, so decidedByUserId
+ * is left null in that case; it is an audit stamp, not an authorization gate.
  *
  * The note is OPTIONAL on an approval and REQUIRED on a rejection. Approving
  * explains itself: the claimant now manages the listing and can see that they
@@ -766,7 +789,7 @@ export async function adminResolveClaim(
   note: string | null,
 ): Promise<OwnershipActionResult> {
   if (!(await isAdmin())) return { error: 'Admins only.' }
-  // Optional: a cookie/Authelia admin authorizes the action but may carry no
+  // Optional: a break-glass cookie admin authorizes the action but carries no
   // app user row, so this is nullable and used only as the decidedBy stamp.
   const user = await getCurrentUser()
   const decidedByUserId = user?.id ?? null

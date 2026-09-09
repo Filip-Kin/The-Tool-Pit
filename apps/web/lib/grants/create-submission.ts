@@ -5,6 +5,12 @@ import type { RawGrantMetadata } from '@the-tool-pit/db'
 import { enqueueGrantExtract } from '@/lib/admin/grant-queue'
 import { sendApprovalNotice, reviewGrantUrl } from '@the-tool-pit/types'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
+import { revalidatePath } from 'next/cache'
+import { adminSubmitter } from '@/lib/admin/auto-approve'
+import { adminName } from '@/lib/admin/auth'
+import { reviewDefaults } from '@/lib/admin/grant-review'
+import { formFromReviewDefaults, publishCandidateFromForm } from '@/lib/admin/grant-publish'
+import { revalidateGrantPublic } from '@/lib/admin/grants'
 
 /**
  * Public grant submissions.
@@ -62,6 +68,8 @@ export interface CreateGrantSubmissionInput {
 
 export type CreateGrantSubmissionResult =
   | { status: 'pending'; candidateId: string; message: string }
+  /** Only for an admin's own submission, which goes live on the spot. */
+  | { status: 'published'; candidateId: string; slug: string; message: string }
   | { status: 'duplicate'; message: string; slug?: string }
   | { status: 'error'; message: string }
 
@@ -255,6 +263,45 @@ export async function createGrantSubmission(
       submitterOwns: input.submitterOwns ?? null,
     })
     .returning({ id: grantCandidates.id })
+
+  // An admin's own submission is published now, from what they typed, with
+  // the same function the review deck's Approve posts to. The form is the
+  // deck's defaults for a candidate with no extraction; overrideVerification
+  // is what lets it past the apply-route and timing gate. No cycle row: the
+  // typed deadline is free text and a cycle needs a dated one, so the admin
+  // adds it in the editor if they want reminders. No extract job either: the
+  // enrich pass can suppress a candidate it reads as junk, and that would
+  // leave a live grant with a suppressed candidate behind it. The monitor
+  // checks the page later, as for every listing. No Discord notice.
+  const admin = await adminSubmitter(input.submittedByUserId)
+  if (admin) {
+    const form = formFromReviewDefaults(reviewDefaults({ url: rawUrl, metadata: rawMetadata }), {
+      status: 'published',
+      overrideVerification: 'submitted by an admin',
+    })
+    const out = await publishCandidateFromForm(row.id, form, adminName(admin), { notifySubmitter: false })
+    if (out.error || !out.slug) {
+      // Could not publish from the typed fields (a name clash, a bad URL).
+      // The candidate stays pending for the admin to finish in the deck.
+      console.error(`[grants/submit] admin auto-publish of ${row.id} failed: ${out.error}`)
+      return {
+        status: 'pending',
+        candidateId: row.id,
+        message: `Saved, but not published: ${out.error ?? 'unknown error'}. Finish it in the review queue.`,
+      }
+    }
+    revalidatePath('/admin/grants/candidates')
+    revalidatePath('/admin/grants')
+    revalidateGrantPublic(out.slug)
+    return {
+      status: 'published',
+      candidateId: row.id,
+      slug: out.slug,
+      message: out.cycleError
+        ? `Published. The cycle was not saved (${out.cycleError}); add it in the editor.`
+        : 'Published. You are an admin, so it went live without review.',
+    }
+  }
 
   // Read the funder's page now: where "Apply" lands and what it says about
   // timing, so the reviewer sees a verified card rather than a bare URL.

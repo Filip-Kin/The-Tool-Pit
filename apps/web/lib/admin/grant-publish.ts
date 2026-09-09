@@ -14,7 +14,7 @@ import { eq, or } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { grantCandidates, grantCycles, grantFunders, grantRequirements, grants } from '@the-tool-pit/db'
 import type { GrantExtraction, GrantSourceKind } from '@the-tool-pit/db'
-import { reviewRequirements } from '@/lib/admin/grant-review'
+import { reviewRequirements, type ReviewDefaults } from '@/lib/admin/grant-review'
 import { lintListing } from '@/lib/grants/listing-lint'
 import { isEntranceUrl } from '@the-tool-pit/db/grant-urls'
 import { bumpSourceCounter, parseCycleFields, parseGrantFields, resolveFunderByName, uniqueGrantSlug } from '@/lib/admin/grants'
@@ -232,6 +232,7 @@ export async function publishCandidateFromForm(
   candidateId: string,
   form: FormData,
   who: string,
+  options: { notifySubmitter?: boolean } = {},
 ): Promise<PublishOutcome> {
   const db = getDb()
   const candidate = await loadCandidate(candidateId)
@@ -316,10 +317,64 @@ export async function publishCandidateFromForm(
     .where(eq(grantCandidates.id, candidateId))
   await bumpSourceCounter(candidate.sourceId, 'yield')
   await grantGrantOwnership(candidateId, created.id)
-  await notifyGrantPublished(candidateId, {
-    name: parsed.values.name!,
-    slug: created.slug,
-    funderName: parsed.funderName ?? null,
-  })
+  // The "your grant is listed" email. Off when the submitter is the admin who
+  // just published it.
+  if (options.notifySubmitter !== false) {
+    await notifyGrantPublished(candidateId, {
+      name: parsed.values.name!,
+      slug: created.slug,
+      funderName: parsed.funderName ?? null,
+    })
+  }
   return { slug: created.slug, grantId: created.id, cycleError }
+}
+
+/**
+ * The review deck's form, built from reviewDefaults instead of typed. This is
+ * what an admin's own submission publishes with: the same field names the deck
+ * posts, so parseGrantFields / parseCycleFields / reviewRequirements read it
+ * unchanged. `extra` overrides or adds fields (status, overrideVerification).
+ */
+export function formFromReviewDefaults(d: ReviewDefaults, extra: Record<string, string> = {}): FormData {
+  const form = new FormData()
+  const set = (key: string, value: string | number | null | undefined) => {
+    form.set(key, value == null ? '' : String(value))
+  }
+  set('name', d.name)
+  set('funderName', d.funderName)
+  set('summary', d.summary)
+  set('description', d.description)
+  set('infoUrl', d.infoUrl)
+  set('applicationUrl', d.applicationUrl)
+  set('applyMethod', d.applyMethod)
+  set('contactEmail', d.contactEmail)
+  set('mailingAddress', d.mailingAddress)
+  for (const p of d.programs) form.append('programs', p)
+  set('geoScope', d.geoScope)
+  set('countries', d.countries.join(', '))
+  set('regions', d.regions.join(', '))
+  set('localityNote', d.localityNote)
+  set('awardMin', d.awardMin)
+  set('awardMax', d.awardMax)
+  set('awardCurrency', d.awardCurrency)
+  set('awardNotes', d.awardNotes)
+  set('renewable', d.renewable)
+  set('deadlineType', d.deadlineType)
+  set('effortLevel', d.effortLevel)
+  set('cycleYear', d.cycleYear)
+  set('opensAt', d.opensAt)
+  set('deadlineAt', d.deadlineAt)
+  set('deadlineNote', d.deadlineNote)
+  set('decisionAt', d.decisionAt)
+  set('cycleStatus', 'unknown')
+  set('cycleSourceUrl', d.infoUrl)
+  set('req501c3', d.eligibility.requires501c3)
+  set('reqEmployeeMentor', d.eligibility.requiresEmployeeMentor)
+  set('reqRookieOnly', d.eligibility.rookieOnly)
+  set('reqSchoolAffiliation', d.eligibility.requiresSchoolAffiliation)
+  set('reqAgeRange', d.eligibility.ageRange)
+  set('reqGeography', d.eligibility.geographyRestriction)
+  set('reqEligibilityText', d.eligibility.eligibilityText)
+  for (const [k, v] of Object.entries(extra)) form.set(k, v)
+  return form
 }
