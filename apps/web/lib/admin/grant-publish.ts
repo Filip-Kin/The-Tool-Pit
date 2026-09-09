@@ -193,11 +193,13 @@ export async function duplicateOfExisting(name: string, funderName: string | nul
     .leftJoin(grantFunders, eq(grantFunders.id, grants.funderId))
   const wantName = normalizeGrantName(name)
   const wantFunder = (funderName ?? '').trim().toLowerCase()
-  const wantUrl = (applicationUrl ?? '').replace(/[?#].*$/, '').replace(/\/$/, '').toLowerCase()
+  // The query string stays: every Foundant logon is grantinterface.com/Home/Logon?urlkey=<foundation>.
+  const sameUrlKey = (u: string | null | undefined) => (u ?? '').replace(/#.*$/, '').replace(/\/(\?|$)/, '$1').toLowerCase()
+  const wantUrl = sameUrlKey(applicationUrl)
   for (const r of rows) {
     const sameFunder = wantFunder !== '' && (r.funder ?? '').trim().toLowerCase() === wantFunder
     const sameName = normalizeGrantName(r.name) === wantName
-    const sameUrl = wantUrl !== '' && (r.applicationUrl ?? '').replace(/[?#].*$/, '').replace(/\/$/, '').toLowerCase() === wantUrl
+    const sameUrl = wantUrl !== '' && sameUrlKey(r.applicationUrl) === wantUrl
     if ((sameFunder && sameName) || sameUrl) return `this is the same programme as "${r.name}" (/grants/${r.slug}, ${r.status})`
   }
   return null
