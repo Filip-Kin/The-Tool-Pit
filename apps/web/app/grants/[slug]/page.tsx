@@ -184,13 +184,13 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
               {nextWindow && <span className="block text-muted-2">Expected back {nextWindow}</span>}
               <span className="block text-muted-2">
                 {DEADLINE_TYPE_LABEL[grant.deadlineType]}
-                {!deadline && <KnowThisLink what="deadline" />}
+                {!deadline && grant.deadlineType !== 'rolling' && <KnowThisLink what="deadline" />}
               </span>
               {/* No dated deadline: say what the funder itself says about timing,
                   with the sentence and where it was read. The pipeline re-reads
                   this weekly, so "expected by mid-September" becomes a date the
                   week it is posted. */}
-              {!deadline && grant.deadlineProof && (
+              {!deadline && grant.deadlineType !== 'rolling' && grant.deadlineProof && (
                 <span className="mt-1 block text-muted">
                   {grant.deadlineProof.startsWith('No deadline statement') ? 'The funder\'s pages give no dates. ' : <>The funder says: &ldquo;{grant.deadlineProof}&rdquo; </>}
                   {grant.deadlineProofUrl && (
