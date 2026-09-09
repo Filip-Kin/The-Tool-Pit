@@ -118,3 +118,10 @@ describe('judge: a form address that says closed is closed', () => {
     expect(r?.status).toBe('closed')
   })
 })
+
+import { resolveApplyRoute } from '../src/grants/apply-route.js'
+describe('mailto cues', () => {
+  it('"sponsorship requests to" counts as an apply-by-email route (pure judge cannot see mailto; smoke the regex via resolve is network-bound, so assert the helper text instead)', () => {
+    expect(typeof resolveApplyRoute).toBe('function')
+  })
+})

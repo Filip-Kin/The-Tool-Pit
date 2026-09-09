@@ -271,7 +271,7 @@ function applyMailto(html: string): string | null {
   let m: RegExpExecArray | null
   while ((m = re.exec(html)) !== null) {
     const around = html.slice(Math.max(0, m.index - 300), m.index + 300).replace(/<[^>]+>/g, ' ')
-    if (/(email (your|the|a|an|completed) (application|proposal|request|form|letter)|apply by e-?mail|send (your|the|a|completed) (application|proposal|request|form) to|submit(ted)? (it |the form |applications? |proposals? )?(by|via) e-?mail|applications? (should|must|may|can) be (sent|emailed|submitted) to|to apply,? (email|e-mail|contact))/i.test(around)) return m[1].trim()
+    if (/(email (your|the|a|an|completed) (application|proposal|request|form|letter)|apply by e-?mail|send (your|the|a|completed) (application|proposal|request|form|inquiry) to|submit(ted)? (it |the form |applications? |proposals? |requests? )?(by|via) e-?mail|(applications?|requests?|proposals?|inquiries) (should|must|may|can) be (sent|emailed|submitted|directed) to|to (apply|request (funding|support|a grant|a donation|sponsorship)|inquire),? (email|e-mail|contact|write to)|(sponsorship|donation|funding|grant) (requests?|inquiries) (to|at|via)|contact .{0,40} to (apply|request))/i.test(around)) return m[1].trim()
   }
   return null
 }
