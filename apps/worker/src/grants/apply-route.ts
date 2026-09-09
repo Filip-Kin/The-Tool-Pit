@@ -154,7 +154,11 @@ async function readHtml(url: string): Promise<{ html: string; status: number; ho
         }
         const { extractText } = await import('unpdf')
         const { text } = await extractText(bytes, { mergePages: true })
-        if (/(application|apply|applicant|signature|name of (team|school|organization))/i.test(text)) return { html: `<pdf-form>${text.slice(0, 2000).replace(/</g, ' ')}</pdf-form>`, status: res.status, how: 'pdf', finalUrl }
+        // A fillable PDF form often has little extractable text; the file
+        // name saying "application" or "form" is evidence enough.
+        if (/(application|apply|applicant|signature|name of (team|school|organization))/i.test(text) || /(application|app|form)[^/]*\.pdf/i.test(url)) {
+          return { html: `<pdf-form>${(text || 'application form').slice(0, 2000).replace(/</g, ' ')}</pdf-form>`, status: res.status, how: 'pdf', finalUrl }
+        }
       } catch {
         // unreadable PDF: fall through
       }
