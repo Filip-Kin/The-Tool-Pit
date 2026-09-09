@@ -102,7 +102,20 @@ function formOnPage(html: string): { fields: number; hasTextarea: boolean; hasFi
       if (!best || fields > best.fields) best = { fields, hasTextarea, hasFile, submit }
     }
   }
-  return best
+  if (best) return best
+  // No <form> qualified. A script-mounted form has no <form> element at all;
+  // count the page's own inputs, minus search and login fields.
+  const bare = root.querySelectorAll('input, textarea, select').filter((el) => {
+    const type = (el.getAttribute('type') ?? el.tagName).toLowerCase()
+    const name = `${el.getAttribute('name') ?? ''} ${el.getAttribute('id') ?? ''} ${el.getAttribute('placeholder') ?? ''}`.toLowerCase()
+    if (['hidden', 'submit', 'button', 'image', 'reset', 'checkbox', 'radio', 'search', 'password'].includes(type)) return false
+    return !/search|password|newsletter|subscribe/.test(name)
+  })
+  const hasTextarea = root.querySelectorAll('textarea').length > 0
+  const hasFile = root.querySelectorAll('input[type="file"]').length > 0
+  const submit = root.querySelectorAll('button, input[type="submit"]').map((b) => (b.textContent || b.getAttribute('value') || '').trim()).find((t) => /submit|send|apply|request/i.test(t)) ?? null
+  if (bare.length >= 5 && (hasTextarea || hasFile) && submit) return { fields: bare.length, hasTextarea, hasFile, submit }
+  return null
 }
 
 /** A page that says "log in" and little else is a portal entrance, which counts once the host is a portal. */
@@ -130,11 +143,17 @@ async function readHtml(url: string): Promise<{ html: string; status: number; ho
       // A JS shell says nothing; render it.
       if (html.replace(/<script[\s\S]*?<\/script>/gi, '').length > 2500) return { html, status: res.status, how: 'fetch', finalUrl }
     }
-    if (res.ok && /pdf/i.test(ct)) {
+    const looksPdf = /pdf/i.test(ct) || /\.pdf(\?|#|$)/i.test(url) || (!/html/i.test(ct) && !/json|image|video|audio/i.test(ct))
+    if (res.ok && looksPdf) {
       // A PDF at the application link is the form when it reads like one.
+      // Servers label PDFs as octet-stream often enough that the bytes decide.
       try {
+        const bytes = new Uint8Array(await res.arrayBuffer())
+        if (bytes.length < 5 || String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== '%PDF') {
+          if (!/html/i.test(ct)) return { html: '', status: res.status, how: 'fetch', finalUrl }
+        }
         const { extractText } = await import('unpdf')
-        const { text } = await extractText(new Uint8Array(await res.arrayBuffer()), { mergePages: true })
+        const { text } = await extractText(bytes, { mergePages: true })
         if (/(application|apply|applicant|signature|name of (team|school|organization))/i.test(text)) return { html: `<pdf-form>${text.slice(0, 2000).replace(/</g, ' ')}</pdf-form>`, status: res.status, how: 'pdf', finalUrl }
       } catch {
         // unreadable PDF: fall through

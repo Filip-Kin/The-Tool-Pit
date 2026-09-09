@@ -61,3 +61,11 @@ describe('embeddedApplyLinks', () => {
     expect(links.map((l) => l.url)).toEqual(['https://forms.example.com/embed/123', 'https://sdspacegrant.sdsmt.edu/docs/RoboticsMaterialsAward2026.pdf'])
   })
 })
+
+describe('judge: a script-mounted form without a <form> element', () => {
+  it('counts the page inputs when there is a textarea and a submit', () => {
+    const html = '<html><body><h1>Corporate Sponsorship Request</h1><div><input type="text" name="org"><input type="email" name="email"><input type="text" name="city"><input type="text" name="amount"><input type="date" name="when"><textarea name="why"></textarea><button>Submit request</button></div></body></html>'
+    const r = judge('https://www.bmwgroup-werke.com/spartanburg/en/our-plant/corporate-sponsorship-request', html, 'browser')
+    expect(r?.status).toBe('form')
+  })
+})
