@@ -110,6 +110,13 @@ export function windowsIn(text: string, today: string): Array<{ opens: string; d
     const second = rest.match(DATE_RE)
     const end = second ? isoFromMatch(second) : null
     if (!first || !end || end < first) continue
+    // "FY 2027: July 1, 2026 - June 30, 2027" is the year the money covers,
+    // not the weeks the form is open. A window longer than about six months,
+    // or one the text calls a fiscal year, grant period or project period,
+    // is not an application window.
+    const spanDays = (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${first}T00:00:00Z`)) / 86_400_000
+    const before = flat.slice(Math.max(0, (m.index ?? 0) - 80), (m.index ?? 0) + 40)
+    if (spanDays > 200 || /\b(fy\s?\d{2,4}|fiscal year|grant period|project period|funding period|performance period|award period|program year|school year)\b/i.test(before)) continue
     out.push({ opens: first, date: end, quote: flat.slice(Math.max(0, (m.index ?? 0) - 60), (m.index ?? 0) + m[0].length + 20).trim().slice(0, 220) })
   }
   void today

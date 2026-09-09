@@ -524,7 +524,7 @@ async function verifyPublishedGrant(grant: Grant, now: Date, notes: string[]): P
       // any page is open all year: that is how those programmes work, and
       // "dates not confirmed" on them reads as if we had not looked.
       const requestForm = /\b(donation|sponsorship|charitable|giving|contribution)s? (request|form|program|programme)\b|\bcorporate giving\b|\bcommunity giving\b/i.test(`${grant.name} ${grant.summary ?? ''}`)
-      if (requestForm && (route.status === 'form' || route.status === 'portal') && proof.urlsRead.length >= 2 && !proof.past && grant.deadlineType === 'unknown') {
+      if (requestForm && (route.status === 'form' || route.status === 'portal') && proof.urlsRead.length >= 2 && !proof.past && (grant.deadlineType === 'unknown' || grant.deadlineType === 'rolling')) {
         patch.deadlineType = 'rolling'
         patch.deadlineProof = `Requests are taken any time: the form is open and none of the ${proof.urlsRead.length} pages read gives a date.`
         patch.deadlineProofUrl = proof.urlsRead[0] ?? null

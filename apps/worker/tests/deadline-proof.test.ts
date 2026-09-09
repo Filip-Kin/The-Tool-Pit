@@ -101,3 +101,9 @@ describe('application windows', () => {
     expect(w[0]).toMatchObject({ opens: '2026-03-01', date: '2026-04-15' })
   })
 })
+describe('a fiscal year is not an application window', () => {
+  it('skips FY spans and year-long periods', () => {
+    expect(windowsIn('Maryland Robotics Grant FY 2027 (July 1, 2026 - June 30, 2027). Proposals are due no later than 5:00 p.m. on June 5, 2026.', '2026-09-09')).toEqual([])
+    expect(windowsIn('Grant period: January 1, 2027 - December 31, 2027.', '2026-09-09')).toEqual([])
+  })
+})
