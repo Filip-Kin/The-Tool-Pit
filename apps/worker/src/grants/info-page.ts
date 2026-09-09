@@ -41,6 +41,16 @@ export function scoreInfoResult(r: { url: string; title: string; description: st
   const host = hostOf(r.url)
   if (!host || isEntranceUrl(r.url) || NOT_FUNDER_HOSTS.test(host)) return 0
   if (SECONDHAND_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) return 0
+  // A homepage is not a programme page (murdocktrust.org/ was picked once),
+  // and FIRST's own round-up of team grants is a list, not the funder.
+  let path = ''
+  try {
+    path = new URL(r.url).pathname.replace(/\/$/, '')
+  } catch {
+    return 0
+  }
+  if (path === '' || /^\/(en|en-us|us|home|index\.html?)$/i.test(path)) return 0
+  if (/(^|\.)firstinspires\.org$/i.test(host) && !/firstinspires\.org$/i.test(hostOf(`https://${funderName.toLowerCase().replace(/\s+/g, '')}.org`))) return 0
   const funderWords = words(funderName)
   const nameWords = words(grantName)
   const hostBare = host.replace(/\./g, '')
@@ -51,6 +61,7 @@ export function scoreInfoResult(r: { url: string; title: string; description: st
   if (nameWords.length > 0 && nameHits >= Math.min(2, nameWords.length)) score += 2
   if (funderWords.some((w) => text.includes(w))) score += 1
   if (/\b(grant|fund|sponsor|giving|apply|application|eligib|deadline)/i.test(text)) score += 1
+  if (/(grant|fund|giving|sponsor|donat|apply|program|scholar|communit|csr|social)/i.test(path)) score += 1
   return score
 }
 
@@ -61,8 +72,13 @@ async function pageMentions(url: string, funderName: string, grantName: string):
     const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA }, redirect: 'follow', signal: controller.signal })
     if (!res.ok) return null
     const text = (await res.text()).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').toLowerCase()
-    const need = [...words(funderName).slice(0, 2), ...words(grantName).slice(0, 2)]
-    return need.length === 0 ? true : need.some((w) => text.includes(w))
+    // The page has to name BOTH the funder and the programme: "ptc" alone
+    // matched a different organisation's site (ptc.org for PTC's FIRST grant).
+    const funderWords = words(funderName).slice(0, 3)
+    const nameWords = words(grantName).slice(0, 4)
+    const funderHit = funderWords.length === 0 || funderWords.some((w) => text.includes(w))
+    const nameHit = nameWords.length === 0 || nameWords.some((w) => text.includes(w))
+    return funderHit && nameHit
   } catch {
     return null
   } finally {
@@ -91,7 +107,9 @@ export async function findInfoPage(funderName: string, grantName: string, avoid:
     // A page that refuses a bot but sits on the funder's own domain still
     // counts; a page we could read and that never names the programme does not.
     if (mentions === false) continue
-    if (mentions === null && score < 5) continue
+    // Unreadable (a bot wall) is accepted only on the funder's own domain
+    // with the programme named in the result itself.
+    if (mentions === null && score < 6) continue
     return { url: r.url, title: r.title, evidence: `search result on ${hostOf(r.url)} scored ${score}: "${r.title.slice(0, 80)}"` }
   }
   return null
