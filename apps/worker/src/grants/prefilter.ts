@@ -99,9 +99,19 @@ export function isSecondhandGrantHost(url: string): boolean {
   return SECONDHAND_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))
 }
 
+/**
+ * Money that is already the team's is not a grant. FIRST's "regrant" pays out
+ * a team's unrestricted credit balance; a reimbursement or disbursement page
+ * moves funds the team already has. Both read like grants and are not.
+ */
+const OWN_FUNDS_RE = /\b(re-?grants?|re-?granting|disbursement of (your|the team'?s?|team) (funds|balance|credit)|unrestricted credit balance|reimbursement (form|request|process))\b/i
+
 export function deterministicGrantPrefilter(input: PrefilterInput): PrefilterVerdict {
   const { url, title } = input
   const body = input.body ?? ''
+  if (OWN_FUNDS_RE.test(`${url} ${title}`) || (OWN_FUNDS_RE.test(body) && /\b(credit balance|funds remaining in (team|your) accounts?|your own funds)\b/i.test(body))) {
+    return { keep: false, reason: "Prefilter: this pays out money the team already has (a regrant, reimbursement or disbursement), not a grant." }
+  }
 
   const portalHost = hostOf(url)
   if (PORTAL_HOSTS.some((h) => portalHost === h || portalHost.endsWith(`.${h}`))) {

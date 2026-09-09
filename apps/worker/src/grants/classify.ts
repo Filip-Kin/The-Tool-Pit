@@ -311,6 +311,7 @@ function getClient(): Anthropic {
 }
 
 const SYSTEM_PROMPT = `You are triaging web pages for a grants directory used by FIRST robotics teams (FRC, FTC, FLL) and other youth STEM teams.
+A page about paying out money a team already has (a regrant of its credit balance, a reimbursement, a disbursement) is NOT a grant: isGrant=false, say why.
 Some pages arrive as CURATED LEADS from the site owner's own list; the user message says so and states the rules that change for them.
 
 The ONLY question you answer is: can a robotics team APPLY for money (or in-kind goods) described on this page, now or in a future cycle?
