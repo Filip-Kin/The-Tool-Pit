@@ -91,7 +91,16 @@ export function publishBlockers(
   const emailRoute = values.applyMethod === 'email' && Boolean(values.contactEmail)
   if (!emailRoute) {
     if (!route) out.push('the application link has not been verified (no apply-route check on the extraction)')
-    else if (route.status === 'closed') out.push(`the application is closed: ${route.evidence}`)
+    // A closed form is still a real grant with a real entrance; the page says
+    // "not taking submissions right now" and the monitor flips it the week it
+    // reopens. It publishes when the timing is on record (a past cycle, a
+    // window, or the funder's own "opens in ..." sentence); a closed form with
+    // no idea of when is a dead end and waits.
+    else if (route.status === 'closed') {
+      const proof = extraction?.deadlineProof
+      const timingKnown = String(form.get('cycleYear') ?? '').trim() !== '' || (proof && (proof.kind !== 'none' || proof.past))
+      if (!timingKnown) out.push(`the application is closed and the pages say nothing about when it reopens: ${route.evidence}`)
+    }
     else if (route.status === 'walled') out.push(`the application page could not be read: ${route.evidence}`)
     else if (route.status === 'unverified') out.push(`the link does not land on an application: ${route.evidence}`)
   }
