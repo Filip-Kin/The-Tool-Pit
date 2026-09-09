@@ -27,6 +27,34 @@ const MONTH = '(january|february|march|april|may|june|july|august|september|octo
 const DATE_RE = new RegExp(`\\b${MONTH}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(20\\d\\d)\\b|\\b(\\d{1,2})\\s+${MONTH}\\.?\\s+(20\\d\\d)\\b|\\b(20\\d\\d)-(\\d{2})-(\\d{2})\\b|\\b(\\d{1,2})/(\\d{1,2})/(20\\d\\d)\\b`, 'i')
 /** A strong cue: a bare "by" or "through" next to a date is a schedule, not a deadline. */
 const DEADLINE_CUE = /(deadline|due (date|by|on)?\b|due\b|close[sd]?\b|closing|closes on|must be (submitted|received)|submit(ted)? (by|on or before|no later than)|received (by|on or before)|no later than|on or before|applications? (will )?(be )?(accepted|open) (until|through)|last day to (apply|submit)|final day)/i
+/**
+ * A deadline for something else: a scholarship on a grants page, a
+ * recommendation letter, a report, an invoice, a webinar. Not the round.
+ */
+const OTHER_DEADLINE_RE = /\b(scholarship|recommendation letters?|letters? of recommendation|transcripts?|final report|progress report|interim report|reporting deadline|invoice|reimbursement request|webinar|info(rmation)? session|office hours|early bird|registration for the (conference|event|gala))\b/i
+
+/**
+ * The date that belongs to the deadline word. A timeline table reads
+ * "FORM OPENS August 17, 2026 ... DEADLINE FOR SUBMISSION September 17,
+ * 2026" as one row, and the first date in it is the opening. Take the first
+ * date AFTER the first cue word; when no date follows a cue, the nearest
+ * date before one.
+ */
+export function dateForCue(s: string): RegExpMatchArray | null {
+  const dates = [...s.matchAll(new RegExp(DATE_RE.source, 'gi'))]
+  if (dates.length === 0) return null
+  if (dates.length === 1) return dates[0]
+  const cues = [...s.matchAll(new RegExp(DEADLINE_CUE.source, 'gi'))]
+  if (cues.length === 0) return dates[0]
+  for (const c of cues) {
+    const after = dates.find((d) => (d.index ?? 0) > (c.index ?? 0) && (d.index ?? 0) - (c.index ?? 0) < 90)
+    if (after) return after
+  }
+  const firstCue = cues[0].index ?? 0
+  const before = [...dates].reverse().find((d) => (d.index ?? 0) < firstCue)
+  return before ?? dates[0]
+}
+
 /** Sentences that are page furniture, never evidence. */
 const FURNITURE_RE = /^(skip|check the|click|select|sign in|log in|next page|previous|home|menu|search|share)\b/i
 const NOT_PUBLIC_RE =
@@ -65,7 +93,7 @@ function sentences(text: string): string[] {
     .replace(/\s+/g, ' ')
     .split(/(?<=[.!?])\s+(?=[A-Z"“(])/)
     .map((s) => s.trim())
-    .filter((s) => s.length >= 12 && s.length <= 320)
+    .filter((s) => s.length >= 12 && s.length <= 700)
 }
 
 /**
@@ -89,7 +117,8 @@ export function findDeadlineProof(pages: Array<{ url: string; text: string }>, t
   for (const { url, text } of pages) {
     for (const s of sentences(text)) {
       if (FURNITURE_RE.test(s)) continue
-      const dm = s.match(DATE_RE)
+      if (OTHER_DEADLINE_RE.test(s)) continue
+      const dm = dateForCue(s)
       if (dm && DEADLINE_CUE.test(s)) {
         const iso = isoFromMatch(dm)
         if (iso && /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(iso)) {

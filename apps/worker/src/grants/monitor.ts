@@ -860,7 +860,10 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
       })
       cycles.push({ cycleYear: year } as (typeof cycles)[number])
       for (const c of proposed) if (c.field.startsWith(`cycle.${year}.`) && (c.field.endsWith('.opensAt') || (c.field.endsWith('.deadlineAt') && String(c.newValue).slice(0, 10) === d.date))) c.alreadyApplied = true
-      if (grant.deadlineType === 'unknown') await db.update(grants).set({ deadlineType: 'fixed', updatedAt: now }).where(eq(grants.id, grant.id))
+      if (grant.deadlineType === 'unknown') {
+        const recurring = /\b(quarterly|each quarter|every quarter|twice a year|semi-?annual|each year|every year|annually|annual|spring cycle|fall cycle|each (spring|summer|fall|winter))\b/i.test(d.quote)
+        await db.update(grants).set({ deadlineType: recurring ? 'annual_window' : 'fixed', updatedAt: now }).where(eq(grants.id, grant.id))
+      }
       notes.push(`${year} round written from the funder's own sentence: "${d.quote.slice(0, 100)}"`)
       console.log(`[grant-monitor] ${grant.slug}: ${year} deadline ${d.date} written from the funder's own sentence`)
     }

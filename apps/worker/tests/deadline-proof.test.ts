@@ -66,3 +66,18 @@ describe('deadlines written without a year', () => {
     expect(p.date).toBe('2026-11-15')
   })
 })
+
+import { dateForCue } from '../src/grants/deadline-proof.js'
+describe('a timeline row with several dates', () => {
+  it('takes the date after the deadline word, not the opening date', () => {
+    const row = 'Milestone Date LETTER OF INTEREST (LOI) FORM OPENS August 17, 2026 9:00am ET DEADLINE FOR LETTER OF INTEREST (LOI) FORM SUBMISSION September 17, 2026 5:00pm ET NOTIFICATION OF LOI FORM REVIEW DECISION October 15, 2026'
+    expect(dateForCue(row)?.[0]).toMatch(/September 17, 2026/)
+    const p = fdp([{ url: 'https://aauw.org/x', text: row }], '2026-09-09')
+    expect(p.kind).toBe('dated')
+    expect(p.date).toBe('2026-09-17')
+  })
+  it('ignores a scholarship or report deadline on a grant page', () => {
+    const p = fdp([{ url: 'https://f.org/x', text: 'January 15th is the scholarship application deadline. Grant proposals are reviewed on a rolling basis.' }], '2026-09-09')
+    expect(p.kind).toBe('rolling')
+  })
+})
