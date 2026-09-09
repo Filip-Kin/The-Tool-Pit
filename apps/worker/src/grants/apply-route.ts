@@ -82,39 +82,50 @@ function portalName(url: URL): string | null {
 const CLOSED_RE =
   /(no longer accepting responses|is no longer accepting|this form is closed|form is now closed|not currently accepting|presently no open calls|no open calls for submissions|survey has (already )?expired|has expired|applications? (are|is) (now )?closed|closed for 20\d\d|not accepting (new )?(applications|submissions))/i
 
-/** A form is real when it asks for more than an email address. */
-function formOnPage(html: string): { fields: number; hasTextarea: boolean; hasFile: boolean; submit: string | null } | null {
+/**
+ * A form is the APPLICATION when it asks what an application asks: the
+ * organisation or team, an amount or budget, a project, a proposal, a file.
+ * A contact form (name, email, message), a cookie-preferences dialog (eight
+ * toggles and a CANCEL button, te.com), a newsletter box or a site search is
+ * not, however many fields it has.
+ */
+const APPLICATION_FIELD_RE = /(organi[sz]ation|org[_-]?name|nonprofit|non-profit|team[_ -]?(name|number|no)|school|district|ein|tax[_ -]?id|501|amount|budget|request(ed)?[_ -]?(amount|funding)|project|program(me)?|proposal|grant|sponsor|purpose|mission|title|address|city|state|zip|postal|phone)/i
+const CONTAINER_NOISE_RE = /(cookie|consent|gdpr|privacy|newsletter|subscribe|search|login|signin|sign-in|password|modal|preferences|tracking|banner)/i
+const SUBMIT_NOISE_RE = /^(cancel|close|search|subscribe|sign ?in|log ?in|accept|reject|save preferences|ok|dismiss|got it|agree)$/i
+type FormShape = { fields: number; hasTextarea: boolean; hasFile: boolean; submit: string | null }
+function shapeOf(inputs: ReturnType<ReturnType<typeof parse>['querySelectorAll']>, submitEls: ReturnType<ReturnType<typeof parse>['querySelectorAll']>): FormShape | null {
+  const real = inputs.filter((el) => {
+    const type = (el.getAttribute('type') ?? el.tagName).toLowerCase()
+    return !['hidden', 'submit', 'button', 'image', 'reset', 'checkbox', 'radio', 'search', 'password'].includes(type)
+  })
+  const names = real.map((el) => `${el.getAttribute('name') ?? ''} ${el.getAttribute('id') ?? ''} ${el.getAttribute('placeholder') ?? ''} ${el.getAttribute('aria-label') ?? ''}`)
+  const hasTextarea = real.some((el) => el.tagName.toLowerCase() === 'textarea')
+  const hasFile = inputs.some((el) => (el.getAttribute('type') ?? '').toLowerCase() === 'file')
+  const submits = submitEls.map((b) => (b.textContent || b.getAttribute('value') || '').trim()).filter(Boolean)
+  const submit = submits.find((t) => !SUBMIT_NOISE_RE.test(t)) ?? null
+  if (submits.length > 0 && !submit) return null
+  const applicationLike = names.filter((n) => APPLICATION_FIELD_RE.test(n)).length
+  if (!(hasFile || (real.length >= 3 && applicationLike >= 1) || (hasTextarea && applicationLike >= 1))) return null
+  return { fields: real.length, hasTextarea, hasFile, submit }
+}
+function formOnPage(html: string): FormShape | null {
   const root = parse(html)
-  let best: { fields: number; hasTextarea: boolean; hasFile: boolean; submit: string | null } | null = null
+  let best: FormShape | null = null
   for (const form of root.querySelectorAll('form')) {
     const action = (form.getAttribute('action') ?? '').toLowerCase()
     const cls = `${form.getAttribute('class') ?? ''} ${form.getAttribute('id') ?? ''}`.toLowerCase()
-    if (/search|newsletter|subscribe|login|signin|sign-in|password/.test(action + ' ' + cls)) continue
-    const inputs = form.querySelectorAll('input, textarea, select').filter((el) => {
-      const type = (el.getAttribute('type') ?? el.tagName).toLowerCase()
-      return !['hidden', 'submit', 'button', 'image', 'reset', 'checkbox', 'radio'].includes(type)
-    })
-    const hasTextarea = form.querySelectorAll('textarea').length > 0
-    const hasFile = form.querySelectorAll('input[type="file"]').length > 0
-    const submit = form.querySelector('button, input[type="submit"]')?.textContent?.trim() || form.querySelector('input[type="submit"]')?.getAttribute('value') || null
-    const fields = inputs.length
-    if (fields >= 3 || hasTextarea || hasFile) {
-      if (!best || fields > best.fields) best = { fields, hasTextarea, hasFile, submit }
-    }
+    if (CONTAINER_NOISE_RE.test(action + ' ' + cls)) continue
+    const parentCls = `${form.parentNode?.getAttribute?.('class') ?? ''} ${form.parentNode?.getAttribute?.('id') ?? ''}`.toLowerCase()
+    if (CONTAINER_NOISE_RE.test(parentCls)) continue
+    const shape = shapeOf(form.querySelectorAll('input, textarea, select'), form.querySelectorAll('button, input[type="submit"]'))
+    if (shape && (!best || shape.fields > best.fields)) best = shape
   }
   if (best) return best
   // No <form> qualified. A script-mounted form has no <form> element at all;
-  // count the page's own inputs, minus search and login fields.
-  const bare = root.querySelectorAll('input, textarea, select').filter((el) => {
-    const type = (el.getAttribute('type') ?? el.tagName).toLowerCase()
-    const name = `${el.getAttribute('name') ?? ''} ${el.getAttribute('id') ?? ''} ${el.getAttribute('placeholder') ?? ''}`.toLowerCase()
-    if (['hidden', 'submit', 'button', 'image', 'reset', 'checkbox', 'radio', 'search', 'password'].includes(type)) return false
-    return !/search|password|newsletter|subscribe/.test(name)
-  })
-  const hasTextarea = root.querySelectorAll('textarea').length > 0
-  const hasFile = root.querySelectorAll('input[type="file"]').length > 0
-  const submit = root.querySelectorAll('button, input[type="submit"]').map((b) => (b.textContent || b.getAttribute('value') || '').trim()).find((t) => /submit|send|apply|request/i.test(t)) ?? null
-  if (bare.length >= 5 && (hasTextarea || hasFile) && submit) return { fields: bare.length, hasTextarea, hasFile, submit }
+  // judge the page's own inputs by the same rule, but only with a real
+  // submit ("Submit request", not "Accept cookies").
+  const shape = shapeOf(root.querySelectorAll('input, textarea, select'), root.querySelectorAll('button, input[type="submit"]'))
+  if (shape && shape.fields >= 4 && shape.submit && /submit|send|apply|request|continue/i.test(shape.submit)) return shape
   return null
 }
 

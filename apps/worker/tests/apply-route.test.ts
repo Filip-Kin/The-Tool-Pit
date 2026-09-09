@@ -14,7 +14,7 @@ describe('judge (apply route)', () => {
     expect(r?.evidence).toContain('Submittable')
   })
   it('a page with a real form is the form', () => {
-    const r = judge('https://kars4kidsgrants.org/', page('<form action="/thanks.php"><input type="text" name="n"><input type="email" name="e"><input type="tel" name="p"><textarea name="m"></textarea><input type="submit" value="Send"></form>'), 'fetch')
+    const r = judge('https://kars4kidsgrants.org/', page('<form action="/thanks.php"><input type="text" name="name"><input type="email" name="email"><input type="text" name="charity_name"><input type="text" name="tax_id"><textarea name="mission"></textarea><input type="file" name="determination_letter"><input type="submit" value="Submit Application"></form>'), 'fetch')
     expect(r?.status).toBe('form')
   })
   it('a search box is not a form', () => {
@@ -83,5 +83,20 @@ describe('judge: a portal host on a webinar or help path is not the form', () =>
   })
   it('the same host on a quiz path is the portal', () => {
     expect(judge('https://www.cybergrants.com/pls/cybergrants/quiz.display_question?x_gm_id=4184', '<html><body><h1>Question 1</h1></body></html>', 'fetch')?.status).toBe('portal')
+  })
+})
+
+describe('judge: contact forms and cookie dialogs are not applications', () => {
+  it('a cookie preferences dialog with CANCEL is not a form', () => {
+    const html = '<html><body><h1>Request funding</h1><div class="cookie-preferences"><form><input type="text" name="pref1"><input type="text" name="pref2"><input type="text" name="pref3"><input type="text" name="pref4"><select name="pref5"><option>a</option></select><input type="text" name="pref6"><input type="text" name="pref7"><input type="text" name="pref8"><button>CANCEL</button></form></div></body></html>'
+    expect(judge('https://www.te.com/en/about-te/corporate-responsibility/request-funding.html', html, 'fetch')).toBeNull()
+  })
+  it('a contact form (name, email, message) is not an application', () => {
+    const html = '<html><body><form action="/contact"><input type="text" name="name"><input type="email" name="email"><textarea name="message"></textarea><button type="submit">Send</button></form></body></html>'
+    expect(judge('https://example.org/grants', html, 'fetch')).toBeNull()
+  })
+  it('an application form (organisation, amount, project) is', () => {
+    const html = '<html><body><form action="/apply"><input type="text" name="organization_name"><input type="email" name="email"><input type="text" name="requested_amount"><textarea name="project_description"></textarea><button type="submit">Submit application</button></form></body></html>'
+    expect(judge('https://example.org/grants/apply', html, 'fetch')?.status).toBe('form')
   })
 })
