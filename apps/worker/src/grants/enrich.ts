@@ -62,6 +62,7 @@ import { braveSearch, BraveBudgetExhausted } from './brave.js'
 import { routeAggregatorToSource, AUTO_ROUTE_CONFIDENCE } from './route-aggregator.js'
 import { findApplyLinks } from './apply-links.js'
 import { deterministicGrantPrefilter } from './prefilter.js'
+import { verifyListing } from './verify-listing.js'
 import {
   loadSuppressionExamples,
   pickSuppressionExamples,
@@ -632,6 +633,34 @@ export async function processGrantExtractJob(payload: GrantExtractPayload): Prom
   }
 
   extraction.notes = [...gathered.notes, ...extraction.notes]
+
+  // 4. Where "Apply" lands, and what the funder says about timing. Both are
+  //    deterministic reads with evidence, and the publish gate needs both.
+  //    A resolved portal or form REPLACES the model's applicationUrl: the model
+  //    reads a page, the resolver followed the button.
+  try {
+    const known = gathered.urls.length > 0 ? [{ url: gathered.urls[0], text: gathered.evidence.funderPage }] : []
+    const { route, proof } = await verifyListing(
+      [extraction.fields.applicationUrl.value, meta.applicationUrl, url],
+      known,
+    )
+    extraction.applyRoute = route
+    extraction.deadlineProof = proof
+    if ((route.status === 'portal' || route.status === 'form') && route.url) {
+      extraction.fields.applicationUrl = { value: route.url, quote: route.evidence, source: 'funder_page' }
+      if (extraction.fields.applyMethod.value === 'unknown' || extraction.fields.applyMethod.value === null) {
+        extraction.fields.applyMethod = { value: 'online_form', quote: route.evidence, source: 'funder_page' }
+      }
+    } else if (route.status === 'email' && route.email) {
+      extraction.fields.applyMethod = { value: 'email', quote: route.evidence, source: 'funder_page' }
+      if (!extraction.fields.contactEmail.value) {
+        extraction.fields.contactEmail = { value: route.email, quote: route.evidence, source: 'funder_page' }
+      }
+    }
+    extraction.notes.push(`apply route: ${route.status} (${route.evidence})`, `timing: ${proof.kind}${proof.quote ? ` ("${proof.quote.slice(0, 120)}")` : ''}`)
+  } catch (err) {
+    extraction.notes.push(`verification failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
 
   await db
     .update(grantCandidates)

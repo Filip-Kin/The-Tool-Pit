@@ -28,6 +28,7 @@ import { and, desc, eq, getDb, grantChanges, grantCycles, grants, grantSnapshots
 import type { ExtractedGrantFields, Grant, GrantCycle } from '@the-tool-pit/db'
 import { politeFetch } from '../connectors/base.js'
 import { hashContent, stripToMainContent } from './strip.js'
+import { verifyListing } from './verify-listing.js'
 import { extractGrantFields, type GrantExtractionResult } from './extract.js'
 import { deriveCycleStatus } from './cadence.js'
 import { enqueueGrantAlert, grantUrl } from './alerts.js'
@@ -441,6 +442,46 @@ async function fetchPage(url: string): Promise<FetchOutcome> {
  * just fetch the same broken page three more times. Only a database or
  * programming fault escapes.
  */
+const VERIFY_EVERY_MS = 7 * 24 * 3600_000
+
+async function verifyPublishedGrant(grant: Grant, now: Date, notes: string[]): Promise<void> {
+  const last = grant.applyRouteCheckedAt?.getTime() ?? 0
+  if (now.getTime() - last < VERIFY_EVERY_MS) return
+  const db = getDb()
+  try {
+    const { route, proof } = await verifyListing([grant.applicationUrl, grant.infoUrl])
+    const patch: Partial<typeof grants.$inferInsert> = {
+      applyRouteStatus: route.status,
+      applyRouteEvidence: route.evidence.slice(0, 500),
+      applyRouteCheckedAt: now,
+      deadlineProofCheckedAt: now,
+      updatedAt: now,
+    }
+    const resolvedForm = (route.status === 'portal' || route.status === 'form') && route.url
+    if (resolvedForm && grant.applyMethod !== 'email' && route.url !== grant.applicationUrl) {
+      patch.applicationUrl = route.url
+      patch.applyMethod = 'online_form'
+      notes.push(`application link moved to the ${route.status}: ${route.url}`)
+    }
+    if (route.status === 'email' && route.email && !grant.contactEmail && grant.applyMethod === 'unknown') {
+      patch.applyMethod = 'email'
+      patch.contactEmail = route.email
+    }
+    if (proof.kind === 'none') {
+      patch.deadlineProof = `No deadline statement found on ${proof.urlsRead.length} page(s) read${proof.past ? `; last dated cycle: "${proof.past.quote.slice(0, 160)}"` : ''}.`
+      patch.deadlineProofUrl = proof.past?.url ?? proof.urlsRead[0] ?? null
+    } else {
+      patch.deadlineProof = proof.quote ?? null
+      patch.deadlineProofUrl = proof.url ?? null
+    }
+    await db.update(grants).set(patch).where(eq(grants.id, grant.id))
+    notes.push(`apply route ${route.status}; timing ${proof.kind}`)
+    console.log(`[grant-monitor] ${grant.slug}: apply route ${route.status} (${route.evidence.slice(0, 80)}); timing ${proof.kind}`)
+  } catch (err) {
+    notes.push(`verification failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
 export async function processGrantMonitorJob(payload: GrantMonitorPayload): Promise<GrantMonitorOutcome> {
   const db = getDb()
   const { grantId } = payload
@@ -462,6 +503,15 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
       error: 'grant not found',
     }
   }
+  // Where "Apply" lands and what the funder says about timing, re-checked on
+  // its own cadence whatever the page hash does: a form can close and a portal
+  // can move while the info page stays byte-identical. Evidence-backed
+  // machine facts land in their own columns; a resolved portal or form URL
+  // replaces the application link outright (that is the point), a route by
+  // email set by a person is left alone, and everything else is shown to the
+  // admin rather than guessed at.
+  await verifyPublishedGrant(grant, now, notes)
+
 
   const fetched = await fetchPage(grant.infoUrl)
   if (fetched.redirectedTo) {

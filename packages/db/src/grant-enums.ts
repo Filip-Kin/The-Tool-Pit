@@ -260,3 +260,15 @@ export const GRANT_REJECTION_KIND_LABELS: Record<GrantRejectionKind, string> = {
  */
 export const GRANT_AWARD_MIN = 50
 export const GRANT_AWARD_MAX = 5_000_000
+
+/**
+ * What the application link was last found to land on.
+ * - portal:     a known application portal (Submittable, Fluxx, CyberGrants, a Google or Microsoft form ...).
+ * - form:       a page carrying a real application form of its own.
+ * - email:      applications go by email; contactEmail holds the address.
+ * - closed:     the form or portal says it is not accepting submissions right now.
+ * - walled:     the page refused every read; nothing could be confirmed.
+ * - unverified: reachable, but nothing form-like was found within two hops.
+ */
+export const GRANT_APPLY_ROUTE_STATUSES = ['portal', 'form', 'email', 'closed', 'walled', 'unverified'] as const
+export type GrantApplyRouteStatus = (typeof GRANT_APPLY_ROUTE_STATUSES)[number]

@@ -518,6 +518,34 @@ export interface GrantExtraction {
   evidenceUrls: string[]
   /** Quotes dropped because they were in neither text, truncation, skipped surfaces. */
   notes: string[]
+  /**
+   * Where "Apply" was found to land (worker grants/apply-route.ts): the URL to
+   * publish, or the address, or why neither could be confirmed. Written after
+   * every extraction; the publish gate reads it.
+   */
+  applyRoute?: {
+    status: string
+    url: string | null
+    email: string | null
+    evidence: string
+    chain: string[]
+    checkedAt: string
+  }
+  /**
+   * The funder's own words on timing (worker grants/deadline-proof.ts): a dated
+   * sentence, a "not announced yet" sentence, a rolling statement, or none with
+   * the pages that were read. The publish gate needs one of the first three or
+   * a dated cycle.
+   */
+  deadlineProof?: {
+    kind: 'dated' | 'not_public' | 'rolling' | 'none'
+    date?: string
+    quote?: string
+    url?: string
+    urlsRead: string[]
+    checkedAt: string
+    past?: { date: string; quote: string; url: string }
+  }
   /** The model's own sentence on what it could and could not read. */
   reasoning?: string
   extractedAt: string

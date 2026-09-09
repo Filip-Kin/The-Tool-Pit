@@ -188,6 +188,24 @@ export const grants = pgTable(
     /** Consecutive fetch failures. Non-zero for a while means a dead page. */
     checkFailureCount: integer('check_failure_count').notNull().default(0),
 
+    // Verification the pipeline keeps current on its own (see worker
+    // grants/apply-route.ts and grants/deadline-proof.ts). These are machine
+    // facts with evidence, not human confirmations: verifiedAt above stays a
+    // person's signature.
+    /** GRANT_APPLY_ROUTE_STATUSES: what applicationUrl was last found to land on. */
+    applyRouteStatus: text('apply_route_status'),
+    /** One sentence of evidence: "Submittable form, 14 fields" or "form says: no longer accepting responses". */
+    applyRouteEvidence: text('apply_route_evidence'),
+    applyRouteCheckedAt: timestamp('apply_route_checked_at', { withTimezone: true }),
+    /**
+     * The funder's own words on timing when no dated cycle exists: a quote
+     * such as "FY27 application timeline is expected to be posted by
+     * mid-September", or "no deadline statement found" with the pages read.
+     */
+    deadlineProof: text('deadline_proof'),
+    deadlineProofUrl: text('deadline_proof_url'),
+    deadlineProofCheckedAt: timestamp('deadline_proof_checked_at', { withTimezone: true }),
+
     publishedAt: timestamp('published_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

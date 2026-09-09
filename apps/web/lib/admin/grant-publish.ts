@@ -13,7 +13,7 @@
 import { eq, or } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { grantCandidates, grantCycles, grantRequirements, grants } from '@the-tool-pit/db'
-import type { GrantSourceKind } from '@the-tool-pit/db'
+import type { GrantExtraction, GrantSourceKind } from '@the-tool-pit/db'
 import { reviewRequirements } from '@/lib/admin/grant-review'
 import { bumpSourceCounter, parseCycleFields, parseGrantFields, resolveFunderByName, uniqueGrantSlug } from '@/lib/admin/grants'
 import { notifyGrantPublished } from '@/lib/notify/approvals'
@@ -72,6 +72,36 @@ export async function loadCandidate(candidateId: string) {
   return row ?? null
 }
 
+/**
+ * Why a candidate cannot be published yet. Empty when it can.
+ *
+ * Route: the extraction's applyRoute must be portal, form or email (the
+ * worker checked where the link lands), or the form itself names an email.
+ * Timing: a dated cycle on the form, or a deadlineProof of kind dated,
+ * not_public or rolling. "None" means the pages were read and say nothing,
+ * which is exactly the listing that later lies to a team.
+ */
+export function publishBlockers(
+  extraction: GrantExtraction | null | undefined,
+  values: { applyMethod?: string | null; contactEmail?: string | null; deadlineType?: string | null },
+  form: FormData,
+): string[] {
+  const out: string[] = []
+  const route = extraction?.applyRoute
+  const emailRoute = values.applyMethod === 'email' && Boolean(values.contactEmail)
+  if (!emailRoute) {
+    if (!route) out.push('the application link has not been verified (no apply-route check on the extraction)')
+    else if (route.status === 'closed') out.push(`the application is closed: ${route.evidence}`)
+    else if (route.status === 'walled') out.push(`the application page could not be read: ${route.evidence}`)
+    else if (route.status === 'unverified') out.push(`the link does not land on an application: ${route.evidence}`)
+  }
+  const hasCycle = String(form.get('cycleYear') ?? '').trim() !== '' && String(form.get('deadlineAt') ?? '').trim() !== ''
+  const proof = extraction?.deadlineProof
+  const timingOk = hasCycle || values.deadlineType === 'rolling' || (proof && proof.kind !== 'none')
+  if (!timingOk) out.push(proof ? `no deadline and no statement about timing on ${proof.urlsRead.length} page(s) read` : 'timing has not been checked (no deadline-proof on the extraction)')
+  return out
+}
+
 export interface PublishOutcome {
   error?: string
   slug?: string
@@ -91,6 +121,16 @@ export async function publishCandidateFromForm(
   if (candidate.matchedGrantId) return { error: 'This candidate is already attached to a grant.' }
   const parsed = parseGrantFields(form)
   if (parsed.error) return { error: parsed.error }
+  // THE GATE. A listing goes live only when a team can act on it: the link
+  // lands on the application (or applications go by email to an address), and
+  // timing is either dated or explained in the funder's own words. Both facts
+  // come from the extraction the worker verified (apply-route.ts,
+  // deadline-proof.ts); a reviewer who knows better types a reason.
+  const override = String(form.get('overrideVerification') ?? '').trim()
+  if (!override) {
+    const blocked = publishBlockers(candidate.extraction, parsed.values, form)
+    if (blocked.length > 0) return { error: `Not ready to publish: ${blocked.join('; ')}. Fix it, or give a reason in "publish anyway".` }
+  }
   const now = new Date()
   const slug = await uniqueGrantSlug(parsed.values.name!)
   const funderId = parsed.funderName ? await resolveFunderByName(parsed.funderName) : null
