@@ -105,6 +105,19 @@ export function publishBlockers(
   return out
 }
 
+/** A short generic name gets the funder in front of it; a name that already names the funder is left alone. */
+const GENERIC_NAME_RE = /^(the )?((corporate|community|charitable|team|robotics|classroom|small|local|global|competition|academic|stem)\s+)*(giving|grants?|grant program(me)?|program(me)?s?|funding|foundation|sponsorships?|donations?|contributions?|request(s| system)?|application( portal)?|funding requests?|impact fund|enrichment grants?|cash grants?|good neighbor committee)(\s+(program(me)?|request(s)?|portal|application|grants?))*$/i
+export function nameWithFunder(name: string, funderName: string | null | undefined): string {
+  const n = name.trim()
+  const f = (funderName ?? '').trim()
+  if (!f) return n
+  const funderWords = f.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !['the', 'and', 'foundation', 'company', 'corporation', 'inc', 'llc', 'fund'].includes(w))
+  const lower = n.toLowerCase()
+  if (funderWords.some((w) => lower.includes(w))) return n
+  if (!GENERIC_NAME_RE.test(n) && n.split(/\s+/).length > 4) return n
+  return `${f} ${n}`.slice(0, 200)
+}
+
 export interface PublishOutcome {
   error?: string
   slug?: string
@@ -124,6 +137,10 @@ export async function publishCandidateFromForm(
   if (candidate.matchedGrantId) return { error: 'This candidate is already attached to a grant.' }
   const parsed = parseGrantFields(form)
   if (parsed.error) return { error: parsed.error }
+  // A generic programme name ("Corporate Giving Programme", "Community
+  // Grants") is unfindable in a list of sixty. When the name does not carry
+  // the funder, the funder leads it: "Viasat Corporate Giving Programme".
+  parsed.values.name = nameWithFunder(parsed.values.name!, parsed.funderName)
   // THE GATE. A listing goes live only when a team can act on it: the link
   // lands on the application (or applications go by email to an address), and
   // timing is either dated or explained in the funder's own words. Both facts
