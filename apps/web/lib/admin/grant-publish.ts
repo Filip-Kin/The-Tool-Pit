@@ -200,7 +200,10 @@ export async function duplicateOfExisting(name: string, funderName: string | nul
     const sameFunder = wantFunder !== '' && (r.funder ?? '').trim().toLowerCase() === wantFunder
     const sameName = normalizeGrantName(r.name) === wantName
     const sameUrl = wantUrl !== '' && sameUrlKey(r.applicationUrl) === wantUrl
-    if ((sameFunder && sameName) || sameUrl) return `this is the same programme as "${r.name}" (/grants/${r.slug}, ${r.status})`
+    // One foundation's portal URL hosts all its funds (Montana CF lists six
+    // on one login), so a shared URL is a duplicate only across funders or
+    // with a matching name.
+    if ((sameFunder && sameName) || (sameUrl && (!sameFunder || sameName))) return `this is the same programme as "${r.name}" (/grants/${r.slug}, ${r.status})`
   }
   return null
 }

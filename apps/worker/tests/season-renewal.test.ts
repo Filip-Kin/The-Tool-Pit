@@ -153,7 +153,8 @@ describe('seasonRenewalDedupeKey', () => {
 
 // #region who gets asked
 
-const LISTING = { id: 'listing-1', submittedByUserId: null as string | null }
+const LISTING = { id: 'listing-1',
+  slug: 'listing-1', submittedByUserId: null as string | null }
 
 describe('renewalRecipients', () => {
   it('asks the people who hold a write role on the listing', () => {
@@ -207,6 +208,7 @@ describe('renewalRecipients', () => {
 
 const BOT_BASH: RenewableListing = {
   id: 'listing-1',
+  slug: 'listing-1',
   name: 'Bot Bash',
   seasonYear: 2026,
   startDate: '2026-10-31',
@@ -252,6 +254,7 @@ describe('buildRenewalPayload', () => {
   it('leaves out a fact it does not have instead of printing a blank row', () => {
     const bare: RenewableListing = {
       id: 'listing-2',
+  slug: 'listing-2',
       name: 'Mystery Offseason',
       seasonYear: 2026,
       startDate: null,

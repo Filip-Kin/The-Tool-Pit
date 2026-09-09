@@ -48,6 +48,13 @@ const PORTAL_HOSTS: Array<[RegExp, string]> = [
   [/(^|\.)benevity\.(com|org)$/i, 'Benevity'],
   [/(^|\.)webportalapp\.com$/i, 'WebPortalApp'],
   [/(^|\.)forms\.gle$/i, 'Google Forms'],
+  [/^app\.smartsheet\.com$/i, 'Smartsheet'],
+  [/^frc-grants\.arc\.nasa\.gov$/i, 'NASA RAP'],
+  [/(^|\.)zohopublic\.com$/i, 'Zoho Forms'],
+  [/(^|\.)zfrmz\.com$/i, 'Zoho Forms'],
+  [/(^|\.)grants\.gov$/i, 'Grants.gov'],
+  [/(^|\.)my\.site\.com$/i, 'Salesforce'],
+  [/(^|\.)force\.com$/i, 'Salesforce'],
   [/(^|\.)docs\.google\.com$/i, 'Google Forms'],
   [/(^|\.)forms\.office\.com$/i, 'Microsoft Forms'],
   [/(^|\.)forms\.cloud\.microsoft$/i, 'Microsoft Forms'],
@@ -80,7 +87,7 @@ function portalName(url: URL): string | null {
 
 /** Phrases that mean the form exists but is not taking submissions. */
 const CLOSED_RE =
-  /(no longer accepting responses|is no longer accepting|this form is closed|form is now closed|not currently accepting|presently no open calls|no open calls for submissions|survey has (already )?expired|has expired|applications? (are|is) (now )?closed|closed for 20\d\d|not accepting (new )?(applications|submissions))/i
+  /(no longer accepting responses|is no longer accepting|this form is closed|form is now closed|not currently accepting|presently no open calls|no open calls for submissions|survey has (already )?expired|has expired|applications? (are|is) (now )?closed|closed for 20\d\d|not accepting (new )?(applications|submissions)|(is|are) currently closed|(have|has) closed|cycle is (currently |now )?closed|application window (is|has) (now )?closed|coming soon|no open (rfps?|requests|opportunities|grant cycles?)|will reopen)/i
 
 /**
  * A form is the APPLICATION when it asks what an application asks: the
@@ -237,7 +244,7 @@ export function embeddedApplyLinks(html: string, pageUrl: string): Array<{ url: 
   }
   for (const m of html.matchAll(/<iframe[^>]+src="([^"]+)"/gi)) {
     const u = abs(m[1])
-    if (!u || /youtube|vimeo|maps\.google|google\.com\/maps|recaptcha|doubleclick|facebook|twitter/i.test(u)) continue
+    if (!u || /youtube|vimeo|maps\.google|google\.com\/maps|recaptcha|doubleclick|facebook|twitter|googletagmanager|\/ns\.html|hotjar|analytics|pixel/i.test(u)) continue
     out.push({ url: u, text: 'embedded frame', score: 2 })
   }
   let pageHost = ''
@@ -280,7 +287,7 @@ function applyMailto(html: string): string | null {
   let m: RegExpExecArray | null
   while ((m = re.exec(html)) !== null) {
     const around = html.slice(Math.max(0, m.index - 300), m.index + 300).replace(/<[^>]+>/g, ' ')
-    if (/(email (your|the|a|an|completed) (application|proposal|request|form|letter)|apply by e-?mail|send (your|the|a|completed) (application|proposal|request|form|inquiry) to|submit(ted)? (it |the form |applications? |proposals? |requests? )?(by|via) e-?mail|(applications?|requests?|proposals?|inquiries) (should|must|may|can) be (sent|emailed|submitted|directed) to|to (apply|request (funding|support|a grant|a donation|sponsorship)|inquire),? (email|e-mail|contact|write to)|(sponsorship|donation|funding|grant) (requests?|inquiries) (to|at|via)|contact .{0,40} to (apply|request))/i.test(around)) return m[1].trim()
+    if (/(email (your|the|a|an|completed) (application|proposal|request|form|letter)|apply by e-?mail|send (your|the|a|completed) (application|proposal|request|form|inquiry) to|submit(ted)? (it |the form |applications? |proposals? |requests? )?(by|via) e-?mail|(applications?|requests?|proposals?|inquiries) (should|must|may|can) be (sent|emailed|submitted|directed) to|to (apply|request (funding|support|a grant|a donation|sponsorship)|inquire),? (email|e-mail|contact|write to)|(sponsorship|donation|funding|grant) (requests?|inquiries) (to|at|via)|contact .{0,40} to (apply|request|form your team)|correspondence (should|may|must) be (directed|sent|addressed) to|(scanned and|completed forms?) (should be )?(e-?mailed|sent) to|letters? of (inquiry|intent|interest) (to|should be sent)|or e-?mail(ed)? (it |them |the form )?to\b)/i.test(around)) return m[1].trim()
   }
   return null
 }

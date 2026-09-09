@@ -66,6 +66,12 @@ export function parseFit(text: string, checkedAt = new Date()): GrantFit {
 }
 
 export async function judgeFit(extraction: Pick<GrantExtraction, 'fields'>): Promise<GrantFit> {
+  const f = extraction.fields
+  const words = [f.summary.value, f.description.value, f.eligibilityText.value].map((v) => field(v)).join(' ').trim()
+  // A name and a funder are not enough to judge; the model says so in prose
+  // and the gate would read a guess. Leave the verdict missing, the gate
+  // holds the row, and the next extraction with text judges it.
+  if (words.split(/\s+/).length < 12) throw new Error('fit: too little text to judge (no summary, description or eligibility)')
   const response = await anthropic().messages.create({
     model: FIT_MODEL,
     max_tokens: 200,
