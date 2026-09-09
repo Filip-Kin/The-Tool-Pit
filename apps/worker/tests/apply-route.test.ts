@@ -100,3 +100,14 @@ describe('judge: contact forms and cookie dialogs are not applications', () => {
     expect(judge('https://example.org/grants/apply', html, 'fetch')?.status).toBe('form')
   })
 })
+
+describe('judge and links: chat widgets and other sites\' PDFs', () => {
+  it('a chat widget form with CHAT NOW is not an application', () => {
+    const html = '<html><body><h1>Request funding</h1><form><input type="text" name="first_name"><input type="text" name="last_name"><input type="email" name="email"><input type="text" name="phone"><input type="text" name="title"><input type="text" name="city"><input type="text" name="state"><input type="text" name="zip"><button>CHAT NOW</button></form></body></html>'
+    expect(judge('https://www.te.com/en/about-te/corporate-responsibility/request-funding.html', html, 'fetch')).toBeNull()
+  })
+  it("a PDF on another organisation's site is not this funder's form", () => {
+    const links = embeddedApplyLinks('<a href="https://www.autismsociety-nc.org/wp-content/uploads/grant-application.pdf">Grant application</a><a href="/forms/our-application.pdf">Application form</a>', 'https://www.mscdirect.com/community')
+    expect(links.map((l) => l.url)).toEqual(['https://www.mscdirect.com/forms/our-application.pdf'])
+  })
+})

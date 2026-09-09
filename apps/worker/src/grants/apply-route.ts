@@ -89,9 +89,10 @@ const CLOSED_RE =
  * toggles and a CANCEL button, te.com), a newsletter box or a site search is
  * not, however many fields it has.
  */
-const APPLICATION_FIELD_RE = /(organi[sz]ation|org[_-]?name|nonprofit|non-profit|team[_ -]?(name|number|no)|school|district|ein|tax[_ -]?id|501|amount|budget|request(ed)?[_ -]?(amount|funding)|project|program(me)?|proposal|grant|sponsor|purpose|mission|title|address|city|state|zip|postal|phone)/i
+/** Fields only an application asks for. Address, phone and title are on every contact form and prove nothing. */
+const APPLICATION_FIELD_RE = /(organi[sz]ation|org[_-]?name|nonprofit|non-profit|charity|team[_ -]?(name|number|no)|school|district|ein|tax[_ -]?id|501|amount|budget|request(ed)?[_ -]?(amount|funding)|project|program(me)?|proposal|grant|sponsor|purpose|mission|determination)/i
 const CONTAINER_NOISE_RE = /(cookie|consent|gdpr|privacy|newsletter|subscribe|search|login|signin|sign-in|password|modal|preferences|tracking|banner)/i
-const SUBMIT_NOISE_RE = /^(cancel|close|search|subscribe|sign ?in|log ?in|accept|reject|save preferences|ok|dismiss|got it|agree)$/i
+const SUBMIT_NOISE_RE = /^(cancel|close|search|subscribe|sign ?in|log ?in|accept|reject|save preferences|ok|dismiss|got it|agree|chat( now)?|start chat|talk to us|contact us|call( us)?|send message)$/i
 type FormShape = { fields: number; hasTextarea: boolean; hasFile: boolean; submit: string | null }
 function shapeOf(inputs: ReturnType<ReturnType<typeof parse>['querySelectorAll']>, submitEls: ReturnType<ReturnType<typeof parse>['querySelectorAll']>): FormShape | null {
   const real = inputs.filter((el) => {
@@ -230,11 +231,27 @@ export function embeddedApplyLinks(html: string, pageUrl: string): Array<{ url: 
     if (!u || /youtube|vimeo|maps\.google|google\.com\/maps|recaptcha|doubleclick|facebook|twitter/i.test(u)) continue
     out.push({ url: u, text: 'embedded frame', score: 2 })
   }
+  let pageHost = ''
+  try {
+    pageHost = new URL(pageUrl).hostname.replace(/^www\./, '')
+  } catch {
+    // no host, no PDF links
+  }
   for (const m of html.matchAll(/<a[^>]+href="([^"]+\.pdf(?:\?[^"]*)?)"[^>]*>([\s\S]*?)<\/a>/gi)) {
     const text = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
     if (!/(application|apply|form|nomination)/i.test(text + ' ' + m[1])) continue
     const u = abs(m[1])
-    if (u) out.push({ url: u, text, score: 3 })
+    if (!u) continue
+    // A PDF on another organisation's site is that organisation's form (MSC's
+    // page linked a charity's own application PDF).
+    let host = ''
+    try {
+      host = new URL(u).hostname.replace(/^www\./, '')
+    } catch {
+      continue
+    }
+    if (pageHost && host !== pageHost && !host.endsWith(`.${pageHost}`) && !pageHost.endsWith(`.${host}`)) continue
+    out.push({ url: u, text, score: 3 })
   }
   return out
 }
