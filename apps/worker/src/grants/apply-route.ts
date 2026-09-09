@@ -309,7 +309,7 @@ export function judge(url: string, html: string, how: string): Omit<ApplyRoute, 
   // (cybergrants.com/boa/webinars/ is Bank of America's training page).
   // A vendor's help centre (support.foundant.com/s/article/...) is on a
   // portal host and is documentation, never the form.
-  if (/^(support|help|docs|community|status|learn)\./i.test(parsed.hostname)) return null
+  if (/^(support|help|community|status|learn)\./i.test(parsed.hostname) || (/^docs\./i.test(parsed.hostname) && !/google\.com$/i.test(parsed.hostname))) return null
   const portal = /\/(webinars?|help|faq|faqs|support|about|blog|news|training|resources?|guidelines?|tutorial|docs)(\/|$|[.?#])/i.test(parsed.pathname) ? null : portalName(parsed)
   if (closed) {
     return { status: 'closed', url, email: null, evidence: `${portal ?? parsed.hostname} says: "${closed[0]}"` }
