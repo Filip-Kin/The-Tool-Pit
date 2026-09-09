@@ -132,10 +132,26 @@ function gatedInput(html: string): boolean {
   return /<input[^>]+type="(password|email|text)"/i.test(html) && /<(button|input)[^>]*(type="submit"|>\s*(log ?in|sign ?in|continue|submit|next)\s*<)/i.test(html)
 }
 
+/** Some hosts answer the crawler's honest User-Agent with 403/406 and a browser with 200 (sdspacegrant.sdsmt.edu). One retry as a browser. */
+const BROWSER_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+async function fetchWithFallback(url: string): Promise<Response> {
+  const res = await politeFetch(url)
+  if (![401, 403, 406, 429].includes(res.status)) return res
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 15_000)
+  try {
+    return await fetch(url, { headers: { 'User-Agent': BROWSER_UA, Accept: 'text/html,application/xhtml+xml,application/pdf,*/*;q=0.8' }, redirect: 'follow', signal: controller.signal })
+  } catch {
+    return res
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function readHtml(url: string): Promise<{ html: string; status: number; how: 'fetch' | 'browser' | 'walled' | 'gone' | 'pdf'; finalUrl: string }> {
   let finalUrl = url
   try {
-    const res = await politeFetch(url)
+    const res = await fetchWithFallback(url)
     if (res.url && res.url !== url) finalUrl = res.url
     const ct = res.headers.get('content-type') ?? ''
     if (res.ok && /html|xhtml/i.test(ct)) {
@@ -289,7 +305,11 @@ export async function resolveApplyRoute(startUrls: Array<string | null | undefin
     chain.push(url)
     const { html, how, status, finalUrl } = await readHtml(url)
     if (how === 'gone') {
-      return { status: 'closed', url, email: null, evidence: `HTTP ${status}: the application page is gone`, chain, checkedAt }
+      // The application link itself, or an "Apply" link, answering 404 means
+      // closed. The info page answering 404 means nothing about the form.
+      const wasApplicationLink = depth > 0 || (chain.length === 1 && startUrls[0] === url)
+      if (wasApplicationLink) return { status: 'closed', url, email: null, evidence: `HTTP ${status}: the application page is gone`, chain, checkedAt }
+      continue
     }
     if (how === 'walled') {
       walledCount++
