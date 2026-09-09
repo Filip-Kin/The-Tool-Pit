@@ -273,7 +273,7 @@ export function embeddedApplyLinks(html: string, pageUrl: string): Array<{ url: 
 }
 
 /** A fetched page that shows no form may build one with JavaScript (BMW's request form). One render settles it. */
-async function renderedHtml(url: string): Promise<string | null> {
+export async function renderedHtml(url: string): Promise<string | null> {
   const rendered = await withRenderedPage(url, async (page) => page.content())
   return rendered && rendered.length > 500 ? rendered : null
 }

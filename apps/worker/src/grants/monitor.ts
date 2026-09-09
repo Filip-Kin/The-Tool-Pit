@@ -27,6 +27,7 @@ import { ne } from 'drizzle-orm'
 import { and, desc, eq, getDb, grantChanges, grantCycles, grantFunders, grants, grantSnapshots, grantWatches } from '@the-tool-pit/db'
 import { isEntranceUrl } from '@the-tool-pit/db/grant-urls'
 import { findInfoPage } from './info-page.js'
+import { renderedHtml } from './apply-route.js'
 import type { ExtractedGrantFields, Grant, GrantCycle } from '@the-tool-pit/db'
 import { politeFetch } from '../connectors/base.js'
 import { hashContent, stripToMainContent } from './strip.js'
@@ -407,6 +408,12 @@ async function fetchPage(url: string): Promise<FetchOutcome> {
     const redirectedTo = res.url && res.url !== url ? res.url : null
 
     if (!res.ok) {
+      // A bot wall (aauw.org answers 403 to a plain fetch) is not a dead page.
+      // The browser reads it; the same fallback the apply-route resolver uses.
+      if ([401, 403, 406, 429, 503].includes(res.status)) {
+        const html = await renderedHtml(url).catch(() => null)
+        if (html && html.trim()) return { html, httpStatus: 200, error: null, redirectedTo }
+      }
       return { html: null, httpStatus: res.status, error: `HTTP ${res.status} ${res.statusText}`.trim(), redirectedTo }
     }
 
@@ -423,7 +430,14 @@ async function fetchPage(url: string): Promise<FetchOutcome> {
       }
     }
 
-    return { html: await res.text(), httpStatus: res.status, error: null, redirectedTo }
+    const html = await res.text()
+    // A JS-only page (csr.honda.com) strips to nothing; render it before
+    // calling it empty.
+    if (!stripToMainContent(html).trim()) {
+      const rendered = await renderedHtml(url).catch(() => null)
+      if (rendered && stripToMainContent(rendered).trim()) return { html: rendered, httpStatus: res.status, error: null, redirectedTo }
+    }
+    return { html, httpStatus: res.status, error: null, redirectedTo }
   } catch (err) {
     // politeFetch aborts at 15s. A timeout and a DNS failure are the same
     // thing here: no content, so no diff, so nothing is overwritten.
@@ -446,9 +460,11 @@ async function fetchPage(url: string): Promise<FetchOutcome> {
  */
 const VERIFY_EVERY_MS = 7 * 24 * 3600_000
 
-async function verifyPublishedGrant(grant: Grant, now: Date, notes: string[]): Promise<void> {
+type DeadlineProofResult = Awaited<ReturnType<typeof verifyListing>>['proof']
+
+async function verifyPublishedGrant(grant: Grant, now: Date, notes: string[]): Promise<DeadlineProofResult | null> {
   const last = grant.applyRouteCheckedAt?.getTime() ?? 0
-  if (now.getTime() - last < VERIFY_EVERY_MS) return
+  if (now.getTime() - last < VERIFY_EVERY_MS) return null
   const db = getDb()
   try {
     const { route, proof } = await verifyListing([grant.applicationUrl, grant.infoUrl])
@@ -499,8 +515,10 @@ async function verifyPublishedGrant(grant: Grant, now: Date, notes: string[]): P
     await db.update(grants).set(patch).where(eq(grants.id, grant.id))
     notes.push(`apply route ${route.status}; timing ${proof.kind}`)
     console.log(`[grant-monitor] ${grant.slug}: apply route ${route.status} (${route.evidence.slice(0, 80)}); timing ${proof.kind}`)
+    return proof
   } catch (err) {
     notes.push(`verification failed: ${err instanceof Error ? err.message : String(err)}`)
+    return null
   }
 }
 
@@ -532,7 +550,11 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
   // replaces the application link outright (that is the point), a route by
   // email set by a person is left alone, and everything else is shown to the
   // admin rather than guessed at.
-  await verifyPublishedGrant(grant, now, notes)
+  const proof = await verifyPublishedGrant(grant, now, notes)
+  // The info link may have just moved off the entrance; read the page the
+  // listing now points at, not the one loaded before verification.
+  const [fresh] = await db.select({ infoUrl: grants.infoUrl }).from(grants).where(eq(grants.id, grant.id)).limit(1)
+  if (fresh && fresh.infoUrl !== grant.infoUrl) grant.infoUrl = fresh.infoUrl
 
 
   const fetched = await fetchPage(grant.infoUrl)
@@ -777,6 +799,47 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
           autoApplicable: isFutureYear,
         })
       }
+    }
+  }
+
+  // Filling a BLANK from the funder's own page is additive: nothing a person
+  // verified is contradicted, and a listing with no award and no dates is
+  // the listing Filip opened and found useless. Award figures with no
+  // current value are written now and filed as applied. A new year's
+  // deadline is written when the deadline-proof pass read the same day in
+  // the funder's own words; a date the extractor alone produced still waits.
+  {
+    const fill: Record<string, unknown> = {}
+    for (const c of proposed) {
+      if (c.oldValue !== null) continue
+      if ((c.field === 'awardMin' || c.field === 'awardMax') && typeof c.newValue === 'number') { fill[c.field] = c.newValue; c.alreadyApplied = true }
+      if (c.field === 'awardNotes' && typeof c.newValue === 'string' && !/^(yes|no|unsure|unknown|varies|variable|flexible( funding)?|n\/?a|none|tbd)\.?$/i.test(c.newValue.trim())) { fill.awardNotes = c.newValue.trim().slice(0, 500); c.alreadyApplied = true }
+    }
+    if (Object.keys(fill).length > 0) {
+      await db.update(grants).set({ ...fill, updatedAt: now }).where(eq(grants.id, grant.id))
+      notes.push(`filled from the funder's page: ${Object.keys(fill).join(', ')}`)
+    }
+    const newDeadline = proposed.find((c) => /^cycle\.\d{4}\.deadlineAt$/.test(c.field) && c.oldValue === null && typeof c.newValue === 'string')
+    if (newDeadline && proof && proof.kind === 'dated' && proof.date && String(proof.date).slice(0, 10) === String(newDeadline.newValue).slice(0, 10)) {
+      const year = Number(newDeadline.field.split('.')[1])
+      const deadlineAt = new Date(String(newDeadline.newValue))
+      const opens = proposed.find((c) => c.field === `cycle.${year}.opensAt`)
+      const note = proposed.find((c) => c.field === `cycle.${year}.deadlineNote`)
+      await db.insert(grantCycles).values({
+        grantId: grant.id,
+        cycleYear: year,
+        deadlineAt,
+        opensAt: typeof opens?.newValue === 'string' ? opens.newValue : null,
+        deadlineNote: typeof note?.newValue === 'string' ? note.newValue : null,
+        status: deadlineAt.getTime() < now.getTime() ? 'closed' : 'open',
+        sourceUrl: proof.url ?? grant.infoUrl,
+        isEstimated: false,
+        verifiedAt: now,
+        verifiedBy: 'system:deadline-proof',
+      })
+      for (const c of proposed) if (c.field.startsWith(`cycle.${year}.`)) c.alreadyApplied = true
+      notes.push(`${year} deadline written: the funder's page says "${(proof.quote ?? '').slice(0, 100)}"`)
+      console.log(`[grant-monitor] ${grant.slug}: ${year} deadline ${deadlineAt.toISOString().slice(0, 10)} written from the funder's own sentence`)
     }
   }
 
