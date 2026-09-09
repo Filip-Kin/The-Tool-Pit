@@ -330,6 +330,23 @@ export interface RawGrantMetadata {
    * has them as evidence and the reviewer sees what the sheet's author knew.
    * Free text throughout: the sheet says "Closed", "August 17", "Unsure".
    */
+  /**
+   * What the person who submitted the grant typed into the structured boxes.
+   * Their words, kept verbatim so the extractor reads them as evidence and the
+   * reviewer sees what was claimed; never trusted as fields on their own.
+   */
+  submitted?: {
+    deadlineAt?: string
+    deadlineType?: string
+    awardMax?: number
+    programs?: string[]
+    geoScope?: string
+    regions?: string[]
+    eligibility?: string
+    effortLevel?: string
+    contactEmail?: string
+    howKnown?: string
+  }
   sheet?: {
     isOpen?: string
     openDate?: string

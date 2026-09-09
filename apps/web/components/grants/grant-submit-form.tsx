@@ -18,6 +18,16 @@ interface FormState {
   applicationUrl: string
   summary: string
   notes: string
+  deadlineAt: string
+  deadlineType: string
+  awardMax: string
+  programs: string
+  geoScope: string
+  regions: string
+  eligibility: string
+  effortLevel: string
+  contactEmail: string
+  howKnown: string
   submitterName: string
   submitterContact: string
 }
@@ -29,6 +39,16 @@ const INITIAL: FormState = {
   applicationUrl: '',
   summary: '',
   notes: '',
+  deadlineAt: '',
+  deadlineType: '',
+  awardMax: '',
+  programs: '',
+  geoScope: '',
+  regions: '',
+  eligibility: '',
+  effortLevel: '',
+  contactEmail: '',
+  howKnown: '',
   submitterName: '',
   submitterContact: '',
 }
@@ -219,11 +239,50 @@ export function GrantSubmitForm({ admin }: {
         <Field label="What it funds" hint="One or two sentences in your own words.">
           <textarea value={form.summary} onChange={(e) => set('summary', e.target.value)} rows={2} className="input resize-y" />
         </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Deadline" hint="The next one, if you know it.">
+            <input type="date" value={form.deadlineAt} onChange={(e) => set('deadlineAt', e.target.value)} className="input" />
+          </Field>
+          <Field label="How deadlines work">
+            <select value={form.deadlineType} onChange={(e) => set('deadlineType', e.target.value)} className="input">
+              <option value="">Not sure</option>
+              <option value="fixed">One fixed deadline</option>
+              <option value="annual_window">Opens and closes every year</option>
+              <option value="rolling">Rolling, apply any time</option>
+            </select>
+          </Field>
+          <Field label="Maximum award (USD)">
+            <input type="number" min="1" value={form.awardMax} onChange={(e) => set('awardMax', e.target.value)} className="input" placeholder="e.g. 5000" />
+          </Field>
+          <Field label="Effort to apply">
+            <select value={form.effortLevel} onChange={(e) => set('effortLevel', e.target.value)} className="input">
+              <option value="">Not sure</option>
+              <option value="light">Light: a form, under an hour</option>
+              <option value="moderate">Moderate: a short proposal</option>
+              <option value="heavy">Heavy: a full proposal with budget</option>
+            </select>
+          </Field>
+          <Field label="Programmes" hint="FRC, FTC, FLL, or any.">
+            <input value={form.programs} onChange={(e) => set('programs', e.target.value)} className="input" placeholder="FRC, FTC" />
+          </Field>
+          <Field label="Where" hint="National, a state or province (give the code), or a city.">
+            <input value={form.regions} onChange={(e) => set('regions', e.target.value)} className="input" placeholder="MI, OH or 'national'" />
+          </Field>
+          <Field label="Contact email at the funder" hint="Only if the page gives one.">
+            <input type="email" value={form.contactEmail} onChange={(e) => set('contactEmail', e.target.value)} className="input" />
+          </Field>
+          <Field label="How do you know?" hint="Your team applied, you read the page, someone at the funder told you.">
+            <input value={form.howKnown} onChange={(e) => set('howKnown', e.target.value)} className="input" />
+          </Field>
+        </div>
+        <Field label="Who is eligible" hint="In the funder's words if you can.">
+          <textarea value={form.eligibility} onChange={(e) => set('eligibility', e.target.value)} rows={2} className="input resize-y" />
+        </Field>
         <Field
           label="Anything else"
-          hint="Deadlines, amounts, who is eligible, whether your team has applied before. Say what you actually know and leave out what you do not, we will check it all against the funder's page anyway."
+          hint="Whether your team has applied before, what the process was like. Say what you actually know and leave out what you do not; we check it all against the funder's page anyway."
         >
-          <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={4} className="input resize-y" />
+          <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className="input resize-y" />
         </Field>
       </Section>
 

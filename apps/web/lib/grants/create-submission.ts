@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { grantCandidates, grantSources, grants } from '@the-tool-pit/db'
 import type { RawGrantMetadata } from '@the-tool-pit/db'
+import { enqueueGrantExtract } from '@/lib/admin/grant-queue'
 import { sendApprovalNotice, reviewGrantUrl } from '@the-tool-pit/types'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 
@@ -25,6 +26,18 @@ export interface CreateGrantSubmissionInput {
   summary?: string
   /** Anything else the submitter knows: dates, amounts, who it is for. */
   notes?: string
+  /** The structured boxes, as typed. Evidence for the extractor and the reviewer, not fields. */
+  submitted?: {
+    deadlineAt?: string
+    deadlineType?: string
+    awardMax?: number
+    programs?: string
+    regions?: string
+    eligibility?: string
+    effortLevel?: string
+    contactEmail?: string
+    howKnown?: string
+  }
   submitterName?: string
   submitterContact?: string
   /**
@@ -181,13 +194,43 @@ export async function createGrantSubmission(
   // what a classifier gets handed, and for a submission the most useful text is
   // what the person actually typed, so their notes go there rather than being
   // stapled onto the description.
+  // The structured boxes ride along as evidence: a description sentence the
+  // extractor reads, and a `submitted` block the review deck shows verbatim.
+  const sub = input.submitted ?? {}
+  const programs = (sub.programs ?? '').split(/[,\s/]+/).map((p) => p.trim().toLowerCase()).filter((p) => ['frc', 'ftc', 'fll', 'any'].includes(p))
+  const regionsRaw = (sub.regions ?? '').trim()
+  const isNational = /^national$/i.test(regionsRaw)
+  const regions = isNational ? [] : regionsRaw.split(/[,\s]+/).map((r) => r.trim().toUpperCase()).filter((r) => /^[A-Z]{2,3}$/.test(r))
+  const submitted: NonNullable<RawGrantMetadata['submitted']> = {
+    deadlineAt: sub.deadlineAt?.trim() || undefined,
+    deadlineType: sub.deadlineType?.trim() || undefined,
+    awardMax: sub.awardMax && Number.isFinite(sub.awardMax) && sub.awardMax > 0 ? Math.round(sub.awardMax) : undefined,
+    programs: programs.length > 0 ? programs : undefined,
+    geoScope: isNational ? 'national' : regions.length > 0 ? 'state' : undefined,
+    regions: regions.length > 0 ? regions : undefined,
+    eligibility: sub.eligibility?.trim() || undefined,
+    effortLevel: sub.effortLevel?.trim() || undefined,
+    contactEmail: sub.contactEmail?.trim() || undefined,
+    howKnown: sub.howKnown?.trim() || undefined,
+  }
+  const facts = [
+    submitted.deadlineAt ? `Deadline: ${submitted.deadlineAt}.` : null,
+    submitted.deadlineType ? `Deadline type: ${submitted.deadlineType}.` : null,
+    submitted.awardMax ? `Maximum award: $${submitted.awardMax}.` : null,
+    submitted.programs ? `Programmes: ${submitted.programs.join(', ')}.` : null,
+    submitted.geoScope ? `Where: ${submitted.geoScope}${submitted.regions ? ' ' + submitted.regions.join(', ') : ''}.` : null,
+    submitted.eligibility ? `Eligibility: ${submitted.eligibility}` : null,
+    submitted.effortLevel ? `Effort: ${submitted.effortLevel}.` : null,
+    submitted.howKnown ? `How the submitter knows: ${submitted.howKnown}.` : null,
+  ].filter(Boolean)
   const rawMetadata: RawGrantMetadata = {
     title: name,
-    description: input.summary?.trim() || undefined,
+    description: [input.summary?.trim(), facts.length > 0 ? `Submitted by a person: ${facts.join(' ')}` : null].filter(Boolean).join(' ') || undefined,
     funderName: input.funderName?.trim() || undefined,
     applicationUrl,
     discoveredVia: 'public submission',
     contentText: input.notes?.trim() || undefined,
+    ...(Object.values(submitted).some((v) => v !== undefined) ? { submitted } : {}),
   }
 
   const sourceId = await submissionSourceId()
@@ -212,6 +255,11 @@ export async function createGrantSubmission(
       submitterOwns: input.submitterOwns ?? null,
     })
     .returning({ id: grantCandidates.id })
+
+  // Read the funder's page now: where "Apply" lands and what it says about
+  // timing, so the reviewer sees a verified card rather than a bare URL.
+  // Best effort; a queue that is down does not fail the submission.
+  await enqueueGrantExtract({ candidateId: row.id }).catch(() => false)
 
   sendApprovalNotice({
     vertical: 'grant',

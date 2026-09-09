@@ -1,3 +1,4 @@
+import type { GrantProgram } from '@the-tool-pit/db/grant-enums'
 /**
  * The review deck's pure half: what the deck shows, and what it writes.
  *
@@ -129,6 +130,7 @@ export function reviewDefaults(input: {
   const fields = input.extraction?.fields
   const cls = input.classification ?? {}
   const meta = input.metadata ?? {}
+  const sub = meta.submitted ?? {}
 
   // The award phrase is the funder's own wording and it is what a team reads
   // when there is no figure at all. "varies" and "up to $5,000 in kind" are
@@ -143,26 +145,26 @@ export function reviewDefaults(input: {
     infoUrl: input.url,
     applicationUrl: text(fields?.applicationUrl, meta.applicationUrl ?? ''),
     applyMethod: text(fields?.applyMethod, 'unknown') || 'unknown',
-    contactEmail: text(fields?.contactEmail),
+    contactEmail: text(fields?.contactEmail, sub.contactEmail ?? ''),
     mailingAddress: text(fields?.mailingAddress),
-    programs: fields?.programs.value ?? cls.programs ?? ['any'],
-    geoScope: text(fields?.geoScope, cls.geoScope ?? 'national') || 'national',
+    programs: fields?.programs.value ?? cls.programs ?? (sub.programs as GrantProgram[] | undefined) ?? ['any'],
+    geoScope: text(fields?.geoScope, cls.geoScope ?? sub.geoScope ?? 'national') || 'national',
     countries: fields?.countries.value ?? cls.countries ?? ['US'],
-    regions: fields?.regions.value ?? cls.regions ?? [],
+    regions: fields?.regions.value ?? cls.regions ?? sub.regions ?? [],
     localityNote: text(fields?.localityNote),
     awardMin: fields?.awardMin.value ?? cls.awardMin ?? null,
-    awardMax: fields?.awardMax.value ?? cls.awardMax ?? null,
+    awardMax: fields?.awardMax.value ?? cls.awardMax ?? sub.awardMax ?? null,
     awardCurrency: text(fields?.awardCurrency, 'USD') || 'USD',
     awardNotes,
     renewable: tri(fields?.renewable),
-    deadlineType: text(fields?.deadlineType, cls.deadlineType ?? 'unknown') || 'unknown',
-    effortLevel: text(fields?.effortLevel, 'unknown') || 'unknown',
+    deadlineType: text(fields?.deadlineType, cls.deadlineType ?? sub.deadlineType ?? 'unknown') || 'unknown',
+    effortLevel: text(fields?.effortLevel, sub.effortLevel ?? 'unknown') || 'unknown',
     // The year a cycle closes in is not a guess when a date is already in
     // hand: it is the year printed on that date. Only ever read off a date the
     // extraction supported with a quote.
     cycleYear: fields?.cycleYear.value ?? yearOf(fields?.deadlineAt.value ?? fields?.opensAt.value ?? null),
     opensAt: text(fields?.opensAt),
-    deadlineAt: text(fields?.deadlineAt),
+    deadlineAt: text(fields?.deadlineAt, sub.deadlineAt ?? ''),
     deadlineNote: text(fields?.deadlineNote),
     decisionAt: text(fields?.decisionAt),
     eligibility: {
@@ -172,7 +174,7 @@ export function reviewDefaults(input: {
       requiresSchoolAffiliation: tri(fields?.requiresSchoolAffiliation),
       ageRange: text(fields?.ageRange),
       geographyRestriction: text(fields?.geographyRestriction),
-      eligibilityText: text(fields?.eligibilityText),
+      eligibilityText: text(fields?.eligibilityText, sub.eligibility ?? ''),
     },
   }
 }
