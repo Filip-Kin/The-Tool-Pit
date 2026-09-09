@@ -24,9 +24,13 @@ Reply with JSON only: {"level": "robotics" | "stem" | "general" | "off", "reason
 - robotics: the programme names robotics, FIRST, FRC, FTC, FLL, VEX or robot competitions as its purpose or an eligible use.
 - stem: it funds STEM, science, engineering, technology, computing, maker or career-technical education for youth or schools. A robotics team is a natural applicant.
 - general: an open community, youth or education grant that any local nonprofit or school could apply to. A team could apply; it is not the point of the programme.
-- off: the purpose or the eligible population rules a robotics team out or makes an application unrealistic: disaster or wildfire relief, health care, foster care, housing, hunger, arts and culture, environment, conservation or marine work, adult workforce, higher-education research, faith, a specific unrelated population, or money that goes only to individuals.
+- off: the purpose or the eligible population rules a robotics team out or makes an application unrealistic. Any of these is off:
+  * the cause: disaster or wildfire relief, health care, foster care, housing, hunger, arts and culture, environment, conservation or marine work, climate, adult workforce, higher-education research, faith, a specific unrelated population;
+  * the eligibility: schools, school districts, PTOs, booster clubs or youth clubs are named as ineligible; an operating budget floor of $100,000 or more; a track record of several years of programming; invitation-only or "no unsolicited requests"; prior participants only;
+  * the mechanism: a formula allocation to districts or agencies rather than an application; a reimbursement, discount or referral bonus; wages or stipends; money paid only to individuals (a scholarship, an educator stipend);
+  * a different competition: VEX-only, drone-only or another league named as the sole eligible programme.
 
-Judge only from the text you are given. A broad list of causes that includes education alongside unrelated causes is general, not off. A programme aimed at elementary or middle school only is still stem or general (FLL teams are that age).`
+Judge only from the text you are given. A broad list of causes that includes education alongside unrelated causes is general, not off. A programme aimed at elementary or middle school only is still stem or general (FLL teams are that age). A closed round on a recurring programme is not off.`
 
 function field(v: unknown, limit = 1200): string {
   if (Array.isArray(v)) return v.map(String).join(', ')

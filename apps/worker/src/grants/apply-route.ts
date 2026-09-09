@@ -160,6 +160,8 @@ async function fetchWithFallback(url: string): Promise<Response> {
   }
 }
 
+const NOT_FORM_PDF_RE = /(form 990|990-PF|return of (organization|private foundation)|annual report|financial statements|audited financial|meeting minutes|board minutes|permit application|notice of funding opportunity|request for proposals?\b.{0,40}\bresearch|newsletter)/i
+
 async function readHtml(url: string): Promise<{ html: string; status: number; how: 'fetch' | 'browser' | 'walled' | 'gone' | 'pdf'; finalUrl: string }> {
   let finalUrl = url
   try {
@@ -184,6 +186,13 @@ async function readHtml(url: string): Promise<{ html: string; status: number; ho
         const { text } = await extractText(bytes, { mergePages: true })
         // A fillable PDF form often has little extractable text; the file
         // name saying "application" or "form" is evidence enough.
+        // A tax return, an annual report, a permit form or a newsletter is a
+        // PDF with the word "application" in it and is not the form (an
+        // audit found a Form 990-PF, a groundwater permit and a 2020 report
+        // published as application links).
+        if (NOT_FORM_PDF_RE.test(text.slice(0, 6000))) {
+          return { html: '', status: res.status, how: 'gone', finalUrl }
+        }
         if (/(application|apply|applicant|signature|name of (team|school|organization))/i.test(text) || /(application|app|form)[^/]*\.pdf/i.test(url)) {
           return { html: `<pdf-form>${(text || 'application form').slice(0, 2000).replace(/</g, ' ')}</pdf-form>`, status: res.status, how: 'pdf', finalUrl }
         }
@@ -298,6 +307,9 @@ export function judge(url: string, html: string, how: string): Omit<ApplyRoute, 
   const closed = text.match(CLOSED_RE) ?? (closedByPath ? [`path ends in ${parsed.pathname.split('/').pop()}`] : null)
   // On a portal host, a webinar, help or about page is still not the form
   // (cybergrants.com/boa/webinars/ is Bank of America's training page).
+  // A vendor's help centre (support.foundant.com/s/article/...) is on a
+  // portal host and is documentation, never the form.
+  if (/^(support|help|docs|community|status|learn)\./i.test(parsed.hostname)) return null
   const portal = /\/(webinars?|help|faq|faqs|support|about|blog|news|training|resources?|guidelines?|tutorial|docs)(\/|$|[.?#])/i.test(parsed.pathname) ? null : portalName(parsed)
   if (closed) {
     return { status: 'closed', url, email: null, evidence: `${portal ?? parsed.hostname} says: "${closed[0]}"` }
