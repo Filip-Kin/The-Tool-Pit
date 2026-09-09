@@ -52,6 +52,9 @@ export interface ApplyPanelProps {
   hasProfile: boolean
   /** Where the profile editor lives. */
   profileHref?: string
+  /** What the link was last found to land on; 'closed' changes the panel's message. */
+  routeStatus?: string | null
+  routeEvidence?: string | null
 }
 
 export function ApplyPanel({
@@ -62,6 +65,8 @@ export function ApplyPanel({
   prefill,
   hasProfile,
   profileHref = '/grants/profile',
+  routeStatus,
+  routeEvidence,
 }: ApplyPanelProps) {
   const { user, loading } = useSession()
   const [signInOpen, setSignInOpen] = useState(false)
@@ -71,6 +76,17 @@ export function ApplyPanel({
   return (
     <section className={cardClass()}>
       <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Apply</h2>
+      {/* The weekly check found the form closed or gone. Say so before the button,
+          so nobody fills in a profile for a door that is shut. */}
+      {routeStatus === 'closed' && (
+        <p className="rounded-md border border-reg-closed/30 bg-reg-closed/10 px-3 py-2 text-sm text-foreground">
+          The application is not taking submissions right now
+          {routeEvidence ? <span className="text-muted">: {routeEvidence}</span> : null}. Check the funder&apos;s page for the next round.
+        </p>
+      )}
+      {routeStatus === 'walled' && (
+        <p className="text-xs text-muted-2">We could not open the application page automatically; the link may still work in a browser.</p>
+      )}
 
       {!signedIn && !loading && (
         <SignedOutState

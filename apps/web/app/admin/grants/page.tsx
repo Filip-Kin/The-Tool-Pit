@@ -113,6 +113,7 @@ export default async function AdminGrantsPage({
                           <tr>
                             <th className="px-4 py-2 text-left">Grant</th>
                             <th className="w-44 px-4 py-2 text-left">Next deadline</th>
+                            <th className="w-40 px-4 py-2 text-left">Apply route</th>
                             <th className="w-40 px-4 py-2 text-left">Verified</th>
                             <th className="w-32 px-4 py-2 text-left">Crawl</th>
                           </tr>
@@ -145,7 +146,31 @@ export default async function AdminGrantsPage({
                                 ) : (
                                   <span className="text-muted-2">
                                     {grant.deadlineType === 'rolling' ? 'rolling, no deadline' : 'none recorded'}
+                                    {grant.deadlineProof && (
+                                      <span className="mt-0.5 block max-w-[11rem] truncate text-muted-2" title={grant.deadlineProof}>
+                                        {grant.deadlineProof}
+                                      </span>
+                                    )}
                                   </span>
+                                )}
+                              </td>
+
+                              <td className="px-4 py-3 text-[10px]" title={grant.applyRouteEvidence ?? ''}>
+                                {grant.applyRouteStatus ? (
+                                  <span
+                                    className={
+                                      grant.applyRouteStatus === 'portal' || grant.applyRouteStatus === 'form' || grant.applyRouteStatus === 'email'
+                                        ? 'text-foreground'
+                                        : 'text-frc'
+                                    }
+                                  >
+                                    {grant.applyRouteStatus}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-2">not checked</span>
+                                )}
+                                {grant.applyRouteEvidence && (
+                                  <span className="mt-0.5 block max-w-[10rem] truncate text-muted-2">{grant.applyRouteEvidence}</span>
                                 )}
                               </td>
 

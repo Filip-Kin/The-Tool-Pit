@@ -84,6 +84,13 @@ export interface PublicGrant {
   funder: PublicGrantFunder | null
   cycles: PublicGrantCycle[]
   requirements: PublicGrantRequirement[]
+  /** What the application link was last found to land on (worker apply-route.ts). */
+  applyRouteStatus: string | null
+  applyRouteEvidence: string | null
+  /** The funder's own words on timing when there is no dated cycle (worker deadline-proof.ts). */
+  deadlineProof: string | null
+  deadlineProofUrl: string | null
+  deadlineProofCheckedAt: Date | null
 }
 
 // #endregion

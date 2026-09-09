@@ -77,6 +77,7 @@ export default async function AdminGrantCandidateDeckPage({
       fill={extractionFillCount(extraction)}
       extractedAt={cand.extractedAt ? cand.extractedAt.toISOString() : null}
       extractionDepth={extraction?.depth ?? null}
+      extraction={extraction ?? null}
       extractionNotes={extraction?.notes ?? []}
       extractionReasoning={extraction?.reasoning ?? null}
       alreadyMatched={Boolean(cand.matchedGrantId)}

@@ -182,6 +182,23 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
               )}
               {nextWindow && <span className="block text-muted-2">Expected back {nextWindow}</span>}
               <span className="block text-muted-2">{DEADLINE_TYPE_LABEL[grant.deadlineType]}</span>
+              {/* No dated deadline: say what the funder itself says about timing,
+                  with the sentence and where it was read. The pipeline re-reads
+                  this weekly, so "expected by mid-September" becomes a date the
+                  week it is posted. */}
+              {!deadline && grant.deadlineProof && (
+                <span className="mt-1 block text-muted">
+                  {grant.deadlineProof.startsWith('No deadline statement') ? 'The funder\'s pages give no dates. ' : <>The funder says: &ldquo;{grant.deadlineProof}&rdquo; </>}
+                  {grant.deadlineProofUrl && (
+                    <a href={grant.deadlineProofUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                      source
+                    </a>
+                  )}
+                  {grant.deadlineProofCheckedAt && (
+                    <span className="text-muted-2">{` · checked ${new Date(grant.deadlineProofCheckedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}</span>
+                  )}
+                </span>
+              )}
             </Fact>
 
             <Fact icon={<Coins className="h-4 w-4" />} label="Award">
@@ -222,6 +239,8 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
           <ApplyPanel
             grantName={grant.name}
             applicationUrl={grant.applicationUrl ?? grant.infoUrl}
+            routeStatus={grant.applyRouteStatus}
+            routeEvidence={grant.applyRouteEvidence}
             mappedFieldCount={applyContext.formFields.length}
             prefillableFieldCount={applyContext.formFields.filter((f) => f.fillKind !== 'copy').length}
             prefill={prefill}

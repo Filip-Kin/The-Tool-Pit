@@ -142,6 +142,8 @@ export interface ReviewDeckProps {
   fill: { filled: number; total: number; quoted: number }
   extractedAt: string | null
   extractionDepth: string | null
+  /** The worker's extraction as stored, for the verification panel. */
+  extraction?: unknown
   extractionNotes: string[]
   extractionReasoning: string | null
   alreadyMatched: boolean
@@ -449,6 +451,12 @@ export function ReviewDeck(props: ReviewDeckProps) {
                     ))}
                   </select>
                 </DeckField>
+                <DeckField
+                  label="Publish anyway (reason)"
+                  hint="The publish gate refuses a link that does not land on the application, and timing that is neither dated nor explained. A reason here overrides it and is kept."
+                >
+                  <input name="overrideVerification" className={inputClass} placeholder="e.g. spoke to the funder, form opens Oct 1" />
+                </DeckField>
                 <DeckField label="On approve, save as" hint="Only 'published' is visible to teams.">
                   <select name="status" defaultValue="published" className={inputClass}>
                     {GRANT_STATUSES.map((s) => (
@@ -461,6 +469,38 @@ export function ReviewDeck(props: ReviewDeckProps) {
               </div>
             </div>
           </section>
+          {/* #endregion */}
+
+          {/* #region verification */}
+          {(() => {
+            const x = (props.extraction ?? null) as { applyRoute?: { status: string; url: string | null; email: string | null; evidence: string }; deadlineProof?: { kind: string; quote?: string; url?: string; urlsRead: string[] } } | null
+            if (!x?.applyRoute && !x?.deadlineProof) return null
+            return (
+              <section className="rounded-lg border border-border bg-surface p-5">
+                <h2 className="mb-3 text-sm font-semibold text-foreground">What the pipeline verified</h2>
+                <dl className="grid gap-3 text-sm md:grid-cols-2">
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-muted-2">Apply route</dt>
+                    <dd className="text-foreground">
+                      <span className="font-medium">{x.applyRoute?.status ?? 'not checked'}</span>
+                      {x.applyRoute?.url && <span className="block break-all text-xs text-muted">{x.applyRoute.url}</span>}
+                      {x.applyRoute?.email && <span className="block text-xs text-muted">{x.applyRoute.email}</span>}
+                      {x.applyRoute?.evidence && <span className="block text-xs text-muted-2">{x.applyRoute.evidence}</span>}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-muted-2">Timing</dt>
+                    <dd className="text-foreground">
+                      <span className="font-medium">{x.deadlineProof?.kind ?? 'not checked'}</span>
+                      {x.deadlineProof?.quote && <span className="block text-xs text-muted">&ldquo;{x.deadlineProof.quote}&rdquo;</span>}
+                      {x.deadlineProof?.url && <span className="block break-all text-xs text-muted-2">{x.deadlineProof.url}</span>}
+                      {x.deadlineProof?.kind === 'none' && <span className="block text-xs text-muted-2">read {x.deadlineProof.urlsRead.length} page(s), no statement about dates</span>}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+            )
+          })()}
           {/* #endregion */}
 
           {/* #region geography */}
