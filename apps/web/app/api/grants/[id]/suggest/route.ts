@@ -20,25 +20,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Too many suggestions. Please wait a bit.' }, { status: 429 })
   }
   const user = await getCurrentUser()
-  const str = (k: string) => {
-    const v = form.get(k)
-    return typeof v === 'string' && v.trim() ? v.trim() : undefined
-  }
-  const num = (k: string) => {
-    const v = str(k)
-    return v ? Number(v.replace(/[^0-9.]/g, '')) : undefined
-  }
+  // Every field the page shows can be suggested; the handler decides what counts.
+  const values: Record<string, string | undefined> = {}
+  for (const [k, v] of form.entries()) if (typeof v === 'string' && v.trim() && /^[a-zA-Z]+$/.test(k)) values[k] = v.trim()
   const result = await createGrantEditSuggestion(id, {
-    applicationUrl: str('applicationUrl'),
-    deadlineAt: str('deadlineAt'),
-    deadlineType: str('deadlineType'),
-    awardMax: num('awardMax'),
-    effortLevel: str('effortLevel'),
-    eligibilityText: str('eligibilityText'),
-    summary: str('summary'),
-    note: str('note'),
-    evidenceUrl: str('evidenceUrl') ?? '',
-    email: str('email'),
+    fields: values,
+    evidenceUrl: values.evidenceUrl ?? '',
     ipHash,
     userId: user?.id ?? null,
   })

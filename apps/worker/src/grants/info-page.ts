@@ -54,8 +54,11 @@ export function scoreInfoResult(r: { url: string; title: string; description: st
   const funderWords = words(funderName)
   const nameWords = words(grantName)
   const hostBare = host.replace(/\./g, '')
-  let score = 0
-  if (funderWords.some((w) => w.length >= 4 && hostBare.includes(w))) score += 3
+  // The programme page is on the FUNDER's site or nowhere. A post about the
+  // grant on a regional FIRST site (socalftc.org on BAE's grant) is somebody
+  // else's page, and it was picked once because the name words matched.
+  if (!funderWords.some((w) => w.length >= 3 && hostBare.includes(w))) return 0
+  let score = 3
   const text = `${r.title} ${r.description}`.toLowerCase()
   const nameHits = nameWords.filter((w) => text.includes(w)).length
   if (nameWords.length > 0 && nameHits >= Math.min(2, nameWords.length)) score += 2

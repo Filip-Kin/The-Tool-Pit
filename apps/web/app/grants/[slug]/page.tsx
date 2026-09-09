@@ -183,7 +183,7 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
               {nextWindow && <span className="block text-muted-2">Expected back {nextWindow}</span>}
               <span className="block text-muted-2">
                 {DEADLINE_TYPE_LABEL[grant.deadlineType]}
-                {!deadline && grant.deadlineType !== 'rolling' && <KnowThisLink what="deadline" />}
+                {!deadline && grant.deadlineType !== 'rolling' && <KnowThisLink what="deadline" field="deadlineAt" />}
               </span>
               {/* No dated deadline: say what the funder itself says about timing,
                   with the sentence and where it was read. The pipeline re-reads
@@ -207,7 +207,7 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
             <Fact icon={<Coins className="h-4 w-4" />} label="Award">
               <span className="text-foreground">
                 {award ?? 'Amount not confirmed'}
-                {!award && <KnowThisLink what="amount" />}
+                {!award && <KnowThisLink what="amount" field="awardMax" />}
               </span>
               {grant.awardNotes && <span className="block text-muted">{grant.awardNotes}</span>}
             </Fact>
@@ -219,7 +219,7 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
             <Fact icon={<Gauge className="h-4 w-4" />} label="Effort">
               <span className="text-foreground">
                 {EFFORT_LABEL[grant.effortLevel]}
-                {grant.effortLevel === 'unknown' && <KnowThisLink what="effort" />}
+                {grant.effortLevel === 'unknown' && <KnowThisLink what="effort" field="effortLevel" />}
               </span>
             </Fact>
 
@@ -248,11 +248,26 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
           <SuggestGrantEdit
             grantId={grant.id}
             current={{
-              applicationUrl: grant.applicationUrl,
-              deadlineType: grant.deadlineType,
-              awardMax: grant.awardMax,
-              effortLevel: grant.effortLevel,
+              name: grant.name,
+              funderName: grant.funder?.name ?? null,
               summary: grant.summary,
+              description: grant.description,
+              infoUrl: grant.infoUrl,
+              applicationUrl: grant.applicationUrl,
+              programs: grant.programs,
+              geoScope: grant.geoScope,
+              countries: grant.countries,
+              regions: grant.regions,
+              localityNote: grant.localityNote,
+              awardMin: grant.awardMin,
+              awardMax: grant.awardMax,
+              awardCurrency: grant.awardCurrency,
+              awardNotes: grant.awardNotes,
+              renewable: grant.renewable,
+              deadlineType: grant.deadlineType,
+              effortLevel: grant.effortLevel,
+              nextDeadline: resolved.cycle?.deadlineAt ? resolved.cycle.deadlineAt.toISOString().slice(0, 10) : null,
+              nextOpens: resolved.cycle?.opensAt ?? null,
             }}
           />
 

@@ -14,3 +14,10 @@ describe('scoreInfoResult', () => {
     expect(scoreInfoResult({ url: 'https://www.firstinspires.org/programs/team-grant-opportunities', title: 'Team Grant Opportunities', description: 'John Deere FIRST Team Grant...' }, 'John Deere', 'John Deere FIRST Team Grant')).toBe(0)
   })
 })
+
+describe('another organisation is never the funder page', () => {
+  it('refuses a regional FIRST post about the grant', () => {
+    expect(scoreInfoResult({ url: 'https://socalftc.org/posts/bae-team-grant-app-for-fll-ftc-and-frc', title: 'BAE Team Grant app for FLL, FTC and FRC', description: 'BAE Systems team grant application is open' }, 'BAE Systems', 'BAE Team Grant')).toBe(0)
+    expect(scoreInfoResult({ url: 'https://www.baesystems.com/en-us/partnership/community-investment', title: 'Community investment | BAE Systems', description: 'FIRST Robotics team grants' }, 'BAE Systems', 'BAE Team Grant')).toBeGreaterThanOrEqual(4)
+  })
+})

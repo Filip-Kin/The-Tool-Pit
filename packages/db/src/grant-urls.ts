@@ -9,7 +9,11 @@
 const ENTRANCE_HOSTS =
   /(^|\.)(submittable\.com|fluxx\.io|cybergrants\.com|smartsimple\.com|grantinterface\.com|foundant\.com|versaic\.com|yourcausegrants\.com|benevity\.(com|org)|webportalapp\.com|forms\.gle|jotform\.com|typeform\.com|tfaforms\.(net|com)|formassembly\.com|wufoo\.com|formstack\.com|donationx\.org|surveymonkey\.com|qualtrics\.com|alchemer\.com|zohopublic\.com|zfrmz\.com|akoyago\.com|smapply\.io|openwaterapps\.com|hubspot\.com|hsforms\.com|grantrequest\.com|my\.site\.com|force\.com)$/i
 
-const ENTRANCE_PATH = /\/(login|logon|signin|sign-in|user_sessions|sessions\/new|register|signup|sign-up|formresponse|viewform|submit|apply|application|b\/form|jfe\/form|forms?\/[A-Za-z0-9_-]{8,})(\/|$|[.?#])/i
+// Only a login or a form id says "entrance" by path. "/apply" and
+// "/application" on a funder's own site are usually the programme page
+// ("/first-robotics-team-grant-application/" was BAE's), and treating them
+// as the entrance swapped a good info link for another organisation's post.
+const ENTRANCE_PATH = /\/(login|logon|signin|sign-in|user_sessions|sessions\/new|formresponse|viewform|b\/form|jfe\/form|forms?\/[A-Za-z0-9_-]{12,})(\/|$|[.?#])/i
 
 /** True when the URL is the way IN rather than the page ABOUT the grant. */
 export function isEntranceUrl(url: string | null | undefined): boolean {

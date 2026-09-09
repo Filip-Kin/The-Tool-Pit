@@ -3,29 +3,24 @@
  *
  * The change queue (grant_changes) is where the crawler's proposals already
  * wait for a human, with a field, an old value, a new value and the reasoning.
- * A visitor who knows the effort level or the real deadline files exactly the
- * same shape, one row per field they changed, with "Suggested by a visitor"
- * and the URL they point to as the reasoning. The admin applies or dismisses
- * it on the same screen; nothing here touches a listing.
+ * A visitor who knows better files exactly the same shape, one row per field
+ * they changed, with "Suggested by a visitor" and the URL they point to as
+ * the reasoning. Every fact on the public page can be corrected here: the
+ * admin applies or dismisses it on the same screen; nothing here touches a
+ * listing.
  */
 import { and, eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { grantChanges, grantCycles, grants, GRANT_DEADLINE_TYPES, GRANT_EFFORT_LEVELS } from '@the-tool-pit/db'
+import { grantChanges, grantCycles, grants } from '@the-tool-pit/db'
+import { GRANT_APPLY_METHODS, GRANT_DEADLINE_TYPES, GRANT_EFFORT_LEVELS, GRANT_GEO_SCOPES, GRANT_PROGRAMS } from '@the-tool-pit/db/grant-enums'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 import { sendApprovalNotice, reviewQueueUrl, grantListingUrl } from '@the-tool-pit/types'
 
 export interface GrantEditSuggestion {
-  applicationUrl?: string
-  deadlineAt?: string
-  deadlineType?: string
-  awardMax?: number
-  effortLevel?: string
-  eligibilityText?: string
-  summary?: string
-  note?: string
+  /** Raw form values, by the same names the page shows them under. */
+  fields: Record<string, string | undefined>
   /** Where the visitor saw it. Required: a suggestion with no source is a guess. */
   evidenceUrl: string
-  email?: string
   ipHash?: string | null
   userId?: string | null
 }
@@ -37,6 +32,9 @@ export interface SuggestOutcome {
 }
 
 const URL_RE = /^https?:\/\/\S+$/i
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+type Row = { field: string; oldValue: unknown; newValue: unknown }
 
 export async function createGrantEditSuggestion(grantId: string, input: GrantEditSuggestion): Promise<SuggestOutcome> {
   const db = getDb()
@@ -45,37 +43,91 @@ export async function createGrantEditSuggestion(grantId: string, input: GrantEdi
 
   const evidenceUrl = (input.evidenceUrl ?? '').trim()
   if (!URL_RE.test(evidenceUrl)) return { ok: false, error: 'Add the link where you saw this, so a reviewer can check it.' }
-  if (urlContainsHateSpeech(evidenceUrl) || containsHateSpeech(input.note, input.summary, input.eligibilityText)) {
+  const text = (k: string) => (typeof input.fields[k] === 'string' ? input.fields[k]!.trim() : '')
+  if (urlContainsHateSpeech(evidenceUrl) || containsHateSpeech(text('note'), text('summary'), text('description'), text('eligibilityText'), text('name'), text('awardNotes'), text('localityNote'))) {
     return { ok: false, error: 'That text cannot be submitted.' }
   }
 
-  const who = input.userId ? `a signed-in visitor` : 'a visitor'
-  const reasoning = [`Suggested by ${who} on ${new Date().toISOString().slice(0, 10)}.`, `Evidence: ${evidenceUrl}`, input.note?.trim() ? `Note: ${input.note.trim().slice(0, 600)}` : null, input.email?.trim() ? `Contact: ${input.email.trim().slice(0, 120)}` : null]
+  const who = input.userId ? 'a signed-in visitor' : 'a visitor'
+  const note = text('note')
+  const email = text('email')
+  const reasoning = [`Suggested by ${who} on ${new Date().toISOString().slice(0, 10)}.`, `Evidence: ${evidenceUrl}`, note ? `Note: ${note.slice(0, 600)}` : null, email ? `Contact: ${email.slice(0, 120)}` : null]
     .filter(Boolean)
     .join(' ')
 
-  const rows: Array<{ field: string; oldValue: unknown; newValue: unknown }> = []
-  const applicationUrl = input.applicationUrl?.trim()
-  if (applicationUrl && URL_RE.test(applicationUrl) && applicationUrl !== grant.applicationUrl) rows.push({ field: 'applicationUrl', oldValue: grant.applicationUrl, newValue: applicationUrl })
-  if (input.awardMax != null && Number.isFinite(input.awardMax) && input.awardMax > 0 && input.awardMax !== grant.awardMax) rows.push({ field: 'awardMax', oldValue: grant.awardMax, newValue: Math.round(input.awardMax) })
-  const effort = input.effortLevel?.trim()
-  if (effort && (GRANT_EFFORT_LEVELS as readonly string[]).includes(effort) && effort !== 'unknown' && effort !== grant.effortLevel) rows.push({ field: 'effortLevel', oldValue: grant.effortLevel, newValue: effort })
-  const dtype = input.deadlineType?.trim()
-  if (dtype && (GRANT_DEADLINE_TYPES as readonly string[]).includes(dtype) && dtype !== 'unknown' && dtype !== grant.deadlineType) rows.push({ field: 'deadlineType', oldValue: grant.deadlineType, newValue: dtype })
-  const summary = input.summary?.trim()
-  if (summary && summary.length >= 20 && summary !== grant.summary) rows.push({ field: 'summary', oldValue: grant.summary, newValue: summary.slice(0, 600) })
-  const eligibility = input.eligibilityText?.trim()
+  const rows: Row[] = []
+  const push = (field: string, oldValue: unknown, newValue: unknown) => {
+    if (JSON.stringify(oldValue ?? null) !== JSON.stringify(newValue ?? null)) rows.push({ field, oldValue: oldValue ?? null, newValue })
+  }
+  // Text fields: a changed value is a change; blank means "no opinion".
+  const textFields: Array<[string, string | null, number, number]> = [
+    ['name', grant.name, 3, 200],
+    ['summary', grant.summary, 20, 600],
+    ['description', grant.description, 20, 4000],
+    ['awardNotes', grant.awardNotes, 3, 500],
+    ['localityNote', grant.localityNote, 3, 300],
+    ['mailingAddress', grant.mailingAddress, 8, 400],
+  ]
+  for (const [field, oldValue, min, max] of textFields) {
+    const v = text(field)
+    if (v && v.length >= min) push(field, oldValue, v.slice(0, max))
+  }
+  for (const [field, oldValue] of [['infoUrl', grant.infoUrl], ['applicationUrl', grant.applicationUrl]] as const) {
+    const v = text(field)
+    if (v && URL_RE.test(v)) push(field, oldValue, v)
+  }
+  const contact = text('contactEmail')
+  if (contact && EMAIL_RE.test(contact)) push('contactEmail', grant.contactEmail, contact)
+  // Enums: "unknown"/"not sure" is no opinion.
+  const enums: Array<[string, readonly string[], string | null]> = [
+    ['applyMethod', GRANT_APPLY_METHODS, grant.applyMethod],
+    ['effortLevel', GRANT_EFFORT_LEVELS, grant.effortLevel],
+    ['deadlineType', GRANT_DEADLINE_TYPES, grant.deadlineType],
+    ['geoScope', GRANT_GEO_SCOPES, grant.geoScope],
+  ]
+  for (const [field, allowed, oldValue] of enums) {
+    const v = text(field)
+    if (v && allowed.includes(v) && v !== 'unknown') push(field, oldValue, v)
+  }
+  const renewable = text('renewable')
+  if (renewable === 'yes' || renewable === 'no') push('renewable', grant.renewable, renewable === 'yes')
+  // Numbers.
+  for (const [field, oldValue] of [['awardMin', grant.awardMin], ['awardMax', grant.awardMax]] as const) {
+    const raw = text(field).replace(/[^0-9.]/g, '')
+    if (!raw) continue
+    const n = Math.round(Number(raw))
+    if (Number.isFinite(n) && n > 0) push(field, oldValue, n)
+  }
+  const currency = text('awardCurrency').toUpperCase()
+  if (/^[A-Z]{3}$/.test(currency)) push('awardCurrency', grant.awardCurrency, currency)
+  // Lists: comma-separated codes, upper-cased, deduped; programs are the enum.
+  const list = (k: string) => text(k).split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i)
+  const countries = list('countries').filter((c) => /^[A-Z]{2}$/.test(c))
+  if (text('countries')) push('countries', grant.countries, countries)
+  const regions = list('regions').filter((r) => /^[A-Z]{2,3}$/.test(r))
+  if (text('regions')) push('regions', grant.regions, regions)
+  const programs = text('programs').split(/[,\s]+/).map((p) => p.trim().toLowerCase()).filter((p) => (GRANT_PROGRAMS as readonly string[]).includes(p)).filter((x, i, a) => a.indexOf(x) === i)
+  if (programs.length) push('programs', grant.programs, programs)
+  // Eligibility has no column; it is a note for the reviewer to turn into requirement rows.
+  const eligibility = text('eligibilityText')
   if (eligibility && eligibility.length >= 10) rows.push({ field: 'eligibilityText', oldValue: null, newValue: eligibility.slice(0, 600) })
-  const deadline = input.deadlineAt?.trim()
-  if (deadline && /^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
-    const year = Number(deadline.slice(0, 4))
-    const [cycle] = await db.select({ deadlineAt: grantCycles.deadlineAt }).from(grantCycles).where(and(eq(grantCycles.grantId, grant.id), eq(grantCycles.cycleYear, year))).limit(1)
-    rows.push({ field: `cycle.${year}.deadlineAt`, oldValue: cycle?.deadlineAt ?? null, newValue: `${deadline}T23:59:59Z` })
+  // The round: deadline, opens, decisions, all on that year's cycle.
+  const deadline = text('deadlineAt')
+  const opens = text('opensAt')
+  const decision = text('decisionAt')
+  const year = /^\d{4}-\d{2}-\d{2}$/.test(deadline) ? Number(deadline.slice(0, 4)) : /^\d{4}-\d{2}-\d{2}$/.test(opens) ? Number(opens.slice(0, 4)) + (opens.slice(5, 7) >= '07' ? 1 : 0) : null
+  if (year) {
+    const [cycle] = await db.select().from(grantCycles).where(and(eq(grantCycles.grantId, grant.id), eq(grantCycles.cycleYear, year))).limit(1)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(deadline)) push(`cycle.${year}.deadlineAt`, cycle?.deadlineAt?.toISOString() ?? null, `${deadline}T23:59:59Z`)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(opens)) push(`cycle.${year}.opensAt`, cycle?.opensAt ?? null, opens)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(decision)) push(`cycle.${year}.decisionAt`, cycle?.decisionAt ?? null, decision)
+    const dnote = text('deadlineNote')
+    if (dnote) push(`cycle.${year}.deadlineNote`, cycle?.deadlineNote ?? null, dnote.slice(0, 300))
   }
   if (rows.length === 0) {
     // Nothing structured changed: keep the note as an advisory row so it still reaches the reviewer.
-    if (!input.note?.trim()) return { ok: false, error: 'Change something, or write what you know in the note.' }
-    rows.push({ field: 'eligibilityText', oldValue: null, newValue: input.note.trim().slice(0, 600) })
+    if (!note) return { ok: false, error: 'Change something, or write what you know in the note.' }
+    rows.push({ field: 'eligibilityText', oldValue: null, newValue: note.slice(0, 600) })
   }
 
   await db.insert(grantChanges).values(
@@ -90,9 +142,9 @@ export async function createGrantEditSuggestion(grantId: string, input: GrantEdi
     facts: [
       { label: 'Fields', value: rows.map((r) => r.field).join(', ') },
       { label: 'Listing', value: grantListingUrl(grant.slug) },
-      ...(input.note?.trim() ? [{ label: 'Note', value: input.note.trim().slice(0, 300) }] : []),
+      ...(note ? [{ label: 'Note', value: note.slice(0, 300) }] : []),
     ],
-    submitter: input.email?.trim() || null,
+    submitter: email || null,
   })
   return { ok: true, filed: rows.length }
 }

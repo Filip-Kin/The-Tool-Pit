@@ -26,5 +26,8 @@ describe('isEntranceUrl', () => {
     expect(isEntranceUrl('https://www.aauw.org/resources/programs/fellowships-grants/community-action-grant/')).toBe(false)
     expect(isEntranceUrl('https://csr.honda.com/funding')).toBe(false)
     expect(isEntranceUrl('https://docs.google.com/document/d/abc/edit')).toBe(false)
+    // A funder's own page whose path says "application" is the programme page, not the entrance.
+    expect(isEntranceUrl('https://www.baesystems.com/en-us/partnership/community-investment/first-robotics-team-grant-application/')).toBe(false)
+    expect(isEntranceUrl('https://mtcf.org/funding/apply-for-a-grant/community-investment-program')).toBe(false)
   })
 })
