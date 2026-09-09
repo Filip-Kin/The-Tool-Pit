@@ -27,6 +27,7 @@ export type SubmissionBucket =
   | 'submit'
   | 'album-submit'
   | 'event-submit'
+  | 'grant-suggest'
   | 'field-submit'
   | 'grant-submit'
   | 'robot-code-submit'
@@ -51,6 +52,7 @@ const HOURLY_LIMIT: Record<SubmissionBucket, number> = {
   'grant-submit': 5,
   'field-submit': 8,
   'event-submit': 8,
+  'grant-suggest': 8,
   'robot-code-submit': 8,
   'album-submit': 10,
 }

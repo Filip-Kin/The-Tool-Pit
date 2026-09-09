@@ -16,6 +16,7 @@ import { ApplyPanel } from '@/components/grants/apply-panel'
 import { GrantCycles } from '@/components/grants/grant-cycles'
 import { GrantRequirements } from '@/components/grants/grant-requirements'
 import { SaveGrantButton } from '@/components/grants/save-grant-button'
+import { KnowThisLink, SuggestGrantEdit } from '@/components/grants/suggest-grant-edit'
 import {
   DEADLINE_STATE_LABEL,
   DEADLINE_TYPE_LABEL,
@@ -181,7 +182,10 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
                 </span>
               )}
               {nextWindow && <span className="block text-muted-2">Expected back {nextWindow}</span>}
-              <span className="block text-muted-2">{DEADLINE_TYPE_LABEL[grant.deadlineType]}</span>
+              <span className="block text-muted-2">
+                {DEADLINE_TYPE_LABEL[grant.deadlineType]}
+                {!deadline && <KnowThisLink what="deadline" />}
+              </span>
               {/* No dated deadline: say what the funder itself says about timing,
                   with the sentence and where it was read. The pipeline re-reads
                   this weekly, so "expected by mid-September" becomes a date the
@@ -202,7 +206,10 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
             </Fact>
 
             <Fact icon={<Coins className="h-4 w-4" />} label="Award">
-              <span className="text-foreground">{award ?? 'Amount not confirmed'}</span>
+              <span className="text-foreground">
+                {award ?? 'Amount not confirmed'}
+                {!award && <KnowThisLink what="amount" />}
+              </span>
               {grant.awardNotes && <span className="block text-muted">{grant.awardNotes}</span>}
             </Fact>
 
@@ -211,7 +218,10 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
             </Fact>
 
             <Fact icon={<Gauge className="h-4 w-4" />} label="Effort">
-              <span className="text-foreground">{EFFORT_LABEL[grant.effortLevel]}</span>
+              <span className="text-foreground">
+                {EFFORT_LABEL[grant.effortLevel]}
+                {grant.effortLevel === 'unknown' && <KnowThisLink what="effort" />}
+              </span>
             </Fact>
 
             {grant.renewable !== null && (
@@ -235,6 +245,17 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
               hasDeadline={resolved.cycle?.deadlineAt != null && !resolved.isEstimated}
             />
           </div>
+
+          <SuggestGrantEdit
+            grantId={grant.id}
+            current={{
+              applicationUrl: grant.applicationUrl,
+              deadlineType: grant.deadlineType,
+              awardMax: grant.awardMax,
+              effortLevel: grant.effortLevel,
+              summary: grant.summary,
+            }}
+          />
 
           <ApplyPanel
             grantName={grant.name}
