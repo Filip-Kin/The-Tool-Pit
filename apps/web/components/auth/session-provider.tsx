@@ -14,6 +14,8 @@ export interface SessionUser {
   photoUrl: string | null
   /** The linked GitHub login, or null. Drives the link-GitHub card. */
   githubLogin: string | null
+  /** Admins edit listings directly: no citation asked, "Save edit" instead of "Send for review". */
+  isAdmin: boolean
 }
 
 interface SessionContextValue {

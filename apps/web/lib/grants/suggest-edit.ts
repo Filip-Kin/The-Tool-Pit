@@ -48,17 +48,18 @@ export async function createGrantEditSuggestion(grantId: string, input: GrantEdi
   if (!grant) return { ok: false, error: 'Grant not found.' }
 
   const evidenceUrl = (input.evidenceUrl ?? '').trim()
-  if (!URL_RE.test(evidenceUrl)) return { ok: false, error: 'Add the link where you saw this, so a reviewer can check it.' }
+  // An admin is the reviewer; their edit needs no citation for a reviewer.
+  const admin = await adminSubmitter(input.userId)
+  if (!admin && !URL_RE.test(evidenceUrl)) return { ok: false, error: 'Add the link where you saw this, so a reviewer can check it.' }
   const text = (k: string) => (typeof input.fields[k] === 'string' ? input.fields[k]!.trim() : '')
   if (urlContainsHateSpeech(evidenceUrl) || containsHateSpeech(text('note'), text('summary'), text('description'), text('eligibilityText'), text('name'), text('awardNotes'), text('localityNote'))) {
     return { ok: false, error: 'That text cannot be submitted.' }
   }
 
-  const admin = await adminSubmitter(input.userId)
   const who = admin ? `an admin (${adminName(admin)})` : input.userId ? 'a signed-in visitor' : 'a visitor'
   const note = text('note')
   const email = text('email')
-  const reasoning = [`Suggested by ${who} on ${new Date().toISOString().slice(0, 10)}.`, `Evidence: ${evidenceUrl}`, note ? `Note: ${note.slice(0, 600)}` : null, email ? `Contact: ${email.slice(0, 120)}` : null]
+  const reasoning = [admin ? `Edited by ${admin.displayName ?? admin.email ?? 'an admin'} on ${new Date().toISOString().slice(0, 10)}.` : `Suggested by ${who} on ${new Date().toISOString().slice(0, 10)}.`, evidenceUrl ? `Evidence: ${evidenceUrl}` : null, note ? `Note: ${note.slice(0, 600)}` : null, email ? `Contact: ${email.slice(0, 120)}` : null]
     .filter(Boolean)
     .join(' ')
 

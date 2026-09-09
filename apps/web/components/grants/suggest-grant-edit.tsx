@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Pencil, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useSession } from '@/components/auth/session-provider'
 
 /**
  * "Suggest an edit" for a grant. Accountless, like the event and field
@@ -48,6 +49,10 @@ export function SuggestGrantEdit({ grantId, current }: SuggestGrantEditProps) {
   const [error, setError] = useState<string | null>(null)
   const [focusField, setFocusField] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
+  // An admin's edit is saved straight to the listing (the server applies it
+  // and skips the queue), so the dialog asks for no citation and says so.
+  const { user } = useSession()
+  const admin = user?.isAdmin === true
 
   // "Know the deadline? Tell us" beside a blank fact opens this dialog on that field.
   useEffect(() => {
@@ -79,7 +84,8 @@ export function SuggestGrantEdit({ grantId, current }: SuggestGrantEditProps) {
         setError(data.error ?? 'Could not send that.')
         return
       }
-      setDone(`Thanks. ${data.filed} change${data.filed === 1 ? '' : 's'} sent for review. It shows on the page once a person has checked it.`)
+      setDone(admin ? `Saved. ${data.filed} change${data.filed === 1 ? '' : 's'} applied to the listing.` : `Thanks. ${data.filed} change${data.filed === 1 ? '' : 's'} sent for review. It shows on the page once a person has checked it.`)
+      if (admin) setTimeout(() => window.location.reload(), 800)
     } catch {
       setError('Could not send that. Try again in a moment.')
     } finally {
@@ -103,7 +109,7 @@ export function SuggestGrantEdit({ grantId, current }: SuggestGrantEditProps) {
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <Dialog.Title className="text-lg font-semibold text-foreground">Suggest an edit</Dialog.Title>
-              <p className="mt-1 text-sm text-muted">Change what you know and leave the rest. A person checks it before it goes live.</p>
+              <p className="mt-1 text-sm text-muted">{admin ? 'Change what you know and leave the rest. Saved straight to the listing.' : 'Change what you know and leave the rest. A person checks it before it goes live.'}</p>
             </div>
             <Dialog.Close asChild>
               <button type="button" className="rounded-md p-1 text-muted hover:text-foreground" aria-label="Close">
@@ -229,21 +235,23 @@ export function SuggestGrantEdit({ grantId, current }: SuggestGrantEditProps) {
                 </Field>
               </Section>
 
-              <Section title="Your evidence">
+              <Section title={admin ? 'Notes' : 'Your evidence'}>
                 <Field label="Anything else" wide>
                   <textarea name="note" rows={2} className="input" placeholder="What you know that the page does not say" />
                 </Field>
-                <Field label="Where did you see this? (required)" wide>
-                  <input name="evidenceUrl" type="url" required className="input" placeholder="https://funder.org/grants/..." />
+                <Field label={admin ? 'Where you saw this (optional)' : 'Where did you see this? (required)'} wide>
+                  <input name="evidenceUrl" type="url" required={!admin} className="input" placeholder="https://funder.org/grants/..." />
                 </Field>
-                <Field label="Your email (optional, in case a reviewer has a question)" wide>
-                  <input name="email" type="email" className="input" />
-                </Field>
+                {!admin && (
+                  <Field label="Your email (optional, in case a reviewer has a question)" wide>
+                    <input name="email" type="email" className="input" />
+                  </Field>
+                )}
               </Section>
 
               {error && <p className="text-sm text-reg-closed">{error}</p>}
               <div className="flex gap-2">
-                <Button type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send for review'}</Button>
+                <Button type="submit" disabled={busy}>{busy ? (admin ? 'Saving…' : 'Sending…') : admin ? 'Save edit' : 'Send for review'}</Button>
                 <Dialog.Close asChild>
                   <Button type="button" variant="secondary">Cancel</Button>
                 </Dialog.Close>

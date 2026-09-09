@@ -81,3 +81,23 @@ describe('a timeline row with several dates', () => {
     expect(p.kind).toBe('rolling')
   })
 })
+
+import { windowsIn } from '../src/grants/deadline-proof.js'
+describe('application windows', () => {
+  it('reads "Application Period: start - end" as opens and deadline', () => {
+    const t = 'Basic Needs and Income Creation | Application Period: 2/2/2026 - 3/2/2026 Stable Housing and Empowering Communities | Application Period: 5/18/2026 - 6/29/2026 How do we ensure we are eligible?'
+    const w = windowsIn(t, '2026-09-09')
+    expect(w.map((x) => [x.opens, x.date])).toEqual([['2026-02-02', '2026-03-02'], ['2026-05-18', '2026-06-29']])
+    const p = fdp([{ url: 'https://boa.com/faq', text: t }], '2026-09-09')
+    expect(p.kind).toBe('none')
+    expect(p.past?.date).toBe('2026-06-29')
+    const p2 = fdp([{ url: 'https://boa.com/faq', text: t }], '2026-06-01')
+    expect(p2.kind).toBe('dated')
+    expect(p2.date).toBe('2026-06-29')
+    expect(p2.opens).toBe('2026-05-18')
+  })
+  it('reads "accepted March 1 through April 15, 2026"', () => {
+    const w = windowsIn('Applications are accepted March 1, 2026 through April 15, 2026.', '2026-01-01')
+    expect(w[0]).toMatchObject({ opens: '2026-03-01', date: '2026-04-15' })
+  })
+})

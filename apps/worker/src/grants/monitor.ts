@@ -520,8 +520,19 @@ async function verifyPublishedGrant(grant: Grant, now: Date, notes: string[]): P
       patch.contactEmail = route.email
     }
     if (proof.kind === 'none') {
-      patch.deadlineProof = `No deadline statement found on ${proof.urlsRead.length} page(s) read${proof.past ? `; last dated cycle: "${proof.past.quote.slice(0, 160)}"` : ''}.`
-      patch.deadlineProofUrl = proof.past?.url ?? proof.urlsRead[0] ?? null
+      // A corporate donation or sponsorship request form with no date on
+      // any page is open all year: that is how those programmes work, and
+      // "dates not confirmed" on them reads as if we had not looked.
+      const requestForm = /\b(donation|sponsorship|charitable|giving|contribution)s? (request|form|program|programme)\b|\bcorporate giving\b|\bcommunity giving\b/i.test(`${grant.name} ${grant.summary ?? ''}`)
+      if (requestForm && (route.status === 'form' || route.status === 'portal') && proof.urlsRead.length >= 2 && !proof.past && grant.deadlineType === 'unknown') {
+        patch.deadlineType = 'rolling'
+        patch.deadlineProof = `Requests are taken any time: the form is open and none of the ${proof.urlsRead.length} pages read gives a date.`
+        patch.deadlineProofUrl = proof.urlsRead[0] ?? null
+        notes.push('request form with no dates anywhere: rolling')
+      } else {
+        patch.deadlineProof = `No deadline statement found on ${proof.urlsRead.length} page(s) read${proof.past ? `; last dated cycle: "${proof.past.quote.slice(0, 160)}"` : ''}.`
+        patch.deadlineProofUrl = proof.past?.url ?? proof.urlsRead[0] ?? null
+      }
     } else {
       patch.deadlineProof = proof.quote ?? null
       patch.deadlineProofUrl = proof.url ?? null
@@ -837,8 +848,8 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
     // for that year when none is on file (future: open; past: closed, so the
     // pattern shows). The extractor's proposal for the same year is then
     // already applied; a differing extractor date waits for a person.
-    const dated: Array<{ date: string; quote: string; url: string }> = []
-    if (proof?.kind === 'dated' && proof.date && proof.quote) dated.push({ date: proof.date, quote: proof.quote, url: proof.url ?? grant.infoUrl })
+    const dated: Array<{ date: string; quote: string; url: string; opens?: string }> = []
+    if (proof?.kind === 'dated' && proof.date && proof.quote) dated.push({ date: proof.date, quote: proof.quote, url: proof.url ?? grant.infoUrl, opens: proof.opens })
     if (proof?.past && now.getTime() - Date.parse(proof.past.date) < 15 * 30 * 86_400_000) dated.push(proof.past)
     for (const d of dated) {
       const year = Number(d.date.slice(0, 4))
@@ -850,7 +861,7 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
         grantId: grant.id,
         cycleYear: year,
         deadlineAt,
-        opensAt: typeof opens?.newValue === 'string' ? opens.newValue : null,
+        opensAt: d.opens ?? (typeof opens?.newValue === 'string' ? opens.newValue : null),
         deadlineNote: `The funder states the date; no time of day given. "${d.quote.slice(0, 200)}"`,
         status: deadlineAt.getTime() < now.getTime() ? 'closed' : 'open',
         sourceUrl: d.url,

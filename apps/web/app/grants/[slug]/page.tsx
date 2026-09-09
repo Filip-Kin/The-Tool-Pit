@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { CalendarClock, Coins, ExternalLink, Gauge, Globe2, RefreshCw, ShieldCheck } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth/session'
@@ -17,6 +16,7 @@ import { GrantCycles } from '@/components/grants/grant-cycles'
 import { GrantRequirements } from '@/components/grants/grant-requirements'
 import { SaveGrantButton } from '@/components/grants/save-grant-button'
 import { KnowThisLink, SuggestGrantEdit } from '@/components/grants/suggest-grant-edit'
+import { BackLink } from '@/components/grants/back-link'
 import {
   DEADLINE_STATE_LABEL,
   DEADLINE_TYPE_LABEL,
@@ -95,9 +95,7 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
   return (
     <div className="container mx-auto max-w-5xl px-4 py-8">
       <JsonLd data={grantJsonLd(grant)} />
-      <Link href="/" className="text-sm text-muted hover:text-foreground">
-        ← All grants
-      </Link>
+      <BackLink href="/grants">← All grants</BackLink>
 
       <div className="mt-4 grid gap-8 lg:grid-cols-[1fr_320px] lg:items-start">
         <div className="flex min-w-0 flex-col gap-8">

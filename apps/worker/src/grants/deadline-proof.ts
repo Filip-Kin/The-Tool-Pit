@@ -16,6 +16,8 @@ export interface DeadlineProof {
   kind: 'dated' | 'not_public' | 'rolling' | 'none'
   /** ISO date when kind is dated. */
   date?: string
+  /** ISO date the window opens, when the funder wrote a period ("Application Period: 5/18/2026 - 6/29/2026"). */
+  opens?: string
   quote?: string
   url?: string
   /** For kind none: what was read. */
@@ -88,6 +90,32 @@ export function isoFromYearless(s: string, today: string): string | null {
   return thisYear >= today ? thisYear : `${year + 1}-${pad(month)}-${pad(day)}`
 }
 
+/**
+ * "Application Period: 5/18/2026 - 6/29/2026", "Applications accepted
+ * March 1 through April 15, 2026", "Grant cycle opens January 15 and closes
+ * February 28". A window has no deadline word, so the sentence rules miss it;
+ * the END of the window is the deadline. Scanned over the whole text because
+ * funders write these as table rows and pipe-separated lines, not sentences.
+ */
+const WINDOW_RE = new RegExp(`\\b(application|applications|grant|funding|proposal|submission|nomination|rfp|cycle|round)s?\\s*(period|window|cycle|dates?|timeline|open|opens|accepted|are accepted|will be accepted)?\\s*[:\\-–]?\\s*(?:from\\s+)?(${DATE_RE.source})\\s*(?:-|–|to|through|until|thru)\\s*(${DATE_RE.source})`, 'gi')
+export function windowsIn(text: string, today: string): Array<{ opens: string; date: string; quote: string }> {
+  const out: Array<{ opens: string; date: string; quote: string }> = []
+  const flat = text.replace(/\s+/g, ' ')
+  for (const m of flat.matchAll(WINDOW_RE)) {
+    const a = m[3].match(DATE_RE)
+    const b = m[4 + (m.length - 5) / 2 + 0]?.match?.(DATE_RE) ?? null
+    void b
+    const first = a ? isoFromMatch(a) : null
+    const rest = flat.slice((m.index ?? 0) + m[0].indexOf(m[3]) + m[3].length)
+    const second = rest.match(DATE_RE)
+    const end = second ? isoFromMatch(second) : null
+    if (!first || !end || end < first) continue
+    out.push({ opens: first, date: end, quote: flat.slice(Math.max(0, (m.index ?? 0) - 60), (m.index ?? 0) + m[0].length + 20).trim().slice(0, 220) })
+  }
+  void today
+  return out.sort((x, y) => x.date.localeCompare(y.date))
+}
+
 function sentences(text: string): string[] {
   return text
     .replace(/\s+/g, ' ')
@@ -132,6 +160,14 @@ export function findDeadlineProof(pages: Array<{ url: string; text: string }>, t
       if (!notPublic && NOT_PUBLIC_RE.test(s)) notPublic = { quote: s.slice(0, 220), url }
       if (!rolling && ROLLING_RE.test(s)) rolling = { quote: s.slice(0, 220), url }
     }
+  }
+  // A window wins over a yearless date: it names both ends in the funder's words.
+  for (const { url, text } of pages) {
+    const wins = windowsIn(text, today)
+    const next = wins.find((w) => w.date >= today)
+    if (next) return { kind: 'dated', date: next.date, opens: next.opens, quote: next.quote, url, urlsRead, checkedAt, ...(past ? { past } : {}) }
+    const last = wins.filter((w) => w.date < today).pop()
+    if (last && (!past || last.date > past.date)) past = { date: last.date, quote: last.quote, url }
   }
   if (yearless && !notPublic) return { kind: 'dated', date: yearless.date, quote: yearless.quote, url: yearless.url, urlsRead, checkedAt, ...(past ? { past } : {}) }
   if (notPublic) return { kind: 'not_public', quote: notPublic.quote, url: notPublic.url, urlsRead, checkedAt, ...(past ? { past } : {}) }

@@ -11,7 +11,7 @@ export default function SubmitGrantPage() {
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6">
-        <Link href="/" className="text-sm text-muted hover:text-foreground">
+        <Link href="/grants" className="text-sm text-muted hover:text-foreground">
           ← All grants
         </Link>
         <h1 className="mt-2 text-2xl font-bold text-foreground">Submit a grant</h1>

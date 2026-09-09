@@ -75,6 +75,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   displayName: user.displayName,
                   photoUrl: user.photoUrl,
                   githubLogin: user.githubLogin,
+                  isAdmin: user.isAdmin === true,
                 }
               : null
           }

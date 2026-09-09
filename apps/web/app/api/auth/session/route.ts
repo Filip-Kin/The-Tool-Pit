@@ -15,6 +15,7 @@ function publicUser(user: User) {
     email: user.email,
     displayName: user.displayName,
     photoUrl: user.photoUrl,
+    isAdmin: user.isAdmin === true,
     githubLogin: user.githubLogin,
   }
 }
