@@ -76,7 +76,18 @@ function readUrlFilters(): StoredFilters | null {
   if (effort?.length) filters.effortLevels = effort as GrantEffortLevel[]
   if (sp.get('rolling') === '1') filters.rollingOnly = true
   if (sp.get('hideClosed') === '1') filters.hideClosed = true
-  return { filters, awardBand: sp.get('award'), deadlineWindow: sp.get('within') }
+  // The band and window keys carry their numeric bounds with them, the same
+  // way a click on the chip would have set them.
+  const awardBand = sp.get('award')
+  const band = AWARD_BANDS.find((b) => b.key === awardBand)
+  if (band) {
+    filters.awardMin = band.min
+    filters.awardMax = band.max ?? undefined
+  }
+  const deadlineWindow = sp.get('within')
+  const win = DEADLINE_WINDOWS.find((w) => w.key === deadlineWindow)
+  if (win) filters.withinDays = win.days
+  return { filters, awardBand: band ? awardBand : null, deadlineWindow: win ? deadlineWindow : null }
 }
 function writeUrlFilters(value: StoredFilters, q: string | undefined): void {
   const sp = new URLSearchParams()
