@@ -31,7 +31,7 @@ const DEADLINE_CUE = /(deadline|due (date|by|on)?\b|due\b|close[sd]?\b|closing|c
  * A deadline for something else: a scholarship on a grants page, a
  * recommendation letter, a report, an invoice, a webinar. Not the round.
  */
-const OTHER_DEADLINE_RE = /\b(scholarship|recommendation letters?|letters? of recommendation|transcripts?|final report|progress report|interim report|reporting deadline|invoice|reimbursement request|webinar|info(rmation)? session|office hours|early bird|registration for the (conference|event|gala))\b/i
+const OTHER_DEADLINE_RE = /\b(scholarships?|fellowships?|recommendation letters?|letters? of recommendation|transcripts?|final report|progress report|interim report|reporting deadline|invoice|reimbursement request|webinar|info(rmation)? session|office hours|early bird|registration for the (conference|event|gala))\b/i
 
 /**
  * The date that belongs to the deadline word. A timeline table reads
