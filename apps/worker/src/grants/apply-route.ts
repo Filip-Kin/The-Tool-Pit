@@ -119,44 +119,74 @@ function gatedInput(html: string): boolean {
   return /<input[^>]+type="(password|email|text)"/i.test(html) && /<(button|input)[^>]*(type="submit"|>\s*(log ?in|sign ?in|continue|submit|next)\s*<)/i.test(html)
 }
 
-async function readHtml(url: string): Promise<{ html: string; status: number; how: 'fetch' | 'browser' | 'walled' | 'gone' | 'pdf' }> {
+async function readHtml(url: string): Promise<{ html: string; status: number; how: 'fetch' | 'browser' | 'walled' | 'gone' | 'pdf'; finalUrl: string }> {
+  let finalUrl = url
   try {
     const res = await politeFetch(url)
+    if (res.url && res.url !== url) finalUrl = res.url
     const ct = res.headers.get('content-type') ?? ''
     if (res.ok && /html|xhtml/i.test(ct)) {
       const html = await res.text()
       // A JS shell says nothing; render it.
-      if (html.replace(/<script[\s\S]*?<\/script>/gi, '').length > 2500) return { html, status: res.status, how: 'fetch' }
+      if (html.replace(/<script[\s\S]*?<\/script>/gi, '').length > 2500) return { html, status: res.status, how: 'fetch', finalUrl }
     }
     if (res.ok && /pdf/i.test(ct)) {
       // A PDF at the application link is the form when it reads like one.
       try {
         const { extractText } = await import('unpdf')
         const { text } = await extractText(new Uint8Array(await res.arrayBuffer()), { mergePages: true })
-        if (/(application|apply|applicant|signature|name of (team|school|organization))/i.test(text)) return { html: `<pdf-form>${text.slice(0, 2000).replace(/</g, ' ')}</pdf-form>`, status: res.status, how: 'pdf' }
+        if (/(application|apply|applicant|signature|name of (team|school|organization))/i.test(text)) return { html: `<pdf-form>${text.slice(0, 2000).replace(/</g, ' ')}</pdf-form>`, status: res.status, how: 'pdf', finalUrl }
       } catch {
         // unreadable PDF: fall through
       }
-      return { html: '', status: res.status, how: 'fetch' }
+      return { html: '', status: res.status, how: 'fetch', finalUrl }
     }
-    if (res.ok && !/html/i.test(ct)) return { html: '', status: res.status, how: 'fetch' }
+    if (res.ok && !/html/i.test(ct)) return { html: '', status: res.status, how: 'fetch', finalUrl }
     // A 404 to curl is not always a 404 to a browser (Michigan's MiLogin answers
     // 404 with a working page). Ask the browser; gone only if it agrees.
     if (res.status === 404 || res.status === 410) {
       const rendered = await withRenderedPage(url, async (page) => page.content())
       if (rendered && rendered.length > 500 && !/(page not found|404|no longer available|does not exist)/i.test(rendered.replace(/<[^>]+>/g, ' ').slice(0, 3000))) {
-        return { html: rendered, status: 200, how: 'browser' }
+        return { html: rendered, status: 200, how: 'browser', finalUrl }
       }
-      return { html: '', status: res.status, how: 'gone' }
+      return { html: '', status: res.status, how: 'gone', finalUrl }
     }
   } catch {
     // fall through to the browser
   }
   const rendered = await withRenderedPage(url, async (page) => page.content())
   if (rendered && rendered.length > 500 && !/just a moment|checking your browser|verify you are human|access denied|request unsuccessful|incapsula/i.test(rendered.slice(0, 3000))) {
-    return { html: rendered, status: 200, how: 'browser' }
+    return { html: rendered, status: 200, how: 'browser', finalUrl }
   }
-  return { html: '', status: 0, how: 'walled' }
+  return { html: '', status: 0, how: 'walled', finalUrl }
+}
+
+/**
+ * Two link shapes apply-links.ts does not score: an <iframe> that embeds the
+ * form (Microsoft Dynamics, HubSpot, Cognito), and a PDF whose link text says
+ * it is the application form. Both are where the application lives.
+ */
+export function embeddedApplyLinks(html: string, pageUrl: string): Array<{ url: string; text: string; score: number }> {
+  const out: Array<{ url: string; text: string; score: number }> = []
+  const abs = (href: string): string | null => {
+    try {
+      return new URL(href, pageUrl).toString()
+    } catch {
+      return null
+    }
+  }
+  for (const m of html.matchAll(/<iframe[^>]+src="([^"]+)"/gi)) {
+    const u = abs(m[1])
+    if (!u || /youtube|vimeo|maps\.google|google\.com\/maps|recaptcha|doubleclick|facebook|twitter/i.test(u)) continue
+    out.push({ url: u, text: 'embedded frame', score: 2 })
+  }
+  for (const m of html.matchAll(/<a[^>]+href="([^"]+\.pdf(?:\?[^"]*)?)"[^>]*>([\s\S]*?)<\/a>/gi)) {
+    const text = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    if (!/(application|apply|form|nomination)/i.test(text + ' ' + m[1])) continue
+    const u = abs(m[1])
+    if (u) out.push({ url: u, text, score: 3 })
+  }
+  return out
 }
 
 /** A fetched page that shows no form may build one with JavaScript (BMW's request form). One render settles it. */
@@ -234,7 +264,7 @@ export async function resolveApplyRoute(startUrls: Array<string | null | undefin
   while (queue.length > 0) {
     const { url, depth } = queue.shift() as { url: string; depth: number }
     chain.push(url)
-    const { html, how, status } = await readHtml(url)
+    const { html, how, status, finalUrl } = await readHtml(url)
     if (how === 'gone') {
       return { status: 'closed', url, email: null, evidence: `HTTP ${status}: the application page is gone`, chain, checkedAt }
     }
@@ -250,18 +280,20 @@ export async function resolveApplyRoute(startUrls: Array<string | null | undefin
       continue
     }
     if (!html) continue
-    let verdict = judge(url, html, how)
+    // Judge by where the page ENDED UP: an apply link that redirects to the
+    // member login is the login, and the portal host is the final one.
+    let verdict = judge(finalUrl, html, how) ?? (finalUrl !== url ? judge(url, html, how) : null)
     if (!verdict && how === 'fetch') {
       const rendered = await renderedHtml(url)
-      if (rendered) verdict = judge(url, rendered, 'browser')
+      if (rendered) verdict = judge(finalUrl, rendered, 'browser')
     }
-    if (verdict) return { ...verdict, chain, checkedAt }
+    if (verdict) return { ...verdict, url: verdict.url ? (verdict.status === 'portal' || verdict.status === 'form' ? url : verdict.url) : verdict.url, chain, checkedAt }
     if (!mailto) mailto = applyMailto(html)
     if (depth < 2) {
       // A funder with several portals (community giving AND a FIRST/SAE
       // competition portal) links both; the one whose text names the team
       // programme is the one a team wants.
-      const links = findApplyLinks(html, url)
+      const links = [...findApplyLinks(html, url), ...embeddedApplyLinks(html, url)]
         .map((l) => ({ ...l, score: l.score + (TEAM_CUE.test(l.text) ? 3 : 0) }))
         .sort((a, b) => b.score - a.score)
       for (const link of links.slice(0, 3)) {

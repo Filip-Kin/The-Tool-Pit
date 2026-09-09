@@ -52,3 +52,12 @@ describe('judge (apply route), second pass rules', () => {
     expect(r?.evidence).toContain('MiLogin')
   })
 })
+
+import { embeddedApplyLinks } from '../src/grants/apply-route.js'
+describe('embeddedApplyLinks', () => {
+  it('finds an embedded form frame and a PDF application', () => {
+    const html = '<iframe src="https://forms.example.com/embed/123"></iframe><iframe src="https://www.youtube.com/embed/x"></iframe><a href="/docs/RoboticsMaterialsAward2026.pdf">2026 Application Form (PDF)</a><a href="/report.pdf">Annual report</a>'
+    const links = embeddedApplyLinks(html, 'https://sdspacegrant.sdsmt.edu/RoboticsMaterialsAward')
+    expect(links.map((l) => l.url)).toEqual(['https://forms.example.com/embed/123', 'https://sdspacegrant.sdsmt.edu/docs/RoboticsMaterialsAward2026.pdf'])
+  })
+})
