@@ -43,6 +43,23 @@ function isoFromMatch(m: RegExpMatchArray): string | null {
   return null
 }
 
+/** "November 15", "Nov. 15th", "15 November", "11/15" with no year: the next time that date comes round. */
+const DATE_NO_YEAR_RE = new RegExp(`\\b${MONTH}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b(?!,?\\s*20\\d\\d)|\\b(\\d{1,2})\\s+${MONTH}\\.?\\b(?!\\s*,?\\s*20\\d\\d)|\\b(\\d{1,2})/(\\d{1,2})\\b(?!/)`, 'i')
+export function isoFromYearless(s: string, today: string): string | null {
+  const m = s.match(DATE_NO_YEAR_RE)
+  if (!m) return null
+  const pad = (n: number) => String(n).padStart(2, '0')
+  let month = 0
+  let day = 0
+  if (m[1] && m[2]) { month = MONTHS[m[1].toLowerCase()] ?? 0; day = Number(m[2]) }
+  else if (m[3] && m[4]) { month = MONTHS[m[4].toLowerCase()] ?? 0; day = Number(m[3]) }
+  else if (m[5] && m[6]) { month = Number(m[5]); day = Number(m[6]) }
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null
+  const year = Number(today.slice(0, 4))
+  const thisYear = `${year}-${pad(month)}-${pad(day)}`
+  return thisYear >= today ? thisYear : `${year + 1}-${pad(month)}-${pad(day)}`
+}
+
 function sentences(text: string): string[] {
   return text
     .replace(/\s+/g, ' ')
@@ -64,6 +81,11 @@ export function findDeadlineProof(pages: Array<{ url: string; text: string }>, t
   let notPublic: { quote: string; url: string } | null = null
   let rolling: { quote: string; url: string } | null = null
   let past: { date: string; quote: string; url: string } | null = null
+  // A deadline written without a year ("Applications are due November 15")
+  // is the next November 15. It is the funder's sentence all the same, and
+  // most community foundations write it that way; it ranks below a sentence
+  // with the year in it, above "nothing found".
+  let yearless: { date: string; quote: string; url: string } | null = null
   for (const { url, text } of pages) {
     for (const s of sentences(text)) {
       if (FURNITURE_RE.test(s)) continue
@@ -74,11 +96,15 @@ export function findDeadlineProof(pages: Array<{ url: string; text: string }>, t
           if (iso >= today) return { kind: 'dated', date: iso, quote: s.slice(0, 220), url, urlsRead, checkedAt }
           if (!past || iso > past.date) past = { date: iso, quote: s.slice(0, 220), url }
         }
+      } else if (!dm && !yearless && DEADLINE_CUE.test(s)) {
+        const iso = isoFromYearless(s, today)
+        if (iso) yearless = { date: iso, quote: s.slice(0, 220), url }
       }
       if (!notPublic && NOT_PUBLIC_RE.test(s)) notPublic = { quote: s.slice(0, 220), url }
       if (!rolling && ROLLING_RE.test(s)) rolling = { quote: s.slice(0, 220), url }
     }
   }
+  if (yearless && !notPublic) return { kind: 'dated', date: yearless.date, quote: yearless.quote, url: yearless.url, urlsRead, checkedAt, ...(past ? { past } : {}) }
   if (notPublic) return { kind: 'not_public', quote: notPublic.quote, url: notPublic.url, urlsRead, checkedAt, ...(past ? { past } : {}) }
   if (rolling) return { kind: 'rolling', quote: rolling.quote, url: rolling.url, urlsRead, checkedAt, ...(past ? { past } : {}) }
   return { kind: 'none', urlsRead, checkedAt, ...(past ? { past } : {}) }

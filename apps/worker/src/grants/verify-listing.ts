@@ -14,6 +14,7 @@ import { politeFetch } from '../connectors/base.js'
 import { stripToMainContent } from './strip.js'
 import { resolveApplyRoute, renderedHtml, type ApplyRoute } from './apply-route.js'
 import { findDeadlineProof, type DeadlineProof } from './deadline-proof.js'
+import { archiveCopy } from './archive.js'
 
 const TEXT_LIMIT = 20_000
 const DATE_LINK_RE = /(deadline|dates?\b|timeline|calendar|schedule|how to apply|apply\b|application|guidelines?|faq|eligib|cycle|round|program details|grant details|request for proposals|rfp)/i
@@ -22,6 +23,8 @@ const MAX_HOPS = 4
 interface ReadPage {
   text: string
   html: string | null
+  /** Set when the words came from the Wayback Machine, so the proof says so. */
+  archiveUrl?: string
 }
 
 async function readPage(url: string): Promise<ReadPage> {
@@ -33,6 +36,9 @@ async function readPage(url: string): Promise<ReadPage> {
       if ([401, 403, 406, 429, 503].includes(res.status)) {
         const html = await renderedHtml(url).catch(() => null)
         if (html) return { text: stripToMainContent(html).slice(0, TEXT_LIMIT), html }
+        // A wall the browser cannot pass either: read the public archive copy.
+        const copy = await archiveCopy(url)
+        if (copy) return { text: stripToMainContent(copy.html).slice(0, TEXT_LIMIT), html: copy.html, archiveUrl: copy.url }
       }
       return { text: '', html: null }
     }
@@ -121,7 +127,7 @@ export async function verifyListing(
   for (const url of wanted) {
     if (have.has(url)) continue
     const page = await readPage(url)
-    if (page.text.trim()) pages.push({ url, text: page.text })
+    if (page.text.trim()) pages.push({ url: page.archiveUrl ?? url, text: page.text })
     if (page.html) for (const l of dateLinks(page.html, url)) if (!have.has(l) && !hops.includes(l)) hops.push(l)
     have.add(url)
   }
@@ -129,7 +135,7 @@ export async function verifyListing(
   if (proof.kind !== 'dated' && hops.length > 0) {
     for (const url of hops.slice(0, MAX_HOPS)) {
       const page = await readPage(url)
-      if (page.text.trim()) pages.push({ url, text: page.text })
+      if (page.text.trim()) pages.push({ url: page.archiveUrl ?? url, text: page.text })
       have.add(url)
     }
     proof = findDeadlineProof(pages)

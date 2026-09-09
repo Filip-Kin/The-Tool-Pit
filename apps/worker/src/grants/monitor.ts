@@ -28,6 +28,7 @@ import { and, desc, eq, getDb, grantChanges, grantCycles, grantFunders, grants, 
 import { isEntranceUrl } from '@the-tool-pit/db/grant-urls'
 import { findInfoPage } from './info-page.js'
 import { renderedHtml } from './apply-route.js'
+import { archiveCopy } from './archive.js'
 import type { ExtractedGrantFields, Grant, GrantCycle } from '@the-tool-pit/db'
 import { politeFetch } from '../connectors/base.js'
 import { hashContent, stripToMainContent } from './strip.js'
@@ -413,11 +414,24 @@ async function fetchPage(url: string): Promise<FetchOutcome> {
       if ([401, 403, 406, 429, 503].includes(res.status)) {
         const html = await renderedHtml(url).catch(() => null)
         if (html && html.trim()) return { html, httpStatus: 200, error: null, redirectedTo }
+        const copy = await archiveCopy(url)
+        if (copy) return { html: copy.html, httpStatus: 200, error: null, redirectedTo: copy.url }
       }
       return { html: null, httpStatus: res.status, error: `HTTP ${res.status} ${res.statusText}`.trim(), redirectedTo }
     }
 
     const contentType = res.headers.get('content-type') ?? ''
+    if (/pdf/i.test(contentType) || /\.pdf(\?|#|$)/i.test(url)) {
+      // A guidelines PDF is the funder's page too; its text hashes and
+      // extracts like any other.
+      const bytes = new Uint8Array(await res.arrayBuffer())
+      if (bytes.length > 4 && String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) === '%PDF') {
+        const { extractText } = await import('unpdf')
+        const { text } = await extractText(bytes, { mergePages: true })
+        const body = (text ?? '').replace(/\s+/g, ' ').trim()
+        if (body) return { html: `<html><body><main>${body.replace(/</g, ' ')}</main></body></html>`, httpStatus: res.status, error: null, redirectedTo }
+      }
+    }
     if (contentType && !READABLE_CONTENT.test(contentType)) {
       // A funder that moves its guidelines into a PDF is a real thing that
       // happens, and it needs a person, not a retry. Counting it as a failure

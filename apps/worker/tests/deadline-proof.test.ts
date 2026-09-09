@@ -50,3 +50,19 @@ describe('findDeadlineProof rejects furniture and schedules', () => {
     expect(r.date).toBe('2027-06-12')
   })
 })
+
+import { isoFromYearless, findDeadlineProof as fdp } from '../src/grants/deadline-proof.js'
+describe('deadlines written without a year', () => {
+  it('reads the next occurrence', () => {
+    expect(isoFromYearless('Applications are due November 15.', '2026-09-09')).toBe('2026-11-15')
+    expect(isoFromYearless('Deadline: March 1', '2026-09-09')).toBe('2027-03-01')
+    expect(isoFromYearless('Proposals must be received by 15 March.', '2026-09-09')).toBe('2027-03-15')
+    expect(isoFromYearless('Due 11/15', '2026-09-09')).toBe('2026-11-15')
+    expect(isoFromYearless('Applications are due November 15, 2025.', '2026-09-09')).toBeNull()
+  })
+  it('counts as a dated proof below a full date and above nothing', () => {
+    const p = fdp([{ url: 'https://f.org/grants', text: 'The AAUW Community Action Grant supports projects. Applications are due November 15. Awards are announced in April.' }], '2026-09-09')
+    expect(p.kind).toBe('dated')
+    expect(p.date).toBe('2026-11-15')
+  })
+})
