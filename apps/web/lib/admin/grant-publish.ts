@@ -114,7 +114,12 @@ export function nameWithFunder(name: string, funderName: string | null | undefin
   const funderWords = f.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !['the', 'and', 'foundation', 'company', 'corporation', 'inc', 'llc', 'fund'].includes(w))
   const lower = n.toLowerCase()
   if (funderWords.some((w) => lower.includes(w))) return n
-  if (!GENERIC_NAME_RE.test(n) && n.split(/\s+/).length > 4) return n
+  // "VDOE", "MSOE", "AAUW", "DoW": the funder's initials already name it.
+  const initials = f.replace(/[^A-Za-z ]/g, ' ').split(/\s+/).filter((w) => w.length > 1 && !/^(the|and|of|for)$/i.test(w)).map((w) => w[0]).join('').toLowerCase()
+  const acronyms = n.match(/\b[A-Za-z]{3,6}\b/g)?.filter((t) => /[A-Z]{2,}/.test(t)).map((t) => t.toLowerCase()) ?? []
+  if (initials.length >= 3 && acronyms.some((a) => a === initials || initials.startsWith(a) || a.startsWith(initials.slice(0, 3)))) return n
+  // Only a GENERIC name gets the funder in front; a specific one is left alone.
+  if (!GENERIC_NAME_RE.test(n)) return n
   return `${f} ${n}`.slice(0, 200)
 }
 
