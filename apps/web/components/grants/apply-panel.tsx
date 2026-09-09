@@ -72,6 +72,7 @@ export function ApplyPanel({
   const [signInOpen, setSignInOpen] = useState(false)
 
   const signedIn = !!user
+  const verified = routeStatus === 'portal' || routeStatus === 'form'
 
   return (
     <section className={cardClass()}>
@@ -91,6 +92,7 @@ export function ApplyPanel({
       {!signedIn && !loading && (
         <SignedOutState
           applicationUrl={applicationUrl}
+          verified={verified}
           mappedFieldCount={mappedFieldCount}
           prefillableFieldCount={prefillableFieldCount}
           onSignIn={() => setSignInOpen(true)}
@@ -100,6 +102,7 @@ export function ApplyPanel({
       {signedIn && !hasProfile && (
         <NoProfileState
           applicationUrl={applicationUrl}
+          verified={verified}
           mappedFieldCount={mappedFieldCount}
           prefillableFieldCount={prefillableFieldCount}
           profileHref={profileHref}
@@ -128,11 +131,13 @@ export function ApplyPanel({
 
 function SignedOutState({
   applicationUrl,
+  verified,
   mappedFieldCount,
   prefillableFieldCount,
   onSignIn,
 }: {
   applicationUrl: string | null
+  verified: boolean
   mappedFieldCount: number
   prefillableFieldCount: number
   onSignIn: () => void
@@ -145,7 +150,7 @@ function SignedOutState({
           <UserPlus className="h-4 w-4" />
           Sign in to prepare this
         </Button>
-        <OpenPlainLink url={applicationUrl} />
+        <OpenPlainLink url={applicationUrl} verified={verified} />
       </div>
     </div>
   )
@@ -153,11 +158,13 @@ function SignedOutState({
 
 function NoProfileState({
   applicationUrl,
+  verified,
   mappedFieldCount,
   prefillableFieldCount,
   profileHref,
 }: {
   applicationUrl: string | null
+  verified: boolean
   mappedFieldCount: number
   prefillableFieldCount: number
   profileHref: string
@@ -174,7 +181,7 @@ function NoProfileState({
           <PencilLine className="h-4 w-4" />
           Set up a team profile
         </ButtonLink>
-        <OpenPlainLink url={applicationUrl} />
+        <OpenPlainLink url={applicationUrl} verified={verified} />
       </div>
     </div>
   )
@@ -355,12 +362,17 @@ async function writeClipboard(text: string): Promise<boolean> {
 
 // #region copy writing
 
-function OpenPlainLink({ url }: { url: string | null }) {
+/**
+ * "Open the application" only when the weekly check found that the link lands
+ * on one (a portal or a form). Otherwise the honest label: it is the funder's
+ * page, and the reader will have to find the way in from there.
+ */
+function OpenPlainLink({ url, verified }: { url: string | null; verified: boolean }) {
   if (!url) return null
   return (
     <ButtonLink href={url} external variant="secondary">
       <ExternalLink className="h-4 w-4" />
-      Open the application
+      {verified ? 'Open the application' : "Read how to apply on the funder's page"}
     </ButtonLink>
   )
 }
