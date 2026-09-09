@@ -292,7 +292,10 @@ export function judge(url: string, html: string, how: string): Omit<ApplyRoute, 
     return null
   }
   const text = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
-  const closed = text.match(CLOSED_RE)
+  // A form whose own address says closed (Benevity redirects a closed
+  // programme to .../closed) is closed whatever the page manages to say.
+  const closedByPath = /\/(closed|inactive|expired|ended)(\/|$|[.?#])/i.test(parsed.pathname)
+  const closed = text.match(CLOSED_RE) ?? (closedByPath ? [`path ends in ${parsed.pathname.split('/').pop()}`] : null)
   // On a portal host, a webinar, help or about page is still not the form
   // (cybergrants.com/boa/webinars/ is Bank of America's training page).
   const portal = /\/(webinars?|help|faq|faqs|support|about|blog|news|training|resources?|guidelines?|tutorial|docs)(\/|$|[.?#])/i.test(parsed.pathname) ? null : portalName(parsed)

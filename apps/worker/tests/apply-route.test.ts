@@ -111,3 +111,10 @@ describe('judge and links: chat widgets and other sites\' PDFs', () => {
     expect(links.map((l) => l.url)).toEqual(['https://www.mscdirect.com/forms/our-application.pdf'])
   })
 })
+
+describe('judge: a form address that says closed is closed', () => {
+  it('Benevity /closed', () => {
+    const r = judge('https://forms.benevity.org/f396a581-072b-4c78-b629-5b42bd0f12ac/closed', '<html><body><div id="app"></div></body></html>', 'browser')
+    expect(r?.status).toBe('closed')
+  })
+})
