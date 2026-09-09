@@ -56,7 +56,10 @@ const APPLY_HOSTS = [
 ]
 
 const APPLY_TEXT = /\b(apply|application|applications|submit (an |a |your )?(application|proposal|request)|register|nominate|request (funding|a grant|a sponsorship|support)|grant (form|portal|application)|sponsorship (form|request|application)|start (your|an) application|how to apply|apply (here|now|online))\b/i
-const APPLY_PATH = /\/(apply|application|applications|grant-?application|submit|nominate|portal)(\/|$|[.?#-])/i
+/** A path segment that IS the word, not a product called "application tooling". */
+const APPLY_PATH = /\/(apply|application|applications|grant-?application|submit|nominate|portal)(\/|$|[.?#])/i
+/** Paths and link text that are never the way in, whatever else they match. */
+const NOT_APPLY_PATH = /\/(products?|tooling|catalog|catalogue|shop|store|cart|careers?|jobs?|press|news|investors?|privacy|terms|login|logout)(\/|$|[.?#-])/i
 const NOT_APPLY = /\b(unsubscribe|log ?out|donat(e|ion)|volunteer|job|career|press|news|privacy|terms)\b/i
 
 export interface ApplyLink {
@@ -105,6 +108,7 @@ export function findApplyLinks(html: string, pageUrl: string): ApplyLink[] {
 
     let score = 0
     if (isApplyHost(abs) || isGoogleForm(abs)) score += 3
+    if (NOT_APPLY_PATH.test(abs)) continue
     if (APPLY_TEXT.test(text)) score += 2
     if (APPLY_PATH.test(abs)) score += 1
     if (score === 0) continue

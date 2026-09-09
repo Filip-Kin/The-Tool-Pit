@@ -69,3 +69,10 @@ describe('judge: a script-mounted form without a <form> element', () => {
     expect(r?.status).toBe('form')
   })
 })
+
+describe('judge: product and catalogue pages are never the application', () => {
+  it("TE's application tooling catalogue is not a form", () => {
+    const html = '<html><body><h1>Application Tooling</h1><form><input type="text" name="q"><select name="family"><option>a</option></select><input type="text" name="part"><textarea name="notes"></textarea><button type="submit">Submit</button></form></body></html>'
+    expect(judge('https://www.te.com/en/products/application-tooling.html', html, 'fetch')).toBeNull()
+  })
+})

@@ -258,6 +258,11 @@ export function judge(url: string, html: string, how: string): Omit<ApplyRoute, 
   if (how === 'pdf') {
     return { status: 'form', url, email: null, evidence: `a PDF application form (submit it as the page instructs)` }
   }
+  // A product, shop or careers page is never the application, however many
+  // inputs it carries (TE's "application tooling" catalogue has a filter form).
+  if (/\/(products?|tooling|catalog|catalogue|shop|store|cart|careers?|jobs?|press|news|investors?)(\/|$|[.?#-])/i.test(parsed.pathname)) {
+    return null
+  }
   const text = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
   const closed = text.match(CLOSED_RE)
   const portal = portalName(parsed)
