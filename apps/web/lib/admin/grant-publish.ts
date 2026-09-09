@@ -12,7 +12,7 @@
  */
 import { eq, or } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { grantCandidates, grantCycles, grantRequirements, grants } from '@the-tool-pit/db'
+import { grantCandidates, grantCycles, grantFunders, grantRequirements, grants } from '@the-tool-pit/db'
 import type { GrantExtraction, GrantSourceKind } from '@the-tool-pit/db'
 import { reviewRequirements } from '@/lib/admin/grant-review'
 import { bumpSourceCounter, parseCycleFields, parseGrantFields, resolveFunderByName, uniqueGrantSlug } from '@/lib/admin/grants'
@@ -81,12 +81,59 @@ export async function loadCandidate(candidateId: string) {
  * not_public or rolling. "None" means the pages were read and say nothing,
  * which is exactly the listing that later lies to a team.
  */
+/**
+ * The FIRST season a date falls in, by kickoff year: September 2026 is the
+ * 2027 season, March 2026 is the 2026 season. A programme named for an
+ * earlier season or fiscal year is last year's page.
+ */
+export function seasonYear(today: Date): number {
+  return today.getUTCMonth() >= 6 ? today.getUTCFullYear() + 1 : today.getUTCFullYear()
+}
+
+/**
+ * "2024-2025 K-12 Robotics Competition Grant", "Maryland Robotics Grant FY
+ * 2026", "2022-2023 STEM Mini-Grants": the name itself says the round is
+ * over. Returns the sentence for the gate, or null when the name is current
+ * or carries no year.
+ */
+export function staleSeasonInName(name: string, today = new Date()): string | null {
+  const m = name.match(/\b(FY ?)?(20\d\d)(?:\s?[-\u2013/]\s?(?:20)?(\d\d))?\b/i)
+  if (!m) return null
+  const start = Number(m[2])
+  const end = m[3] ? 2000 + Number(m[3]) : null
+  const season = seasonYear(today)
+  if (m[1]) return start < season ? `the name is for fiscal year ${start}, which has ended` : null
+  if (end) return end < season ? `the name is for the ${start}-${end} season, which has ended` : null
+  return start < today.getUTCFullYear() ? `the name is for ${start}, which has passed` : null
+}
+
+/** Names compare with years, seasons and punctuation removed. */
+export function normalizeGrantName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\b(fy ?)?20\d\d(\s?[-\u2013/]\s?(20)?\d\d)?\b/g, ' ')
+    .replace(/\b(program|programme|grant|grants|application|the|a|an|for|of|and)\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
 export function publishBlockers(
   extraction: GrantExtraction | null | undefined,
-  values: { applyMethod?: string | null; contactEmail?: string | null; deadlineType?: string | null },
+  values: { name?: string | null; applyMethod?: string | null; contactEmail?: string | null; deadlineType?: string | null },
   form: FormData,
+  today = new Date(),
 ): string[] {
   const out: string[] = []
+  // A real grant aimed at somebody else (wildfire relief, foster care) is
+  // noise on a robotics site. The worker judges fit from the extracted text.
+  const fit = extraction?.fit
+  if (!fit) out.push('fit for a robotics team has not been checked (no fit verdict on the extraction)')
+  else if (fit.level === 'off') out.push(`not a fit for a robotics team: ${fit.reason}`)
+  // Last season's page: the name carries a year that has passed and no
+  // future deadline is on the form to say the page has been updated.
+  const stale = values.name ? staleSeasonInName(values.name, today) : null
+  const futureDeadline = Date.parse(String(form.get('deadlineAt') ?? '')) > today.getTime()
+  if (stale && !futureDeadline) out.push(stale)
   const route = extraction?.applyRoute
   const emailRoute = values.applyMethod === 'email' && Boolean(values.contactEmail)
   if (!emailRoute) {
@@ -132,6 +179,30 @@ export function nameWithFunder(name: string, funderName: string | null | undefin
   return `${f} ${n}`.slice(0, 200)
 }
 
+/**
+ * The same programme under a second candidate: same funder and the same name
+ * once years are stripped ("Maryland Robotics Grant FY 2026" vs "FY 2027"),
+ * or the same application URL. One listing per programme; the monitor keeps
+ * the cycle current, a second row would go stale beside it.
+ */
+export async function duplicateOfExisting(name: string, funderName: string | null | undefined, applicationUrl: string | null): Promise<string | null> {
+  const db = getDb()
+  const rows = await db
+    .select({ name: grants.name, slug: grants.slug, status: grants.status, applicationUrl: grants.applicationUrl, funder: grantFunders.name })
+    .from(grants)
+    .leftJoin(grantFunders, eq(grantFunders.id, grants.funderId))
+  const wantName = normalizeGrantName(name)
+  const wantFunder = (funderName ?? '').trim().toLowerCase()
+  const wantUrl = (applicationUrl ?? '').replace(/[?#].*$/, '').replace(/\/$/, '').toLowerCase()
+  for (const r of rows) {
+    const sameFunder = wantFunder !== '' && (r.funder ?? '').trim().toLowerCase() === wantFunder
+    const sameName = normalizeGrantName(r.name) === wantName
+    const sameUrl = wantUrl !== '' && (r.applicationUrl ?? '').replace(/[?#].*$/, '').replace(/\/$/, '').toLowerCase() === wantUrl
+    if ((sameFunder && sameName) || sameUrl) return `this is the same programme as "${r.name}" (/grants/${r.slug}, ${r.status})`
+  }
+  return null
+}
+
 export interface PublishOutcome {
   error?: string
   slug?: string
@@ -163,6 +234,8 @@ export async function publishCandidateFromForm(
   const override = String(form.get('overrideVerification') ?? '').trim()
   if (!override) {
     const blocked = publishBlockers(candidate.extraction, parsed.values, form)
+    const dup = await duplicateOfExisting(parsed.values.name!, parsed.funderName, parsed.values.applicationUrl ?? null)
+    if (dup) blocked.push(dup)
     if (blocked.length > 0) return { error: `Not ready to publish: ${blocked.join('; ')}. Fix it, or give a reason in "publish anyway".` }
   }
   const now = new Date()

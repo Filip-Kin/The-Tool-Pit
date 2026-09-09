@@ -63,6 +63,8 @@ import { routeAggregatorToSource, AUTO_ROUTE_CONFIDENCE } from './route-aggregat
 import { findApplyLinks } from './apply-links.js'
 import { deterministicGrantPrefilter } from './prefilter.js'
 import { verifyListing } from './verify-listing.js'
+import { judgeFit } from './fit.js'
+import { inferRegions } from './infer-regions.js'
 import {
   loadSuppressionExamples,
   pickSuppressionExamples,
@@ -660,6 +662,34 @@ export async function processGrantExtractJob(payload: GrantExtractPayload): Prom
     extraction.notes.push(`apply route: ${route.status} (${route.evidence})`, `timing: ${proof.kind}${proof.quote ? ` ("${proof.quote.slice(0, 120)}")` : ''}`)
   } catch (err) {
     extraction.notes.push(`verification failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  // 4b. A state-scoped grant with no state cannot publish (the matcher cannot
+  //     rule anyone out). When the funder name and page text keep naming one
+  //     state, that is the state.
+  {
+    const scope = extraction.fields.geoScope.value
+    const regions = extraction.fields.regions.value
+    if ((scope === 'state' || scope === 'region' || scope === 'local') && (!Array.isArray(regions) || regions.length === 0)) {
+      const guess = inferRegions(
+        [extraction.fields.funderName.value, extraction.fields.name.value, extraction.fields.geographyRestriction.value, extraction.fields.eligibilityText.value, gathered.evidence.funderPage],
+        extraction.fields.countries.value?.[0] ?? null,
+      )
+      if (guess) {
+        extraction.fields.regions = { value: guess.codes, quote: guess.quote, source: 'funder_page' }
+        extraction.notes.push(`regions inferred: ${guess.codes.join(',')} (${guess.quote})`)
+      }
+    }
+  }
+
+  // 5. Is it FOR a robotics team? A foundation's wildfire fund is a real
+  //    grant a school could apply to and still noise here. Read from the
+  //    extracted text, no fetch; the gate refuses 'off' and a missing verdict.
+  try {
+    extraction.fit = await judgeFit(extraction)
+    extraction.notes.push(`fit: ${extraction.fit.level} (${extraction.fit.reason})`)
+  } catch (err) {
+    extraction.notes.push(`fit check failed: ${err instanceof Error ? err.message : String(err)}`)
   }
 
   await db

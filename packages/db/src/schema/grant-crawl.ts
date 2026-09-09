@@ -563,6 +563,17 @@ export interface GrantExtraction {
     checkedAt: string
     past?: { date: string; quote: string; url: string }
   }
+  /**
+   * Would a FIRST team realistically apply (worker grants/fit.ts)? 'off' is a
+   * real grant aimed at somebody else (wildfire relief, foster care, marine
+   * conservation) and the publish gate refuses it.
+   */
+  fit?: {
+    level: 'robotics' | 'stem' | 'general' | 'off'
+    reason: string
+    model: string
+    checkedAt: string
+  }
   /** The model's own sentence on what it could and could not read. */
   reasoning?: string
   extractedAt: string
