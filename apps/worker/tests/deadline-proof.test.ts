@@ -34,3 +34,19 @@ describe('findDeadlineProof', () => {
     expect(r.urlsRead).toEqual(['a', 'b'])
   })
 })
+
+describe('findDeadlineProof rejects furniture and schedules', () => {
+  it('a survey header with a date in it is not a deadline', () => {
+    const r = findDeadlineProof([{ url: 'u', text: 'Skip survey header WISCONSIN ROBOTICS LEAGUE PARTICIPATION GRANT APPLICATION 2026/2027 through October 5, 2026.' }], '2026-09-08')
+    expect(r.kind).not.toBe('dated')
+  })
+  it('"by" alone next to a date is not a deadline', () => {
+    const r = findDeadlineProof([{ url: 'u', text: 'Grant recipients will be notified by November 2, 2026.' }], '2026-09-08')
+    expect(r.kind).not.toBe('dated')
+  })
+  it('"due" with a date is', () => {
+    const r = findDeadlineProof([{ url: 'u', text: 'All proposals are due on June 12, 2027.' }], '2026-09-08')
+    expect(r.kind).toBe('dated')
+    expect(r.date).toBe('2027-06-12')
+  })
+})

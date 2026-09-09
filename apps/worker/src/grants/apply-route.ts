@@ -103,8 +103,19 @@ function formOnPage(html: string): { fields: number; hasTextarea: boolean; hasFi
   return best
 }
 
-/** A page that says "log in" and little else is a portal entrance, which counts once the host is a portal; elsewhere it is unverified. */
+/** A page that says "log in" and little else is a portal entrance, which counts once the host is a portal. */
 const LOGIN_RE = /(log ?in|sign ?in|create (an )?account|register to apply)/i
+/**
+ * A funder's OWN application system: a login or access-token gate on a page
+ * that talks about applying. Not a known portal host, but it is where the
+ * application lives (first.dowstem.us asks for an access token; AIAA's
+ * awards site redirects to its member login; Fabworks' sponsorship form sits
+ * behind "sign in to your account").
+ */
+const OWN_PORTAL_RE = /(submit (a|your) (proposal|application|request)|application portal|applicant portal|grant portal|sponsorship (form|request|application)|access token|log ?in to (apply|your application|continue)|sign in to (apply|your account)|create (an )?account to apply|solicitation)/i
+function gatedInput(html: string): boolean {
+  return /<input[^>]+type="(password|email|text)"/i.test(html) && /<(button|input)[^>]*(type="submit"|>\s*(log ?in|sign ?in|continue|submit|next)\s*<)/i.test(html)
+}
 
 async function readHtml(url: string): Promise<{ html: string; status: number; how: 'fetch' | 'browser' | 'walled' | 'gone' }> {
   try {
@@ -116,8 +127,15 @@ async function readHtml(url: string): Promise<{ html: string; status: number; ho
       if (html.replace(/<script[\s\S]*?<\/script>/gi, '').length > 2500) return { html, status: res.status, how: 'fetch' }
     }
     if (res.ok && !/html/i.test(ct)) return { html: '', status: res.status, how: 'fetch' }
-    // Gone is gone: a portal or form that answers 404/410 is not walled, it is dead.
-    if (res.status === 404 || res.status === 410) return { html: '', status: res.status, how: 'gone' }
+    // A 404 to curl is not always a 404 to a browser (Michigan's MiLogin answers
+    // 404 with a working page). Ask the browser; gone only if it agrees.
+    if (res.status === 404 || res.status === 410) {
+      const rendered = await withRenderedPage(url, async (page) => page.content())
+      if (rendered && rendered.length > 500 && !/(page not found|404|no longer available|does not exist)/i.test(rendered.replace(/<[^>]+>/g, ' ').slice(0, 3000))) {
+        return { html: rendered, status: 200, how: 'browser' }
+      }
+      return { html: '', status: res.status, how: 'gone' }
+    }
   } catch {
     // fall through to the browser
   }
@@ -128,6 +146,12 @@ async function readHtml(url: string): Promise<{ html: string; status: number; ho
   return { html: '', status: 0, how: 'walled' }
 }
 
+/** A fetched page that shows no form may build one with JavaScript (BMW's request form). One render settles it. */
+async function renderedHtml(url: string): Promise<string | null> {
+  const rendered = await withRenderedPage(url, async (page) => page.content())
+  return rendered && rendered.length > 500 ? rendered : null
+}
+
 /** Link text or a nearby heading that names the programme a team applies to. Preferred over a funder's other portals. */
 const TEAM_CUE = /\b(FIRST|FRC|FTC|FLL|robot|robotics|team|competition|student)\b/i
 
@@ -136,13 +160,13 @@ function applyMailto(html: string): string | null {
   const re = /href="mailto:([^"?]+)"/gi
   let m: RegExpExecArray | null
   while ((m = re.exec(html)) !== null) {
-    const around = html.slice(Math.max(0, m.index - 400), m.index + 400).replace(/<[^>]+>/g, ' ')
-    if (/\b(apply|application|applications|submit|proposal|request|inquir)/i.test(around)) return m[1].trim()
+    const around = html.slice(Math.max(0, m.index - 300), m.index + 300).replace(/<[^>]+>/g, ' ')
+    if (/(email (your|the|a|an|completed) (application|proposal|request|form|letter)|apply by e-?mail|send (your|the|a|completed) (application|proposal|request|form) to|submit(ted)? (it |the form |applications? |proposals? )?(by|via) e-?mail|applications? (should|must|may|can) be (sent|emailed|submitted) to|to apply,? (email|e-mail|contact))/i.test(around)) return m[1].trim()
   }
   return null
 }
 
-function judge(url: string, html: string, how: string): Omit<ApplyRoute, 'chain' | 'checkedAt'> | null {
+export function judge(url: string, html: string, how: string): Omit<ApplyRoute, 'chain' | 'checkedAt'> | null {
   let parsed: URL
   try {
     parsed = new URL(url)
@@ -157,6 +181,9 @@ function judge(url: string, html: string, how: string): Omit<ApplyRoute, 'chain'
   }
   if (portal) {
     return { status: 'portal', url, email: null, evidence: `${portal} at ${parsed.hostname}${LOGIN_RE.test(text.slice(0, 4000)) ? ' (behind an account login)' : ''}, read via ${how}` }
+  }
+  if (OWN_PORTAL_RE.test(text.slice(0, 6000)) && gatedInput(html)) {
+    return { status: 'portal', url, email: null, evidence: `the funder's own application system at ${parsed.hostname} (login or access gate on a page about applying), read via ${how}` }
   }
   const form = formOnPage(html)
   if (form) {
@@ -203,7 +230,11 @@ export async function resolveApplyRoute(startUrls: Array<string | null | undefin
       continue
     }
     if (!html) continue
-    const verdict = judge(url, html, how)
+    let verdict = judge(url, html, how)
+    if (!verdict && how === 'fetch') {
+      const rendered = await renderedHtml(url)
+      if (rendered) verdict = judge(url, rendered, 'browser')
+    }
     if (verdict) return { ...verdict, chain, checkedAt }
     if (!mailto) mailto = applyMailto(html)
     if (depth < 2) {

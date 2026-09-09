@@ -25,7 +25,10 @@ export interface DeadlineProof {
 
 const MONTH = '(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec)'
 const DATE_RE = new RegExp(`\\b${MONTH}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(20\\d\\d)\\b|\\b(\\d{1,2})\\s+${MONTH}\\.?\\s+(20\\d\\d)\\b|\\b(20\\d\\d)-(\\d{2})-(\\d{2})\\b|\\b(\\d{1,2})/(\\d{1,2})/(20\\d\\d)\\b`, 'i')
-const DEADLINE_CUE = /(deadline|due|close[sd]?|closing|must be (submitted|received)|submit(ted)? by|received by|no later than|applications? (will )?(be )?accepted (until|through)|through|by)/i
+/** A strong cue: a bare "by" or "through" next to a date is a schedule, not a deadline. */
+const DEADLINE_CUE = /(deadline|due (date|by|on)?\b|due\b|close[sd]?\b|closing|closes on|must be (submitted|received)|submit(ted)? (by|on or before|no later than)|received (by|on or before)|no later than|on or before|applications? (will )?(be )?(accepted|open) (until|through)|last day to (apply|submit)|final day)/i
+/** Sentences that are page furniture, never evidence. */
+const FURNITURE_RE = /^(skip|check the|click|select|sign in|log in|next page|previous|home|menu|search|share)\b/i
 const NOT_PUBLIC_RE =
   /((timeline|dates?|application|applications|window|cycle|portal|form|details|guidelines)[^.]{0,80}(will be (posted|announced|available|released|published|open(ed|ing)?)|expected to (be posted|open|be announced)|to be announced|to be determined|tbd|not (yet )?(been )?(posted|announced|published|available|determined))|(will|expected to) open (in|on|by) [^.]{0,40}(20\d\d|spring|summer|fall|autumn|winter|early|late|mid)|next (application )?cycle [^.]{0,60}(expected|will|anticipated)|check back (soon|later|in)|coming soon|opens? (in|on) (early|mid|late)? ?(january|february|march|april|may|june|july|august|september|october|november|december|spring|summer|fall|autumn|winter))/i
 const ROLLING_RE = /(rolling basis|reviewed as they arrive|no deadline|there are no deadlines|accepted (year|all year|year-round|throughout the year)|any time of (the )?year|ongoing basis)/i
@@ -63,6 +66,7 @@ export function findDeadlineProof(pages: Array<{ url: string; text: string }>, t
   let past: { date: string; quote: string; url: string } | null = null
   for (const { url, text } of pages) {
     for (const s of sentences(text)) {
+      if (FURNITURE_RE.test(s)) continue
       const dm = s.match(DATE_RE)
       if (dm && DEADLINE_CUE.test(s)) {
         const iso = isoFromMatch(dm)
