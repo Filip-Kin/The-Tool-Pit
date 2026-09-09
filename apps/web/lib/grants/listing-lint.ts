@@ -42,7 +42,7 @@ export function restatesRequirement(prose: string, blocking: Array<{ label: stri
 const VOICE_RE = /\b(worth noting|it'?s worth|notably|crucially|importantly|in summary|in conclusion|overall,|additionally,|furthermore,|moreover,|leverage|robust|seamless|comprehensive|holistic|empower(s|ing)?|unlock|delve|landscape|ecosystem|tailored|cutting[- ]edge|state[- ]of[- ]the[- ]art)\b/i
 
 export interface ListingLintIssue {
-  field: 'name' | 'summary' | 'description' | 'requirement' | 'awardNotes'
+  field: 'name' | 'funder' | 'summary' | 'description' | 'requirement' | 'awardNotes'
   text: string
   problem: string
 }
@@ -50,6 +50,7 @@ export interface ListingLintIssue {
 /** Everything wrong with the listing as a reader would see it. */
 export function lintListing(values: {
   name?: string | null
+  funderName?: string | null
   summary?: string | null
   description?: string | null
   awardNotes?: string | null
@@ -66,6 +67,15 @@ export function lintListing(values: {
   const name = values.name ?? ''
   if (/\b(the|this) (page|site|form|portal)\b|\bclick\b|\bwelcome to\b/i.test(name) || /[.!?]$/.test(name.trim()) || name.length > 120) {
     out.push({ field: 'name', text: name, problem: 'reads as a page title or a sentence, not a programme name' })
+  }
+  // "Community Request System", "Corporate Funding Application Portal",
+  // "Grant Application": the portal's name, not the programme's.
+  if (/\b(request system|application portal|funding portal|grant portal|grant application|application form|login|sign[- ]?in|request form)\b\s*$/i.test(name) || /\s[-–]\s(grants?|apply|application)\s*$/i.test(name)) {
+    out.push({ field: 'name', text: name, problem: 'names the portal or the form, not the programme' })
+  }
+  const funder = values.funderName ?? ''
+  if (funder && (funder.length > 70 || /[.!?]$/.test(funder.trim()) || /\b(in partnership with|in collaboration with|and its|which|that)\b/i.test(funder))) {
+    out.push({ field: 'funder', text: funder, problem: 'the funder field holds a sentence, not an organisation' })
   }
   if (!values.summary || values.summary.trim().length < 40) {
     out.push({ field: 'summary', text: values.summary ?? '', problem: 'no usable summary' })

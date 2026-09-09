@@ -28,7 +28,11 @@ export function GrantCycles({ cycles, now }: { cycles: PublicGrantCycle[]; now: 
       {ordered.map((cycle) => {
         const state = cycleState(cycle, now)
         const past = state === 'closed'
-        const deadline = formatDeadline(cycle.deadlineAt)
+        // A funder that gives a date and no time gets a date on the card: the
+        // stored instant is a placeholder and "8:00 pm EDT the day before"
+        // is what it looks like once converted.
+        const dateOnly = /no time of day/i.test(cycle.deadlineNote ?? '')
+        const deadline = dateOnly && cycle.deadlineAt ? formatPlainDate(String(cycle.deadlineAt).slice(0, 10)) : formatDeadline(cycle.deadlineAt)
         const opens = formatPlainDate(cycle.opensAt)
         const decision = formatPlainDate(cycle.decisionAt)
         const verified = formatDay(cycle.verifiedAt)
@@ -73,7 +77,10 @@ export function GrantCycles({ cycles, now }: { cycles: PublicGrantCycle[]; now: 
             {/* The funder's own wording about the closing time, kept verbatim
                 next to the instant we render, because "by close of business"
                 and "11:59pm ET" are not the same promise. */}
-            {cycle.deadlineNote && <p className="text-xs text-muted">{cycle.deadlineNote}</p>}
+            {cycle.deadlineNote && !dateOnly && <p className="text-xs text-muted">{cycle.deadlineNote}</p>}
+            {dateOnly && cycle.deadlineNote && cycle.deadlineNote.replace(/the funder states the date; no time of day given\.?/i, '').trim() && (
+              <p className="text-xs text-muted">{cycle.deadlineNote.replace(/the funder states the date; no time of day given\.?/i, '').trim()}</p>
+            )}
 
             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-2">
               {verified ? (

@@ -73,8 +73,15 @@ function RequirementList({
             <span className="text-xs font-medium uppercase tracking-wide text-muted-2">
               {REQUIREMENT_KIND_LABEL[r.kind]}
             </span>
-            {/* The funder's own words. We never paraphrase eligibility. */}
-            <span className="text-sm text-foreground">{r.label}</span>
+            {/* The funder's own words. We never paraphrase eligibility, so a
+                "we" or "our" is the funder speaking, and the card says so. */}
+            {/\b(we|our|us)\b/i.test(r.label) ? (
+              <span className="text-sm text-foreground">
+                <span className="text-muted">In the funder&apos;s words: </span>&ldquo;{r.label}&rdquo;
+              </span>
+            ) : (
+              <span className="text-sm text-foreground">{r.label}</span>
+            )}
           </li>
         ))}
       </ul>

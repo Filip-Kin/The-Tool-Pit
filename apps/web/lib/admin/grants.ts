@@ -6,6 +6,8 @@
  * screens needs, so the rules live in one place rather than being re-typed per
  * route.
  */
+import { scrubNarration } from '@the-tool-pit/db/listing-text'
+import type { GrantDeadlineType } from '@the-tool-pit/db/grant-enums'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { and, eq, ne, sql } from 'drizzle-orm'
@@ -217,6 +219,39 @@ function pick<T extends readonly string[]>(raw: FormDataEntryValue | null, allow
  * invisible to the matcher's rule-out test, so it would be offered to every
  * team in the country. Better to refuse the save.
  */
+/**
+ * Award notes are the funder's wording about the amount. "Restrictions: Yes",
+ * "varies", "flexible funding" say nothing; a note that only restates the
+ * range on the card ("up to $5,000" under "up to $5,000") says it twice; a
+ * note that repeats the summary is padding. Null is a clean card.
+ */
+export function cleanAwardNotes(raw: string, prose: string, awardMin: number | null, awardMax: number | null): string | null {
+  let note = scrubNarration(raw.replace(/\s+/g, ' ').trim(), 1) ?? ''
+  // The sheet's own facts were appended as "Restrictions: Yes"; strip them.
+  note = note.replace(/\b(restrictions?|window per the sheet)\s*:\s*[^.]*\.?/gi, ' ').replace(/\s+/g, ' ').replace(/^[.\s]+|[\s.]+$/g, '').trim()
+  if (!note) return null
+  if (/^(yes|no|unsure|unknown|varies|variable|flexible( funding)?|unrestricted( funding)?|n\/?a|none|tbd|not (stated|specified|disclosed|provided)|see (page|website)|contact (us|the funder))\.?$/i.test(note)) return null
+  const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+  const hay = norm(prose)
+  if (hay && hay.includes(norm(note))) return null
+  // Only the numbers already on the card, in any wording.
+  const nums = (note.match(/\d[\d,]*/g) ?? []).map((n) => Number(n.replace(/,/g, '')))
+  const cardNums = [awardMin, awardMax].filter((n): n is number => n != null)
+  if (nums.length > 0 && cardNums.length > 0 && nums.every((n) => cardNums.includes(n)) && note.split(' ').length <= 8) return null
+  return note.slice(0, 500)
+}
+
+/**
+ * A "one-off deadline" next to a description that says "each year",
+ * "annually" or "quarterly" is a contradiction a reader spots at once. The
+ * text decides the type when it is explicit.
+ */
+export function deadlineTypeFor(chosen: GrantDeadlineType, prose: string): GrantDeadlineType {
+  if (chosen === 'rolling') return chosen
+  if (/\b(each year|every year|annually|annual (cycle|round|window|deadline|grant cycle|competition)|yearly|per year|each (spring|summer|fall|autumn|winter)|every (spring|summer|fall|autumn|winter)|twice a year|semi-?annual|quarterly|each quarter|every quarter|three times a year|monthly)\b/i.test(prose)) return 'annual_window'
+  return chosen
+}
+
 export function parseGrantFields(form: FormData): ParsedGrantFields {
   const name = String(form.get('name') ?? '').trim()
   const infoUrl = String(form.get('infoUrl') ?? '').trim()
@@ -228,8 +263,9 @@ export function parseGrantFields(form: FormData): ParsedGrantFields {
 
   const values: Partial<NewGrant> = {
     name,
-    summary: String(form.get('summary') ?? '').trim() || null,
-    description: String(form.get('description') ?? '').trim() || null,
+    // Sentences about the page or the metadata never reach a reader.
+    summary: scrubNarration(String(form.get('summary') ?? '').trim(), 20),
+    description: scrubNarration(String(form.get('description') ?? '').trim(), 40),
     infoUrl,
     applicationUrl: String(form.get('applicationUrl') ?? '').trim() || null,
     // How a team actually applies. Defaulting to 'online_form' would hide every
@@ -245,11 +281,11 @@ export function parseGrantFields(form: FormData): ParsedGrantFields {
     awardMin: int(form.get('awardMin')),
     awardMax: int(form.get('awardMax')),
     awardCurrency: String(form.get('awardCurrency') ?? '').trim().toUpperCase() || 'USD',
-    awardNotes: String(form.get('awardNotes') ?? '').trim() || null,
+    awardNotes: cleanAwardNotes(String(form.get('awardNotes') ?? ''), `${form.get('summary') ?? ''} ${form.get('description') ?? ''}`, int(form.get('awardMin')), int(form.get('awardMax'))),
     // Tri-state on purpose: "we do not know if it renews" is a real answer and
     // is not the same as "it does not renew".
     renewable: renewableRaw === 'yes' ? true : renewableRaw === 'no' ? false : null,
-    deadlineType: pick(form.get('deadlineType'), GRANT_DEADLINE_TYPES, 'unknown'),
+    deadlineType: deadlineTypeFor(pick(form.get('deadlineType'), GRANT_DEADLINE_TYPES, 'unknown'), `${form.get('summary') ?? ''} ${form.get('description') ?? ''} ${form.get('awardNotes') ?? ''}`),
     effortLevel: pick(form.get('effortLevel'), GRANT_EFFORT_LEVELS, 'unknown'),
     status: pick(form.get('status'), GRANT_STATUSES, 'pending'),
     updatedAt: new Date(),
@@ -483,6 +519,23 @@ export function parseCycleFields(form: FormData): ParsedCycleFields {
     const d = new Date(deadlineRaw)
     if (Number.isNaN(d.getTime())) return { values, error: `"${deadlineRaw}" is not a valid date and time.` }
     values.deadlineAt = d
+    // The year on the card is the year the round closes. A "2027" label over
+    // a September 2026 deadline came from a season name, and it confuses.
+    values.cycleYear = d.getUTCFullYear()
+    // Opens and decisions belong to the same round: within a year before the
+    // deadline and a year after it. Anything else is another year's date
+    // the extractor picked up, and a wrong date is worse than none.
+    const dayMs = 86_400_000
+    if (values.opensAt) {
+      const o = Date.parse(`${values.opensAt}T00:00:00Z`)
+      if (!(o <= d.getTime() && d.getTime() - o <= 366 * dayMs)) values.opensAt = null
+    }
+    if (values.decisionAt) {
+      const dec = Date.parse(`${values.decisionAt}T00:00:00Z`)
+      if (!(dec >= d.getTime() - dayMs && dec - d.getTime() <= 366 * dayMs)) values.decisionAt = null
+    }
+    // A closed round is a closed round, whatever the form said.
+    if (d.getTime() < Date.now() && (values.status === 'open' || values.status === 'upcoming' || values.status === 'unknown')) values.status = 'closed'
   }
   return { values }
 }

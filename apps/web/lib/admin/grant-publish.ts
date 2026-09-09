@@ -139,7 +139,7 @@ export function publishBlockers(
   if (values.infoUrl && isEntranceUrl(values.infoUrl)) out.push(`the info link is the application entrance, not the funder's programme page: ${values.infoUrl}`)
   // The listing as a reader sees it: no sentences about the page or the
   // metadata, no "Unsure" printed as a fact, a name that is a name.
-  for (const issue of lintListing({ name: values.name, summary: values.summary, description: values.description, awardNotes: values.awardNotes, requirementLabels: reviewRequirements(form).map((r) => r.label) })) {
+  for (const issue of lintListing({ name: values.name, funderName: form.get('funderName') ? String(form.get('funderName')) : null, summary: values.summary, description: values.description, awardNotes: values.awardNotes, requirementLabels: reviewRequirements(form).map((r) => r.label) })) {
     out.push(`${issue.field} ${issue.problem}: "${issue.text.slice(0, 120)}"`)
   }
   const stale = values.name ? staleSeasonInName(values.name, today) : null

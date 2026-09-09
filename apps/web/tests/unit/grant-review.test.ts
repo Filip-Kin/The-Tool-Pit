@@ -199,10 +199,11 @@ describe('reviewRequirements', () => {
         reqEmployeeMentor: 'yes',
         reqAgeRange: 'grades 6-12',
         reqGeography: 'Wayne and Oakland counties',
-        reqEligibilityText: 'Teams must have a mentor over 21.',
+        reqEligibilityText: 'Teams must have a mentor over 21 who is an employee of the company.',
       }),
     )
-    expect(rows).toHaveLength(4)
+    // Geography is a fact on the card, not a note; the other three are prose.
+    expect(rows).toHaveLength(3)
     expect(rows.every((r) => r.kind === 'other')).toBe(true)
     expect(rows.some((r) => r.isBlocking)).toBe(false)
   })

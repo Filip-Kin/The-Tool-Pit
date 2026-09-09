@@ -81,8 +81,13 @@ export function ApplyPanel({
           so nobody fills in a profile for a door that is shut. */}
       {routeStatus === 'closed' && (
         <p className="rounded-md border border-reg-closed/30 bg-reg-closed/10 px-3 py-2 text-sm text-foreground">
-          The application is not taking submissions right now
-          {routeEvidence ? <span className="text-muted">: {routeEvidence}</span> : null}. Check the funder&apos;s page for the next round.
+          The form is closed right now.
+          {/* Only the funder's own sentence is worth showing; "path ends in
+              closed" is our checker talking to itself. */}
+          {routeEvidence && /^[A-Z"“]/.test(routeEvidence) && !/\b(path|http|read via|says:|fetch|browser)\b/i.test(routeEvidence) ? (
+            <span className="text-muted"> The funder&apos;s page says: &ldquo;{routeEvidence.replace(/^(google forms|benevity|[a-z ]+) says: /i, '').replace(/^["“]|["”]$/g, '')}&rdquo;.</span>
+          ) : null}{' '}
+          Check the funder&apos;s page for the next round.
         </p>
       )}
       {routeStatus === 'walled' && (
