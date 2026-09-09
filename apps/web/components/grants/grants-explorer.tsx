@@ -54,6 +54,48 @@ function readStoredFilters(): StoredFilters | null {
     return null
   }
 }
+/**
+ * The same state in the URL, so a filtered view can be shared: /grants?regions=MI
+ * lands the reader on Michigan. Read once on mount (the URL beats the stored
+ * copy when both exist), written with replaceState on every change so the
+ * address bar follows without a navigation or a history entry per click.
+ */
+const URL_KEYS = ['programs', 'countries', 'regions', 'effortLevels'] as const
+function readUrlFilters(): StoredFilters | null {
+  const sp = new URLSearchParams(window.location.search)
+  if ([...sp.keys()].length === 0) return null
+  const list = (k: string) => sp.get(k)?.split(',').map((v) => v.trim()).filter(Boolean)
+  const filters: Omit<GrantFilters, 'q'> = {}
+  const programs = list('programs')
+  if (programs?.length) filters.programs = programs as GrantProgram[]
+  const countries = list('countries')
+  if (countries?.length) filters.countries = countries
+  const regions = list('regions')
+  if (regions?.length) filters.regions = regions
+  const effort = list('effortLevels')
+  if (effort?.length) filters.effortLevels = effort as GrantEffortLevel[]
+  if (sp.get('rolling') === '1') filters.rollingOnly = true
+  if (sp.get('hideClosed') === '1') filters.hideClosed = true
+  return { filters, awardBand: sp.get('award'), deadlineWindow: sp.get('within') }
+}
+function writeUrlFilters(value: StoredFilters, q: string | undefined): void {
+  const sp = new URLSearchParams()
+  for (const k of URL_KEYS) {
+    const v = value.filters[k]
+    if (Array.isArray(v) && v.length > 0) sp.set(k, v.join(','))
+  }
+  if (value.filters.rollingOnly) sp.set('rolling', '1')
+  if (value.filters.hideClosed) sp.set('hideClosed', '1')
+  if (value.awardBand) sp.set('award', value.awardBand)
+  if (value.deadlineWindow) sp.set('within', value.deadlineWindow)
+  if (q?.trim()) sp.set('q', q.trim())
+  const qs = sp.toString()
+  const next = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`
+  if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+    window.history.replaceState(window.history.state, '', next)
+  }
+}
+
 function writeStoredFilters(value: StoredFilters): void {
   try {
     const { filters, awardBand, deadlineWindow } = value
@@ -71,11 +113,14 @@ export function GrantsExplorer({ grants, now }: { grants: PublicGrant[]; now: Da
   const [deadlineWindow, setDeadlineWindow] = useState<string | null>(null)
   const [restored, setRestored] = useState(false)
 
-  // Restore what this browser used last time, once, after mount.
+  // Restore once, after mount: a shared URL first, this browser's last state
+  // otherwise. The search text comes from the URL only.
   useEffect(() => {
-    const stored = readStoredFilters()
+    const fromUrl = readUrlFilters()
+    const stored = fromUrl ?? readStoredFilters()
     if (stored) {
-      setFilters((f) => ({ ...stored.filters, q: f.q }))
+      const q = new URLSearchParams(window.location.search).get('q') ?? undefined
+      setFilters({ ...stored.filters, ...(q ? { q } : {}) })
       setAwardBand(stored.awardBand)
       setDeadlineWindow(stored.deadlineWindow)
     }
@@ -86,8 +131,9 @@ export function GrantsExplorer({ grants, now }: { grants: PublicGrant[]; now: Da
   // state on mount would wipe the stored one before it was read.
   useEffect(() => {
     if (!restored) return
-    const { q: _q, ...rest } = filters
+    const { q, ...rest } = filters
     writeStoredFilters({ filters: rest, awardBand, deadlineWindow })
+    writeUrlFilters({ filters: rest, awardBand, deadlineWindow }, q)
   }, [restored, filters, awardBand, deadlineWindow])
 
   // Facets come from the grants actually in the list, not from a fixed list of
