@@ -20,7 +20,7 @@ export async function GrantsHeader() {
       <div className="container mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
         <VerticalHomeCrumb current="grants" />
 
-        <Link href="/" className="flex shrink-0 items-center gap-2">
+        <Link href="/grants" className="flex shrink-0 items-center gap-2">
           <CircleDollarSign className="h-5 w-5 text-primary" />
           <span className="whitespace-nowrap text-lg font-bold tracking-tight text-foreground">Grants</span>
         </Link>

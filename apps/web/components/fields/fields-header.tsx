@@ -12,7 +12,7 @@ export async function FieldsHeader() {
       <div className="container mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
         <VerticalHomeCrumb current="fields" />
 
-        <Link href="/" className="flex shrink-0 items-center gap-2">
+        <Link href="/fields" className="flex shrink-0 items-center gap-2">
           <MapPin className="h-5 w-5 text-primary" />
           <span className="whitespace-nowrap text-lg font-bold tracking-tight text-foreground">
             <span className="hidden sm:inline">Practice Field Map</span>
