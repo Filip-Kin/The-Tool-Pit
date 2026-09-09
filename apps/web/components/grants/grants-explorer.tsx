@@ -15,6 +15,7 @@ import {
   matchesFilters,
   resolveNextCycle,
   sortByUrgency,
+  regionLabel,
 } from '@/lib/grants/grant-display'
 import { GrantCard } from './grant-card'
 
@@ -153,17 +154,29 @@ export function GrantsExplorer({ grants, now }: { grants: PublicGrant[]; now: Da
   const facets = useMemo(() => {
     const countries = new Set<string>()
     const regions = new Set<string>()
+    // A state belongs to the country of the listing it came from, so the
+    // state list follows the country picked ("select country, then state").
+    const regionsByCountry = new Map<string, Set<string>>()
     const programs = new Set<GrantProgram>()
     const efforts = new Set<GrantEffortLevel>()
     for (const g of grants) {
       for (const c of g.countries) countries.add(c.toUpperCase())
-      for (const r of g.regions) regions.add(r.toUpperCase())
+      for (const r of g.regions) {
+        regions.add(r.toUpperCase())
+        for (const c of g.countries) {
+          const set = regionsByCountry.get(c.toUpperCase()) ?? new Set<string>()
+          set.add(r.toUpperCase())
+          regionsByCountry.set(c.toUpperCase(), set)
+        }
+      }
       for (const p of g.programs) programs.add(p)
       efforts.add(g.effortLevel)
     }
+    const byName = (a: string, b: string) => regionLabel(a).localeCompare(regionLabel(b))
     return {
-      countries: [...countries].sort(),
-      regions: [...regions].sort(),
+      countries: [...countries].sort((a, b) => countryLabel(a).localeCompare(countryLabel(b))),
+      regions: [...regions].sort(byName),
+      regionsByCountry: Object.fromEntries([...regionsByCountry].map(([c, set]) => [c, [...set].sort(byName)])) as Record<string, string[]>,
       programs: GRANT_PROGRAMS.filter((p) => programs.has(p)),
       efforts: GRANT_EFFORT_LEVELS.filter((e) => efforts.has(e)),
     }
@@ -264,34 +277,52 @@ export function GrantsExplorer({ grants, now }: { grants: PublicGrant[]; now: Da
 
             {facets.countries.length > 1 && (
               <FilterGroup label="Country">
-                {facets.countries.map((c) => (
-                  <Chip
-                    key={c}
-                    active={!!filters.countries?.includes(c)}
-                    onClick={() => setFilters((f) => ({ ...f, countries: toggleIn(f.countries, c) }))}
-                  >
-                    {countryLabel(c)}
-                  </Chip>
-                ))}
+                <select
+                  className="input"
+                  value={filters.countries?.[0] ?? ''}
+                  onChange={(e) => {
+                    const c = e.target.value
+                    // A new country means the old state no longer applies.
+                    setFilters((f) => ({ ...f, countries: c ? [c] : undefined, regions: undefined }))
+                  }}
+                >
+                  <option value="">Any country</option>
+                  {facets.countries.map((c) => (
+                    <option key={c} value={c}>
+                      {countryLabel(c)}
+                    </option>
+                  ))}
+                </select>
               </FilterGroup>
             )}
 
-            {facets.regions.length > 0 && (
-              <FilterGroup
-                label="State or region"
-                hint="National grants stay in the list: they have no region to match on."
-              >
-                {facets.regions.map((r) => (
-                  <Chip
-                    key={r}
-                    active={!!filters.regions?.includes(r)}
-                    onClick={() => setFilters((f) => ({ ...f, regions: toggleIn(f.regions, r) }))}
+            {(() => {
+              const country = filters.countries?.[0]
+              const options = country ? (facets.regionsByCountry[country] ?? []) : facets.regions
+              if (options.length === 0) return null
+              return (
+                <FilterGroup
+                  label={country === 'CA' ? 'Province' : 'State or region'}
+                  hint="National grants stay in the list: they have no region to match on."
+                >
+                  <select
+                    className="input"
+                    value={filters.regions?.[0] ?? ''}
+                    onChange={(e) => {
+                      const r = e.target.value
+                      setFilters((f) => ({ ...f, regions: r ? [r] : undefined }))
+                    }}
                   >
-                    {r}
-                  </Chip>
-                ))}
-              </FilterGroup>
-            )}
+                    <option value="">{country ? `Anywhere in ${countryLabel(country)}` : 'Any state or region'}</option>
+                    {options.map((r) => (
+                      <option key={r} value={r}>
+                        {regionLabel(r)}
+                      </option>
+                    ))}
+                  </select>
+                </FilterGroup>
+              )
+            })()}
 
             <FilterGroup label="Award size" hint="Matched on the top of each grant's range.">
               {AWARD_BANDS.map((b) => (
