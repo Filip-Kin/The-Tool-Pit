@@ -265,7 +265,9 @@ export function judge(url: string, html: string, how: string): Omit<ApplyRoute, 
   }
   const text = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
   const closed = text.match(CLOSED_RE)
-  const portal = portalName(parsed)
+  // On a portal host, a webinar, help or about page is still not the form
+  // (cybergrants.com/boa/webinars/ is Bank of America's training page).
+  const portal = /\/(webinars?|help|faq|faqs|support|about|blog|news|training|resources?|guidelines?|tutorial|docs)(\/|$|[.?#])/i.test(parsed.pathname) ? null : portalName(parsed)
   if (closed) {
     return { status: 'closed', url, email: null, evidence: `${portal ?? parsed.hostname} says: "${closed[0]}"` }
   }
@@ -320,7 +322,8 @@ export async function resolveApplyRoute(startUrls: Array<string | null | undefin
       walledCount++
       // A walled page on a portal host is still the portal.
       try {
-        const p = portalName(new URL(url))
+        const wu = new URL(url)
+        const p = /\/(webinars?|help|faq|faqs|support|about|blog|news|training|resources?|guidelines?|tutorial|docs)(\/|$|[.?#])/i.test(wu.pathname) ? null : portalName(wu)
         if (p) return { status: 'portal', url, email: null, evidence: `${p} portal (page refused automated reads, host is the destination)`, chain, checkedAt }
       } catch {
         // ignore

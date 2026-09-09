@@ -76,3 +76,12 @@ describe('judge: product and catalogue pages are never the application', () => {
     expect(judge('https://www.te.com/en/products/application-tooling.html', html, 'fetch')).toBeNull()
   })
 })
+
+describe('judge: a portal host on a webinar or help path is not the form', () => {
+  it("CyberGrants' webinars page is not Bank of America's application", () => {
+    expect(judge('https://www.cybergrants.com/boa/webinars/', '<html><body><h1>Webinars</h1><p>Learn how to apply.</p></body></html>', 'fetch')).toBeNull()
+  })
+  it('the same host on a quiz path is the portal', () => {
+    expect(judge('https://www.cybergrants.com/pls/cybergrants/quiz.display_question?x_gm_id=4184', '<html><body><h1>Question 1</h1></body></html>', 'fetch')?.status).toBe('portal')
+  })
+})
