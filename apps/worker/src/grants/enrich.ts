@@ -407,7 +407,7 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
       `${fetched ? ' [page fetched]' : readThePage ? '' : ' [page NOT read]'} (${url})`,
   )
 
-  return { extract: shouldExtractCandidate({ classification }) }
+  return { extract: shouldExtractCandidate({ classification, rawMetadata: meta }) }
 }
 
 // #region extraction job

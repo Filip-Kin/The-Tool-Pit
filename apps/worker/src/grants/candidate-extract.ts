@@ -791,9 +791,15 @@ export async function extractGrantCandidate(input: ExtractionInput): Promise<Gra
  * read fields off either of those is paying to fill a record nobody will
  * publish.
  */
-export function shouldExtractCandidate(candidate: Pick<GrantCandidate, 'classification'>): boolean {
+export function shouldExtractCandidate(candidate: Pick<GrantCandidate, 'classification' | 'rawMetadata'>): boolean {
   const cls = candidate.classification
-  if (!cls) return false
+  if (!cls) {
+    // A person filed it (the public form, the curated sheet): no classifier
+    // ran and none is needed, the extraction is what turns their claims into
+    // a verified card.
+    const via = (candidate.rawMetadata as { discoveredVia?: string } | null)?.discoveredVia ?? ''
+    return via === 'public submission' || via.startsWith('sheet:')
+  }
   return cls.isGrant === true && cls.isAggregator !== true && cls.isAnnouncement !== true
 }
 
