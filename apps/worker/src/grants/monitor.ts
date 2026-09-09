@@ -24,7 +24,9 @@
  * only route a scraped date takes onto a published listing.
  */
 import { ne } from 'drizzle-orm'
-import { and, desc, eq, getDb, grantChanges, grantCycles, grants, grantSnapshots, grantWatches } from '@the-tool-pit/db'
+import { and, desc, eq, getDb, grantChanges, grantCycles, grantFunders, grants, grantSnapshots, grantWatches } from '@the-tool-pit/db'
+import { isEntranceUrl } from '@the-tool-pit/db/grant-urls'
+import { findInfoPage } from './info-page.js'
 import type { ExtractedGrantFields, Grant, GrantCycle } from '@the-tool-pit/db'
 import { politeFetch } from '../connectors/base.js'
 import { hashContent, stripToMainContent } from './strip.js'
@@ -456,6 +458,26 @@ async function verifyPublishedGrant(grant: Grant, now: Date, notes: string[]): P
       applyRouteCheckedAt: now,
       deadlineProofCheckedAt: now,
       updatedAt: now,
+    }
+    // The info link is the portal (the sheet only had the login): find the
+    // funder's programme page, point the listing at it, and drop the content
+    // hash so the next pass reads the award and the dates off it.
+    if (isEntranceUrl(grant.infoUrl)) {
+      try {
+        const funderName = grant.funderId ? (await db.select({ name: grantFunders.name }).from(grantFunders).where(eq(grantFunders.id, grant.funderId)))[0]?.name ?? '' : ''
+        const info = await findInfoPage(funderName, grant.name, [grant.infoUrl, grant.applicationUrl ?? ''])
+        if (info) {
+          patch.infoUrl = info.url
+          patch.contentHash = null
+          if (!grant.applicationUrl) patch.applicationUrl = grant.infoUrl
+          notes.push(`info link was the entrance (${grant.infoUrl}); now the programme page ${info.url} (${info.evidence})`)
+          console.log(`[grant-monitor] ${grant.slug}: info link moved from the entrance to ${info.url}`)
+        } else {
+          notes.push(`info link is the entrance (${grant.infoUrl}) and no programme page was found`)
+        }
+      } catch (err) {
+        notes.push(`info page search failed: ${err instanceof Error ? err.message : String(err)}`)
+      }
     }
     const resolvedForm = (route.status === 'portal' || route.status === 'form') && route.url
     if (resolvedForm && grant.applyMethod !== 'email' && route.url !== grant.applicationUrl) {

@@ -31,6 +31,7 @@ import { anthropic } from '../anthropic.js'
 import type { SuppressionExample } from './suppression-feedback.js'
 import { formatSuppressionExamples } from './suppression-feedback.js'
 import { GRANT_AWARD_MAX } from '@the-tool-pit/db/grant-enums'
+import { scrubNarration } from '@the-tool-pit/db/listing-text'
 import {
   GRANT_PROGRAMS,
   GRANT_GEO_SCOPES,
@@ -347,7 +348,7 @@ Return a JSON object with these fields:
 - isAggregator: boolean - shape A. A page listing several separate funding opportunities
 - name: string - the grant or programme name as printed. Not the funder name unless the page gives no other name.
 - funderName: string - the organisation handing out the money
-- summary: 1 to 2 sentences: who can apply, for what, roughly how much. Plain English, no marketing copy.
+- summary: 1 to 2 sentences: who can apply, for what, roughly how much. Plain English, no marketing copy. About the grant, never about the page, the metadata or what is missing; a missing fact is simply left out.
 - programs: array from ["frc","ftc","fll","any"]. Use "any" when it funds youth STEM generally rather than a named FIRST programme. Empty array if you cannot tell.
 - geoScope: one of "international","national","state","region","local"
 - countries: array of ISO 3166-1 alpha-2 codes, e.g. ["US","CA"]
@@ -521,6 +522,9 @@ export function validateGrantClassification(
     const v = out[key]
     out[key] = typeof v === 'string' && v.trim() ? v.trim() : undefined
   }
+  // The summary is shown to readers when the extractor has none; a sentence
+  // about the metadata is not a summary.
+  if (out.summary) out.summary = scrubNarration(out.summary, 20) ?? undefined
 
   return out
 }

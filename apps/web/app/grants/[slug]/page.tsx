@@ -145,8 +145,7 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
           <section className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Application windows</h2>
             <p className="text-xs text-muted-2">
-              Past rounds are kept so you can see the pattern. A grant that closed in March usually opens again
-              around the same time.
+              Past rounds stay listed. Most grants reopen around the same time each year.
             </p>
             <GrantCycles cycles={grant.cycles} now={now} />
           </section>

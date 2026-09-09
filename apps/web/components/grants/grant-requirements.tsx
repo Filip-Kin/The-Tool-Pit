@@ -8,8 +8,10 @@ import { REQUIREMENT_KIND_LABEL } from '@/lib/grants/grant-display'
  *
  * The split is `isBlocking`, not the requirement kind. The schema is explicit
  * that a rule which cannot be tested goes in as kind 'other' with isBlocking
- * false, and those must never read like a hard gate.
+ * false, and those must never read like a requirement.
  */
+import { isJunkRequirementLabel, restatesRequirement } from '@/lib/grants/listing-lint'
+
 export function GrantRequirements({ requirements }: { requirements: PublicGrantRequirement[] }) {
   if (requirements.length === 0) {
     return (
@@ -20,23 +22,25 @@ export function GrantRequirements({ requirements }: { requirements: PublicGrantR
     )
   }
 
-  const blocking = requirements.filter((r) => r.isBlocking)
-  const context = requirements.filter((r) => !r.isBlocking)
+  const blocking = requirements.filter((r) => r.isBlocking && !isJunkRequirementLabel(r.label))
+  // "Geography: Unsure" is not a fact, and a prose note that restates a box
+  // above it ("must be a 501(c)(3)") is the same fact twice.
+  const context = requirements.filter((r) => !r.isBlocking && !isJunkRequirementLabel(r.label) && !restatesRequirement(r.label, blocking))
 
   return (
     <div className="flex flex-col gap-5">
       {blocking.length > 0 && (
         <RequirementList
-          title="You have to meet these"
-          hint="Fail one of these and the application will not be considered."
+          title="Must have"
+          hint="The funder turns down applications that miss any of these."
           icon={<CircleAlert className="h-4 w-4 text-official" aria-hidden />}
           requirements={blocking}
         />
       )}
       {context.length > 0 && (
         <RequirementList
-          title="Worth knowing"
-          hint="Not a hard gate, but it shapes how strong an application will be."
+          title="Good to know"
+          hint="Not required. It helps to know before you start."
           icon={<Info className="h-4 w-4 text-muted-2" aria-hidden />}
           requirements={context}
         />

@@ -1,3 +1,4 @@
+import { isJunkRequirementLabel, restatesRequirement } from '@/lib/grants/listing-lint'
 import type { GrantProgram } from '@the-tool-pit/db/grant-enums'
 /**
  * The review deck's pure half: what the deck shows, and what it writes.
@@ -253,16 +254,20 @@ export function reviewRequirements(form: FormData): ReviewRequirementRow[] {
     })
   }
 
+  // "Unsure", "unknown", "N/A": the extractor's way of saying nothing, and a
+  // listing must not print nothing as a fact. A prose note that only restates
+  // a box above it ("must be a 501(c)(3) or apply through one") is dropped
+  // too: the same fact twice reads as padding.
   const ageRange = value('reqAgeRange')
-  if (ageRange) {
+  if (ageRange && !isJunkRequirementLabel(ageRange)) {
     push({ kind: 'other', operator: 'exists', value: null, label: `Ages served: ${ageRange}`.slice(0, 300), isBlocking: false })
   }
   const geography = value('reqGeography')
-  if (geography) {
+  if (geography && !isJunkRequirementLabel(geography)) {
     push({ kind: 'other', operator: 'exists', value: null, label: `Geography: ${geography}`.slice(0, 300), isBlocking: false })
   }
   const eligibility = value('reqEligibilityText')
-  if (eligibility) {
+  if (eligibility && !isJunkRequirementLabel(eligibility) && !restatesRequirement(eligibility, rows.filter((r) => r.isBlocking))) {
     push({ kind: 'other', operator: 'exists', value: null, label: eligibility.slice(0, 300), isBlocking: false })
   }
 

@@ -53,6 +53,7 @@ import { parseLooseDate } from './extract.js'
 import { GRANT_AWARD_MAX } from '@the-tool-pit/db/grant-enums'
 import { normaliseForQuoteMatch, quoteSource, urlSource } from '../model/evidence.js'
 import { parseModelJson } from '../model/json.js'
+import { scrubNarration } from '@the-tool-pit/db/listing-text'
 
 /** Bumped when the field set changes, so an old row reads as old. */
 export const GRANT_EXTRACTION_VERSION = 1
@@ -393,8 +394,10 @@ type ValueCleaner = (raw: unknown) => unknown
 const VALUE_CLEANERS: Record<Exclude<keyof GrantExtractionFields, TriStateFieldKey>, ValueCleaner> = {
   name: (raw) => cleanText(raw, 200),
   funderName: (raw) => cleanText(raw, 200),
-  summary: (raw) => cleanText(raw, 400),
-  description: (raw) => cleanText(raw, 4000),
+  // Prose about the grant, never about the reading: "the page is an
+  // eligibility quiz", "amounts are not stated in the metadata" go.
+  summary: (raw) => scrubNarration(cleanText(raw, 400), 20),
+  description: (raw) => scrubNarration(cleanText(raw, 4000), 40),
   applyMethod: (raw) => cleanEnum(raw, GRANT_APPLY_METHODS),
   applicationUrl: cleanUrl,
   contactEmail: cleanEmail,
@@ -622,8 +625,8 @@ YES/NO FIELDS are "yes", "no" or "unknown". Never null, never "maybe". "unknown"
 FIELDS
   name                      the programme name as printed
   funderName                the organisation handing out the money
-  summary                   1 to 2 sentences: who can apply, for what, roughly how much. Your own words, plain English, no marketing copy.
-  description               3 to 6 sentences with the detail a team needs: what it funds, what it does not fund, how the process works. Your own words.
+  summary                   1 to 2 sentences: who can apply, for what, roughly how much. Your own words, plain English, no marketing copy. Write about the GRANT, never about the page, the portal, the form, the metadata or what is missing. A missing fact is a null field, not a sentence ("award amounts are not stated" is never written).
+  description               3 to 6 sentences with the detail a team needs: what it funds, what it does not fund, how the process works. Your own words. Same rule: the grant, never the page or what it lacks.
   applyMethod               "online_form", "email", "letter", "contact" (make contact first, no form) or "unknown"
   applicationUrl            the URL where the application actually happens, if the text gives one and it is different from the page itself
   contactEmail              an email address for applications or questions

@@ -64,6 +64,8 @@ import { findApplyLinks } from './apply-links.js'
 import { deterministicGrantPrefilter } from './prefilter.js'
 import { verifyListing } from './verify-listing.js'
 import { judgeFit } from './fit.js'
+import { findInfoPage } from './info-page.js'
+import { isEntranceUrl } from '@the-tool-pit/db/grant-urls'
 import { inferRegions } from './infer-regions.js'
 import {
   loadSuppressionExamples,
@@ -472,11 +474,40 @@ async function gatherEvidence(
   meta: RawGrantMetadata,
   deep: boolean,
 ): Promise<GatheredEvidence> {
-  const url = candidate.canonicalUrl ?? candidate.sourceUrl
+  let url = candidate.canonicalUrl ?? candidate.sourceUrl
   const notes: string[] = []
   const urls: string[] = []
 
   let funderPage = meta.contentText ?? ''
+
+  // The URL we were given is the way in (a Fluxx login, a CyberGrants quiz),
+  // not the page about the grant. Find the funder's programme page and read
+  // THAT as the funder page; the entrance stays as the application link. The
+  // programme page becomes the candidate's canonical URL so the listing's
+  // info link is a page a mentor can read.
+  if (isEntranceUrl(url)) {
+    const funder = candidate.classification?.funderName ?? meta.funderName ?? ''
+    const name = candidate.classification?.name ?? meta.title ?? ''
+    try {
+      const info = await findInfoPage(String(funder), String(name), [url])
+      if (info) {
+        notes.push(`info page found for the entrance URL ${url}: ${info.url} (${info.evidence})`)
+        const infoText = await fetchCandidateText(info.url)
+        if (infoText) {
+          funderPage = infoText
+          meta.applicationUrl = meta.applicationUrl ?? url
+          await getDb().update(grantCandidates).set({ canonicalUrl: info.url, updatedAt: new Date() }).where(eq(grantCandidates.id, candidate.id))
+          url = info.url
+        } else {
+          notes.push(`info page ${info.url} could not be read`)
+        }
+      } else {
+        notes.push(`no programme page found for the entrance URL ${url}; the listing will read like a login page until a human adds one`)
+      }
+    } catch (err) {
+      notes.push(`info page search failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
   if (deep || !funderPage.trim()) {
     const fresh = await fetchCandidateText(url)
     if (fresh) {

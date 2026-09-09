@@ -42,7 +42,7 @@ export interface PrefilterVerdict {
 }
 
 /** Commercial or catalogue grant databases: secondhand, often paywalled, never the place to apply. */
-const SECONDHAND_HOSTS = [
+export const SECONDHAND_HOSTS = [
   'grantwatch.com',
   'instrumentl.com',
   'grantedai.com',

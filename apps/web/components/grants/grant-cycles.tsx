@@ -16,7 +16,7 @@ export function GrantCycles({ cycles, now }: { cycles: PublicGrantCycle[]; now: 
   if (cycles.length === 0) {
     return (
       <p className="text-sm text-muted-2">
-        No application windows recorded yet. We will not invent one, so check the funder&apos;s page for dates.
+        No dates on record yet. Check the funder&apos;s page.
       </p>
     )
   }

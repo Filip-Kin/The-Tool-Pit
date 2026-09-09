@@ -15,6 +15,8 @@ import { getDb } from '@/lib/db'
 import { grantCandidates, grantCycles, grantFunders, grantRequirements, grants } from '@the-tool-pit/db'
 import type { GrantExtraction, GrantSourceKind } from '@the-tool-pit/db'
 import { reviewRequirements } from '@/lib/admin/grant-review'
+import { lintListing } from '@/lib/grants/listing-lint'
+import { isEntranceUrl } from '@the-tool-pit/db/grant-urls'
 import { bumpSourceCounter, parseCycleFields, parseGrantFields, resolveFunderByName, uniqueGrantSlug } from '@/lib/admin/grants'
 import { notifyGrantPublished } from '@/lib/notify/approvals'
 import { grantGrantOwnership } from '@/lib/listings/submitter-ownership'
@@ -119,7 +121,7 @@ export function normalizeGrantName(name: string): string {
 
 export function publishBlockers(
   extraction: GrantExtraction | null | undefined,
-  values: { name?: string | null; applyMethod?: string | null; contactEmail?: string | null; deadlineType?: string | null },
+  values: { name?: string | null; infoUrl?: string | null; summary?: string | null; description?: string | null; awardNotes?: string | null; applyMethod?: string | null; contactEmail?: string | null; deadlineType?: string | null },
   form: FormData,
   today = new Date(),
 ): string[] {
@@ -131,6 +133,15 @@ export function publishBlockers(
   else if (fit.level === 'off') out.push(`not a fit for a robotics team: ${fit.reason}`)
   // Last season's page: the name carries a year that has passed and no
   // future deadline is on the form to say the page has been updated.
+  // The info link is what a mentor reads. A login, a portal, a form or a
+  // PDF there means the listing was extracted from the entrance and has no
+  // programme page behind it (AAUW's Fluxx login, Honda's CyberGrants quiz).
+  if (values.infoUrl && isEntranceUrl(values.infoUrl)) out.push(`the info link is the application entrance, not the funder's programme page: ${values.infoUrl}`)
+  // The listing as a reader sees it: no sentences about the page or the
+  // metadata, no "Unsure" printed as a fact, a name that is a name.
+  for (const issue of lintListing({ name: values.name, summary: values.summary, description: values.description, awardNotes: values.awardNotes, requirementLabels: reviewRequirements(form).map((r) => r.label) })) {
+    out.push(`${issue.field} ${issue.problem}: "${issue.text.slice(0, 120)}"`)
+  }
   const stale = values.name ? staleSeasonInName(values.name, today) : null
   const futureDeadline = Date.parse(String(form.get('deadlineAt') ?? '')) > today.getTime()
   if (stale && !futureDeadline) out.push(stale)

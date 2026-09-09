@@ -29,6 +29,14 @@
       "bun": "./src/grant-enums.ts",
       "default": "./dist/grant-enums.js"
     },
+    "./listing-text": {
+      "bun": "./src/listing-text.ts",
+      "default": "./dist/listing-text.js"
+    },
+    "./grant-urls": {
+      "bun": "./src/grant-urls.ts",
+      "default": "./dist/grant-urls.js"
+    },
     "./event-enums": {
       "bun": "./src/event-enums.ts",
       "default": "./dist/event-enums.js"

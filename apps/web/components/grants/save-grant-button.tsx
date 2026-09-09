@@ -129,7 +129,7 @@ export function SaveGrantButton({
         className={buttonClass({
           variant: 'none',
           className: cn(
-            'border',
+            'w-full border',
             saved ? 'border-primary bg-primary/15 text-primary' : 'border-border bg-surface text-foreground hover:bg-surface-2',
             error && 'border-frc/60 text-frc',
           ),
