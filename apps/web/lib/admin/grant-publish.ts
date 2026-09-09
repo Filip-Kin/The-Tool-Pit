@@ -97,8 +97,11 @@ export function publishBlockers(
   }
   const hasCycle = String(form.get('cycleYear') ?? '').trim() !== '' && String(form.get('deadlineAt') ?? '').trim() !== ''
   const proof = extraction?.deadlineProof
-  const timingOk = hasCycle || values.deadlineType === 'rolling' || (proof && proof.kind !== 'none')
-  if (!timingOk) out.push(proof ? `no deadline and no statement about timing on ${proof.urlsRead.length} page(s) read` : 'timing has not been checked (no deadline-proof on the extraction)')
+  // "Read N pages, nothing stated" IS the proof that the dates are not public,
+  // as long as at least one page was actually read; zero pages read means we
+  // know nothing, which is the case the gate exists for.
+  const timingOk = hasCycle || values.deadlineType === 'rolling' || (proof && (proof.kind !== 'none' || proof.urlsRead.length >= 1))
+  if (!timingOk) out.push(proof ? 'timing could not be checked: none of the pages could be read' : 'timing has not been checked (no deadline-proof on the extraction)')
   return out
 }
 
