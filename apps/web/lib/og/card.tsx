@@ -184,7 +184,7 @@ export function renderVerticalOgCard({ name, tagline, icon }: VerticalOgInput): 
           alignItems: 'center',
           backgroundColor: BG,
           backgroundImage: 'radial-gradient(circle at 18% 50%, rgba(99,102,241,0.22), rgba(10,10,11,0) 55%)',
-          padding: '0 96px',
+          padding: '0 80px',
         }}
       >
         {/* Left: the section's icon, big, in the brand tint. */}
@@ -216,7 +216,8 @@ export function renderVerticalOgCard({ name, tagline, icon }: VerticalOgInput): 
         </div>
 
         {/* Right: the wordmark, the section name, one short line. */}
-        <div style={{ display: 'flex', flexDirection: 'column', marginLeft: 88, flexGrow: 1 }}>
+        {/* A fixed width, or satori lets the line run off the card instead of wrapping. */}
+        <div style={{ display: 'flex', flexDirection: 'column', marginLeft: 80, width: 584, flexShrink: 0 }}>
           <div
             style={{
               display: 'flex',
@@ -249,6 +250,7 @@ export function renderVerticalOgCard({ name, tagline, icon }: VerticalOgInput): 
               WebkitLineClamp: 2,
               overflow: 'hidden',
               marginTop: 28,
+              width: 584,
               fontSize: 36,
               fontWeight: 500,
               lineHeight: 1.3,
