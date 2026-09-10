@@ -13,7 +13,7 @@ export const contentType = OG_CONTENT_TYPE
 export default function GrantsOgImage() {
   return renderVerticalOgCard({
     name: 'Grants',
-    tagline: 'Funding your FIRST team can apply for, with deadlines checked by a person before they appear.',
+    tagline: 'Grants and sponsorships for FIRST teams, with deadlines.',
     icon: [
       <circle key="a" cx="12" cy="12" r="10" />,
       <path key="b" d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />,

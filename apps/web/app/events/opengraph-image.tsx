@@ -13,7 +13,7 @@ export const contentType = OG_CONTENT_TYPE
 export default function EventsOgImage() {
   return renderVerticalOgCard({
     name: 'Off-season events',
-    tagline: 'Off-season competitions on a map, with cost, capacity and registration status.',
+    tagline: 'Off-season events on a map: cost, capacity, registration.',
     icon: [
       <path key="a" d="M8 2v4" />,
       <path key="b" d="M16 2v4" />,

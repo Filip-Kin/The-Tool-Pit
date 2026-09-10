@@ -163,9 +163,9 @@ interface VerticalOgInput {
  * Where the per-listing card (renderOgCard) fronts one event or tool, this
  * fronts a whole section. Sharing frc.tools/events or /fields used to unfurl the
  * site-wide card, so every section looked the same in Discord or iMessage. This
- * leads with the section's own lucide icon, big, in the indigo brand tint, then
- * the section name and a one-line tagline, so a person seeing it knows at a
- * glance which section it is.
+ * puts the section's own lucide icon big on the left in the indigo brand tint,
+ * and the wordmark, the section name and one short line on the right, so a
+ * person seeing it knows at a glance which section it is.
  *
  * The accent stays indigo for every vertical because the site shows all of them
  * in the one brand indigo (the header switcher, the home vertical cards, the
@@ -180,62 +180,63 @@ export function renderVerticalOgCard({ name, tagline, icon }: VerticalOgInput): 
           height: '100%',
           width: '100%',
           display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
+          flexDirection: 'row',
+          alignItems: 'center',
           backgroundColor: BG,
-          backgroundImage: 'radial-gradient(circle at 82% 18%, rgba(99,102,241,0.28), rgba(10,10,11,0) 58%)',
-          padding: '72px 80px',
+          backgroundImage: 'radial-gradient(circle at 18% 50%, rgba(99,102,241,0.22), rgba(10,10,11,0) 55%)',
+          padding: '0 96px',
         }}
       >
-        {/* The frc.tools lockup, same as the site card. */}
+        {/* Left: the section's icon, big, in the brand tint. */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            fontSize: 52,
-            fontWeight: 800,
-            letterSpacing: '-0.04em',
-            color: INK,
+            justifyContent: 'center',
+            width: 360,
+            height: 360,
+            flexShrink: 0,
+            borderRadius: 72,
+            backgroundColor: 'rgba(99,102,241,0.12)',
+            border: '3px solid rgba(99,102,241,0.4)',
           }}
         >
-          frc<span style={{ color: ACCENT }}>.tools</span>
+          <svg
+            width={216}
+            height={216}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={ACCENT}
+            strokeWidth={1.75}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            {icon}
+          </svg>
         </div>
 
-        {/* The section's icon, big and in the brand tint, then its name and tagline. */}
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {/* Right: the wordmark, the section name, one short line. */}
+        <div style={{ display: 'flex', flexDirection: 'column', marginLeft: 88, flexGrow: 1 }}>
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              width: 168,
-              height: 168,
-              borderRadius: 40,
-              backgroundColor: 'rgba(99,102,241,0.12)',
-              border: '2px solid rgba(99,102,241,0.4)',
+              fontSize: 40,
+              fontWeight: 800,
+              letterSpacing: '-0.04em',
+              color: MUTED,
             }}
           >
-            <svg
-              width={96}
-              height={96}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={ACCENT}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              {icon}
-            </svg>
+            frc<span style={{ color: ACCENT }}>.tools</span>
           </div>
           <div
             style={{
               display: 'flex',
-              marginTop: 40,
-              fontSize: 82,
+              marginTop: 24,
+              fontSize: 96,
               fontWeight: 800,
               letterSpacing: '-0.03em',
-              lineHeight: 1.05,
+              lineHeight: 1.0,
               color: INK,
             }}
           >
@@ -247,19 +248,17 @@ export function renderVerticalOgCard({ name, tagline, icon }: VerticalOgInput): 
               WebkitBoxOrient: 'vertical',
               WebkitLineClamp: 2,
               overflow: 'hidden',
-              marginTop: 18,
-              fontSize: 38,
+              marginTop: 28,
+              fontSize: 36,
               fontWeight: 500,
-              lineHeight: 1.25,
+              lineHeight: 1.3,
               color: MUTED,
             }}
           >
             {tagline}
           </div>
+          <div style={{ display: 'flex', marginTop: 40, height: 10, width: 200, borderRadius: 999, backgroundColor: ACCENT }} />
         </div>
-
-        {/* Accent bar, same as the site card. */}
-        <div style={{ display: 'flex', height: 10, width: 220, borderRadius: 999, backgroundColor: ACCENT }} />
       </div>
     ),
     { ...OG_SIZE },

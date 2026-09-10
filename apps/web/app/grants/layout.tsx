@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     template: '%s | Grants',
   },
   description:
-    'Funding a FIRST team can apply for: who funds it, how much, what it takes, and when it closes. Every deadline is checked by a person before it appears here.',
+    'Grants and sponsorships FIRST teams can apply for: who funds it, how much, and when it closes.',
 }
 
 export default function GrantsLayout({ children }: { children: React.ReactNode }) {
