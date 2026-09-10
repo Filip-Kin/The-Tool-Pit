@@ -1,7 +1,7 @@
 import { OG_CONTENT_TYPE, OG_SIZE, renderVerticalOgCard } from '@/lib/og/card'
 
 /**
- * Share card for the robot code INDEX (frc.tools/robot-code). The lucide Code
+ * Share card for the robot code INDEX (frc.tools/robot-code). The lucide Code2
  * glyph, the same icon the site shows this vertical with.
  */
 export const alt = 'Robot code and CAD from FIRST teams on frc.tools'
@@ -12,6 +12,6 @@ export default function RobotCodeOgImage() {
   return renderVerticalOgCard({
     name: 'Robot code',
     tagline: 'Team robot code and CAD, by team and season.',
-    icon: [<polyline key="a" points="16 18 22 12 16 6" />, <polyline key="b" points="8 6 2 12 8 18" />],
+    icon: [<path key="a" d="m18 16 4-4-4-4" />, <path key="b" d="m6 8-4 4 4 4" />, <path key="c" d="m14.5 4-5 16" />],
   })
 }
