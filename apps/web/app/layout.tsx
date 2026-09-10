@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   // titles, and "The Tool Pit" was all they saw; "FRC.Tools" is what people
   // type.
   title: {
-    default: 'FRC.Tools: FRC tools, calculators and apps for FIRST teams',
+    default: 'FRC.Tools: Tools, offseason events, practice fields, photos',
     template: '%s | FRC.Tools',
   },
   description:
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: 'FRC.Tools',
     url: '/',
-    title: 'FRC.Tools: FRC tools, calculators and apps for FIRST teams',
+    title: 'FRC.Tools: Tools, offseason events, practice fields, photos',
     description:
       'Tools, calculators and apps for FRC, FTC and FLL teams. Browse by program or search by what you need, and bookmark the ones your team keeps reaching for.',
   },
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
   // a page only needs to set the card type here.
   twitter: {
     card: 'summary_large_image',
-    title: 'FRC.Tools: FRC tools, calculators and apps for FIRST teams',
+    title: 'FRC.Tools: Tools, offseason events, practice fields, photos',
     description:
       'Tools, calculators and apps for FRC, FTC and FLL teams. Browse by program or search by what you need, and bookmark the ones your team keeps reaching for.',
   },
