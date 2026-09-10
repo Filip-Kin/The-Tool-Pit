@@ -234,7 +234,9 @@ export function renderVerticalOgCard({ name, tagline, icon }: VerticalOgInput): 
             style={{
               display: 'flex',
               marginTop: 24,
-              fontSize: 96,
+              width: 584,
+              // "Off-season events" does not fit at 96 in the column; a long name steps down.
+              fontSize: name.length > 14 ? 74 : 96,
               fontWeight: 800,
               letterSpacing: '-0.03em',
               lineHeight: 1.0,
