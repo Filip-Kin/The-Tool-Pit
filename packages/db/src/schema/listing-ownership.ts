@@ -259,6 +259,41 @@ export const listingInvites = pgTable(
 // Relations
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Owner edits, as they happened.
+//
+// An owner's save in /me/listings writes straight to the listing (that is
+// the point of owning it). Until this table existed there was no way to
+// answer "which owners have actually edited anything": updated_at is bumped
+// by crawlers and monitors too, and edit proposals are the anonymous path.
+// One row per save that changed something, with the fields it moved.
+// ---------------------------------------------------------------------------
+
+export const listingEdits = pgTable(
+  'listing_edits',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** LISTING_ENTITY_TYPES. Not an FK: the targets live in unrelated tables. */
+    entityType: text('entity_type').notNull(),
+    entityId: uuid('entity_id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** What kind of save: 'fields', 'links', 'tags', 'photos', 'cover', 'roster'. */
+    action: text('action').notNull(),
+    /** { field: { from, to } } for column edits; a short summary object for the rest. */
+    changes: jsonb('changes').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('listing_edits_entity_idx').on(table.entityType, table.entityId),
+    index('listing_edits_user_idx').on(table.userId),
+  ],
+)
+
+export type ListingEdit = typeof listingEdits.$inferSelect
+export type NewListingEdit = typeof listingEdits.$inferInsert
+
 export const listingOwnersRelations = relations(listingOwners, ({ one }) => ({
   user: one(users, { fields: [listingOwners.userId], references: [users.id] }),
 }))

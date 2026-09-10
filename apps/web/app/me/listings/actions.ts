@@ -4,6 +4,7 @@ import { randomBytes, createHash } from 'crypto'
 import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { getDb } from '@/lib/db'
+import { recordListingEdit, diffColumns } from '@/lib/listings/edit-log'
 import {
   albumCovers,
   albums,
@@ -1019,6 +1020,12 @@ export async function saveToolListing(formData: FormData): Promise<OwnershipActi
     await refreshListingPopularity(entityId)
   }
 
+  await recordListingEdit({
+    entityType: 'tool',
+    entityId,
+    action: 'fields',
+    changes: { ...diffColumns(set, (before ?? {}) as Record<string, unknown>), ...(changedLinkTypes.length ? { links: changedLinkTypes } : {}), ...(claimed.length ? { claimed } : {}) },
+  })
   revalidatePath('/me/listings')
   return { message: 'Saved.' }
 }
@@ -1069,10 +1076,13 @@ export async function saveAlbumListing(formData: FormData): Promise<OwnershipAct
   if ('result' in step) return step.result
 
   const db = getDb()
+  const [albumBefore] = await db.select().from(albums).where(eq(albums.id, step.entityId)).limit(1)
+  const albumSet = columnSet(step.values, columnKeys('album'))
   await db
     .update(albums)
     .set({ ...columnSet(step.values, columnKeys('album')), updatedAt: new Date() })
     .where(eq(albums.id, step.entityId))
+  await recordListingEdit({ entityType: 'album', entityId: step.entityId, action: 'fields', changes: diffColumns(albumSet, (albumBefore ?? {}) as Record<string, unknown>) })
   revalidatePath('/me/listings')
   revalidatePath('/photos')
   return { message: 'Saved.' }
@@ -1131,6 +1141,7 @@ export async function saveAlbumCover(formData: FormData): Promise<OwnershipActio
     .set({ coverImageUrl: `/api/albums/cover/${album.id}?v=${Date.now()}`, updatedAt: new Date() })
     .where(eq(albums.id, album.id))
 
+  await recordListingEdit({ entityType: 'album', entityId, action: 'cover', changes: { cover: 'replaced' } })
   revalidatePath('/me/listings')
   revalidatePath('/photos')
   const [event] = await db
@@ -1193,6 +1204,7 @@ export async function saveFieldPhotos(formData: FormData): Promise<OwnershipActi
     })),
   )
 
+  await recordListingEdit({ entityType: 'field', entityId, action: 'photos', changes: { added: parsed.photos.length } })
   revalidatePath('/me/listings')
   revalidatePath('/fields')
   revalidatePath(`/fields/${entityId}`)
@@ -1218,6 +1230,7 @@ export async function removeFieldPhoto(
     .delete(fieldPhotos)
     .where(and(eq(fieldPhotos.id, photoId), eq(fieldPhotos.fieldId, entityId)))
 
+  await recordListingEdit({ entityType: 'field', entityId, action: 'photos', changes: { removed: photoId } })
   revalidatePath('/me/listings')
   revalidatePath('/fields')
   revalidatePath(`/fields/${entityId}`)
@@ -1231,12 +1244,14 @@ export async function saveFieldListing(formData: FormData): Promise<OwnershipAct
   keepPinIfCleared(set)
 
   const db = getDb()
+  const [fieldBefore] = await db.select().from(practiceFields).where(eq(practiceFields.id, step.entityId)).limit(1)
   await db
     .update(practiceFields)
     .set({ ...set, updatedAt: new Date() })
     .where(eq(practiceFields.id, step.entityId))
   // The pin, the address and the spec are all on this form now, so the map and
   // the field's own page both have to be refreshed, not just /me.
+  await recordListingEdit({ entityType: 'field', entityId: step.entityId, action: 'fields', changes: diffColumns(set, (fieldBefore ?? {}) as Record<string, unknown>) })
   revalidatePath('/me/listings')
   revalidatePath('/fields')
   revalidatePath(`/fields/${step.entityId}`)
@@ -1258,10 +1273,13 @@ export async function saveGrantListing(formData: FormData): Promise<OwnershipAct
   if ('result' in step) return step.result
 
   const db = getDb()
+  const [grantBefore] = await db.select().from(grants).where(eq(grants.id, step.entityId)).limit(1)
+  const grantSet = columnSet(step.values, columnKeys('grant'))
   await db
     .update(grants)
     .set({ ...columnSet(step.values, columnKeys('grant')), updatedAt: new Date() })
     .where(eq(grants.id, step.entityId))
+  await recordListingEdit({ entityType: 'grant', entityId: step.entityId, action: 'fields', changes: diffColumns(grantSet, (grantBefore ?? {}) as Record<string, unknown>) })
   revalidatePath('/me/listings')
   return { message: 'Saved.' }
 }
@@ -1317,6 +1335,7 @@ export async function saveEventListing(formData: FormData): Promise<OwnershipAct
     await writeManualRoster(step.entityId, step.values.manualTeamListText, before?.registeredTeamCount ?? null)
   }
 
+  await recordListingEdit({ entityType: 'event', entityId: step.entityId, action: 'fields', changes: { ...diffColumns(set, (before ?? {}) as Record<string, unknown>), ...(claimed.length ? { claimed } : {}) } })
   revalidatePath('/me/listings')
   revalidatePath('/events')
   revalidatePath(`/events/${step.entityId}`)

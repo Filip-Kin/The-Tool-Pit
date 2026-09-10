@@ -281,6 +281,13 @@
       "when": 1788914495913,
       "tag": "0039_grant_verification",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1789010853796,
+      "tag": "0040_listing_edits",
+      "breakpoints": true
     }
   ]
 }
