@@ -214,7 +214,7 @@ export async function VerticalCards({
 
   return (
     <nav
-      aria-label="Explore FRC.tools"
+      aria-label="Explore FRC.Tools"
       className={cn('flex flex-wrap justify-center gap-3', className)}
     >
       {links
@@ -306,8 +306,8 @@ export async function VerticalHomeCrumb({
       )}
     >
       <ChevronLeft className="h-4 w-4" aria-hidden />
-      <span className="hidden sm:inline">frc.tools</span>
-      <span className="sr-only sm:hidden">Back to frc.tools</span>
+      <span className="hidden sm:inline">FRC.Tools</span>
+      <span className="sr-only sm:hidden">Back to FRC.Tools</span>
     </a>
   )
 }

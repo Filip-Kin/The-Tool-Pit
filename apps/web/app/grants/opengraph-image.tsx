@@ -6,7 +6,7 @@ import { OG_CONTENT_TYPE, OG_SIZE, renderVerticalOgCard } from '@/lib/og/card'
  * The lucide CircleDollarSign glyph, the same icon the site shows this vertical
  * with.
  */
-export const alt = 'Grants for FIRST teams on frc.tools'
+export const alt = 'Grants for FIRST teams on FRC.Tools'
 export const size = OG_SIZE
 export const contentType = OG_CONTENT_TYPE
 

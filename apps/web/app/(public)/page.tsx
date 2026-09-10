@@ -45,7 +45,7 @@ export default async function HomePage() {
         data={{
           '@context': 'https://schema.org',
           '@type': 'WebSite',
-          name: 'frc.tools',
+          name: 'FRC.Tools',
           alternateName: ['FRC tools', 'The Tool Pit'],
           url: 'https://frc.tools/',
           description: 'Tools, calculators and apps for FRC, FTC and FLL teams, plus off-season events, practice fields, grants, photos and robot code.',
@@ -72,7 +72,7 @@ export default async function HomePage() {
             <span className="text-primary">your season easier</span>
           </h1>
           <p className="max-w-xl text-base text-muted md:text-lg">
-            frc.tools is the community directory of FRC tools, calculators and resources, with FTC and FLL alongside.
+            FRC.Tools is the community directory of FRC tools, calculators and resources, with FTC and FLL alongside.
           </p>
         </div>
 

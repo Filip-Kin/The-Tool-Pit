@@ -8,7 +8,7 @@ import { OG_CONTENT_TYPE, OG_SIZE, renderVerticalOgCard } from '@/lib/og/card'
  * site shows this vertical with, instead of the site-wide fallback card. The
  * per-tool detail route under tools/[slug] keeps its own listing card.
  */
-export const alt = 'The FRC, FTC and FLL tools directory on frc.tools'
+export const alt = 'The FRC, FTC and FLL tools directory on FRC.Tools'
 export const size = OG_SIZE
 export const contentType = OG_CONTENT_TYPE
 

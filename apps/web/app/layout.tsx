@@ -14,11 +14,11 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   // The brand is the domain. Search engines learn a site's name from its
-  // titles, and "The Tool Pit" was all they saw; "frc.tools" is what people
+  // titles, and "The Tool Pit" was all they saw; "FRC.Tools" is what people
   // type.
   title: {
-    default: 'frc.tools: FRC tools, calculators and apps for FIRST teams',
-    template: '%s | frc.tools',
+    default: 'FRC.Tools: FRC tools, calculators and apps for FIRST teams',
+    template: '%s | FRC.Tools',
   },
   description:
     'Tools, calculators and apps for FRC, FTC and FLL teams. Browse by program or search by what you need, and bookmark the ones your team keeps reaching for.',
@@ -28,9 +28,9 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: 'website',
-    siteName: 'FRC.tools',
+    siteName: 'FRC.Tools',
     url: '/',
-    title: 'frc.tools: FRC tools, calculators and apps for FIRST teams',
+    title: 'FRC.Tools: FRC tools, calculators and apps for FIRST teams',
     description:
       'Tools, calculators and apps for FRC, FTC and FLL teams. Browse by program or search by what you need, and bookmark the ones your team keeps reaching for.',
   },
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
   // a page only needs to set the card type here.
   twitter: {
     card: 'summary_large_image',
-    title: 'frc.tools: FRC tools, calculators and apps for FIRST teams',
+    title: 'FRC.Tools: FRC tools, calculators and apps for FIRST teams',
     description:
       'Tools, calculators and apps for FRC, FTC and FLL teams. Browse by program or search by what you need, and bookmark the ones your team keeps reaching for.',
   },

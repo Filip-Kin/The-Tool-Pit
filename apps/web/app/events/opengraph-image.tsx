@@ -6,7 +6,7 @@ import { OG_CONTENT_TYPE, OG_SIZE, renderVerticalOgCard } from '@/lib/og/card'
  * The lucide CalendarDays glyph, the same icon the site shows this vertical
  * with in the header switcher and the home vertical cards.
  */
-export const alt = 'Off-season events on frc.tools'
+export const alt = 'Off-season events on FRC.Tools'
 export const size = OG_SIZE
 export const contentType = OG_CONTENT_TYPE
 
