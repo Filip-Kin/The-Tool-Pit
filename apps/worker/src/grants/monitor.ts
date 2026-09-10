@@ -28,6 +28,7 @@ import { and, desc, eq, getDb, grantChanges, grantCycles, grantFunders, grants, 
 import { isEntranceUrl } from '@the-tool-pit/db/grant-urls'
 import { findInfoPage } from './info-page.js'
 import { renderedHtml } from './apply-route.js'
+import { awardNoteAddsFacts, eligibilityChanged, deadlineNoteIsWhole, applicationUrlIsNew, deadlineMovesTheDay } from './change-filters.js'
 import { archiveCopy } from './archive.js'
 import type { ExtractedGrantFields, Grant, GrantCycle } from '@the-tool-pit/db'
 import { politeFetch } from '../connectors/base.js'
@@ -277,13 +278,15 @@ function diffGrantFields(
   if (typeof fields.awardMax === 'number' && fields.awardMax !== grant.awardMax) {
     out.push({ field: 'awardMax', oldValue: grant.awardMax, newValue: fields.awardMax, reasoning })
   }
-  if (typeof fields.awardNotes === 'string' && fields.awardNotes.trim() && fields.awardNotes !== grant.awardNotes) {
+  // A note is filed when it brings a figure the listing lacks and drops none
+  // it has; a rewording is not a change (change-filters.ts).
+  if (typeof fields.awardNotes === 'string' && awardNoteAddsFacts(fields.awardNotes, grant.awardNotes)) {
     out.push({ field: 'awardNotes', oldValue: grant.awardNotes, newValue: fields.awardNotes, reasoning })
   }
   if (
     typeof fields.applicationUrl === 'string' &&
     fields.applicationUrl.trim() &&
-    fields.applicationUrl !== grant.applicationUrl
+    applicationUrlIsNew(fields.applicationUrl, grant.applicationUrl, grant.infoUrl)
   ) {
     out.push({
       field: 'applicationUrl',
@@ -300,7 +303,7 @@ function diffGrantFields(
     typeof fields.eligibilityText === 'string' &&
     fields.eligibilityText.trim() &&
     previousEligibility !== null &&
-    fields.eligibilityText.trim() !== previousEligibility.trim()
+    eligibilityChanged(fields.eligibilityText, previousEligibility)
   ) {
     out.push({
       field: 'eligibilityText',
@@ -329,7 +332,7 @@ function diffCycleFields(
   const out: PendingChange[] = []
   const prefix = `cycle.${cycle.cycleYear}`
 
-  if (typeof fields.deadlineAt === 'string' && deadlineDiffers(cycle.deadlineAt, fields.deadlineAt)) {
+  if (typeof fields.deadlineAt === 'string' && deadlineDiffers(cycle.deadlineAt, fields.deadlineAt) && deadlineMovesTheDay(fields.deadlineAt, cycle.deadlineAt, cycle.opensAt)) {
     out.push({
       field: `${prefix}.deadlineAt`,
       oldValue: cycle.deadlineAt?.toISOString() ?? null,
@@ -350,7 +353,8 @@ function diffCycleFields(
   if (
     typeof fields.deadlineNote === 'string' &&
     fields.deadlineNote.trim() &&
-    fields.deadlineNote !== cycle.deadlineNote
+    fields.deadlineNote !== cycle.deadlineNote &&
+    deadlineNoteIsWhole(fields.deadlineNote)
   ) {
     out.push({
       field: `${prefix}.deadlineNote`,
@@ -363,7 +367,10 @@ function diffCycleFields(
   // A page that says it is shut is the one status signal worth filing. The
   // other direction is not symmetrical: a page that stops saying "closed" is
   // usually a rewrite, not a reopening, so it waits for a date to move.
-  if (fields.looksClosed === true && cycle.status !== 'closed') {
+  const pageDeadline = typeof fields.deadlineAt === 'string' ? toDeadlineDate(fields.deadlineAt) : null
+  // "Closed" on a page whose own deadline is still ahead is last round's
+  // banner; it is filed only when the page's date agrees or it gives none.
+  if (fields.looksClosed === true && cycle.status !== 'closed' && (!pageDeadline || pageDeadline.getTime() < now.getTime())) {
     out.push({
       field: `${prefix}.status`,
       oldValue: cycle.status,
@@ -765,7 +772,9 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
 
     if (existing) {
       proposed.push(...diffCycleFields(existing, fields, reasoning, now))
-    } else if (typeof fields.deadlineAt === 'string' || typeof fields.opensAt === 'string') {
+    } else if ((typeof fields.deadlineAt === 'string' || typeof fields.opensAt === 'string') && (cycleYear >= now.getUTCFullYear() || cycles.length === 0)) {
+      // A past year is a backfill, and a backfill next to a round already on
+      // file is a stale page, not news.
       // A year we hold no cycle row for at all. This used to insert the cycle
       // outright on the grounds that adding a year cannot contradict anything
       // a human verified. That reasoning was wrong in its consequences: the
@@ -783,8 +792,8 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
       // all; it sits in the queue and the reviewer gets told to go fix the
       // extractor. The insert branch in changes/actions.ts creates the cycle
       // on first apply, so the first column applied makes the row.
-      const deadlineAt = typeof fields.deadlineAt === 'string' ? toDeadlineDate(fields.deadlineAt) : null
       const opensAt = typeof fields.opensAt === 'string' ? fields.opensAt.trim().slice(0, 10) : null
+      const deadlineAt = typeof fields.deadlineAt === 'string' && deadlineMovesTheDay(fields.deadlineAt, null, opensAt) ? toDeadlineDate(fields.deadlineAt) : null
       const isFutureYear = cycleYear >= now.getUTCFullYear()
       const prefix = `cycle.${cycleYear}`
 
@@ -815,7 +824,7 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
         })
       }
 
-      if (typeof fields.deadlineNote === 'string' && fields.deadlineNote.trim()) {
+      if (typeof fields.deadlineNote === 'string' && deadlineNoteIsWhole(fields.deadlineNote)) {
         proposed.push({
           field: `${prefix}.deadlineNote`,
           oldValue: null,
