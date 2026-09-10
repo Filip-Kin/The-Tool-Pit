@@ -5,6 +5,7 @@ import { listingClaimStates } from '@/lib/queries/listing-ownership'
 import { currentOffseasonSeason } from '@the-tool-pit/db'
 import type { SeasonScope } from '@/lib/events/event-display'
 import { EventsExplorer } from '@/components/events/events-explorer'
+import { ListingLinks } from '@/components/seo/listing-links'
 
 export const metadata: Metadata = {
   title: { absolute: 'Offseason events' },
@@ -92,6 +93,7 @@ export default async function EventsHomePage({
           initialWhen={initialWhen}
         />
       )}
+      <ListingLinks title="Every event, A to Z" links={events.map((e) => ({ href: `/events/${e.slug}`, label: e.name, meta: [e.city, e.region].filter(Boolean).join(', ') || null }))} />
     </div>
   )
 }

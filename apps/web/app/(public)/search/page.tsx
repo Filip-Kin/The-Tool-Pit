@@ -19,6 +19,8 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const { q } = await searchParams
   return {
     title: q ? `"${q}" search` : 'Search Tools',
+    // A results page is the same listings under a different query; the listings are indexed, this is not.
+    robots: { index: false, follow: true },
   }
 }
 

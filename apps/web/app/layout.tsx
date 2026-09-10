@@ -13,9 +13,12 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
+  // The brand is the domain. Search engines learn a site's name from its
+  // titles, and "The Tool Pit" was all they saw; "frc.tools" is what people
+  // type.
   title: {
-    default: 'The Tool Pit: FIRST Robotics Tool Directory',
-    template: '%s | The Tool Pit',
+    default: 'frc.tools: FRC tools, calculators and apps for FIRST teams',
+    template: '%s | frc.tools',
   },
   description:
     'Tools, calculators and apps for FRC, FTC and FLL teams. Browse by program or search by what you need, and bookmark the ones your team keeps reaching for.',
@@ -27,7 +30,7 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: 'FRC.tools',
     url: '/',
-    title: 'The Tool Pit: FIRST Robotics Tool Directory',
+    title: 'frc.tools: FRC tools, calculators and apps for FIRST teams',
     description:
       'Tools, calculators and apps for FRC, FTC and FLL teams. Browse by program or search by what you need, and bookmark the ones your team keeps reaching for.',
   },
@@ -36,7 +39,7 @@ export const metadata: Metadata = {
   // a page only needs to set the card type here.
   twitter: {
     card: 'summary_large_image',
-    title: 'The Tool Pit: FIRST Robotics Tool Directory',
+    title: 'frc.tools: FRC tools, calculators and apps for FIRST teams',
     description:
       'Tools, calculators and apps for FRC, FTC and FLL teams. Browse by program or search by what you need, and bookmark the ones your team keeps reaching for.',
   },

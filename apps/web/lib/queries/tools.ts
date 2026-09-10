@@ -466,3 +466,20 @@ export async function getVotedToolIds(toolIds: string[]): Promise<Set<string>> {
     .where(and(inArray(toolVotes.toolId, toolIds), mine))
   return new Set(rows.map((r) => r.toolId))
 }
+
+/**
+ * Every published tool for one program as a name and a slug, for the
+ * server-rendered link list on /frc, /ftc and /fll. The explorer grid is
+ * client-side, so without this a crawler leaves the program page with no
+ * path to the 1,600 tool pages except the sitemap.
+ */
+export async function getToolLinksForProgram(programSlug: string): Promise<Array<{ slug: string; name: string }>> {
+  const db = getDb()
+  return db
+    .select({ slug: tools.slug, name: tools.name })
+    .from(tools)
+    .innerJoin(toolPrograms, eq(toolPrograms.toolId, tools.id))
+    .innerJoin(programs, eq(programs.id, toolPrograms.programId))
+    .where(and(eq(programs.slug, programSlug), eq(tools.status, 'published')))
+    .orderBy(tools.name)
+}

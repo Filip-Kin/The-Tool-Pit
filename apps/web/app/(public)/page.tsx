@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { JsonLd } from '@/components/seo/json-ld'
 import { SearchBar } from '@/components/search/search-bar'
 import { ProgramCards } from '@/components/program/program-cards'
 import { VerticalCards } from '@/components/layout/vertical-switcher'
@@ -40,6 +41,21 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col gap-12 pb-20">
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'WebSite',
+          name: 'frc.tools',
+          alternateName: ['FRC tools', 'The Tool Pit'],
+          url: 'https://frc.tools/',
+          description: 'Tools, calculators and apps for FRC, FTC and FLL teams, plus off-season events, practice fields, grants, photos and robot code.',
+          potentialAction: {
+            '@type': 'SearchAction',
+            target: { '@type': 'EntryPoint', urlTemplate: 'https://frc.tools/search?q={search_term_string}' },
+            'query-input': 'required name=search_term_string',
+          },
+        }}
+      />
       {/* Hero */}
       <section className="relative flex flex-col items-center justify-center gap-6 px-4 pt-24 pb-12 text-center">
         {/* Background glow */}
@@ -56,7 +72,7 @@ export default async function HomePage() {
             <span className="text-primary">your season easier</span>
           </h1>
           <p className="max-w-xl text-base text-muted md:text-lg">
-            Tools, calculators and resources for FRC, FTC and FLL.
+            frc.tools is the community directory of FRC tools, calculators and resources, with FTC and FLL alongside.
           </p>
         </div>
 

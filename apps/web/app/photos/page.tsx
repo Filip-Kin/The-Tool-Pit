@@ -3,6 +3,7 @@ import { AlbumSearchBar } from '@/components/albums/album-search-bar'
 import { SectionHeader } from '@/components/ui/section-header'
 import { InfiniteEventList } from '@/components/albums/infinite-event-list'
 import { getEventsByDatePage } from '@/lib/queries/albums'
+import { ListingLinks } from '@/components/seo/listing-links'
 import { soleAlbumClaimStates } from '@/lib/albums/claim-states'
 
 /**
@@ -60,6 +61,7 @@ export default async function PhotosHomePage() {
           initialClaimStates={claimStates}
         />
       </section>
+      <ListingLinks title="Recent events with photos, A to Z" links={first.events.map((e) => ({ href: `/photos/event/${e.tbaKey}`, label: `${e.name} ${e.year}`, meta: [e.city, e.stateProv].filter(Boolean).join(', ') || null }))} />
     </div>
   )
 }

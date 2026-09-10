@@ -3,7 +3,8 @@ import { SearchBar } from '@/components/search/search-bar'
 import { ToolGrid } from '@/components/tools/tool-grid'
 import { SectionHeader } from '@/components/ui/section-header'
 import { searchTools } from '@/lib/search/search'
-import { getRookieFriendlyTools, getOfficialTools } from '@/lib/queries/tools'
+import { getRookieFriendlyTools, getOfficialTools, getToolLinksForProgram } from '@/lib/queries/tools'
+import { ListingLinks } from '@/components/seo/listing-links'
 
 const PROGRAM_META: Record<string, { name: string; color: string; description: string }> = {
   frc: {
@@ -30,7 +31,7 @@ interface ProgramPageProps {
 export async function ProgramPage({ program }: ProgramPageProps) {
   const meta = PROGRAM_META[program]
 
-  const [topTools, rookieTools, officialTools] = await Promise.all([
+  const [topTools, rookieTools, officialTools, allTools] = await Promise.all([
     searchTools({ query: '', program, page: 1, pageSize: 12 }),
     getRookieFriendlyTools(6).then((tools) =>
       tools.filter((t) => t.programs.includes(program)),
@@ -38,6 +39,7 @@ export async function ProgramPage({ program }: ProgramPageProps) {
     getOfficialTools(6).then((tools) =>
       tools.filter((t) => t.programs.includes(program)),
     ),
+    getToolLinksForProgram(program),
   ])
 
   return (
@@ -99,6 +101,7 @@ export async function ProgramPage({ program }: ProgramPageProps) {
           <ToolGrid tools={officialTools} />
         </section>
       )}
+      <ListingLinks title={`Every ${meta.name} tool, A to Z`} links={allTools.map((t) => ({ href: `/tools/${t.slug}`, label: t.name }))} />
     </div>
   )
 }

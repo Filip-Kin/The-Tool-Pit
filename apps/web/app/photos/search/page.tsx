@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { ScrollRestorer } from '@/components/albums/scroll-restorer'
 import { redirect } from 'next/navigation'
 import { AlbumSearchBar } from '@/components/albums/album-search-bar'
@@ -7,6 +8,11 @@ import { soleAlbumClaimStates } from '@/lib/albums/claim-states'
 
 interface PageProps {
   searchParams: Promise<{ q?: string; page?: string }>
+}
+
+export const metadata: Metadata = {
+  // A results page is the same listings under a different query; the listings are indexed, this is not.
+  robots: { index: false, follow: true },
 }
 
 export default async function AlbumSearchPage({ searchParams }: PageProps) {

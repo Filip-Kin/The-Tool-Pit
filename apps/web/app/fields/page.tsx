@@ -4,6 +4,7 @@ import { ButtonLink } from '@/components/ui/button'
 import { getPublishedFields } from '@/lib/queries/fields'
 import { listingClaimStates } from '@/lib/queries/listing-ownership'
 import { FieldsExplorer } from '@/components/fields/fields-explorer'
+import { ListingLinks } from '@/components/seo/listing-links'
 
 export const metadata: Metadata = {
   title: { absolute: 'Practice Field Map' },
@@ -38,6 +39,7 @@ export default async function FieldsHomePage() {
       ) : (
         <FieldsExplorer fields={fields} claimStates={claimStates} />
       )}
+      <ListingLinks title="Every practice field, A to Z" links={fields.map((f) => ({ href: `/fields/${f.slug}`, label: f.name, meta: [f.city, f.region].filter(Boolean).join(', ') || null }))} />
     </div>
   )
 }
