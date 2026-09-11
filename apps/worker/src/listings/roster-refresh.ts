@@ -39,7 +39,7 @@
 import { createHash } from 'node:crypto'
 import { and, desc, eq, gte, inArray, isNull, ne, or } from 'drizzle-orm'
 import { latestRosterForDay } from '@the-tool-pit/db/roster-days'
-import { getDb, eventListings, eventRosterSnapshots, isHumanEdited, getTeamNames, type RosterTeam } from '@the-tool-pit/db'
+import { getDb, eventListings, eventListingCandidates, eventRosterSnapshots, isHumanEdited, getTeamNames, type RosterTeam } from '@the-tool-pit/db'
 import { delay } from '../connectors/base.js'
 import { TbaEventsConnector, type TbaEventUpsert } from '../connectors/tba-events.js'
 import {
@@ -587,7 +587,17 @@ export function findTbaMatch(
   // Too short to be distinctive: "CORI" or "MARC" alone would match loosely.
   if (target.length < 5) return null
   for (const ev of events) {
-    if (normEventName(ev.name) !== target) continue
+    const evName = normEventName(ev.name)
+    // A listing seeded from a flyer often carries a short name ("Grand Rapids
+    // Girls") while TBA holds the full one ("Grand Rapids Girls Robotics
+    // Competition"). Accept one being a prefix of the other, as long as the
+    // shorter is still distinctive; the date or city/region signal below is
+    // what actually confirms the match.
+    const namesAgree =
+      evName === target ||
+      (Math.min(evName.length, target.length) >= 8 &&
+        (evName.startsWith(target) || target.startsWith(evName)))
+    if (!namesAgree) continue
     if (listing.startDate && ev.startDate && listing.startDate === ev.startDate) {
       return { tbaKey: ev.tbaKey, reason: 'name + start date' }
     }
@@ -702,6 +712,17 @@ async function processTbaRecheck(
         .where(and(eq(eventListings.id, l.id), isNull(eventListings.tbaKey)))
       matched++
       console.log(`[roster-recheck] ${l.name}: attached TBA key ${match.tbaKey} (${match.reason})`)
+
+      // The daily TBA sweep files this same event as a candidate whenever the
+      // listing has no key, because discovery dedupes on tba_key alone. Now
+      // that the key sits on the listing, its pending twin is a duplicate:
+      // close it and point it at the listing so it leaves the review queue.
+      const closed = await db
+        .update(eventListingCandidates)
+        .set({ status: 'duplicate', matchedListingId: l.id, rejectionReason: `Same event as the published "${l.name}" listing; TBA key ${match.tbaKey} attached to it.`, updatedAt: new Date() })
+        .where(and(eq(eventListingCandidates.tbaKey, match.tbaKey), eq(eventListingCandidates.status, 'pending')))
+        .returning({ id: eventListingCandidates.id })
+      if (closed.length > 0) console.log(`[roster-recheck] ${l.name}: closed ${closed.length} duplicate candidate(s)`)
     } catch (err) {
       failed++
       console.error(`[roster-recheck] ${l.name}: ${String(err)}`)

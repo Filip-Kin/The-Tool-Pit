@@ -96,6 +96,21 @@ describe('findTbaMatch', () => {
       findTbaMatch({ name: 'Bunnybots', startDate: '2026-09-12', city: 'Flint', region: 'MI' }, events),
     ).toBeNull()
   })
+
+  it('matches when the listing name is a shortened form of the TBA name', () => {
+    // "Grand Rapids Girls" (seeded from a flyer) vs "Grand Rapids Girls
+    // Robotics Competition" (TBA's full name): a prefix, corroborated by
+    // city + region. This is the case that left 2026miwyo keyless.
+    const gr: TbaEventUpsert[] = [{ ...events[0], tbaKey: '2026miwyo', eventCode: 'miwyo', name: 'Grand Rapids Girls Robotics Competition', shortName: 'Grand Rapids Girls', startDate: '2026-09-25', city: 'Allendale', stateProv: 'MI' }]
+    const m = findTbaMatch({ name: 'Grand Rapids Girls', startDate: '2026-09-26', city: 'Allendale', region: 'MI' }, gr)
+    expect(m?.tbaKey).toBe('2026miwyo')
+    expect(m?.reason).toBe('name + city/region')
+  })
+
+  it('does not treat a short shared prefix as a match', () => {
+    const gr: TbaEventUpsert[] = [{ ...events[0], tbaKey: '2026mixx', name: 'Grand Championship', city: 'Flint', stateProv: 'MI' }]
+    expect(findTbaMatch({ name: 'Grand', startDate: null, city: 'Flint', region: 'MI' }, gr)).toBeNull()
+  })
 })
 
 // The rule CHANGE 1 added: a site-scraped roster auto-approves and writes the
