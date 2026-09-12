@@ -412,7 +412,7 @@ export function EventsExplorer({
             label="Sort"
             size="sm"
             options={[
-              { value: 'relevance', label: 'For me' },
+              { value: 'relevance', label: 'Relevant' },
               { value: 'date', label: 'By date' },
               { value: 'distance', label: 'Nearest' },
             ]}
