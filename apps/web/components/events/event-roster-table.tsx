@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { CalendarSearch, ExternalLink, Copy, Check } from 'lucide-react'
@@ -115,13 +115,39 @@ const MENU_ITEM =
  * the team's menu.
  */
 function TeamRow({ team }: { team: RosterTeamRow }) {
+  const [open, setOpen] = useState(false)
+  // On a phone the list scrolls under the finger, and a scroll that starts on a
+  // row read as a tap and opened the menu. Track how far the pointer moved
+  // between down and the open request; a drag past a few pixels is a scroll, not
+  // a tap, so the open is dropped. Mouse still opens on click (no movement).
+  const start = useRef<{ x: number; y: number } | null>(null)
+  const scrolled = useRef(false)
   return (
-    <DropdownMenu.Root modal={false}>
+    <DropdownMenu.Root
+      modal={false}
+      open={open}
+      onOpenChange={(next) => {
+        if (next && scrolled.current) {
+          scrolled.current = false
+          return
+        }
+        setOpen(next)
+      }}
+    >
       <DropdownMenu.Trigger asChild>
         <tr
           className="cursor-pointer border-t border-border-subtle outline-none transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 data-[state=open]:bg-surface-2"
           tabIndex={0}
           aria-label={`Team ${team.number}${team.robot ?? ''} options`}
+          onPointerDown={(e) => {
+            start.current = { x: e.clientX, y: e.clientY }
+            scrolled.current = false
+          }}
+          onPointerMove={(e) => {
+            if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) {
+              scrolled.current = true
+            }
+          }}
         >
           <td className="w-10 min-w-10 py-1.5 pl-3 pr-2">
             <TeamAvatar number={team.number} />

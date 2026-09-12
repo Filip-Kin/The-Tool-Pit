@@ -297,6 +297,7 @@ export async function processRosterRefreshJob(
       tbaKey: eventListings.tbaKey,
       tbaKeyDay2: eventListings.tbaKeyDay2,
       parallelDivisions: eventListings.parallelDivisions,
+      endDate: eventListings.endDate,
       teamListUrl: eventListings.teamListUrl,
       teamListMode: eventListings.teamListMode,
       startDate: eventListings.startDate,
@@ -313,7 +314,12 @@ export async function processRosterRefreshJob(
   // a scrape nor a TBA read may overwrite it.
   const wanted = listings.filter(
     (l) =>
-      l.teamListMode !== 'manual' &&
+      // Manual is skipped, with ONE exception: a 2x1-day event whose owner
+      // typed both days by hand. Once a day's own TBA event has run, TBA holds
+      // who actually competed that day and is authoritative for it, while the
+      // day that has not run yet keeps the owner's list. The per-day gate is in
+      // the unit builder below; a non-parallel manual listing is still skipped.
+      (l.teamListMode !== 'manual' || (l.parallelDivisions && (l.tbaKey || l.tbaKeyDay2))) &&
       (l.tbaKey || l.teamListUrl || l.tbaKeyDay2) &&
       (!payload.listingId || l.id === payload.listingId),
   )
@@ -325,7 +331,7 @@ export async function processRosterRefreshJob(
   const withKey = wanted.filter(
     (l) => chooseRosterSource(l, today) === 'tba' || (!l.tbaKey && !l.teamListUrl && l.tbaKeyDay2),
   )
-  const siteOnly = wanted.filter((l) => chooseRosterSource(l, today) === 'site')
+  const siteOnly = wanted.filter((l) => l.teamListMode !== 'manual' && chooseRosterSource(l, today) === 'site')
   stats.considered = wanted.length
 
   // ONE READ PER DAY on a two-1-day-events listing (each day is its own TBA
@@ -333,10 +339,16 @@ export async function processRosterRefreshJob(
   // day, the previous-hash check is per day, and the count lands in the day's
   // own column so the card can draw a fill bar per day.
   for (const listing of withKey) {
+    // A manual 2x1-day listing reads TBA only for a day that has already
+    // started (day 1 = startDate, day 2 = endDate); the unstarted day keeps
+    // the owner's snapshot. A non-manual listing reads every day it has a key
+    // for, as before.
+    const manualGate = listing.teamListMode === 'manual'
+    const started = (date: string | null | undefined) => Boolean(date) && today >= (date as string)
     const units: Array<{ day: number | null; tbaKey: string }> = listing.parallelDivisions
       ? [
-          ...(listing.tbaKey ? [{ day: 1, tbaKey: listing.tbaKey }] : []),
-          ...(listing.tbaKeyDay2 ? [{ day: 2, tbaKey: listing.tbaKeyDay2 }] : []),
+          ...(listing.tbaKey && (!manualGate || started(listing.startDate)) ? [{ day: 1, tbaKey: listing.tbaKey }] : []),
+          ...(listing.tbaKeyDay2 && (!manualGate || started(listing.endDate)) ? [{ day: 2, tbaKey: listing.tbaKeyDay2 }] : []),
         ]
       : [{ day: null, tbaKey: listing.tbaKey as string }]
     for (const unit of units) {
