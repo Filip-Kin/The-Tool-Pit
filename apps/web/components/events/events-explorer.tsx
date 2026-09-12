@@ -14,6 +14,7 @@ import {
   effectiveRegistrationStatus,
   daysUntil,
   distanceKm,
+  eventRelevanceScore,
   formatDistance,
   unitFromLocale,
   seasonsPresent,
@@ -46,7 +47,7 @@ const EventMap = dynamic(() => import('./event-map').then((m) => m.EventMap), {
 })
 
 type When = 'upcoming' | 'past' | 'all'
-type SortBy = 'date' | 'distance'
+type SortBy = 'relevance' | 'date' | 'distance'
 type GeoState = 'idle' | 'locating' | 'granted' | 'denied' | 'unsupported'
 
 /**
@@ -111,7 +112,7 @@ export function EventsExplorer({
   // an off-season event. It falls back to date ordering on its own until a
   // location arrives, so a visitor who refuses the prompt sees the old
   // behaviour rather than an empty-looking sort.
-  const [sortBy, setSortBy] = useState<SortBy>('distance')
+  const [sortBy, setSortBy] = useState<SortBy>('relevance')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
@@ -270,6 +271,22 @@ export function EventsExplorer({
     )
 
     rows.sort((a, b) => {
+      // MOST RELEVANT: soonest and nearest blended, time-dominant, so an event
+      // happening now leads even when it is not the closest, and far-future
+      // events sink. Upcoming first, cancelled below the live ones.
+      if (sortBy === 'relevance' && userLoc) {
+        const aGone = eventTiming(a.event, now) === 'past' ? 1 : 0
+        const bGone = eventTiming(b.event, now) === 'past' ? 1 : 0
+        if (aGone !== bGone) return aGone - bGone
+        if (aGone === 1) return dateKey(b.event.startDate) - dateKey(a.event.startDate)
+        const aCx = a.event.eventStatus === 'cancelled' ? 1 : 0
+        const bCx = b.event.eventStatus === 'cancelled' ? 1 : 0
+        if (aCx !== bCx) return aCx - bCx
+        return (
+          eventRelevanceScore(daysUntil(a.event, now), a.km) -
+          eventRelevanceScore(daysUntil(b.event, now), b.km)
+        )
+      }
       // NEAREST, BUT STILL UPCOMING FIRST. A pure distance sort put an event
       // that ran in July above one happening next weekend simply because it was
       // closer, which is not what "nearest" means to somebody deciding where to
@@ -395,13 +412,16 @@ export function EventsExplorer({
             label="Sort"
             size="sm"
             options={[
+              { value: 'relevance', label: 'For me' },
               { value: 'date', label: 'By date' },
               { value: 'distance', label: 'Nearest' },
             ]}
             value={sortBy}
             onChange={(v) => {
               setSortBy(v)
-              if (v === 'distance' && !userLoc) locate()
+              // Both distance-aware sorts need the location; ask for it the same
+              // way the Near me button does.
+              if ((v === 'distance' || v === 'relevance') && !userLoc) locate()
             }}
           />
         </div>
@@ -438,13 +458,15 @@ export function EventsExplorer({
           ) : (
             <>
               {when === 'upcoming' && ' upcoming'}
-              {sortBy === 'distance' && userLoc
-                ? // Say both, because it is sorted by both: what is still to
-                  // come, nearest first.
-                  ' · upcoming, nearest first'
-                : when !== 'past'
-                  ? ' · soonest first'
-                  : ''}
+              {sortBy === 'relevance' && userLoc
+                ? ' · most relevant first'
+                : sortBy === 'distance' && userLoc
+                  ? // Say both, because it is sorted by both: what is still to
+                    // come, nearest first.
+                    ' · upcoming, nearest first'
+                  : when !== 'past'
+                    ? ' · soonest first'
+                    : ''}
             </>
           )}
         </p>

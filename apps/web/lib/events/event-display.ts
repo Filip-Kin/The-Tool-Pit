@@ -192,6 +192,23 @@ export function daysUntil(ev: Pick<PublicEvent, 'startDate'>, now: Date): number
   return Math.round(ms / (24 * 60 * 60 * 1000))
 }
 
+/**
+ * Relevance for the "For me" sort: what a team should look at first, blending
+ * how soon an event is with how far it is. Time dominates so a nearby-but-
+ * distant-in-weeks event does not outrank one happening now; distance breaks
+ * ties and pushes far-future events down. Lower is more relevant. Ten km of
+ * travel is treated as one day of waiting, so a happening-now event 70 km away
+ * (score 7) still beats a closer one three weeks out (score ~22).
+ */
+export const RELEVANCE_KM_PER_DAY = 10
+export function eventRelevanceScore(daysUntilStart: number | null, km: number | null): number {
+  // A missing date is a far-future placeholder; a missing distance (no coords,
+  // rare) is a moderate penalty, not the bottom of the list.
+  const days = daysUntilStart ?? 3650
+  const distance = km ?? 250
+  return days + distance / RELEVANCE_KM_PER_DAY
+}
+
 /** How soon a shooting-distance from now. Uses endDate so a 2-day event stays "on" through day two. */
 export const SOON_DAYS = 30
 

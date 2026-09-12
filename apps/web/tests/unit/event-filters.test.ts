@@ -108,3 +108,24 @@ describe('activeFilterCount', () => {
     expect(activeFilterCount(withFilters({ from: '2026-09-01', to: '2026-09-30', maxCostUsd: 0 }))).toBe(2)
   })
 })
+
+import { eventRelevanceScore } from '@/lib/events/event-display'
+describe('relevance sort score', () => {
+  it('ranks a happening-now far event above closer events weeks out', () => {
+    const kettering = eventRelevanceScore(0, 71) // ~44 mi, today
+    const bloomfield = eventRelevanceScore(35, 15)
+    const detroit = eventRelevanceScore(28, 16)
+    expect(kettering).toBeLessThan(detroit)
+    expect(kettering).toBeLessThan(bloomfield)
+  })
+  it('breaks a same-day tie by distance', () => {
+    expect(eventRelevanceScore(7, 10)).toBeLessThan(eventRelevanceScore(7, 100))
+  })
+  it('keeps a near next-week event above a far tomorrow event', () => {
+    expect(eventRelevanceScore(7, 15)).toBeLessThan(eventRelevanceScore(1, 322))
+  })
+  it('treats a missing distance as a moderate penalty, not the bottom', () => {
+    expect(eventRelevanceScore(5, null)).toBeLessThan(eventRelevanceScore(5, 400))
+    expect(eventRelevanceScore(5, null)).toBeGreaterThan(eventRelevanceScore(5, 10))
+  })
+})
