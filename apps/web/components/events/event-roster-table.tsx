@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { CalendarSearch, ExternalLink } from 'lucide-react'
+import { CalendarSearch, ExternalLink, Copy, Check } from 'lucide-react'
 
 /**
  * The registered teams for one event, drawn as a scrollable table in the public
@@ -187,6 +187,7 @@ function byWaitlistOrder(a: RosterTeamRow, b: RosterTeamRow): number {
 
 export function EventRosterTable({ eventId }: { eventId: string }) {
   const [teams, setTeams] = useState<RosterTeamRow[]>([])
+  const [copied, setCopied] = useState(false)
   const [days, setDays] = useState<DayRosterRow[]>([])
   const [activeDay, setActiveDay] = useState<number>(1)
   const [state, setState] = useState<LoadState>('loading')
@@ -233,10 +234,34 @@ export function EventRosterTable({ eventId }: { eventId: string }) {
 
   return (
     <section className="flex flex-col gap-2 border-t border-border-subtle pt-4">
-      <h3 className="text-sm font-semibold text-foreground">
-        Registered teams
-        <span className="ml-1.5 font-normal text-muted">{registered.length}</span>
-      </h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-foreground">
+          Registered teams
+          <span className="ml-1.5 font-normal text-muted">{registered.length}</span>
+        </h3>
+        {registered.length > 0 && (
+          <button
+            type="button"
+            // The numbers only, one per line, in the order shown, for pasting
+            // into a scouting sheet or a spreadsheet. The day's list when the
+            // event runs two.
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(registered.map((t) => t.number).join('\n'))
+                setCopied(true)
+                setTimeout(() => setCopied(false), 1500)
+              } catch {
+                /* clipboard blocked; nothing to do */
+              }
+            }}
+            className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted hover:text-foreground"
+            aria-label="Copy team numbers"
+          >
+            {copied ? <Check className="h-3.5 w-3.5 text-official" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        )}
+      </div>
       {twoDay && (
         <div role="tablist" aria-label="Day" className="flex gap-1 rounded-lg bg-surface-2 p-1">
           {days.map((d) => {
