@@ -6,7 +6,7 @@
 import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import { tools, toolLinks, crawlCandidates } from '@the-tool-pit/db'
-import { githubRepoIdentity, siteIdentity } from '@the-tool-pit/db/tool-identity'
+import { githubRepoIdentity, siteIdentity, isDocsSubdomain } from '@the-tool-pit/db/tool-identity'
 import {
   DUPLICATE_NAME_SIMILARITY,
   definitelyDifferentListings,
@@ -275,7 +275,11 @@ export async function findDuplicateToolByIdentity(
 ): Promise<{ toolId: string; name: string; slug: string; via: string } | null> {
   const db = getDb()
   const repoId = githubRepoIdentity(githubUrl)
-  const siteId = siteIdentity(homepageUrl)
+  // A shared registrable domain is a duplicate signal ONLY when this candidate
+  // is a docs/help subdomain of a project already listed (docs.frcbom.com beside
+  // frcbom.com). A bare shared domain is not: onshape.com, ctr-electronics.com
+  // and other platform/vendor domains host many distinct tools.
+  const siteId = isDocsSubdomain(homepageUrl) ? siteIdentity(homepageUrl) : null
   if (!repoId && !siteId) return null
 
   // Only published tools block: a suppressed one is already off the site, and a
@@ -292,7 +296,7 @@ export async function findDuplicateToolByIdentity(
       return { toolId: row.toolId, name: row.name, slug: row.slug, via: `GitHub repo ${repoId}` }
     }
     if (siteId && row.linkType === 'homepage' && siteIdentity(row.url) === siteId) {
-      return { toolId: row.toolId, name: row.name, slug: row.slug, via: `site ${siteId}` }
+      return { toolId: row.toolId, name: row.name, slug: row.slug, via: `docs subdomain of ${siteId}` }
     }
   }
   return null

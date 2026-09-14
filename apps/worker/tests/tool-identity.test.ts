@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { githubRepoIdentity, siteIdentity } from '@the-tool-pit/db/tool-identity'
+import { githubRepoIdentity, siteIdentity, isDocsSubdomain } from '@the-tool-pit/db/tool-identity'
 
 describe('githubRepoIdentity', () => {
   it('collapses a rename and casing/hyphen change to one identity', () => {
@@ -32,5 +32,22 @@ describe('siteIdentity', () => {
   })
   it('handles a multi-label TLD', () => {
     expect(siteIdentity('https://docs.example.co.uk/')).toBe('example.co.uk')
+  })
+})
+
+describe('isDocsSubdomain', () => {
+  it('flags a docs/help subdomain and nothing else', () => {
+    expect(isDocsSubdomain('https://docs.frcbom.com/')).toBe(true)
+    expect(isDocsSubdomain('https://wiki.example.org/x')).toBe(true)
+    expect(isDocsSubdomain('https://frcbom.com/')).toBe(false)
+    expect(isDocsSubdomain('https://ctr-electronics.com/swerve')).toBe(false)
+  })
+})
+
+describe('CAD and platform domains are shared hosts', () => {
+  it('never identifies a team CAD by its platform domain', () => {
+    expect(siteIdentity('https://cad.onshape.com/documents/abc')).toBeNull()
+    expect(siteIdentity('https://grabcad.com/library/x')).toBeNull()
+    expect(siteIdentity('https://a360.co/xyz')).toBeNull()
   })
 })

@@ -19,7 +19,7 @@ import {
 } from '@the-tool-pit/db'
 import type { NewTool } from '@the-tool-pit/db'
 import { buildSlug } from '@the-tool-pit/db/slug'
-import { githubRepoIdentity, siteIdentity } from '@the-tool-pit/db/tool-identity'
+import { githubRepoIdentity, siteIdentity, isDocsSubdomain } from '@the-tool-pit/db/tool-identity'
 
 export async function adminPublishCandidate(candidateId: string): Promise<{ toolId: string } | { error: string }> {
   const db = getDb()
@@ -44,7 +44,7 @@ export async function adminPublishCandidate(candidateId: string): Promise<{ tool
   // means to merge sees the existing tool named here instead of creating a rival.
   {
     const repoId = githubRepoIdentity((meta.githubUrl as string | undefined) ?? candidate.canonicalUrl)
-    const siteId = siteIdentity(candidate.canonicalUrl)
+    const siteId = isDocsSubdomain(candidate.canonicalUrl) ? siteIdentity(candidate.canonicalUrl) : null
     if (repoId || siteId) {
       const links = await db
         .select({ toolId: toolLinks.toolId, url: toolLinks.url, linkType: toolLinks.linkType, name: tools.name, slug: tools.slug })

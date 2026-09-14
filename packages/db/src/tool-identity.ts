@@ -48,6 +48,9 @@ const SHARED_WEB_HOSTS = new Set([
   'blogspot.com', 'google.com', 'sites.google.com', 'docs.google.com',
   'streamlit.app', 'pythonanywhere.com', 'surge.sh', 'now.sh', 'cloudflare.net',
   'itch.io', 'fandom.com', 'readthedocs.io', 'readthedocs.org', 'gitbook.io',
+  // CAD and file hosts: each URL is one team's model, not one project's site.
+  'onshape.com', 'grabcad.com', 'a360.co', 'autodesk360.com', 'autodesk.com',
+  'fusion.online.autodesk.com', 'drive.google.com',
 ])
 
 /** Multi-label public suffixes we actually see, so "a.co.uk" is not read as "co.uk". */
@@ -72,4 +75,22 @@ export function siteIdentity(url: string | null | undefined): string | null {
   const registrable = MULTI_TLDS.has(lastTwo) && labels.length >= 3 ? labels.slice(-3).join('.') : lastTwo
   if (SHARED_WEB_HOSTS.has(host) || SHARED_WEB_HOSTS.has(registrable) || SHARED_WEB_HOSTS.has(lastTwo)) return null
   return registrable
+}
+
+/**
+ * A documentation/help subdomain: docs.frcbom.com, wiki.x.org, help.y.io.
+ * The frcbom duplicate was exactly this: a project's docs published beside its
+ * app. Same-registrable-domain alone is NOT a duplicate signal (onshape.com,
+ * ctr-electronics.com and other vendor/platform domains host many real,
+ * distinct tools), so the domain check only ever fires for one of these.
+ */
+export function isDocsSubdomain(url: string | null | undefined): boolean {
+  if (!url) return false
+  let host: string
+  try {
+    host = new URL(url).hostname.toLowerCase()
+  } catch {
+    return false
+  }
+  return /^(docs?|wiki|help|support|guide|manual|kb|readthedocs)\./.test(host)
 }
