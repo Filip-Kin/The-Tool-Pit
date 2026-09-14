@@ -3,7 +3,7 @@
  * Unlike the worker pipeline version, this skips the confidence threshold
  * since the admin is explicitly approving the candidate.
  */
-import { eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import {
   tools,
@@ -19,6 +19,7 @@ import {
 } from '@the-tool-pit/db'
 import type { NewTool } from '@the-tool-pit/db'
 import { buildSlug } from '@the-tool-pit/db/slug'
+import { githubRepoIdentity, siteIdentity } from '@the-tool-pit/db/tool-identity'
 
 export async function adminPublishCandidate(candidateId: string): Promise<{ toolId: string } | { error: string }> {
   const db = getDb()
@@ -38,6 +39,27 @@ export async function adminPublishCandidate(candidateId: string): Promise<{ tool
   // and drop the final trim, so a title ending in punctuation produced a slug
   // with a trailing hyphen, and the test that pins that trim was pointed at the
   // other copy.
+  // Same duplicate gate the worker publish uses: a renamed GitHub repo or a
+  // project's docs subdomain must not become a second listing. An admin who
+  // means to merge sees the existing tool named here instead of creating a rival.
+  {
+    const repoId = githubRepoIdentity((meta.githubUrl as string | undefined) ?? candidate.canonicalUrl)
+    const siteId = siteIdentity(candidate.canonicalUrl)
+    if (repoId || siteId) {
+      const links = await db
+        .select({ toolId: toolLinks.toolId, url: toolLinks.url, linkType: toolLinks.linkType, name: tools.name, slug: tools.slug })
+        .from(toolLinks)
+        .innerJoin(tools, eq(tools.id, toolLinks.toolId))
+        .where(and(eq(tools.status, 'published'), inArray(toolLinks.linkType, ['github', 'homepage'])))
+      const hit = links.find(
+        (l) =>
+          (repoId && l.linkType === 'github' && githubRepoIdentity(l.url) === repoId) ||
+          (siteId && l.linkType === 'homepage' && siteIdentity(l.url) === siteId),
+      )
+      if (hit) return { error: `Duplicate of published tool "${hit.name}" (/tools/${hit.slug}). Merge into it instead of publishing a second listing.` }
+    }
+  }
+
   const titleBase = buildSlug((meta.title as string) ?? 'tool')
 
   let slug = titleBase

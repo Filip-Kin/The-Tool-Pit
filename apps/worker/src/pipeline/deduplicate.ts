@@ -6,6 +6,7 @@
 import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm'
 import { getDb } from '@the-tool-pit/db'
 import { tools, toolLinks, crawlCandidates } from '@the-tool-pit/db'
+import { githubRepoIdentity, siteIdentity } from '@the-tool-pit/db/tool-identity'
 import {
   DUPLICATE_NAME_SIMILARITY,
   definitelyDifferentListings,
@@ -256,4 +257,43 @@ export async function checkDuplicate(
   }
 
   return { isDuplicate: false }
+}
+
+/**
+ * A published tool that is the SAME PROJECT as this candidate, found by an
+ * identity a rename or a subdomain cannot change: the GitHub repo (owner +
+ * repo, separators stripped, so a renamed repo still matches) or the homepage's
+ * registrable domain (so docs.frcbom.com meets frcbom.com). This is the gate
+ * that stops a second listing for a project already on the site; the exact-URL
+ * and name checks cannot, because both of those strings can differ while the
+ * project is one.
+ */
+export async function findDuplicateToolByIdentity(
+  githubUrl: string | null | undefined,
+  homepageUrl: string | null | undefined,
+  excludeToolId: string | null,
+): Promise<{ toolId: string; name: string; slug: string; via: string } | null> {
+  const db = getDb()
+  const repoId = githubRepoIdentity(githubUrl)
+  const siteId = siteIdentity(homepageUrl)
+  if (!repoId && !siteId) return null
+
+  // Only published tools block: a suppressed one is already off the site, and a
+  // human who suppressed it did not ask to be protected from a fresh listing.
+  const rows = await db
+    .select({ toolId: toolLinks.toolId, url: toolLinks.url, linkType: toolLinks.linkType, name: tools.name, slug: tools.slug })
+    .from(toolLinks)
+    .innerJoin(tools, eq(tools.id, toolLinks.toolId))
+    .where(and(eq(tools.status, 'published'), inArray(toolLinks.linkType, ['github', 'homepage'])))
+
+  for (const row of rows) {
+    if (row.toolId === excludeToolId) continue
+    if (repoId && row.linkType === 'github' && githubRepoIdentity(row.url) === repoId) {
+      return { toolId: row.toolId, name: row.name, slug: row.slug, via: `GitHub repo ${repoId}` }
+    }
+    if (siteId && row.linkType === 'homepage' && siteIdentity(row.url) === siteId) {
+      return { toolId: row.toolId, name: row.name, slug: row.slug, via: `site ${siteId}` }
+    }
+  }
+  return null
 }

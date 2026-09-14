@@ -27,6 +27,7 @@ const PUBLISH_THRESHOLD = 0.7
 // admin publish button can use the same one instead of re-inlining it, which is
 // how that copy lost the trailing-hyphen trim.
 import { buildSlug } from '@the-tool-pit/db/slug'
+import { findDuplicateToolByIdentity } from './deduplicate.js'
 export { buildSlug }
 
 export interface PublishResult {
@@ -304,6 +305,26 @@ export async function publishCandidate(candidateId: string, sourceType = 'manual
     if (!existing) break
     attempt++
     slug = `${titleBase}-${attempt}`
+  }
+
+  // HARD DUPLICATE GATE, only on the create path (a matchedToolId is an update
+  // of an existing row, handled above). Same project, different spelling: a
+  // renamed GitHub repo or a project's docs subdomain got published a second
+  // time before this. If the repo or the registrable domain already belongs to
+  // a published tool, do not create a rival row; hand it to a human to merge.
+  {
+    const githubForDedup = (meta.githubUrl as string | undefined) ?? candidate.canonicalUrl ?? undefined
+    const dup = await findDuplicateToolByIdentity(githubForDedup, candidate.canonicalUrl, null)
+    if (dup) {
+      const reason = `Duplicate of published tool "${dup.name}" (${dup.slug}) by ${dup.via}`
+      // Terminal, like the doc-page gate: suppress so a re-crawl stops re-filing
+      // it every cycle (checkDuplicateByUrl reads the suppressed row and skips).
+      await db
+        .update(crawlCandidates)
+        .set({ status: 'suppressed', confidenceScore: 0, rejectionReason: reason, updatedAt: new Date() })
+        .where(eq(crawlCandidates.id, candidateId))
+      return { toolId: '', action: 'skipped', reason }
+    }
   }
 
   const toolData: NewTool = {

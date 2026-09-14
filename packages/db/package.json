@@ -33,6 +33,10 @@
       "bun": "./src/listing-text.ts",
       "default": "./dist/listing-text.js"
     },
+    "./tool-identity": {
+      "bun": "./src/tool-identity.ts",
+      "default": "./dist/tool-identity.js"
+    },
     "./grant-urls": {
       "bun": "./src/grant-urls.ts",
       "default": "./dist/grant-urls.js"
