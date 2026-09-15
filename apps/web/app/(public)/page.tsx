@@ -191,7 +191,7 @@ export default async function HomePage() {
       {/* Recently Updated */}
       <section className="container mx-auto max-w-6xl px-4">
         <SectionHeader
-          title="Recently Updated"
+          title="Recently updated tools"
           href="/search?sort=updated"
           linkLabel="See all"
         />
@@ -205,7 +205,7 @@ export default async function HomePage() {
           none of the H1. This says what the site is, names every vertical, and
           repeats the words the heading uses, without reading as filler. */}
       <section className="container mx-auto max-w-3xl px-4 pt-4 text-sm leading-relaxed text-muted">
-        <h2 className="mb-2 text-base font-semibold text-foreground">The tools your team reaches for, in one place</h2>
+        <h2 className="mb-2 text-base font-semibold text-foreground">Everything an FRC, FTC or FLL team reaches for, in one place</h2>
         <p>
           FRC.Tools is a community directory for FIRST robotics teams. Search over a thousand tools,
           calculators and apps for FRC, FTC and FLL, then bookmark the ones you use every season. It

@@ -1,4 +1,9 @@
-# FRC.Tools
+/**
+ * /llms.txt as a route, not a static file: this app builds with Next's
+ * standalone output, which does not serve public/ files here (robots.txt and
+ * sitemap.xml work because they are routes too). Plain text, cached a day.
+ */
+const BODY = `# FRC.Tools
 
 > FRC.Tools is a community directory for FIRST robotics teams (FRC, FTC, FLL). It lists tools, calculators and apps, off-season events, practice fields, team robot code and CAD, event photo albums, and grants teams can apply for. Everything is free and open to submissions.
 
@@ -11,6 +16,13 @@
 - [Grants](https://frc.tools/grants): grants and sponsorships a team can apply for, with deadlines.
 
 ## Programs
-- [FRC](https://frc.tools/frc) — FIRST Robotics Competition
-- [FTC](https://frc.tools/ftc) — FIRST Tech Challenge
-- [FLL](https://frc.tools/fll) — FIRST LEGO League
+- [FRC](https://frc.tools/frc) - FIRST Robotics Competition
+- [FTC](https://frc.tools/ftc) - FIRST Tech Challenge
+- [FLL](https://frc.tools/fll) - FIRST LEGO League
+`
+
+export function GET() {
+  return new Response(BODY, {
+    headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=86400' },
+  })
+}
