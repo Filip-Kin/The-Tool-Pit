@@ -9,9 +9,11 @@ const VERTICAL_HOSTS = ['photos', 'fields', 'grants'] as const
  * Kept alive and redirected rather than switched off, because they are in
  * bookmarks, in Chief Delphi posts and in the Coolify domain list. The path is
  * preserved, so ttp.filipkin.com/grants lands on frc.tools/grants rather than
- * dumping everyone on the home page.
+ * dumping everyone on the home page. www.frc.tools is here too: it 308s to the
+ * bare apex so the site has one canonical host and does not read as duplicate
+ * content (the apex is what NEXT_PUBLIC_URL, the canonical tag and sitemap use).
  */
-const LEGACY_APP_HOSTS = ['ttp.filipkin.com'] as const
+const LEGACY_APP_HOSTS = ['ttp.filipkin.com', 'www.frc.tools'] as const
 
 /**
  * The one host the verticals are served from.
