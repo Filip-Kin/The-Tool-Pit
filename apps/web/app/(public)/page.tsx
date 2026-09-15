@@ -44,6 +44,17 @@ export default async function HomePage() {
       <JsonLd
         data={{
           '@context': 'https://schema.org',
+          '@type': 'Organization',
+          name: 'FRC.Tools',
+          alternateName: 'The Tool Pit',
+          url: 'https://frc.tools/',
+          logo: 'https://frc.tools/icon.svg',
+          description: 'A community directory of tools, off-season events, practice fields, robot code, photos and grants for FIRST robotics teams (FRC, FTC, FLL).',
+        }}
+      />
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
           '@type': 'WebSite',
           name: 'FRC.Tools',
           alternateName: ['FRC tools', 'The Tool Pit'],
