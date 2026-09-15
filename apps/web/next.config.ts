@@ -20,6 +20,8 @@ try {
 }
 
 const nextConfig: NextConfig = {
+  // Do not advertise the framework in a response header; one less fingerprint.
+  poweredByHeader: false,
   transpilePackages: ['@the-tool-pit/db', '@the-tool-pit/types'],
   serverExternalPackages: ['bullmq'],
   // Cover-image uploads go through a server action; the default 1 MB body cap

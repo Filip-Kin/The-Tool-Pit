@@ -188,6 +188,22 @@ export default async function HomePage() {
           <ToolGrid tools={recent} />
         </Suspense>
       </section>
+
+      {/* A few sentences of real, server-rendered prose. The rest of the page
+          is cards and short labels, so a crawler saw about a hundred words and
+          none of the H1. This says what the site is, names every vertical, and
+          repeats the words the heading uses, without reading as filler. */}
+      <section className="container mx-auto max-w-3xl px-4 pt-4 text-sm leading-relaxed text-muted">
+        <h2 className="mb-2 text-base font-semibold text-foreground">The tools your team reaches for, in one place</h2>
+        <p>
+          FRC.Tools is a community directory for FIRST robotics teams. Search over a thousand tools,
+          calculators and apps for FRC, FTC and FLL, then bookmark the ones you use every season. It
+          also maps off-season events with their cost and open team slots, lists practice fields you
+          can book, archives team robot code and CAD by team and year, gathers event photo albums, and
+          tracks grants your team can apply for with the deadlines checked. Everything is free, and any
+          team can submit a tool, an event, a field or a grant.
+        </p>
+      </section>
     </div>
   )
 }
