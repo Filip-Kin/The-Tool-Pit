@@ -24,7 +24,8 @@ const PER_VERTICAL_LIMIT = 5000
 /**
  * The dynamic sitemap for frc.tools.
  *
- * Static routes first (the verticals, the program pages, search), then every
+ * Static routes first (the verticals and the program pages; NOT /search, which is
+ * noindex and disallowed in robots.txt), then every
  * PUBLISHED listing across the four verticals plus the photo event pages that
  * carry at least one published album. Only public, published rows: nothing
  * under /admin, /me or /api, and no draft/pending/suppressed row.
@@ -47,7 +48,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${origin}/frc`, changeFrequency: 'weekly', priority: 0.6 },
     { url: `${origin}/ftc`, changeFrequency: 'weekly', priority: 0.6 },
     { url: `${origin}/fll`, changeFrequency: 'weekly', priority: 0.6 },
-    { url: `${origin}/search`, changeFrequency: 'monthly', priority: 0.3 },
   ]
 
   const [toolRows, eventRows, fieldRows, grantRows, photoRows] = await Promise.all([
