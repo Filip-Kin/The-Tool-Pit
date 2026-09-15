@@ -214,6 +214,14 @@ export default async function HomePage() {
           tracks grants your team can apply for with the deadlines checked. Everything is free, and any
           team can submit a tool, an event, a field or a grant.
         </p>
+        <p className="mt-3">
+          The point is to make your season easier. Instead of digging through old Chief Delphi threads
+          and shared spreadsheets every January, you find the tool, event, field or grant your team
+          needs in one search, see what other teams actually use, and keep it a tap away for next
+          season. A rookie team gets a running start, and a veteran team stops re-finding the same
+          links year after year. New tools are added as teams build and share them, so the directory
+          grows with the community rather than going stale between seasons.
+        </p>
       </section>
     </div>
   )
