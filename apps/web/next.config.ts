@@ -48,6 +48,20 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: '30mb' },
     middlewareClientMaxBodySize: '56mb',
+    // Tree-shake the icon library so a page ships only the glyphs it uses,
+    // not the whole set. Cuts a chunk of the unused JS a PageSpeed run flags.
+    optimizePackageImports: ['lucide-react'],
+  },
+  // Tell browsers to come back over HTTPS directly, so a repeat visit skips the
+  // http->https redirect (Cloudflare's edge 301) a PageSpeed run counts. No
+  // includeSubDomains/preload: sibling subdomains live on a zone we don't own.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [{ key: 'Strict-Transport-Security', value: 'max-age=63072000' }],
+      },
+    ]
   },
   // Standalone output is required for Docker/Coolify deployment.
   // Disabled locally on Windows because bun's symlink-based module cache
