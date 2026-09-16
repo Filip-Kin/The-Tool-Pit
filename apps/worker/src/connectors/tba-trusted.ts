@@ -35,19 +35,24 @@ function signTrustedRequest(authSecret: string, requestPath: string, body: strin
 }
 
 /**
- * Push a team list to `/event/{tbaKey}/team_list`. `teamNumbers` are plain FRC
- * team numbers (e.g. 254); TBA wants them as `frc254` team keys.
+ * Push a team list to `/event/{tbaKey}/team_list/update` (every trusted-API
+ * write endpoint has an /update suffix; confirmed against TBA's own
+ * api_trusted_v1.json — the version-1 team_list endpoint at
+ * https://www.thebluealliance.com/apidocs/trusted does not exist without it,
+ * and 404s with a generic "Invalid endpoint" rather than an auth error).
+ * `teamNumbers` are plain FRC team numbers (e.g. 254); TBA wants them as
+ * `frc254` team keys.
  */
 export async function pushTeamList(
   tbaKey: string,
   creds: TbaTrustedCredentials,
   teamNumbers: number[],
 ): Promise<TbaTrustedPushResult> {
-  const requestPath = `/api/trusted/v1/event/${tbaKey}/team_list`
+  const requestPath = `/api/trusted/v1/event/${tbaKey}/team_list/update`
   const body = JSON.stringify(teamNumbers.map((n) => `frc${n}`))
   const sig = signTrustedRequest(creds.authSecret, requestPath, body)
 
-  const res = await politeFetch(`${TBA_TRUSTED_BASE}/event/${tbaKey}/team_list`, {
+  const res = await politeFetch(`${TBA_TRUSTED_BASE}/event/${tbaKey}/team_list/update`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
