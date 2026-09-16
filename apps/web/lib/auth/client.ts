@@ -1,22 +1,7 @@
 'use client'
 
-import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app'
-import {
-  getAuth,
-  GoogleAuthProvider,
-  GithubAuthProvider,
-  signInWithPopup,
-  linkWithPopup,
-  reauthenticateWithPopup,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  signOut as firebaseSignOut,
-  type Auth,
-  type User as FirebaseUser,
-  type UserCredential,
-} from 'firebase/auth'
+import type { FirebaseApp } from 'firebase/app'
+import type { Auth, GithubAuthProvider, User as FirebaseUser, UserCredential } from 'firebase/auth'
 import { firebaseConfig } from './firebase-config'
 import type { GithubGrantSummary } from '@/lib/github/summary'
 
@@ -24,18 +9,38 @@ import type { GithubGrantSummary } from '@/lib/github/summary'
  * Browser-side Firebase. Everything here runs in the client bundle; the server
  * never trusts any of it. The one job of this module is to obtain an ID token
  * and hand it to POST /api/auth/session, which verifies it properly.
+ *
+ * `firebase/app` and `firebase/auth` are dynamically imported rather than
+ * imported at the top of this file (only the TYPES are static, which cost
+ * nothing at runtime). Every export here is a function that runs on a click -
+ * sign in, sign out, link GitHub - never on page load. A static import would
+ * put ~23KB of Firebase Auth SDK in the shared bundle every visitor downloads
+ * just because SiteHeader (rendered on every page) has a sign-out button
+ * somewhere in its tree; dynamic import makes that cost land only on someone
+ * who actually uses one of these.
  */
 
-let app: FirebaseApp | null = null
+let appPromise: Promise<FirebaseApp> | null = null
 
-function getFirebaseApp(): FirebaseApp {
-  if (app) return app
-  app = getApps().length ? getApp() : initializeApp(firebaseConfig)
-  return app
+function getFirebaseApp(): Promise<FirebaseApp> {
+  if (!appPromise) {
+    appPromise = import('firebase/app').then(({ initializeApp, getApps, getApp }) =>
+      getApps().length ? getApp() : initializeApp(firebaseConfig),
+    )
+  }
+  return appPromise
 }
 
-export function getFirebaseAuth(): Auth {
-  return getAuth(getFirebaseApp())
+let authModPromise: Promise<typeof import('firebase/auth')> | null = null
+
+function getAuthMod(): Promise<typeof import('firebase/auth')> {
+  if (!authModPromise) authModPromise = import('firebase/auth')
+  return authModPromise
+}
+
+export async function getFirebaseAuth(): Promise<Auth> {
+  const [{ getAuth }, app] = await Promise.all([getAuthMod(), getFirebaseApp()])
+  return getAuth(app)
 }
 
 /** Hand a fresh ID token to the server, which sets the session cookie. */
@@ -53,8 +58,8 @@ async function exchangeForSession(user: FirebaseUser): Promise<void> {
 }
 
 export async function signInWithGoogle(): Promise<void> {
-  const provider = new GoogleAuthProvider()
-  const cred = await signInWithPopup(getFirebaseAuth(), provider)
+  const [{ GoogleAuthProvider, signInWithPopup }, auth] = await Promise.all([getAuthMod(), getFirebaseAuth()])
+  const cred = await signInWithPopup(auth, new GoogleAuthProvider())
   await exchangeForSession(cred.user)
 }
 
@@ -73,7 +78,8 @@ export async function signInWithGoogle(): Promise<void> {
 // the popup result, and never again. So it is read here, posted straight to the
 // server, and dropped. It is never put in state, in storage, or in a URL.
 
-function githubProvider(): GithubAuthProvider {
+async function githubProvider(): Promise<GithubAuthProvider> {
+  const { GithubAuthProvider } = await getAuthMod()
   const provider = new GithubAuthProvider()
   provider.addScope('read:user')
   provider.addScope('read:org')
@@ -82,6 +88,7 @@ function githubProvider(): GithubAuthProvider {
 
 /** Take the one-shot access token off a popup result and hand it to the server. */
 async function exchangeGithubCredential(result: UserCredential): Promise<GithubGrantSummary> {
+  const { GithubAuthProvider } = await getAuthMod()
   const accessToken = GithubAuthProvider.credentialFromResult(result)?.accessToken
   if (!accessToken) {
     throw new Error('GitHub did not return an access token. Try the link again.')
@@ -103,7 +110,8 @@ async function exchangeGithubCredential(result: UserCredential): Promise<GithubG
  * GitHub, so a failure here still leaves the person signed in.
  */
 export async function signInWithGithub(): Promise<GithubGrantSummary> {
-  const result = await signInWithPopup(getFirebaseAuth(), githubProvider())
+  const [{ signInWithPopup }, auth, provider] = await Promise.all([getAuthMod(), getFirebaseAuth(), githubProvider()])
+  const result = await signInWithPopup(auth, provider)
   return exchangeGithubCredential(result)
 }
 
@@ -131,7 +139,7 @@ export async function signInWithGithub(): Promise<GithubGrantSummary> {
  * the difference between "no user" and "no user YET".
  */
 async function settledFirebaseUser(): Promise<FirebaseUser | null> {
-  const auth = getFirebaseAuth()
+  const [{ onAuthStateChanged }, auth] = await Promise.all([getAuthMod(), getFirebaseAuth()])
   if (auth.currentUser) return auth.currentUser
   return new Promise((resolve) => {
     const stop = onAuthStateChanged(auth, (user) => {
@@ -150,7 +158,8 @@ export async function linkGithubAccount(): Promise<GithubGrantSummary> {
   if (!user) return signInWithGithub()
 
   try {
-    return await exchangeGithubCredential(await linkWithPopup(user, githubProvider()))
+    const [{ linkWithPopup }, provider] = await Promise.all([getAuthMod(), githubProvider()])
+    return await exchangeGithubCredential(await linkWithPopup(user, provider))
   } catch (err) {
     if ((err as { code?: string }).code === 'auth/provider-already-linked') {
       return recheckGithubRepos()
@@ -170,29 +179,34 @@ export async function linkGithubAccount(): Promise<GithubGrantSummary> {
 export async function recheckGithubRepos(): Promise<GithubGrantSummary> {
   const user = await settledFirebaseUser()
   if (!user) return signInWithGithub()
-  return exchangeGithubCredential(await reauthenticateWithPopup(user, githubProvider()))
+  const [{ reauthenticateWithPopup }, provider] = await Promise.all([getAuthMod(), githubProvider()])
+  return exchangeGithubCredential(await reauthenticateWithPopup(user, provider))
 }
 
 // #endregion
 
 export async function signInWithEmail(email: string, password: string): Promise<void> {
-  const cred = await signInWithEmailAndPassword(getFirebaseAuth(), email, password)
+  const [{ signInWithEmailAndPassword }, auth] = await Promise.all([getAuthMod(), getFirebaseAuth()])
+  const cred = await signInWithEmailAndPassword(auth, email, password)
   await exchangeForSession(cred.user)
 }
 
 export async function registerWithEmail(email: string, password: string): Promise<void> {
-  const cred = await createUserWithEmailAndPassword(getFirebaseAuth(), email, password)
+  const [{ createUserWithEmailAndPassword }, auth] = await Promise.all([getAuthMod(), getFirebaseAuth()])
+  const cred = await createUserWithEmailAndPassword(auth, email, password)
   await exchangeForSession(cred.user)
 }
 
 export async function resetPassword(email: string): Promise<void> {
-  await sendPasswordResetEmail(getFirebaseAuth(), email)
+  const [{ sendPasswordResetEmail }, auth] = await Promise.all([getAuthMod(), getFirebaseAuth()])
+  await sendPasswordResetEmail(auth, email)
 }
 
 /** Sign out of both Firebase and our own session. */
 export async function signOut(): Promise<void> {
+  const [{ signOut: firebaseSignOut }, auth] = await Promise.all([getAuthMod(), getFirebaseAuth()])
   await Promise.allSettled([
-    firebaseSignOut(getFirebaseAuth()),
+    firebaseSignOut(auth),
     fetch('/api/auth/session', { method: 'DELETE' }),
   ])
 }

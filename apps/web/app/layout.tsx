@@ -9,7 +9,13 @@ import { THEME_INIT_SCRIPT } from '@/lib/theme/theme'
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
-  display: 'swap',
+  // 'optional': the browser gets a very short window to fetch Inter before
+  // first paint; if it isn't ready, the page renders with the (metric-
+  // matched) fallback and never swaps to the webfont later. 'swap' was
+  // causing a late swap that reflowed the hero heading, which re-centered an
+  // absolutely-positioned decorative blob below it - Lighthouse measured that
+  // as CLS 0.13 tied directly to the font file. No visible swap = no shift.
+  display: 'optional',
 })
 
 export const metadata: Metadata = {

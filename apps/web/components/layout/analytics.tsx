@@ -4,8 +4,12 @@ import Script from 'next/script'
  * Google Analytics 4, site wide.
  *
  * Uses next/script rather than @next/third-parties so this adds no dependency.
- * `afterInteractive` is the right strategy for a tag: it must run on every page
- * but never block first paint.
+ * `lazyOnload` loads GTM during browser idle time, after everything the visitor
+ * actually came for. GA4 buffers pageview/route-change events on the client
+ * queue regardless of when the tag itself finishes loading, so nothing is
+ * missed - this only moves ~72KB of GTM's own JS parse/execute cost off the
+ * page's Total Blocking Time. `afterInteractive` still ran early enough to
+ * count against TBT.
  *
  * The measurement ID is not a secret, it ships in the page source by design, so
  * it lives here rather than in an env var that would have to be set as a
@@ -30,9 +34,9 @@ export function Analytics() {
       <Script
         async
         src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
-        strategy="afterInteractive"
+        strategy="lazyOnload"
       />
-      <Script id="ga-init" strategy="afterInteractive">
+      <Script id="ga-init" strategy="lazyOnload">
         {`
           window.dataLayer = window.dataLayer || [];
           function gtag(){dataLayer.push(arguments);}
