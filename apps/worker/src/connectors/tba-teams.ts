@@ -91,7 +91,7 @@ export class TbaTeamsConnector implements Connector {
     const githubToken = process.env.GITHUB_TOKEN
     const githubHeaders: Record<string, string> = {
       Accept: 'application/vnd.github.v3+json',
-      'User-Agent': 'TheToolPit/1.0 (+https://thetoolpit.com)',
+      'User-Agent': 'FRCTools/1.0 (+https://frc.tools)',
     }
     if (githubToken) githubHeaders['Authorization'] = `Bearer ${githubToken}`
 

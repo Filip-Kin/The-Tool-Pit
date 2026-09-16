@@ -245,7 +245,7 @@ export function buildApprovalEmbed(notice: ApprovalNotice): DiscordEmbed {
     color: VERTICAL_COLOR[notice.vertical],
     fields,
     ...(clean(notice.imageUrl) ? { image: { url: notice.imageUrl as string } } : {}),
-    footer: { text: 'The Tool Pit' },
+    footer: { text: 'FRC.Tools' },
     timestamp: new Date().toISOString(),
   }
 }

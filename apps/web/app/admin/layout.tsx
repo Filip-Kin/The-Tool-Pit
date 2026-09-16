@@ -38,7 +38,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <div className="flex items-center gap-3 px-4 py-3 md:py-4">
           <div className="flex min-w-0 flex-1 items-center gap-3 md:block">
             <Link href="/" className="text-xs text-muted hover:text-foreground">
-              ← The Tool Pit
+              ← FRC.Tools
             </Link>
             <p className="text-sm font-semibold text-foreground md:mt-1">Admin</p>
           </div>

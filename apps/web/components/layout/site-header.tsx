@@ -14,7 +14,7 @@ export async function SiteHeader() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
           <span className="whitespace-nowrap text-lg font-bold tracking-tight text-foreground">
-            The Tool Pit
+            FRC.Tools
           </span>
         </Link>
 

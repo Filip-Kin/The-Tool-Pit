@@ -18,7 +18,7 @@ const NOMINATIM = 'https://nominatim.openstreetmap.org'
 const TBA_BASE = 'https://www.thebluealliance.com/api/v3'
 
 /** Nominatim's usage policy requires a real one, with a way to complain. */
-const UA = 'TheToolPit/1.0 (+https://frc.tools; admin@frc.tools)'
+const UA = 'FRCTools/1.0 (+https://frc.tools; admin@frc.tools)'
 
 export interface Located {
   latitude: number

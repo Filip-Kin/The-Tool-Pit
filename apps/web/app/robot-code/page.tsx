@@ -16,7 +16,12 @@ export const revalidate = 60
 
 
 export const metadata: Metadata = {
-  title: 'Robot Code / CAD | The Tool Pit',
+  // `absolute` bypasses every ancestor title.template (this layout's own
+  // "%s | Robot Code / CAD" AND the root's "%s | FRCTools") so this renders
+  // exactly once. A plain string here previously got both templates applied
+  // on top of an already-stale "The Tool Pit" suffix: "Robot Code / CAD |
+  // The Tool Pit | FRC.Tools".
+  title: { absolute: 'Robot Code / CAD | FRCTools' },
   description: 'Browse open-source FRC, FTC, and FLL team robot code and CAD by team number and season.',
 }
 

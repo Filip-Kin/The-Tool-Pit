@@ -28,7 +28,7 @@ async function isUrlBroken(url: string): Promise<boolean> {
       method: 'HEAD',
       redirect: 'follow',
       signal: controller.signal,
-      headers: { 'User-Agent': 'The-Tool-Pit/1.0 (+https://thetoolpit.com)' },
+      headers: { 'User-Agent': 'FRCTools/1.0 (+https://frc.tools)' },
     })
     return !NOT_BROKEN_STATUSES.has(res.status)
   } catch {

@@ -102,7 +102,7 @@ export class GitHubTopicsConnector implements Connector {
     const token = process.env.GITHUB_TOKEN
     const headers: Record<string, string> = {
       Accept: 'application/vnd.github.v3+json',
-      'User-Agent': 'TheToolPit/1.0 (+https://thetoolpit.com)',
+      'User-Agent': 'FRCTools/1.0 (+https://frc.tools)',
     }
     if (token) headers['Authorization'] = `Bearer ${token}`
 

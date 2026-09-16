@@ -8,7 +8,7 @@ export function SiteFooter() {
       <div className="container mx-auto flex max-w-6xl flex-col gap-6 px-4">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-1">
-            <span className="font-semibold text-foreground">The Tool Pit</span>
+            <span className="font-semibold text-foreground">FRC.Tools</span>
             <span className="text-xs text-muted">
               Community directory for FIRST Robotics tools
             </span>

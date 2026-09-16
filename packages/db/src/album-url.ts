@@ -126,7 +126,7 @@ export async function resolveShareUrl(url: string): Promise<string> {
       method: 'GET',
       redirect: 'manual',
       signal: controller.signal,
-      headers: { 'user-agent': 'TheToolPit/1.0 (+https://thetoolpit.com)' },
+      headers: { 'user-agent': 'FRCTools/1.0 (+https://frc.tools)' },
     })
     const loc = res.headers.get('location')
     if (loc && res.status >= 300 && res.status < 400) {

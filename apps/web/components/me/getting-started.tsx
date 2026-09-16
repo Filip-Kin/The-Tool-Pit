@@ -16,7 +16,7 @@ export function GettingStarted() {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Nothing saved yet</h2>
           <p className="mt-2 max-w-2xl text-sm text-muted">
-            Anywhere on The Tool Pit you can save a tool, an event, a practice field or a grant. Everything
+            Anywhere on FRC.Tools you can save a tool, an event, a practice field or a grant. Everything
             you save lands on this page, so you get one list across all four sites instead of four sets of
             browser bookmarks. Saving a grant also means we can tell you before its deadline.
           </p>

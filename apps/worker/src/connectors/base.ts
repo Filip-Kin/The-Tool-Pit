@@ -41,7 +41,7 @@ export async function politeFetch(url: string, options?: RequestInit): Promise<R
       ...options,
       signal: controller.signal,
       headers: {
-        'User-Agent': 'TheToolPit/1.0 (+https://thetoolpit.com; discovery bot)',
+        'User-Agent': 'FRCTools/1.0 (+https://frc.tools; discovery bot)',
         Accept: 'text/html,application/json',
         ...options?.headers,
       },

@@ -198,7 +198,7 @@ export function renderVerifyEmail(input: VerifyEmailInput): EmailBody {
   const { html, text } = layout({
     heading: 'Confirm this address for grant alerts',
     paragraphs: [
-      'Somebody added this address to a Tool Pit account for grant alerts. Confirm it and deadline reminders and new matches will arrive here.',
+      'Somebody added this address to an FRC.Tools account for grant alerts. Confirm it and deadline reminders and new matches will arrive here.',
       `The link works for ${input.expiresInHours} hours. If this was not you, ignore this email and nothing else will be sent here.`,
     ],
     cta: { label: 'Confirm this address', url: input.verifyUrl },

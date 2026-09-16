@@ -9,7 +9,7 @@ into the other things below. Live at **[frc.tools](https://frc.tools)**.
 
 ## What's in it
 
-- **The Tool Pit** (`/`) - a searchable directory of FRC, FTC and FLL software and CAD: scouting
+- **Tools** (`/`) - a searchable directory of FRC, FTC and FLL software and CAD: scouting
   apps, calculators, libraries, dashboards.
 - **Off-Season Events** (`/events`) - every off-season event on a map, with dates, venue, cost,
   capacity, registration and volunteer links, and the team list where the event publishes one.

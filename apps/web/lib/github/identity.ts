@@ -30,7 +30,7 @@ const API = 'https://api.github.com'
 const ACCEPT = 'application/vnd.github+json'
 const API_VERSION = '2022-11-28'
 /** GitHub asks every client to identify itself; an anonymous one gets throttled. */
-const USER_AGENT = 'the-tool-pit (frc.tools)'
+const USER_AGENT = 'frc-tools (frc.tools)'
 
 /** GitHub's max page size. Nobody is in more than 1000 organisations. */
 const PER_PAGE = 100
