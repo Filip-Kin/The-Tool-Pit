@@ -12,6 +12,7 @@ import type { GrantMatchJobPayload } from './grants/matcher.js'
 import type { ListingDiscoverPayload } from './listings/discover.js'
 import type { ReadCandidatesPayload } from './listings/read-candidates.js'
 import type { RosterRefreshPayload } from './listings/roster-refresh.js'
+import type { TbaPushPayload } from './listings/tba-push.js'
 import type { TbaTeamsSyncPayload } from './listings/tba-teams-sync.js'
 import type { PopularityRefreshPayload } from './jobs/popularity.js'
 // The offseason season rule and the renewal date live beside the column they
@@ -277,6 +278,21 @@ export const readCandidatesQueue = new Queue<ReadCandidatesPayload>('read-candid
  * about an event that the machine knows better than the organiser.
  */
 export const rosterRefreshQueue = new Queue<RosterRefreshPayload>('roster-refresh', {
+  connection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 60000 },
+    removeOnComplete: { count: 50 },
+    removeOnFail: { count: 100 },
+  },
+})
+
+/**
+ * Push each opted-in listing's roster to The Blue Alliance's trusted API.
+ * The reverse of roster-refresh: writes our roster out instead of reading
+ * TBA's in. See listings/tba-push.ts for the source and the start-date gate.
+ */
+export const tbaPushQueue = new Queue<TbaPushPayload>('tba-push', {
   connection,
   defaultJobOptions: {
     attempts: 2,
@@ -573,6 +589,15 @@ export async function scheduleRecurringJobs() {
   // there is still room. One request per listing with a TBA key, paced.
   await rosterRefreshQueue.upsertJobScheduler('roster-refresh-daily', { pattern: '50 5 * * *' }, {
     name: 'roster-refresh-daily',
+    data: {},
+  })
+
+  // Push opted-in listings' rosters to TBA, daily, 20 minutes after the roster
+  // sweep above so it reads that run's freshly-approved snapshot rather than
+  // yesterday's. Clear of the 06:20 TBA re-check, which is a different queue
+  // anyway.
+  await tbaPushQueue.upsertJobScheduler('tba-push-daily', { pattern: '10 6 * * *' }, {
+    name: 'tba-push-daily',
     data: {},
   })
 

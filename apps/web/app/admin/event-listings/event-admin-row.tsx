@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
 import { MapPin, CalendarDays, Pencil, Check, X, Trash2, RotateCcw, UserRound, Users, Mail } from 'lucide-react'
 import type { EventListing } from '@the-tool-pit/db'
@@ -22,7 +22,19 @@ import {
 import type { PublicEvent } from '@/lib/events/event-display'
 import { AddressField } from '@/components/fields/address-field'
 import { DateField } from '@/components/ui/date-field'
-import { approveEvent, approveRosterSnapshot, sendEventOutreach, suppressEvent, unsuppressEvent, deleteEvent, updateEvent, type EventEditInput } from './actions'
+import {
+  approveEvent,
+  approveRosterSnapshot,
+  sendEventOutreach,
+  suppressEvent,
+  unsuppressEvent,
+  deleteEvent,
+  updateEvent,
+  getTbaCredentialStatus,
+  setTbaCredentials,
+  clearTbaCredentials,
+  type EventEditInput,
+} from './actions'
 import { ReasonButton } from '@/components/admin/reason-button'
 import { teamListStatus } from '@/lib/admin/team-list-status'
 
@@ -277,6 +289,7 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
     tbaKey: listing.tbaKey,
     tbaKeyDay2: listing.tbaKeyDay2,
     registrationUrlDay2: listing.registrationUrlDay2,
+    tbaAutoPush: listing.tbaAutoPush,
   })
 
   function set<K extends keyof EventEditInput>(k: K, v: EventEditInput[K]) {
@@ -389,6 +402,8 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
         Each day is its own 1-day event (the sheet&apos;s &quot;2x&quot; format): own team list, own TBA code, slots per day
       </label>
 
+      <TbaPushSection listing={listing} autoPush={!!form.tbaAutoPush} onAutoPushChange={(v) => set('tbaAutoPush', v)} />
+
       <div className="flex flex-wrap gap-2">
         <Button onClick={save} disabled={pending}>
           {pending ? 'Saving…' : 'Save changes'}
@@ -402,6 +417,97 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
           Cancel
         </Button>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Push the roster to TBA. auto-push itself is a plain field on the listing
+ * (saved with the rest of the form, via Editor's `set`), but the auth_id /
+ * auth_secret pair is not: it lives in its own action pair (setTbaCredentials
+ * / getTbaCredentialStatus) that never returns the secret to the browser, so
+ * this section saves independently of the main "Save changes" button.
+ */
+function TbaPushSection({
+  listing,
+  autoPush,
+  onAutoPushChange,
+}: {
+  listing: EventListing
+  autoPush: boolean
+  onAutoPushChange: (v: boolean) => void
+}) {
+  const [configured, setConfigured] = useState<boolean | null>(null)
+  const [authId, setAuthId] = useState('')
+  const [authSecret, setAuthSecret] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
+
+  useEffect(() => {
+    getTbaCredentialStatus(listing.id).then((r) => setConfigured(r.configured))
+  }, [listing.id])
+
+  function saveCreds() {
+    startTransition(async () => {
+      const res = await setTbaCredentials(listing.id, authId, authSecret)
+      if (res.error) {
+        setMsg(res.error)
+      } else {
+        setAuthId('')
+        setAuthSecret('')
+        setConfigured(true)
+        setMsg('Saved.')
+      }
+    })
+  }
+
+  function clearCreds() {
+    startTransition(async () => {
+      await clearTbaCredentials(listing.id)
+      setConfigured(false)
+      onAutoPushChange(false)
+      setMsg(null)
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+      <label className="flex items-center gap-2 text-sm text-foreground">
+        <input
+          type="checkbox"
+          checked={autoPush}
+          disabled={!configured}
+          onChange={(e) => onAutoPushChange(e.target.checked)}
+          className="h-4 w-4 accent-[var(--color-primary)]"
+        />
+        Push the team list to TBA automatically (daily, manual or scraped source, only until the event starts)
+      </label>
+      <div className="flex flex-wrap items-end gap-2">
+        <L label="TBA auth ID">
+          <input className="input" value={authId} onChange={(e) => setAuthId(e.target.value)} placeholder={configured ? 'set - enter a new value to replace' : 'from TBA’s request-write-key page'} />
+        </L>
+        <L label="TBA auth secret">
+          <input type="password" className="input" value={authSecret} onChange={(e) => setAuthSecret(e.target.value)} placeholder={configured ? 'set - enter a new value to replace' : ''} />
+        </L>
+        <Button variant="secondary" onClick={saveCreds} disabled={pending || !authId.trim() || !authSecret.trim()}>
+          Save credentials
+        </Button>
+        {configured && (
+          <Button variant="secondary" onClick={clearCreds} disabled={pending}>
+            Clear
+          </Button>
+        )}
+      </div>
+      <p className="text-xs text-muted-2">
+        {configured === null
+          ? 'Checking…'
+          : configured
+            ? 'Credentials are set.'
+            : 'No credentials set - auto-push stays off until you add them.'}
+        {listing.tbaPushedAt && ` Last pushed ${new Date(listing.tbaPushedAt).toLocaleString()} (${listing.tbaPushStatus}).`}
+        {listing.tbaPushError && ` ${listing.tbaPushError}`}
+      </p>
+      {msg && <p className="text-xs text-muted-2">{msg}</p>}
     </div>
   )
 }

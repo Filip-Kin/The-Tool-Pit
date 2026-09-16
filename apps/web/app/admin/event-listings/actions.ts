@@ -8,6 +8,7 @@ import { getDb } from '@/lib/db'
 import {
   eventListings,
   eventRosterSnapshots,
+  eventTbaCredentials,
   EVENT_PROGRAMS,
   EVENT_STATUSES,
   REGISTRATION_STATUSES,
@@ -311,6 +312,7 @@ export interface EventEditInput {
   tbaKey?: string | null
   tbaKeyDay2?: string | null
   registrationUrlDay2?: string | null
+  tbaAutoPush?: boolean
 }
 
 function inEnum<T extends readonly string[]>(v: string | undefined, allowed: T): T[number] | undefined {
@@ -364,6 +366,7 @@ export async function updateEvent(id: string, input: EventEditInput): Promise<{ 
   if (input.tbaKey !== undefined) patch.tbaKey = input.tbaKey?.trim().toLowerCase() || null
   if (input.tbaKeyDay2 !== undefined) patch.tbaKeyDay2 = input.tbaKeyDay2?.trim().toLowerCase() || null
   if (input.registrationUrlDay2 !== undefined) patch.registrationUrlDay2 = input.registrationUrlDay2?.trim() || null
+  if (input.tbaAutoPush !== undefined) patch.tbaAutoPush = input.tbaAutoPush
 
   // Record what the moderator actually MOVED, so a later refresh leaves it be.
   // Earned by changing a value, never by pressing Save: marking every field on
@@ -383,4 +386,48 @@ export async function updateEvent(id: string, input: EventEditInput): Promise<{ 
     .where(eq(eventListings.id, id))
   revalidateAll()
   return {}
+}
+
+// #region TBA team-list push
+//
+// Credentials live in event_tba_credentials, not on eventListings: this
+// page's own query above selects the whole eventListings row for every card,
+// and a secret column here would ride along into that payload. The value is
+// never read back to the browser — only whether one is set.
+
+/** Whether a listing has TBA trusted-API credentials saved. Never returns the secret itself. */
+export async function getTbaCredentialStatus(id: string): Promise<{ configured: boolean }> {
+  await assertAdmin()
+  const db = getDb()
+  const [row] = await db
+    .select({ id: eventTbaCredentials.id })
+    .from(eventTbaCredentials)
+    .where(eq(eventTbaCredentials.eventListingId, id))
+    .limit(1)
+  return { configured: Boolean(row) }
+}
+
+/** Save (or replace) a listing's TBA trusted-API auth_id/auth_secret. */
+export async function setTbaCredentials(id: string, authId: string, authSecret: string): Promise<{ error?: string }> {
+  await assertAdmin()
+  if (!authId.trim() || !authSecret.trim()) return { error: 'Both auth ID and auth secret are required.' }
+  const db = getDb()
+  await db
+    .insert(eventTbaCredentials)
+    .values({ eventListingId: id, authId: authId.trim(), authSecret: authSecret.trim() })
+    .onConflictDoUpdate({
+      target: eventTbaCredentials.eventListingId,
+      set: { authId: authId.trim(), authSecret: authSecret.trim(), updatedAt: new Date() },
+    })
+  revalidateAll()
+  return {}
+}
+
+/** Remove a listing's TBA trusted-API credentials and turn auto-push off. */
+export async function clearTbaCredentials(id: string): Promise<void> {
+  await assertAdmin()
+  const db = getDb()
+  await db.delete(eventTbaCredentials).where(eq(eventTbaCredentials.eventListingId, id))
+  await db.update(eventListings).set({ tbaAutoPush: false, updatedAt: new Date() }).where(eq(eventListings.id, id))
+  revalidateAll()
 }

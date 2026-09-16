@@ -37,6 +37,8 @@ import { processListingDiscoverJob } from './listings/discover.js'
 import { processReadCandidatesJob } from './listings/read-candidates.js'
 import { processRosterRefreshJob } from './listings/roster-refresh.js'
 import type { RosterRefreshPayload } from './listings/roster-refresh.js'
+import { processTbaPushJob } from './listings/tba-push.js'
+import type { TbaPushPayload } from './listings/tba-push.js'
 import { processTbaTeamsSyncJob } from './listings/tba-teams-sync.js'
 import type { TbaTeamsSyncPayload } from './listings/tba-teams-sync.js'
 import { closeBrowser } from './connectors/playwright-render.js'
@@ -408,6 +410,17 @@ const rosterRefreshWorker = new Worker<RosterRefreshPayload>(
   { connection, concurrency: 1 },
 )
 
+const tbaPushWorker = new Worker<TbaPushPayload>(
+  'tba-push',
+  async (job) => {
+    console.log(`[tba-push] processing job ${job.id}`)
+    return processTbaPushJob(job.data)
+  },
+  // One at a time, same reasoning as roster-refresh: it is a handful of
+  // listings hitting someone else's write API, not a scale problem.
+  { connection, concurrency: 1 },
+)
+
 const tbaTeamsSyncWorker = new Worker<TbaTeamsSyncPayload>(
   'tba-teams-sync',
   async (job) => {
@@ -436,7 +449,7 @@ const seasonRenewalWorker = new Worker(
 // #endregion
 
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, readCandidatesWorker, rosterRefreshWorker, tbaTeamsSyncWorker, seasonRenewalWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, readCandidatesWorker, rosterRefreshWorker, tbaPushWorker, tbaTeamsSyncWorker, seasonRenewalWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -480,6 +493,7 @@ async function shutdown() {
     listingDiscoverWorker.close(),
     readCandidatesWorker.close(),
     rosterRefreshWorker.close(),
+    tbaPushWorker.close(),
     tbaTeamsSyncWorker.close(),
     seasonRenewalWorker.close(),
   ])

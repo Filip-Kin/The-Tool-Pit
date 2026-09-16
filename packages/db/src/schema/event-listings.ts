@@ -309,6 +309,31 @@ export const eventListings = pgTable(
      */
     manualTeamListText: text('manual_team_list_text'),
 
+    // TBA team-list push (the reverse of the roster refresh above: send OUR
+    // roster, manual or scraped, back to TBA's trusted write API instead of
+    // reading TBA's). Opt-in per listing, because it writes to someone else's
+    // TBA event page and that is not a thing to do by default.
+    //
+    // Credentials (auth_id/auth_secret, issued by TBA per event) do NOT live on
+    // this table: apps/web/app/admin/event-listings/page.tsx selects the whole
+    // eventListings row to build every admin list/card, so any column here
+    // rides along into that payload. They live in event_tba_credentials
+    // instead, which nothing ever selects wholesale. This column only says
+    // whether push is turned on; the worker checks event_tba_credentials for
+    // the actual auth_id/auth_secret before it ever pushes.
+    /** Push the roster to TBA automatically. Off by default. */
+    tbaAutoPush: boolean('tba_auto_push').notNull().default(false),
+    /** When the push job last successfully wrote a roster to TBA (day 1, or the whole event when not parallelDivisions). */
+    tbaPushedAt: timestamp('tba_pushed_at', { withTimezone: true }),
+    /** Hash of the team numbers last pushed for day 1 / the whole event, so an unchanged roster is not re-sent every run. */
+    tbaPushedHash: text('tba_pushed_hash'),
+    /** Same, for day 2 of a parallelDivisions listing. */
+    tbaPushedHashDay2: text('tba_pushed_hash_day2'),
+    /** 'ok' | 'error' | 'skipped_started' | 'not_configured'. Free text, same as the other status-ish columns on this table. */
+    tbaPushStatus: text('tba_push_status'),
+    /** The error from the last failed push attempt, if any. Null when the last push (or the last check) was fine. */
+    tbaPushError: text('tba_push_error'),
+
     /**
      * The fields a person has set by hand, so an automated pass leaves them be.
      *
@@ -547,6 +572,33 @@ export const eventEditProposalsRelations = relations(eventEditProposals, ({ one 
   listing: one(eventListings, { fields: [eventEditProposals.eventListingId], references: [eventListings.id] }),
 }))
 
+/**
+ * TBA trusted-API credentials for the team-list push (see tbaAutoPush on
+ * eventListings). One row per listing, in its own table rather than columns on
+ * eventListings, because the admin list page selects the whole eventListings
+ * row for every card (`select({ listing: eventListings, ... })` in
+ * apps/web/app/admin/event-listings/page.tsx) and nothing here should ride
+ * along in that payload. Only the push job (apps/worker) and the two admin
+ * actions that set/clear a listing's credentials ever query this table.
+ */
+export const eventTbaCredentials = pgTable(
+  'event_tba_credentials',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventListingId: uuid('event_listing_id')
+      .notNull()
+      .unique()
+      .references(() => eventListings.id, { onDelete: 'cascade' }),
+    /** TBA-issued auth_id for this event's trusted API access. */
+    authId: text('auth_id').notNull(),
+    /** TBA-issued auth_secret, used to HMAC-sign trusted API requests. Never sent to the browser. */
+    authSecret: text('auth_secret').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('event_tba_credentials_event_listing_id_idx').on(table.eventListingId)],
+)
+
 // ---------------------------------------------------------------------------
 // The season rule
 //
@@ -639,3 +691,5 @@ export type EventRosterSnapshot = typeof eventRosterSnapshots.$inferSelect
 export type NewEventRosterSnapshot = typeof eventRosterSnapshots.$inferInsert
 export type EventEditProposal = typeof eventEditProposals.$inferSelect
 export type NewEventEditProposal = typeof eventEditProposals.$inferInsert
+export type EventTbaCredentials = typeof eventTbaCredentials.$inferSelect
+export type NewEventTbaCredentials = typeof eventTbaCredentials.$inferInsert
