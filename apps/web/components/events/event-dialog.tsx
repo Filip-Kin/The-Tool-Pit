@@ -91,7 +91,7 @@ export function EventDialog({
             ) : (
               <div className="flex flex-col gap-5">
                 <EventDetail event={event} now={now} />
-                <EventRosterTable eventId={event.id} />
+                <EventRosterTable eventId={event.id} tbaKey={event.tbaKey} tbaKeyDay2={event.tbaKeyDay2} />
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border-subtle pt-4">
                   <ClaimListingButton entityType="event" entityId={event.id} state={claimState} />
                   {/* Just the words: "suggest" already says it is a proposal that

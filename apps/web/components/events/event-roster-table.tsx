@@ -57,9 +57,27 @@ const AVATAR_BASE = 'https://avatars.frc.tools/avatar'
 // teams was loading dozens of near-megabyte PNGs, so they crawled in one by one.
 const DEFAULT_AVATAR = `${AVATAR_BASE}/default.png?s=64`
 
-function TeamAvatar({ number }: { number: number }) {
-  const [src, setSrc] = useState(`${AVATAR_BASE}/${number}.png?s=64`)
+/** The plain avatar, or - when this event has one - the event-scoped avatar
+ * (an event's own upload for the team, e.g. a sponsor logo swap, overrides
+ * their default). The avatar service resolves the tier itself: event upload >
+ * team default > TBA fallback, so passing `event` is a single request, not a
+ * fallback chain to manage here. */
+function avatarUrl(number: number, event?: string | null): string {
+  const q = event ? `?s=64&event=${encodeURIComponent(event)}` : '?s=64'
+  return `${AVATAR_BASE}/${number}.png${q}`
+}
+
+function TeamAvatar({ number, event }: { number: number; event?: string | null }) {
+  const [src, setSrc] = useState(() => avatarUrl(number, event))
   const [failed, setFailed] = useState(false)
+
+  // A team on both days of a 2x-1-day event keeps the same row key across the
+  // day tabs, so React reuses this instance rather than remounting it - the
+  // source has to follow the prop instead of only being set once at mount.
+  useEffect(() => {
+    setSrc(avatarUrl(number, event))
+    setFailed(false)
+  }, [number, event])
   if (failed) {
     return (
       <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-3 text-[10px] font-semibold tabular-nums text-muted-2">
@@ -114,7 +132,7 @@ const MENU_ITEM =
  * a menu. A second robot ("4145B") shares the team's number, so its menu is
  * the team's menu.
  */
-function TeamRow({ team }: { team: RosterTeamRow }) {
+function TeamRow({ team, eventKey }: { team: RosterTeamRow; eventKey?: string | null }) {
   const [open, setOpen] = useState(false)
   // On a phone the list scrolls under the finger, and a scroll that starts on a
   // row read as a tap and opened the menu. Track how far the pointer moved
@@ -150,7 +168,7 @@ function TeamRow({ team }: { team: RosterTeamRow }) {
           }}
         >
           <td className="w-10 min-w-10 py-1.5 pl-3 pr-2">
-            <TeamAvatar number={team.number} />
+            <TeamAvatar number={team.number} event={eventKey} />
           </td>
           <td className="whitespace-nowrap py-1.5 pr-3 font-medium tabular-nums text-foreground">
             <span className="inline-flex items-center gap-1.5">
@@ -211,7 +229,17 @@ function byWaitlistOrder(a: RosterTeamRow, b: RosterTeamRow): number {
   return a.number - b.number
 }
 
-export function EventRosterTable({ eventId }: { eventId: string }) {
+export function EventRosterTable({
+  eventId,
+  tbaKey,
+  tbaKeyDay2,
+}: {
+  eventId: string
+  /** Day 1's TBA event key (or the whole event's, when it is not a 2x-1-day listing). */
+  tbaKey?: string | null
+  /** Day 2's TBA event key, for a 2x-1-day listing. */
+  tbaKeyDay2?: string | null
+}) {
   const [teams, setTeams] = useState<RosterTeamRow[]>([])
   const [copied, setCopied] = useState(false)
   const [days, setDays] = useState<DayRosterRow[]>([])
@@ -257,6 +285,10 @@ export function EventRosterTable({ eventId }: { eventId: string }) {
   const shown = twoDay ? (days.find((d) => d.day === activeDay)?.teams ?? []) : teams
   const waitlist = shown.filter((t) => t.waitlisted).sort(byWaitlistOrder)
   const registered = shown.filter((t) => !t.waitlisted)
+  // Day 1 is tbaKey, day 2 is tbaKeyDay2 - same split roster-days.ts and the
+  // roster-refresh job already use for which day's TBA event a snapshot came
+  // from, so the avatar tier request matches the same event the roster did.
+  const eventKey = twoDay ? (activeDay === 2 ? tbaKeyDay2 : tbaKey) : tbaKey
 
   return (
     <section className="flex flex-col gap-2 border-t border-border-subtle pt-4">
@@ -335,13 +367,13 @@ export function EventRosterTable({ eventId }: { eventId: string }) {
           <tbody>
             {waitlist.length > 0 && <SectionRow label="Waitlist" count={waitlist.length} />}
             {waitlist.map((t) => (
-              <TeamRow key={`w-${t.number}-${t.robot ?? ''}`} team={t} />
+              <TeamRow key={`w-${t.number}-${t.robot ?? ''}`} team={t} eventKey={eventKey} />
             ))}
             {waitlist.length > 0 && registered.length > 0 && (
               <SectionRow label="Registered" count={registered.length} />
             )}
             {registered.map((t) => (
-              <TeamRow key={`r-${t.number}-${t.robot ?? ''}`} team={t} />
+              <TeamRow key={`r-${t.number}-${t.robot ?? ''}`} team={t} eventKey={eventKey} />
             ))}
           </tbody>
         </table>

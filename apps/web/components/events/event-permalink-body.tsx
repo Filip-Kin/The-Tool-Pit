@@ -46,7 +46,7 @@ export function EventPermalinkBody({
   return (
     <div className="flex flex-col gap-5">
       <EventDetail event={event} now={new Date()} />
-      <EventRosterTable eventId={event.id} />
+      <EventRosterTable eventId={event.id} tbaKey={event.tbaKey} tbaKeyDay2={event.tbaKeyDay2} />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border-subtle pt-4">
         <ClaimListingButton entityType="event" entityId={event.id} state={claimState} />
         <button type="button" onClick={() => setEditing(true)} className={FOOTER_LINK}>
