@@ -50,6 +50,107 @@ type When = 'upcoming' | 'past' | 'all'
 type SortBy = 'relevance' | 'date' | 'distance'
 type GeoState = 'idle' | 'locating' | 'granted' | 'denied' | 'unsupported'
 
+const DEFAULT_PROGRAM: EventProgram = 'frc'
+const DEFAULT_WHEN: When = 'upcoming'
+const DEFAULT_SORT: SortBy = 'relevance'
+
+interface UrlState {
+  program: EventProgram
+  q: string
+  when: When
+  openOnly: boolean
+  sortBy: SortBy
+  filters: EventFilters
+}
+
+/**
+ * The whole filter set, in the URL, so a link reproduces exactly what is on
+ * screen - same mechanism as the grants explorer (readUrlFilters/replaceState),
+ * adapted for this component's own state shape. Distance is stored in km (the
+ * canonical unit event-filters.ts works in) regardless of the reader's display
+ * unit, so a shared link means the same thing to a mi reader and a km reader.
+ *
+ * `team` and `when` are read separately, from the server-parsed initialTeam/
+ * initialWhen props (see the effect below this component's state) - that path
+ * already exists to catch a link clicked while /events is already mounted
+ * (e.g. "View other events" from a roster row), so this only reads the fields
+ * page.tsx does not parse: program, q, sort, open, and the rest of the filter
+ * menu. `seasons` is a different axis (which year, chosen by navigating a
+ * Link) and is left alone by both the read and the write below.
+ */
+function readUrlState(): Partial<Omit<UrlState, 'when'>> {
+  const sp = new URLSearchParams(window.location.search)
+  const out: Partial<Omit<UrlState, 'when'>> = {}
+  const program = sp.get('program')
+  if (program === 'frc' || program === 'ftc' || program === 'fll') out.program = program
+  const q = sp.get('q')
+  if (q) out.q = q
+  if (sp.get('open') === '1') out.openOnly = true
+  const sortBy = sp.get('sort')
+  if (sortBy === 'relevance' || sortBy === 'date' || sortBy === 'distance') out.sortBy = sortBy
+
+  const filters: EventFilters = { ...NO_FILTERS }
+  let hasFilter = false
+  if (sp.has('distanceKm')) {
+    const n = Number(sp.get('distanceKm'))
+    if (Number.isFinite(n) && n > 0) {
+      filters.maxDistanceKm = n
+      hasFilter = true
+    }
+  }
+  if (sp.has('costUsd')) {
+    const n = Number(sp.get('costUsd'))
+    if (Number.isFinite(n) && n >= 0) {
+      filters.maxCostUsd = n
+      hasFilter = true
+    }
+  }
+  const team = sp.get('team')
+  if (team && /^\d{1,5}$/.test(team)) {
+    filters.teamNumber = Number(team)
+    hasFilter = true
+  }
+  if (sp.get('from')) {
+    filters.from = sp.get('from') as string
+    hasFilter = true
+  }
+  if (sp.get('to')) {
+    filters.to = sp.get('to') as string
+    hasFilter = true
+  }
+  if (sp.get('region')) {
+    filters.region = sp.get('region')
+    hasFilter = true
+  }
+  if (hasFilter) out.filters = filters
+  return out
+}
+
+/** Written on every change, with replaceState so the address bar follows without a navigation or a history entry per click. */
+function writeUrlState(state: UrlState): void {
+  const sp = new URLSearchParams(window.location.search)
+  for (const k of ['program', 'q', 'when', 'open', 'sort', 'distanceKm', 'costUsd', 'team', 'from', 'to', 'region']) {
+    sp.delete(k)
+  }
+  if (state.program !== DEFAULT_PROGRAM) sp.set('program', state.program)
+  if (state.q.trim()) sp.set('q', state.q.trim())
+  if (state.when !== DEFAULT_WHEN) sp.set('when', state.when)
+  if (state.openOnly) sp.set('open', '1')
+  if (state.sortBy !== DEFAULT_SORT) sp.set('sort', state.sortBy)
+  if (state.filters.maxDistanceKm != null) sp.set('distanceKm', String(Math.round(state.filters.maxDistanceKm)))
+  if (state.filters.maxCostUsd != null) sp.set('costUsd', String(state.filters.maxCostUsd))
+  if (state.filters.teamNumber != null) sp.set('team', String(state.filters.teamNumber))
+  if (state.filters.from) sp.set('from', state.filters.from)
+  if (state.filters.to) sp.set('to', state.filters.to)
+  if (state.filters.region) sp.set('region', state.filters.region)
+
+  const qs = sp.toString()
+  const next = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`
+  if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+    window.history.replaceState(window.history.state, '', next)
+  }
+}
+
 /**
  * SEASON AND TIMING ARE TWO DIFFERENT AXES AND THIS COMPONENT KEEPS THEM APART.
  *
@@ -133,6 +234,26 @@ export function EventsExplorer({
     setOpenId(null)
     setSelectedId(null)
   }, [initialTeam, initialWhen])
+
+  // The rest of the filter set (team/when are the block above's job), read once
+  // from the URL a shared link arrived with. Restored AFTER mount so the first
+  // client render still matches the server HTML, then every change gets
+  // written back below so the address bar always reproduces what is on screen.
+  const [restored, setRestored] = useState(false)
+  useEffect(() => {
+    const fromUrl = readUrlState()
+    if (fromUrl.program) setProgram(fromUrl.program)
+    if (fromUrl.q) setQ(fromUrl.q)
+    if (fromUrl.openOnly) setOpenOnly(true)
+    if (fromUrl.sortBy) setSortBy(fromUrl.sortBy)
+    if (fromUrl.filters) setFilters((f) => ({ ...f, ...fromUrl.filters }))
+    setRestored(true)
+  }, [])
+
+  useEffect(() => {
+    if (!restored) return
+    writeUrlState({ program, q, when, openOnly, sortBy, filters })
+  }, [restored, program, q, when, openOnly, sortBy, filters])
   // Team numbers per event, fetched once and only if somebody filters by team.
   // Null means "not asked for yet", which is different from an empty answer.
   const [rosterTeams, setRosterTeams] = useState<Record<string, number[]> | null>(null)
