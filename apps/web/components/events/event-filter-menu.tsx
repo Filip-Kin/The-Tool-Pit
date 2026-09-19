@@ -134,6 +134,7 @@ export function EventFilterMenu({
   counts,
   rosterLoading,
   totalShown,
+  regionOptions,
 }: {
   filters: EventFilters
   onChange: (next: EventFilters) => void
@@ -141,11 +142,13 @@ export function EventFilterMenu({
   /** False until the reader shares a location; the distance filter needs one. */
   hasLocation: boolean
   /** Events the other controls allow that a given filter cannot judge. */
-  counts: { noCost: number; noRoster: number; noDates: number }
+  counts: { noCost: number; noRoster: number; noDates: number; noRegion: number }
   /** True while the roster index for the team filter is being fetched. */
   rosterLoading: boolean
   /** Events on screen, for the "N of M" line at the foot of the panel. */
   totalShown: number
+  /** Distinct `region` values among the events the other controls allow, sorted. */
+  regionOptions: string[]
 }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -236,6 +239,29 @@ export function EventFilterMenu({
                 {unit}
               </span>
             </div>
+          </Section>
+
+          <Section
+            label="State"
+            hint={
+              filters.region != null && counts.noRegion > 0
+                ? `${counts.noRegion} ${counts.noRegion === 1 ? 'event has' : 'events have'} no state on file, so they are hidden while this is set.`
+                : undefined
+            }
+          >
+            <select
+              aria-label="State"
+              value={filters.region ?? ''}
+              onChange={(e) => set('region', e.target.value || null)}
+              className="input"
+            >
+              <option value="">Any</option>
+              {regionOptions.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
           </Section>
 
           <Section
@@ -366,6 +392,9 @@ export function ActiveFilterChips({
       label: dateFilterLabel(filters.from, filters.to),
       clear: { from: '', to: '' },
     })
+  }
+  if (filters.region != null) {
+    chips.push({ key: 'region', label: filters.region, clear: { region: null } })
   }
 
   if (chips.length === 0) return null

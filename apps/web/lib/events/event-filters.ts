@@ -26,6 +26,16 @@ export interface EventFilters {
   from: string
   /** ISO yyyy-mm-dd, inclusive. '' when off. */
   to: string
+  /**
+   * The event's `region` column, matched exactly. Null when off.
+   *
+   * `region` is free text (seeded as a two-letter abbreviation, but a form or a
+   * geocode can leave a full state name or a Canadian province in there too),
+   * so this is never a fixed 50-state enum - the menu's option list is built
+   * from whatever distinct values are actually on the events on screen, which
+   * means the filter can only ever offer a value that will actually match one.
+   */
+  region: string | null
 }
 
 export const NO_FILTERS: EventFilters = {
@@ -34,6 +44,7 @@ export const NO_FILTERS: EventFilters = {
   teamNumber: null,
   from: '',
   to: '',
+  region: null,
 }
 
 /**
@@ -58,6 +69,7 @@ export function activeFilterCount(f: EventFilters): number {
   if (f.maxCostUsd != null) n++
   if (f.teamNumber != null) n++
   if (f.from || f.to) n++
+  if (f.region != null) n++
   return n
 }
 
@@ -97,6 +109,7 @@ export function matchesEventFilters(
   if (f.maxCostUsd != null && (ev.costUsd == null || ev.costUsd > f.maxCostUsd)) return false
   if (f.teamNumber != null && !(ctx.rosterTeams ?? []).includes(f.teamNumber)) return false
   if (!matchesDateRange(ev, f.from, f.to)) return false
+  if (f.region != null && ev.region !== f.region) return false
   return true
 }
 
@@ -109,14 +122,16 @@ export function matchesEventFilters(
 export function unjudgeableCounts(
   events: PublicEvent[],
   rosterTeams: Record<string, number[]>,
-): { noCost: number; noRoster: number; noDates: number } {
+): { noCost: number; noRoster: number; noDates: number; noRegion: number } {
   let noCost = 0
   let noRoster = 0
   let noDates = 0
+  let noRegion = 0
   for (const ev of events) {
     if (ev.costUsd == null) noCost++
     if (!rosterTeams[ev.id]?.length) noRoster++
     if (!ev.startDate) noDates++
+    if (!ev.region) noRegion++
   }
-  return { noCost, noRoster, noDates }
+  return { noCost, noRoster, noDates, noRegion }
 }

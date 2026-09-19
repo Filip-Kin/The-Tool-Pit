@@ -262,6 +262,14 @@ export function EventsExplorer({
     [base, rosterTeams],
   )
 
+  // Distinct states among the events the other controls already allow, so the
+  // dropdown never offers a value nothing on screen can match. `region` is free
+  // text (see event-filters.ts), not a fixed enum, hence deriving it from data.
+  const regionOptions = useMemo(
+    () => [...new Set(base.map((r) => r.event.region).filter((r): r is string => Boolean(r)))].sort(),
+    [base],
+  )
+
   const filtered = useMemo(() => {
     const rows = base.filter((r) =>
       matchesEventFilters(r.event, filters, {
@@ -394,6 +402,7 @@ export function EventsExplorer({
             counts={menuCounts}
             rosterLoading={rosterLoading}
             totalShown={filtered.length}
+            regionOptions={regionOptions}
           />
           {/* ALWAYS RENDERED, including before a location arrives.
               It used to appear only once geolocation had succeeded, which hid

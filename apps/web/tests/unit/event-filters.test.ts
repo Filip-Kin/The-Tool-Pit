@@ -1,5 +1,5 @@
 /**
- * The off-season map's filter menu: distance, cost, team number and dates.
+ * The off-season map's filter menu: distance, cost, team number, dates and state.
  *
  * Two things are pinned here. The first is the missing-data rule, which is the
  * only part of this that is a judgement call rather than arithmetic: a filter
@@ -97,6 +97,15 @@ describe('matchesEventFilters', () => {
     expect(matchesEventFilters(ev(), f, NO_CONTEXT)).toBe(true)
     expect(matchesEventFilters(ev({ startDate: '2026-10-01', endDate: '2026-10-02' }), f, NO_CONTEXT)).toBe(false)
     expect(matchesEventFilters(ev({ startDate: null, endDate: null }), f, NO_CONTEXT)).toBe(false)
+  })
+
+  it('matches a state exactly and drops an event with no state on file', () => {
+    const f = withFilters({ region: 'MI' })
+    expect(matchesEventFilters(ev({ region: 'MI' }), f, NO_CONTEXT)).toBe(true)
+    expect(matchesEventFilters(ev({ region: 'OH' }), f, NO_CONTEXT)).toBe(false)
+    expect(matchesEventFilters(ev({ region: null }), f, NO_CONTEXT)).toBe(false)
+    // Off entirely: whatever the event's region, it is not judged.
+    expect(matchesEventFilters(ev({ region: 'OH' }), NO_FILTERS, NO_CONTEXT)).toBe(true)
   })
 })
 
