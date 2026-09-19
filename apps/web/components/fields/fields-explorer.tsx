@@ -53,6 +53,98 @@ const EMPTY: Filters = {
   fmsOnly: false,
 }
 
+const DEFAULT_PROGRAM: FieldProgram = 'frc'
+
+/**
+ * The whole filter set, shareable by link and persisted per browser - the
+ * same two mechanisms grants-explorer proved out (URL via replaceState,
+ * localStorage under frc.tools:<vertical>:filters), applied here since this
+ * page had neither. Search text is never persisted to storage, only to the
+ * URL: a stale query restored on a plain visit reads as a broken page.
+ */
+interface StoredFilters {
+  program: FieldProgram
+  coverage: FieldCoverage[]
+  elements: FieldElements[]
+  availability: FieldAvailability[]
+  fmsOnly: boolean
+}
+
+const STORED_FILTERS_KEY = 'frc.tools:fields:filters'
+
+function isStoredEmpty(s: StoredFilters): boolean {
+  return (
+    s.program === DEFAULT_PROGRAM &&
+    s.coverage.length === 0 &&
+    s.elements.length === 0 &&
+    s.availability.length === 0 &&
+    !s.fmsOnly
+  )
+}
+
+function readStoredFilters(): StoredFilters | null {
+  try {
+    const raw = window.localStorage.getItem(STORED_FILTERS_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<StoredFilters>
+    return {
+      program: parsed.program === 'ftc' || parsed.program === 'fll' ? parsed.program : DEFAULT_PROGRAM,
+      coverage: Array.isArray(parsed.coverage) ? parsed.coverage.filter((c) => COVERAGES.includes(c)) : [],
+      elements: Array.isArray(parsed.elements) ? parsed.elements.filter((c) => ELEMENTS.includes(c)) : [],
+      availability: Array.isArray(parsed.availability)
+        ? parsed.availability.filter((c) => AVAILABILITIES.includes(c))
+        : [],
+      fmsOnly: Boolean(parsed.fmsOnly),
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeStoredFilters(s: StoredFilters): void {
+  try {
+    if (isStoredEmpty(s)) window.localStorage.removeItem(STORED_FILTERS_KEY)
+    else window.localStorage.setItem(STORED_FILTERS_KEY, JSON.stringify(s))
+  } catch {
+    // Storage closed (private browsing, quota): the page still works, it just forgets.
+  }
+}
+
+function readUrlFilters(): (StoredFilters & { q?: string }) | null {
+  const sp = new URLSearchParams(window.location.search)
+  if ([...sp.keys()].length === 0) return null
+  const list = <T extends string>(key: string, allowed: readonly T[]): T[] =>
+    (sp.get(key)?.split(',').filter((v): v is T => (allowed as readonly string[]).includes(v))) ?? []
+  const program = sp.get('program')
+  const out: StoredFilters & { q?: string } = {
+    program: program === 'ftc' || program === 'fll' ? program : DEFAULT_PROGRAM,
+    coverage: list('coverage', COVERAGES),
+    elements: list('elements', ELEMENTS),
+    availability: list('availability', AVAILABILITIES),
+    fmsOnly: sp.get('fms') === '1',
+  }
+  const q = sp.get('q')
+  if (q) out.q = q
+  return out
+}
+
+/** Written on every change, with replaceState so the address bar follows without a navigation or a history entry per click. */
+function writeUrlFilters(s: StoredFilters, q: string): void {
+  const sp = new URLSearchParams(window.location.search)
+  for (const k of ['program', 'coverage', 'elements', 'availability', 'fms', 'q']) sp.delete(k)
+  if (s.program !== DEFAULT_PROGRAM) sp.set('program', s.program)
+  if (s.coverage.length) sp.set('coverage', s.coverage.join(','))
+  if (s.elements.length) sp.set('elements', s.elements.join(','))
+  if (s.availability.length) sp.set('availability', s.availability.join(','))
+  if (s.fmsOnly) sp.set('fms', '1')
+  if (q.trim()) sp.set('q', q.trim())
+  const qs = sp.toString()
+  const next = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`
+  if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+    window.history.replaceState(window.history.state, '', next)
+  }
+}
+
 type GeoState = 'idle' | 'locating' | 'granted' | 'denied' | 'unsupported'
 
 export function FieldsExplorer({
@@ -74,6 +166,40 @@ export function FieldsExplorer({
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [geo, setGeo] = useState<GeoState>('idle')
   const [unit, setUnit] = useState<DistanceUnit>('km')
+  const [restored, setRestored] = useState(false)
+
+  // Restore once, after mount: a shared URL first, this browser's last state
+  // otherwise. The search text comes from the URL only.
+  useEffect(() => {
+    const fromUrl = readUrlFilters()
+    const stored = fromUrl ?? readStoredFilters()
+    if (stored) {
+      setProgram(stored.program)
+      setFilters({
+        q: fromUrl?.q ?? '',
+        coverage: new Set(stored.coverage),
+        elements: new Set(stored.elements),
+        availability: new Set(stored.availability),
+        fmsOnly: stored.fmsOnly,
+      })
+    }
+    setRestored(true)
+  }, [])
+
+  // Remember every change after that. Not before: writing the empty initial
+  // state on mount would wipe the stored one before it was read.
+  useEffect(() => {
+    if (!restored) return
+    const stored: StoredFilters = {
+      program,
+      coverage: [...filters.coverage],
+      elements: [...filters.elements],
+      availability: [...filters.availability],
+      fmsOnly: filters.fmsOnly,
+    }
+    writeStoredFilters(stored)
+    writeUrlFilters(stored, filters.q)
+  }, [restored, program, filters])
 
   // Ask the browser where the visitor is so we can zoom the map in and sort the
   // list by what's nearest - the whole point once fields span the globe. Runs

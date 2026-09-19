@@ -24,6 +24,7 @@ import type { EventProgram } from '@the-tool-pit/db/event-enums'
 import {
   NO_FILTERS,
   activeFilterCount,
+  hasActiveFilters,
   matchesEventFilters,
   unjudgeableCounts,
   type EventFilters,
@@ -152,6 +153,40 @@ function writeUrlState(state: UrlState): void {
 }
 
 /**
+ * Filters persist per browser, the same as grants (frc.tools:grants:filters).
+ * Restored AFTER mount so the first client render still matches the server
+ * HTML, and the search text is deliberately not kept: a stale query on
+ * arrival reads as a broken page, same reasoning as grants.
+ */
+const STORED_FILTERS_KEY = 'frc.tools:events:filters'
+type StoredState = Omit<UrlState, 'q'>
+
+function readStoredState(): StoredState | null {
+  try {
+    const raw = window.localStorage.getItem(STORED_FILTERS_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as StoredState
+  } catch {
+    return null
+  }
+}
+
+function writeStoredState(state: StoredState): void {
+  try {
+    const empty =
+      state.program === DEFAULT_PROGRAM &&
+      state.when === DEFAULT_WHEN &&
+      !state.openOnly &&
+      state.sortBy === DEFAULT_SORT &&
+      !hasActiveFilters(state.filters)
+    if (empty) window.localStorage.removeItem(STORED_FILTERS_KEY)
+    else window.localStorage.setItem(STORED_FILTERS_KEY, JSON.stringify(state))
+  } catch {
+    // Storage closed (private browsing, quota): the page still works, it just forgets.
+  }
+}
+
+/**
  * SEASON AND TIMING ARE TWO DIFFERENT AXES AND THIS COMPONENT KEEPS THEM APART.
  *
  *   SEASON is which year's offseason a listing belongs to. The offseason ends
@@ -235,24 +270,38 @@ export function EventsExplorer({
     setSelectedId(null)
   }, [initialTeam, initialWhen])
 
-  // The rest of the filter set (team/when are the block above's job), read once
-  // from the URL a shared link arrived with. Restored AFTER mount so the first
-  // client render still matches the server HTML, then every change gets
-  // written back below so the address bar always reproduces what is on screen.
+  // The rest of the filter set (team/when-from-a-link are the block above's
+  // job). A shared link wins outright over anything stored - clicking a link
+  // with even one param should show exactly what the link encodes, not a
+  // blend with a returning visitor's own preferences - so localStorage is
+  // only consulted when the URL specified nothing at all. Restored AFTER
+  // mount so the first client render still matches the server HTML, then
+  // every change gets written back below so the address bar and this
+  // browser's storage both always reproduce what is on screen.
   const [restored, setRestored] = useState(false)
   useEffect(() => {
     const fromUrl = readUrlState()
+    const linked = initialTeam != null || initialWhen != null || Object.keys(fromUrl).length > 0
+    const stored = linked ? null : readStoredState()
+
     if (fromUrl.program) setProgram(fromUrl.program)
-    if (fromUrl.q) setQ(fromUrl.q)
+    else if (stored?.program) setProgram(stored.program)
+    if (fromUrl.q) setQ(fromUrl.q) // search text is never restored from storage
     if (fromUrl.openOnly) setOpenOnly(true)
+    else if (stored?.openOnly) setOpenOnly(true)
     if (fromUrl.sortBy) setSortBy(fromUrl.sortBy)
+    else if (stored?.sortBy) setSortBy(stored.sortBy)
+    if (stored?.when && initialWhen == null) setWhen(stored.when)
     if (fromUrl.filters) setFilters((f) => ({ ...f, ...fromUrl.filters }))
+    else if (stored?.filters && hasActiveFilters(stored.filters)) setFilters(stored.filters)
     setRestored(true)
   }, [])
 
   useEffect(() => {
     if (!restored) return
-    writeUrlState({ program, q, when, openOnly, sortBy, filters })
+    const state = { program, when, openOnly, sortBy, filters }
+    writeStoredState(state)
+    writeUrlState({ ...state, q })
   }, [restored, program, q, when, openOnly, sortBy, filters])
   // Team numbers per event, fetched once and only if somebody filters by team.
   // Null means "not asked for yet", which is different from an empty answer.
