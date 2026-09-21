@@ -14,7 +14,7 @@ import {
 } from '@the-tool-pit/db'
 import type { EventListingSource, NewEventListing } from '@the-tool-pit/db'
 import { uniqueEventSlug } from '@/lib/queries/event-listings'
-import { sendApprovalNotice, reviewEventUrl } from '@the-tool-pit/types'
+import { reviewEventUrl } from '@the-tool-pit/types'
 import {
   eventDateRange,
   eventLocation,
@@ -28,6 +28,7 @@ import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate
 import { revalidatePath } from 'next/cache'
 import { adminSubmitter } from '@/lib/admin/auto-approve'
 import { publishEventListing } from '@/lib/events/publish'
+import { sendApprovalNotice } from '@/lib/discord/notify'
 
 export interface CreateEventSubmissionInput {
   name: string
@@ -290,6 +291,7 @@ export async function createEventSubmission(
   if (options.notify !== false) {
     sendApprovalNotice({
       vertical: 'event',
+      entityId: row.id,
       title: name,
       reviewUrl: reviewEventUrl(row.id),
       sourceUrl: values.website ?? null,

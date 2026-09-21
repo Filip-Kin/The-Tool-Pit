@@ -1,12 +1,10 @@
 'use server'
 
-import { isAdmin } from '@/lib/admin/auth'
+import { isAdmin, adminIdentity } from '@/lib/admin/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { eq } from 'drizzle-orm'
-import { getDb } from '@/lib/db'
-import { fieldEditProposals, fieldEditProposalPhotos } from '@the-tool-pit/db'
-import { notifyFieldEditRejected } from '@/lib/notify/approvals'
+import { rejectFieldEditProposal } from '@/lib/fields/reject-edit'
+import { recordDiscordDecision } from '@/lib/discord/decisions'
 import { applyFieldEditProposal } from '@/lib/fields/apply-edit'
 
 async function assertAdmin() {
@@ -23,6 +21,7 @@ export async function applyFieldEdit(proposalId: string): Promise<{ error?: stri
   await assertAdmin()
   const result = await applyFieldEditProposal(proposalId)
   if (result.error) return result
+  await recordDiscordDecision('field_edit', proposalId, { status: 'approved', by: await adminIdentity(), via: 'site' })
   revalidateAll()
   return {}
 }
@@ -40,17 +39,9 @@ export async function rejectFieldEdit(
   reason: string,
 ): Promise<{ error?: string }> {
   await assertAdmin()
-  const clean = reason?.trim() ?? ''
-  if (!clean) return { error: 'Give a reason. It is what the submitter is told.' }
-
-  const db = getDb()
-  // Drop the pending photo bytes; the proposal row stays for the record.
-  await db.delete(fieldEditProposalPhotos).where(eq(fieldEditProposalPhotos.proposalId, proposalId))
-  await db
-    .update(fieldEditProposals)
-    .set({ status: 'rejected', rejectionReason: clean, updatedAt: new Date() })
-    .where(eq(fieldEditProposals.id, proposalId))
-  await notifyFieldEditRejected(proposalId, clean)
+  const result = await rejectFieldEditProposal(proposalId, reason)
+  if (result.error) return result
+  await recordDiscordDecision('field_edit', proposalId, { status: 'rejected', by: await adminIdentity(), via: 'site' })
   revalidatePath('/admin/field-edits')
   return {}
 }

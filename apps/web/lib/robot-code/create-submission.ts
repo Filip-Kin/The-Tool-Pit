@@ -5,8 +5,9 @@ import { ARTIFACT_KINDS, MIN_SEASON_YEAR, maxSeasonYear, type ArtifactKind } fro
 import { FIELD_PROGRAMS, type FieldProgram } from '@the-tool-pit/db/field-enums'
 import { getSubmissionQueue } from '@/lib/submissions/queue'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
-import { sendApprovalNotice, reviewSubmissionUrl } from '@the-tool-pit/types'
+import { reviewSubmissionUrl } from '@the-tool-pit/types'
 import { adminSubmitter } from '@/lib/admin/auto-approve'
+import { sendApprovalNotice } from '@/lib/discord/notify'
 
 /**
  * Public robot code / CAD submissions.
@@ -173,6 +174,7 @@ export async function createRobotCodeSubmission(
   // against the repo rather than reads off the page.
   sendApprovalNotice({
     vertical: 'robot_code',
+    entityId: created.id,
     title: `${program.toUpperCase()} ${input.teamNumber}, ${input.seasonYear}`,
     reviewUrl: reviewSubmissionUrl(created.id),
     sourceUrl: url,

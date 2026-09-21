@@ -3,8 +3,9 @@ import { getDb } from '@/lib/db'
 import { submissions } from '@the-tool-pit/db'
 import { getSubmissionQueue } from './queue'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
-import { sendApprovalNotice, reviewSubmissionUrl, type SubmitToolResponse } from '@the-tool-pit/types'
+import { reviewSubmissionUrl, type SubmitToolResponse } from '@the-tool-pit/types'
 import { adminSubmitter } from '@/lib/admin/auto-approve'
+import { sendApprovalNotice } from '@/lib/discord/notify'
 
 interface CreateSubmissionInput {
   url: string
@@ -96,6 +97,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Su
   // open it.
   sendApprovalNotice({
     vertical: 'tool',
+    entityId: created.id,
     title: input.url,
     reviewUrl: reviewSubmissionUrl(created.id),
     sourceUrl: input.url,

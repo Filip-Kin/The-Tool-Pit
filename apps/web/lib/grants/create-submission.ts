@@ -3,7 +3,7 @@ import { getDb } from '@/lib/db'
 import { grantCandidates, grantSources, grants } from '@the-tool-pit/db'
 import type { RawGrantMetadata } from '@the-tool-pit/db'
 import { enqueueGrantExtract } from '@/lib/admin/grant-queue'
-import { sendApprovalNotice, reviewGrantUrl } from '@the-tool-pit/types'
+import { reviewGrantUrl } from '@the-tool-pit/types'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 import { revalidatePath } from 'next/cache'
 import { adminSubmitter } from '@/lib/admin/auto-approve'
@@ -11,6 +11,7 @@ import { adminName } from '@/lib/admin/auth'
 import { reviewDefaults } from '@/lib/admin/grant-review'
 import { formFromReviewDefaults, publishCandidateFromForm } from '@/lib/admin/grant-publish'
 import { revalidateGrantPublic } from '@/lib/admin/grants'
+import { sendApprovalNotice } from '@/lib/discord/notify'
 
 /**
  * Public grant submissions.

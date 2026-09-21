@@ -85,6 +85,15 @@ The worker is designed for graceful shutdown (SIGTERM handling).
 Coolify's rolling deploys will stop the old worker before starting
 the new one — BullMQ jobs are persisted in Redis, so nothing is lost.
 
+### Discord approvals bot
+Both services need `DISCORD_BOT_TOKEN`, `DISCORD_APPROVALS_CHANNEL_ID`,
+`DISCORD_DEV_ROLE_ID` and `INTERNAL_API_SECRET`. The web app posts and edits;
+the worker holds the gateway connection and relays reactions to
+`/api/internal/moderate` on `NEXT_PUBLIC_URL` (or `WEB_INTERNAL_URL`).
+The bot needs Send Messages, Embed Links, Add Reactions, Read Message History
+and Manage Messages in the approvals channel. Migration `0041` adds the
+`discord_approval_messages` table; run `db:migrate` with the deploy.
+
 ### Rate limiting
 Vote and submission rate limits use Redis. If Redis restarts, rate
 limit counters reset — this is acceptable behavior for v1.

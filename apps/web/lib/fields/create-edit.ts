@@ -2,11 +2,12 @@ import { eq, and, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import type { FieldEditProposalData } from '@the-tool-pit/db'
-import { sendApprovalNotice, reviewFieldEditUrl } from '@the-tool-pit/types'
+import { reviewFieldEditUrl } from '@the-tool-pit/types'
 import { revalidatePath } from 'next/cache'
 import { adminSubmitter } from '@/lib/admin/auto-approve'
 import { applyFieldEditProposal } from '@/lib/fields/apply-edit'
 import { wrapLongitude } from '@/lib/geo/longitude'
+import { sendApprovalNotice } from '@/lib/discord/notify'
 
 export interface CreateFieldEditInput {
   name?: string
@@ -168,6 +169,7 @@ export async function createFieldEditProposal(
 
   sendApprovalNotice({
     vertical: 'field_edit',
+    entityId: proposal.id,
     title: field.name,
     reviewUrl: reviewFieldEditUrl(proposal.id),
     submitter: [input.submitterName, input.submitterContact].filter(Boolean).join(' · ') || null,

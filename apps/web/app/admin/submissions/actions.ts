@@ -1,13 +1,14 @@
 'use server'
 
-import { isAdmin } from '@/lib/admin/auth'
+import { isAdmin, adminIdentity } from '@/lib/admin/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { submissions } from '@the-tool-pit/db'
 import { getSubmissionQueue } from '@/lib/submissions/queue'
-import { notifySubmissionRejected } from '@/lib/notify/approvals'
+import { rejectSubmissionBody } from '@/lib/submissions/reject'
+import { recordDiscordDecision, submissionVertical } from '@/lib/discord/decisions'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -28,15 +29,10 @@ export async function rejectSubmission(
   reason: string,
 ): Promise<{ error?: string }> {
   await assertAdmin()
-  const clean = reason?.trim() ?? ''
-  if (!clean) return { error: 'Give a reason. It is what the submitter is told.' }
-
-  const db = getDb()
-  await db
-    .update(submissions)
-    .set({ status: 'rejected', rejectionReason: clean, updatedAt: new Date() })
-    .where(eq(submissions.id, submissionId))
-  await notifySubmissionRejected(submissionId, clean)
+  const result = await rejectSubmissionBody(submissionId, reason)
+  if (result.error) return result
+  const [sub] = await getDb().select({ artifactKind: submissions.artifactKind }).from(submissions).where(eq(submissions.id, submissionId)).limit(1)
+  await recordDiscordDecision(submissionVertical(sub?.artifactKind), submissionId, { status: 'rejected', by: await adminIdentity(), via: 'site' })
   revalidatePath('/admin/submissions')
   return {}
 }

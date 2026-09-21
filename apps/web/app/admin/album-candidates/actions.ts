@@ -7,37 +7,17 @@ import { eq, and, isNull, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { albumCandidates, albums, albumSources, albumCovers, events } from '@the-tool-pit/db'
 import type { AlbumCandidateMetadata } from '@the-tool-pit/db'
+import { adminIdentity } from '@/lib/admin/auth'
 import { adminPublishAlbum } from '@/lib/admin/publish-album'
-import { fetchOgImage } from '@/lib/albums/og'
 import { notifyAlbumPublished, notifyAlbumCandidateRejected } from '@/lib/notify/approvals'
 import { grantAlbumOwnership } from '@/lib/listings/submitter-ownership'
+import { approveAlbumCandidateBody, suppressAlbumCandidateBody, revalidateEventPublic } from '@/lib/admin/album-decisions'
+import { recordDiscordDecision } from '@/lib/discord/decisions'
+import { fetchOgImage } from '@/lib/albums/og'
 import { normaliseUploadedImage } from '@/lib/images/normalise'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
-}
-
-const CMP_DIVISION_TYPES = new Set([3, 5])
-
-/**
- * Bust the public caches an album on this event affects: the home feed, the
- * event's own page, and - if the event is a championship division - the parent
- * championship page, since the division's albums are rolled up and shown there.
- */
-async function revalidateEventPublic(eventId: string | null | undefined) {
-  revalidatePath('/photos')
-  if (!eventId) return
-  const db = getDb()
-  const [ev] = await db
-    .select({ tbaKey: events.tbaKey, eventCode: events.eventCode, year: events.year, eventType: events.eventType })
-    .from(events)
-    .where(eq(events.id, eventId))
-    .limit(1)
-  if (!ev) return
-  revalidatePath(`/photos/event/${ev.tbaKey}`)
-  if (CMP_DIVISION_TYPES.has(ev.eventType ?? -1) && /\d$/.test(ev.eventCode)) {
-    revalidatePath(`/photos/event/${ev.year}${ev.eventCode.replace(/\d+$/, '')}`)
-  }
 }
 
 /**
@@ -188,29 +168,16 @@ export async function deletePublishedAlbum(
 
 export async function approveAlbumCandidate(candidateId: string): Promise<{ error?: string }> {
   await assertAdmin()
-  const result = await adminPublishAlbum(candidateId)
+  const result = await approveAlbumCandidateBody(candidateId)
   revalidatePath('/admin/album-candidates')
-  if ('error' in result) return { error: result.error }
-  // The photographer who sent it in now manages the album card, unless they
-  // ticked the "just passing it along" box.
-  await grantAlbumOwnership(candidateId, result.albumId)
-  await notifyAlbumPublished(candidateId, result.eventId)
-  // Refresh the public pages (incl. the parent championship if a division).
-  await revalidateEventPublic(result.eventId)
+  if (result.error) return { error: result.error }
+  await recordDiscordDecision('album', candidateId, { status: 'approved', by: await adminIdentity(), via: 'site' })
   return {}
 }
 
-/** Internal reason a crawled candidate carries when an admin one-click suppresses it. */
-const MANUAL_SCRAPED_REASON = 'manual_reject'
-
 /**
- * Refuse an album, or take down one that is already on an event page.
- *
- * The reason is only a message to a submitter when there IS one. A crawled
- * candidate (no submission row) has nobody to tell, so the reason is not
- * required and defaults to an internal slug: the queue is full of scraped rows
- * and forcing a sentence on each one just slows the moderator down. A submitted
- * candidate still requires the reason, because there the reason IS the email.
+ * Refuse an album, or take down one that is already on an event page. Body in
+ * lib/admin/album-decisions.ts, shared with the Discord ❌.
  * deletePublishedAlbum is the harder takedown next to this one and always has a
  * submitter to notify, so it keeps its own required reason.
  */
@@ -219,27 +186,9 @@ export async function suppressAlbumCandidate(
   rejectionReason?: string,
 ): Promise<{ error?: string }> {
   await assertAdmin()
-  const clean = rejectionReason?.trim() ?? ''
-
-  const db = getDb()
-  const [before] = await db
-    .select({ status: albumCandidates.status, submissionId: albumCandidates.submissionId })
-    .from(albumCandidates)
-    .where(eq(albumCandidates.id, candidateId))
-    .limit(1)
-  if (!before) return { error: 'Candidate not found' }
-
-  const fromSubmission = before.submissionId != null
-  // Only a submitted candidate has someone to email, so only it needs the reason.
-  if (fromSubmission && !clean) return { error: 'Give a reason. It is what the submitter is told.' }
-  const reason = clean || MANUAL_SCRAPED_REASON
-
-  await db
-    .update(albumCandidates)
-    .set({ status: 'suppressed', rejectionReason: reason, updatedAt: new Date() })
-    .where(eq(albumCandidates.id, candidateId))
-  // No-ops when there is no submission/submitter, so it is safe on scraped rows.
-  await notifyAlbumCandidateRejected(candidateId, before.status === 'published', reason)
+  const result = await suppressAlbumCandidateBody(candidateId, rejectionReason)
+  if (result.error) return result
+  await recordDiscordDecision('album', candidateId, { status: 'rejected', by: await adminIdentity(), via: 'site' })
   revalidatePath('/admin/album-candidates')
   return {}
 }

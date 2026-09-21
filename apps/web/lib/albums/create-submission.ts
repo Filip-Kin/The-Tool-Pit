@@ -2,9 +2,10 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { albums, albumSubmissions, albumCandidates, events, canonicalizeAlbumUrl, resolveShareUrl } from '@the-tool-pit/db'
 import { getAlbumEnrichQueue } from './queue'
-import { sendApprovalNotice, reviewAlbumUrl } from '@the-tool-pit/types'
+import { reviewAlbumUrl } from '@the-tool-pit/types'
 import { fetchOgImage } from './og'
 import { adminSubmitter } from '@/lib/admin/auto-approve'
+import { sendApprovalNotice } from '@/lib/discord/notify'
 
 interface CreateAlbumSubmissionInput {
   url: string
@@ -182,6 +183,7 @@ export async function createAlbumSubmission(
     const cover = await fetchOgImage(canon.canonicalUrl || input.url).catch(() => null)
     sendApprovalNotice({
       vertical: 'album',
+      entityId: candidate.id,
       title: eventLabel ?? input.url,
       reviewUrl: reviewAlbumUrl(candidate.id),
       sourceUrl: input.url,

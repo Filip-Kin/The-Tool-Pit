@@ -12,10 +12,11 @@ import type { EventEditProposalData } from '@the-tool-pit/db'
 import { wrapLongitude } from '@/lib/geo/longitude'
 import { cleanTeamNumbers } from '@/lib/events/event-display'
 import { eventEditChanges } from '@/lib/events/event-edit-diff'
-import { sendApprovalNotice, reviewEventEditUrl } from '@the-tool-pit/types'
+import { reviewEventEditUrl } from '@the-tool-pit/types'
 import { revalidatePath } from 'next/cache'
 import { adminSubmitter } from '@/lib/admin/auto-approve'
 import { applyEventEditProposal } from '@/lib/events/apply-edit'
+import { sendApprovalNotice } from '@/lib/discord/notify'
 
 export interface CreateEventEditInput {
   name?: string
@@ -207,6 +208,7 @@ export async function createEventEditProposal(
   }
   sendApprovalNotice({
     vertical: 'event_edit',
+    entityId: proposal.id,
     title: name,
     reviewUrl: reviewEventEditUrl(proposal.id),
     submitter: [input.submitterName, input.submitterContact].filter(Boolean).join(' · ') || null,

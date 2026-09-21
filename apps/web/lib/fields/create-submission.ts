@@ -2,7 +2,7 @@ import { getDb } from '@/lib/db'
 import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS, FIELD_SOURCES } from '@the-tool-pit/db'
 import type { FieldSource, NewPracticeField } from '@the-tool-pit/db'
 import { uniqueFieldSlug } from '@/lib/queries/fields'
-import { sendApprovalNotice, reviewFieldUrl } from '@the-tool-pit/types'
+import { reviewFieldUrl } from '@the-tool-pit/types'
 import {
   COVERAGE_LABEL,
   ELEMENTS_LABEL,
@@ -16,6 +16,7 @@ import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate
 import { revalidatePath } from 'next/cache'
 import { adminSubmitter } from '@/lib/admin/auto-approve'
 import { publishPracticeField } from '@/lib/fields/publish'
+import { sendApprovalNotice } from '@/lib/discord/notify'
 
 export interface CreateFieldSubmissionInput {
   name: string
@@ -218,6 +219,7 @@ export async function createFieldSubmission(
   // field is still pending. That is most of the review right there.
   if (options.notify !== false) sendApprovalNotice({
     vertical: 'field',
+    entityId: row.id,
     title: name,
     reviewUrl: reviewFieldUrl(row.id),
     imageUrl: firstPhotoId ? `https://fields.filipkin.com/api/fields/photo/${firstPhotoId}` : null,

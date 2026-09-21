@@ -42,6 +42,7 @@ import type { TbaPushPayload } from './listings/tba-push.js'
 import { processTbaTeamsSyncJob } from './listings/tba-teams-sync.js'
 import type { TbaTeamsSyncPayload } from './listings/tba-teams-sync.js'
 import { closeBrowser } from './connectors/playwright-render.js'
+import { startDiscordListener } from './discord/listener.js'
 import type { ReadCandidatesPayload } from './listings/read-candidates.js'
 import { processSeasonRenewalJob } from './listings/season-renewal.js'
 import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload, AlbumIngestPayload, AlbumEnrichPayload } from '@the-tool-pit/types'
@@ -470,9 +471,17 @@ scheduleRecurringJobs().then(() => {
 
 console.log(`[worker] started with concurrency=${CONCURRENCY}`)
 
+// The approvals channel's reaction listener. Off, with one log line, until the
+// bot's variables are set; never a reason for the worker not to start.
+const discordListener = startDiscordListener().catch((err: Error) => {
+  console.error(`[discord] listener did not start: ${err.message}`)
+  return null
+})
+
 // Graceful shutdown
 async function shutdown() {
   console.log('[worker] shutting down…')
+  await discordListener.then((client) => client?.destroy())
   await Promise.all([
     crawlWorker.close(),
     enrichWorker.close(),

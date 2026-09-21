@@ -1,6 +1,6 @@
 'use server'
 
-import { isAdmin } from '@/lib/admin/auth'
+import { isAdmin, adminIdentity } from '@/lib/admin/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { eq } from 'drizzle-orm'
@@ -16,6 +16,8 @@ import { signOutreachRemove, signOutreachClaim } from '@/lib/listings/outreach-t
 import { readPhotoFiles } from '@/lib/fields/form-parse'
 import { notifyFieldRejected } from '@/lib/notify/approvals'
 import { publishPracticeField } from '@/lib/fields/publish'
+import { suppressPracticeField } from '@/lib/fields/suppress'
+import { recordDiscordDecision } from '@/lib/discord/decisions'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -31,6 +33,7 @@ export async function approveField(id: string): Promise<{ error?: string }> {
   await assertAdmin()
   const result = await publishPracticeField(id)
   if (result.error) return result
+  await recordDiscordDecision('field', id, { status: 'approved', by: await adminIdentity(), via: 'site' })
   revalidateAll()
   return {}
 }
@@ -48,23 +51,9 @@ export async function approveField(id: string): Promise<{ error?: string }> {
  */
 export async function suppressField(id: string, reason: string): Promise<{ error?: string }> {
   await assertAdmin()
-  const clean = reason?.trim() ?? ''
-  if (!clean) return { error: 'Give a reason. It is what the submitter is told.' }
-
-  const db = getDb()
-  const [before] = await db
-    .select({ status: practiceFields.status })
-    .from(practiceFields)
-    .where(eq(practiceFields.id, id))
-    .limit(1)
-  if (!before) return { error: 'Field not found' }
-
-  await db
-    .update(practiceFields)
-    .set({ status: 'suppressed', rejectionReason: clean, updatedAt: new Date() })
-    .where(eq(practiceFields.id, id))
-  // After the write, never before, and never in a way that can fail it.
-  await notifyFieldRejected(id, before.status === 'published', clean)
+  const result = await suppressPracticeField(id, reason)
+  if (result.error) return result
+  await recordDiscordDecision('field', id, { status: 'rejected', by: await adminIdentity(), via: 'site' })
   revalidateAll()
   return {}
 }

@@ -1,11 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import {
   APPROVAL_WEBHOOK_ENV,
+  DISCORD_BOT_TOKEN_ENV,
+  DISCORD_APPROVALS_CHANNEL_ENV,
   buildApprovalEmbed,
+  decideApprovalEmbed,
   reviewAlbumUrl,
   reviewClaimUrl,
   reviewFieldUrl,
   postApprovalNotice,
+  postApprovalMessage,
   type ApprovalNotice,
 } from '@the-tool-pit/types'
 
@@ -101,12 +105,14 @@ describe('the embed', () => {
 })
 
 describe('posting', () => {
-  it('says so out loud when the webhook is not configured', async () => {
+  it('says so out loud when neither the bot nor the webhook is configured', async () => {
     // The whole point of the rewrite. A missing or dead webhook used to be
     // swallowed by an empty catch behind `void`, so notifications stopped and
     // nobody found out until somebody asked why their album was ignored.
     const before = process.env[APPROVAL_WEBHOOK_ENV]
     delete process.env[APPROVAL_WEBHOOK_ENV]
+    delete process.env[DISCORD_BOT_TOKEN_ENV]
+    delete process.env[DISCORD_APPROVALS_CHANNEL_ENV]
     const warnings: string[] = []
     const realWarn = console.warn
     console.warn = (...args: unknown[]) => warnings.push(args.join(' '))
@@ -117,6 +123,49 @@ describe('posting', () => {
       console.warn = realWarn
       if (before !== undefined) process.env[APPROVAL_WEBHOOK_ENV] = before
     }
+  })
+
+  it('returns no message id off the webhook path, so nothing downstream records one', async () => {
+    // The bot path is the only one that hands back an id. A webhook post that
+    // claimed one would write a discord_approval_messages row nobody can react to.
+    delete process.env[DISCORD_BOT_TOKEN_ENV]
+    delete process.env[DISCORD_APPROVALS_CHANNEL_ENV]
+    delete process.env[APPROVAL_WEBHOOK_ENV]
+    const realWarn = console.warn
+    console.warn = () => undefined
+    try {
+      const result = await postApprovalMessage(NOTICE)
+      expect(result.outcome).toBe('skipped')
+      expect(result.messageId).toBeUndefined()
+    } finally {
+      console.warn = realWarn
+    }
+  })
+})
+
+describe('the decided embed', () => {
+  const posted = buildApprovalEmbed(NOTICE)
+
+  it('says who decided and where, in the first line', () => {
+    const embed = decideApprovalEmbed(posted, { status: 'approved', by: 'Filip', via: 'discord' })
+    expect(embed.description).toBe('Approved by Filip in Discord.')
+    expect(decideApprovalEmbed(posted, { status: 'rejected', by: 'Filip', via: 'site' }).description).toBe(
+      'Rejected by Filip on the site.',
+    )
+  })
+
+  it('marks the title and changes the stripe, and keeps the link and the facts', () => {
+    const embed = decideApprovalEmbed(posted, { status: 'approved', by: 'Filip', via: 'discord' })
+    expect(embed.title.startsWith('✅ ')).toBe(true)
+    expect(embed.color).not.toBe(posted.color)
+    expect(embed.url).toBe(posted.url)
+    expect(embed.fields).toEqual(posted.fields)
+  })
+
+  it('does not stack marks when a post is decided twice', () => {
+    const once = decideApprovalEmbed(posted, { status: 'approved', by: 'A', via: 'discord' })
+    const twice = decideApprovalEmbed(once, { status: 'rejected', by: 'B', via: 'site' })
+    expect(twice.title).toBe(`❌ ${posted.title}`)
   })
 })
 

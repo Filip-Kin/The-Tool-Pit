@@ -5,10 +5,10 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { crawlCandidates, submissions } from '@the-tool-pit/db'
-import { adminPublishCandidate } from '@/lib/admin/publish-candidate'
-import { notifyToolPublished, notifyToolCandidateRejected } from '@/lib/notify/approvals'
-import { grantToolOwnership } from '@/lib/listings/submitter-ownership'
+import { submissions } from '@the-tool-pit/db'
+import { adminIdentity } from '@/lib/admin/auth'
+import { approveCandidateBody, suppressCandidateBody } from '@/lib/admin/candidate-decisions'
+import { recordDiscordDecision, submissionIdForCandidate, submissionVertical } from '@/lib/discord/decisions'
 
 async function assertAdmin() {
   if (!(await isAdmin())) redirect('/admin/login')
@@ -16,44 +16,27 @@ async function assertAdmin() {
 
 export async function approveCandidate(candidateId: string): Promise<{ error?: string }> {
   await assertAdmin()
-  const result = await adminPublishCandidate(candidateId)
+  const result = await approveCandidateBody(candidateId)
   revalidatePath('/admin/candidates')
   revalidatePath(`/admin/candidates/${candidateId}`)
   revalidatePath('/admin/tools')
-  if ('error' in result) return { error: result.error }
-  // Only a candidate that came from a public submission has anyone to tell. One
-  // found by a crawler falls straight through this without a query. Same for
-  // ownership: nobody submitted a crawled tool, so nobody gets it.
-  await grantToolOwnership(candidateId, result.toolId)
-  await notifyToolPublished(candidateId, result.toolId)
-  // The submission this candidate came from is done too. It sat in "Needs
-  // review" after its candidate was published because nothing told it.
-  await resolveSubmissionForCandidate(candidateId, { status: 'published', resolvedToolId: result.toolId })
+  revalidatePath('/admin/submissions')
+  if (result.error) return { error: result.error }
+  await markSubmissionPost(candidateId, 'approved')
   return {}
 }
 
 /**
- * A candidate that came from a public submission carries the submission's
- * id. When the candidate is decided, the submission is decided: published
- * with the tool it became, or rejected with the reason the submitter was
- * given. A crawled candidate has no submission and this is a no-op.
+ * The approvals-channel post for a candidate is keyed on the submission it
+ * came from (that is the only row that existed when it was announced). A
+ * crawled candidate has no submission, was never announced, and this is a
+ * quiet no-op.
  */
-export async function resolveSubmissionForCandidate(
-  candidateId: string,
-  outcome: { status: 'published'; resolvedToolId: string } | { status: 'rejected'; reason: string },
-): Promise<void> {
-  const db = getDb()
-  const [cand] = await db.select({ submissionId: crawlCandidates.submissionId }).from(crawlCandidates).where(eq(crawlCandidates.id, candidateId)).limit(1)
-  if (!cand?.submissionId) return
-  await db
-    .update(submissions)
-    .set(
-      outcome.status === 'published'
-        ? { status: 'published', resolvedToolId: outcome.resolvedToolId, updatedAt: new Date() }
-        : { status: 'rejected', rejectionReason: outcome.reason, updatedAt: new Date() },
-    )
-    .where(eq(submissions.id, cand.submissionId))
-  revalidatePath('/admin/submissions')
+async function markSubmissionPost(candidateId: string, status: 'approved' | 'rejected'): Promise<void> {
+  const submissionId = await submissionIdForCandidate(candidateId)
+  if (!submissionId) return
+  const [sub] = await getDb().select({ artifactKind: submissions.artifactKind }).from(submissions).where(eq(submissions.id, submissionId)).limit(1)
+  await recordDiscordDecision(submissionVertical(sub?.artifactKind), submissionId, { status, by: await adminIdentity(), via: 'site' })
 }
 
 /**
@@ -69,29 +52,11 @@ export async function suppressCandidate(
   rejectionReason: string,
 ): Promise<{ error?: string }> {
   await assertAdmin()
-  const clean = rejectionReason?.trim() ?? ''
-  if (!clean) return { error: 'Give a reason. It is what the submitter is told.' }
-
-  const db = getDb()
-  const [before] = await db
-    .select({ status: crawlCandidates.status })
-    .from(crawlCandidates)
-    .where(eq(crawlCandidates.id, candidateId))
-    .limit(1)
-  if (!before) return { error: 'Candidate not found' }
-
-  await db
-    .update(crawlCandidates)
-    .set({
-      status: 'suppressed',
-      rejectionReason: clean,
-      updatedAt: new Date(),
-    })
-    .where(eq(crawlCandidates.id, candidateId))
-  // Only a candidate that came from a public submission has anyone to tell.
-  await notifyToolCandidateRejected(candidateId, before.status === 'published', clean)
-  await resolveSubmissionForCandidate(candidateId, { status: 'rejected', reason: clean })
+  const result = await suppressCandidateBody(candidateId, rejectionReason)
+  if (result.error) return result
+  await markSubmissionPost(candidateId, 'rejected')
   revalidatePath('/admin/candidates')
   revalidatePath(`/admin/candidates/${candidateId}`)
+  revalidatePath('/admin/submissions')
   return {}
 }

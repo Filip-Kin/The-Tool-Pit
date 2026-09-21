@@ -1,11 +1,10 @@
 'use server'
 
-import { isAdmin } from '@/lib/admin/auth'
+import { isAdmin, adminIdentity } from '@/lib/admin/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { eq } from 'drizzle-orm'
-import { getDb } from '@/lib/db'
-import { eventEditProposals } from '@the-tool-pit/db'
+import { rejectEventEditProposal } from '@/lib/events/reject-edit'
+import { recordDiscordDecision } from '@/lib/discord/decisions'
 import { applyEventEditProposal } from '@/lib/events/apply-edit'
 
 async function assertAdmin() {
@@ -22,6 +21,7 @@ export async function applyEventEdit(proposalId: string): Promise<{ error?: stri
   await assertAdmin()
   const result = await applyEventEditProposal(proposalId)
   if (result.error) return result
+  await recordDiscordDecision('event_edit', proposalId, { status: 'approved', by: await adminIdentity(), via: 'site' })
   revalidateAll()
   return {}
 }
@@ -34,14 +34,9 @@ export async function applyEventEdit(proposalId: string): Promise<{ error?: stri
  */
 export async function rejectEventEdit(proposalId: string, reason: string): Promise<{ error?: string }> {
   await assertAdmin()
-  const clean = reason?.trim() ?? ''
-  if (!clean) return { error: 'Give a reason, even a short one.' }
-
-  const db = getDb()
-  await db
-    .update(eventEditProposals)
-    .set({ status: 'rejected', rejectionReason: clean, updatedAt: new Date() })
-    .where(eq(eventEditProposals.id, proposalId))
+  const result = await rejectEventEditProposal(proposalId, reason)
+  if (result.error) return result
+  await recordDiscordDecision('event_edit', proposalId, { status: 'rejected', by: await adminIdentity(), via: 'site' })
   revalidatePath('/admin/event-edits')
   return {}
 }

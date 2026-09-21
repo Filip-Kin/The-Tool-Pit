@@ -1,6 +1,6 @@
 'use server'
 
-import { isAdmin } from '@/lib/admin/auth'
+import { isAdmin, adminIdentity } from '@/lib/admin/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { eq } from 'drizzle-orm'
@@ -25,6 +25,8 @@ import {
 import { signOutreachRemove, signOutreachClaim } from '@/lib/listings/outreach-token'
 import { notifyEventRejected } from '@/lib/notify/approvals'
 import { publishEventListing } from '@/lib/events/publish'
+import { suppressEventListing } from '@/lib/events/suppress'
+import { recordDiscordDecision } from '@/lib/discord/decisions'
 import { addHumanEdits, changedKeys, HUMAN_EDITABLE_EVENT_KEYS } from '@the-tool-pit/db/human-edited'
 
 async function assertAdmin() {
@@ -41,6 +43,7 @@ export async function approveEvent(id: string): Promise<{ error?: string }> {
   await assertAdmin()
   const result = await publishEventListing(id)
   if (result.error) return result
+  await recordDiscordDecision('event', id, { status: 'approved', by: await adminIdentity(), via: 'site' })
   revalidateAll()
   return {}
 }
@@ -54,22 +57,9 @@ export async function approveEvent(id: string): Promise<{ error?: string }> {
  */
 export async function suppressEvent(id: string, reason: string): Promise<{ error?: string }> {
   await assertAdmin()
-  const clean = reason?.trim() ?? ''
-  if (!clean) return { error: 'Give a reason. It is what the submitter is told.' }
-
-  const db = getDb()
-  const [before] = await db
-    .select({ status: eventListings.status })
-    .from(eventListings)
-    .where(eq(eventListings.id, id))
-    .limit(1)
-  if (!before) return { error: 'Event not found' }
-
-  await db
-    .update(eventListings)
-    .set({ status: 'suppressed', rejectionReason: clean, updatedAt: new Date() })
-    .where(eq(eventListings.id, id))
-  await notifyEventRejected(id, before.status === 'published', clean)
+  const result = await suppressEventListing(id, reason)
+  if (result.error) return result
+  await recordDiscordDecision('event', id, { status: 'rejected', by: await adminIdentity(), via: 'site' })
   revalidateAll()
   return {}
 }

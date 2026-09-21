@@ -10,10 +10,11 @@ import {
   type User,
 } from '@the-tool-pit/db'
 import { listingFacts } from '@/lib/queries/listing-ownership'
-import { sendApprovalNotice, reviewClaimUrl } from '@the-tool-pit/types'
+import { reviewClaimUrl } from '@the-tool-pit/types'
 import { GithubLinkError, type GithubIdentity } from './identity'
 import { matchNamespace, planGithubGrants, type RepoLink } from './namespaces'
 import type { GithubGrantSummary } from './summary'
+import { sendApprovalNotice } from '@/lib/discord/notify'
 
 /**
  * Turning a verified GitHub identity into listing ownership.
@@ -241,6 +242,7 @@ export async function applyGithubGrants(
 
     sendApprovalNotice({
       vertical: 'claim',
+      entityId: filed.id,
       title: `Tool · GitHub namespace match on an owned listing`,
       reviewUrl: reviewClaimUrl(filed.id),
       submitter: user.displayName ?? user.email ?? null,

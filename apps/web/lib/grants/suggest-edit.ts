@@ -14,11 +14,12 @@ import { getDb } from '@/lib/db'
 import { grantChanges, grantCycles, grants } from '@the-tool-pit/db'
 import { GRANT_APPLY_METHODS, GRANT_DEADLINE_TYPES, GRANT_EFFORT_LEVELS, GRANT_GEO_SCOPES, GRANT_PROGRAMS } from '@the-tool-pit/db/grant-enums'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
-import { sendApprovalNotice, reviewQueueUrl, grantListingUrl } from '@the-tool-pit/types'
+import { reviewQueueUrl, grantListingUrl } from '@the-tool-pit/types'
 import { adminSubmitter } from '@/lib/admin/auto-approve'
 import { adminName } from '@/lib/admin/auth'
 import { applyGrantChangeRow } from '@/lib/admin/grant-changes'
 import { revalidateGrantPublic } from '@/lib/admin/grants'
+import { sendApprovalNotice } from '@/lib/discord/notify'
 
 export interface GrantEditSuggestion {
   /** Raw form values, by the same names the page shows them under. */

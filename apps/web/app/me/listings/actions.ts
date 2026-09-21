@@ -35,7 +35,9 @@ import {
 } from '@the-tool-pit/db'
 import { latestRosterForDay } from '@the-tool-pit/db/roster-days'
 import { getCurrentUser } from '@/lib/auth/session'
-import { isAdmin } from '@/lib/admin/auth'
+import { isAdmin, adminName } from '@/lib/admin/auth'
+import { resolveClaim } from '@/lib/listings/resolve-claim'
+import { recordDiscordDecision } from '@/lib/discord/decisions'
 import {
   canEditListing,
   countOwners,
@@ -70,9 +72,10 @@ import {
 import { notifyClaimResolved } from '@/lib/notify/approvals'
 import { normaliseUploadedImage } from '@/lib/images/normalise'
 import { MAX_PHOTOS, readPhotoFiles } from '@/lib/fields/form-parse'
-import { sendApprovalNotice, reviewClaimUrl, type ApprovalEmailPayload } from '@the-tool-pit/types'
+import { reviewClaimUrl, type ApprovalEmailPayload } from '@the-tool-pit/types'
 import { entityNoun } from '@/components/me/listing-labels'
 import { refreshListingPopularity, linkChangeNeedsPopularityRefresh } from '@/lib/queues/popularity'
+import { sendApprovalNotice } from '@/lib/discord/notify'
 
 /**
  * Listing ownership writes.
@@ -366,6 +369,7 @@ export async function startClaim(
   // must not rubber-stamp.
   sendApprovalNotice({
     vertical: 'claim',
+    entityId: filed.id,
     title: `${entityNoun(entityType)} · ${target.facts.title}`,
     reviewUrl: reviewClaimUrl(filed.id),
     submitter: user.displayName ?? user.email ?? null,
@@ -457,6 +461,7 @@ export async function verifyRepoClaim(claimId: string): Promise<OwnershipActionR
     // the site can produce and it used to arrive silently.
     sendApprovalNotice({
       vertical: 'claim',
+      entityId: claim.id,
       title: `${entityNoun(claim.entityType)} · repo proof on an owned listing`,
       reviewUrl: reviewClaimUrl(claim.id),
       submitter: user.displayName ?? user.email ?? null,
@@ -793,47 +798,12 @@ export async function adminResolveClaim(
   // Optional: a break-glass cookie admin authorizes the action but carries no
   // app user row, so this is nullable and used only as the decidedBy stamp.
   const user = await getCurrentUser()
-  const decidedByUserId = user?.id ?? null
-  const cleanNote = note?.trim() || null
-  if (!approve && !cleanNote) {
-    return { error: 'Give a reason for turning the claim down. It is what the claimant is told.' }
-  }
-
-  const db = getDb()
-  const [claim] = await db.select().from(listingClaims).where(eq(listingClaims.id, claimId)).limit(1)
-  if (!claim) return { error: 'We could not find that claim.' }
-  if (claim.status !== 'pending') return { message: 'This claim is already settled.' }
-  if (!isListingEntityType(claim.entityType)) return { error: 'Unknown listing type.' }
-
-  if (approve) {
-    // An admin can grant even when the listing is already owned: this is how a
-    // dispute is resolved or a co-owner added. Deliberately additive.
-    await grantOwnership(claim.entityType, claim.entityId, claim.userId, 'owner', 'admin', null)
-  }
-  await db
-    .update(listingClaims)
-    .set({
-      status: approve ? 'verified' : 'rejected',
-      reviewerNote: cleanNote,
-      decidedByUserId,
-      decidedAt: new Date(),
-    })
-    .where(eq(listingClaims.id, claim.id))
-
-  // A rejection is not an approval, and it gets its own email saying so, with
-  // the reviewer's note verbatim. Guarded above by the status !== 'pending'
-  // check, so a second decision cannot send a second time.
-  await notifyClaimResolved(
-    claim.id,
-    claim.entityType,
-    claim.entityId,
-    claim.userId,
-    approve ? 'verified' : 'rejected',
-    cleanNote,
-  )
-
+  const out = await resolveClaim(claimId, approve, note, user?.id ?? null)
+  if (out.error) return { error: out.error }
+  // The post in the approvals channel, if this claim had one.
+  await recordDiscordDecision('claim', claimId, { status: approve ? 'approved' : 'rejected', by: adminName(user), via: 'site' })
   revalidatePath('/me/listings')
-  return { message: approve ? 'Claim approved.' : 'Claim rejected.' }
+  return { message: out.message }
 }
 
 // #endregion
