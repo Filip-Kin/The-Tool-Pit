@@ -6,7 +6,7 @@
  * - an admin promotes 'matched' candidates into albums.
  */
 import { getDb } from '@the-tool-pit/db'
-import { events, albums, albumCandidates, albumSubmissions } from '@the-tool-pit/db'
+import { events, albums, albumCandidates, albumSubmissions, users } from '@the-tool-pit/db'
 import type { AlbumCandidateMetadata, AlbumEventMatch } from '@the-tool-pit/db'
 import { eq, and, desc, sql, inArray } from 'drizzle-orm'
 import { parse } from 'node-html-parser'
@@ -14,6 +14,7 @@ import { politeFetch } from '../connectors/base.js'
 import { matchEventWithAI, type EventCandidate } from '../pipeline/match-event.js'
 import { classifyAlbumJunk, DEAD_LINK_REASON } from './album-junk.js'
 import type { AlbumEnrichPayload } from '@the-tool-pit/types'
+import { askSiteToDecide } from '../site/moderate.js'
 
 interface OgMetadata {
   image?: string
@@ -393,4 +394,26 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
   }
 
   console.log(`[album-enrich] candidate ${cand.id} → ${status} (method=${classification.method})`)
+
+  // 7. An admin's own submission does not wait for that admin to come back.
+  // Every other admin submit path publishes on the spot (lib/admin/auto-approve
+  // in apps/web); an album could not, because publishing needs the event this
+  // job has only just matched. So the moment it is matched, ask the site to
+  // run the same Approve the admin would click. A failure is a log line and
+  // the candidate stays in the queue, which is where it was before.
+  if (status === 'matched' && cand.submissionId) await autoApproveAdminSubmission(db, cand.id, cand.submissionId)
+}
+
+async function autoApproveAdminSubmission(db: ReturnType<typeof getDb>, candidateId: string, submissionId: string): Promise<void> {
+  const [who] = await db
+    .select({ isAdmin: users.isAdmin, blockedReason: users.blockedReason, name: users.displayName, email: users.email })
+    .from(albumSubmissions)
+    .innerJoin(users, eq(users.id, albumSubmissions.submittedByUserId))
+    .where(eq(albumSubmissions.id, submissionId))
+    .limit(1)
+  if (!who?.isAdmin || who.blockedReason) return
+  const name = who.name?.trim() || who.email?.trim() || 'admin'
+  const out = await askSiteToDecide({ vertical: 'album', entityId: candidateId }, 'approve', name)
+  if (out.ok) console.log(`[album-enrich] candidate ${candidateId} auto-approved: submitted by admin ${name}`)
+  else console.warn(`[album-enrich] candidate ${candidateId} NOT auto-approved for admin ${name}: ${out.error}`)
 }

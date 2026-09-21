@@ -1,7 +1,8 @@
 import { Client, Events, GatewayIntentBits, Partials, type MessageReaction, type PartialMessageReaction, type PartialUser, type User } from 'discord.js'
 import { eq } from 'drizzle-orm'
 import { getDb, discordApprovalMessages } from '@the-tool-pit/db'
-import { APPROVE_EMOJI, REJECT_EMOJI, DISCORD_BOT_TOKEN_ENV, DISCORD_APPROVALS_CHANNEL_ENV, siteUrl } from '@the-tool-pit/types'
+import { APPROVE_EMOJI, REJECT_EMOJI, DISCORD_BOT_TOKEN_ENV, DISCORD_APPROVALS_CHANNEL_ENV } from '@the-tool-pit/types'
+import { askSiteToDecide, moderateConfigured, moderateUrl } from '../site/moderate.js'
 
 /**
  * The FRC.Tools bot's ears. One gateway connection, one event: a reaction
@@ -35,20 +36,17 @@ interface ListenerConfig {
   token: string
   channelId: string
   devRoleId: string
-  secret: string
-  moderateUrl: string
 }
 
 function config(): ListenerConfig | null {
   const token = process.env[DISCORD_BOT_TOKEN_ENV]?.trim()
   const channelId = process.env[DISCORD_APPROVALS_CHANNEL_ENV]?.trim()
   const devRoleId = process.env[DEV_ROLE_ENV]?.trim()
-  const secret = process.env[SECRET_ENV]?.trim()
   const missing = [
     [DISCORD_BOT_TOKEN_ENV, token],
     [DISCORD_APPROVALS_CHANNEL_ENV, channelId],
     [DEV_ROLE_ENV, devRoleId],
-    [SECRET_ENV, secret],
+    [SECRET_ENV, moderateConfigured() ? 'set' : ''],
   ]
     .filter(([, v]) => !v)
     .map(([k]) => k)
@@ -56,36 +54,7 @@ function config(): ListenerConfig | null {
     console.warn(`[discord] reaction listener off: ${missing.join(', ')} unset`)
     return null
   }
-  return {
-    token: token!,
-    channelId: channelId!,
-    devRoleId: devRoleId!,
-    secret: secret!,
-    // The worker's own env may carry NEXT_PUBLIC_URL; siteUrl() reads it and
-    // falls back to production. Override with WEB_INTERNAL_URL when the two
-    // services can reach each other on a shorter path than the public one.
-    moderateUrl: `${(process.env.WEB_INTERNAL_URL?.trim() || siteUrl()).replace(/\/+$/, '')}/api/internal/moderate`,
-  }
-}
-
-async function askSiteToDecide(
-  cfg: ListenerConfig,
-  messageId: string,
-  decision: 'approve' | 'reject',
-  actorName: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    const res = await fetch(cfg.moderateUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-internal-secret': cfg.secret },
-      body: JSON.stringify({ messageId, decision, actor: { name: actorName } }),
-    })
-    const body = (await res.json().catch(() => ({}))) as { error?: string }
-    if (res.ok) return { ok: true }
-    return { ok: false, error: body.error ?? `HTTP ${res.status}` }
-  } catch (err) {
-    return { ok: false, error: `could not reach the site: ${(err as Error).message}` }
-  }
+  return { token: token!, channelId: channelId!, devRoleId: devRoleId! }
 }
 
 async function onReaction(
@@ -140,7 +109,7 @@ async function onReaction(
     return
   }
 
-  const outcome = await askSiteToDecide(cfg, message.id, decision, actorName)
+  const outcome = await askSiteToDecide({ messageId: message.id }, decision, actorName)
   if (outcome.ok) {
     console.log(`[discord] ${actorName} ${decision}d message ${message.id}`)
     return
@@ -172,7 +141,7 @@ export async function startDiscordListener(): Promise<Client | null> {
   })
   client.on(Events.Error, (err) => console.error(`[discord] gateway error: ${err.message}`))
   client.once(Events.ClientReady, (ready) => {
-    console.log(`[discord] listening as ${ready.user.tag} in channel ${cfg.channelId}, decisions go to ${cfg.moderateUrl}`)
+    console.log(`[discord] listening as ${ready.user.tag} in channel ${cfg.channelId}, decisions go to ${moderateUrl()}`)
   })
 
   try {
