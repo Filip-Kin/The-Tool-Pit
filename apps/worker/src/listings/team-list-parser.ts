@@ -42,7 +42,17 @@ import type { RosterTeam } from '@the-tool-pit/db'
 // GENERATOR runs on Opus. The parser it writes then runs on every refresh with no
 // model call, so this cost is paid once per event, not per scrape.
 const MODEL = 'claude-opus-4-8'
-const MAX_HTML_CHARS = 40_000
+// Was 40_000. Governor's Cup (a Wix site with the roster behind a "Teams
+// Competing" tab) failed 10 generation attempts straight because its cleaned,
+// collapsed HTML runs 86,560 characters - the team list sat entirely past the
+// cutoff, so the model was never shown it and could not have written a working
+// parser no matter how it was prompted. This is a per-event, one-time cost
+// (the stored parser runs with no model call after), and Opus's context is far
+// larger than this either way, so there is room to raise it well past what one
+// unusually verbose page (a lot of Wix's markup is wrapper divs for every tab,
+// not just the visible one) needs, rather than re-tuning this every time a
+// bigger page shows up.
+const MAX_HTML_CHARS = 120_000
 const MAX_PARSER_TOKENS = 3500
 const RUN_TIMEOUT_MS = 4_000
 const MAX_ATTEMPTS = 10
@@ -110,6 +120,7 @@ What it returns:
 - DO NOT REQUIRE THE WORD "Team" BEFORE A NUMBER. Sections format differently: one block may write 'Team 1506 "Metal Muscle"' while another under a nearby heading writes a bare '2619 "The Charge"'. Inside a team section (under a registered / host / attending / competing heading, or a team table) read the numbers whether or not the word "Team" precedes them. A regex like /Team\\s+(\\d+)/ silently drops a whole block that omits the word — do not scope extraction to that pattern. Outside team sections, do not scrape stray numbers.
 - BUT THE NUMBER MUST LOOK LIKE A TEAM NUMBER. Real FRC team numbers are NOT sequential: a run of small consecutive numbers (1, 2, 3, 4, 5 ...) is a slot or row index, a ranking, or a countdown, not teams. Team 1 is a real team, but "1, 2, 3, 4" in order down a column are indices — drop them and keep the genuine team numbers beside them. When you read bare numbers, ignore any that form a consecutive counter.
 - A COUNT OR A DATE IS NOT A TEAM. A number that is a QUANTITY — immediately followed by a word like "teams", "team", "robots", "spots", "host", "registered", "attending" ("8 host teams", "30 teams registered") — is describing the list, not a member of it. A date, a time, a year, a price ("$400"), a phone number or a zip is not a team either. A real team ENTRY is the team's own number standing on its own in a row/cell/line, usually with the team's name right after it. Read those; skip numbers embedded in a sentence.
+- HOST / ORGANIZING TEAMS NAMED IN AN INTRO PARAGRAPH ARE NOT THE ROSTER. An event's about section often names who runs it, e.g. "the host committee (FRC Teams 56, 75, 102, 1257, and 9116)". These are real numbers and they are comma-separated, exactly the SHAPE of "multiple teams in one row" above — do not let the shape fool you. A number is a roster entry only when it sits in the actual list/table of who is COMPETING, not when it names who organizes, hosts or sponsors the event. If the only numbers you can find read this way, the real list is somewhere else on the page (often much further down, under its own heading like "Team List" or "Teams Competing"); keep looking rather than return the organizers.
 - WAITLIST. A team is waitlisted ONLY when it sits under an explicit waitlist HEADING that introduces an actual list of waitlisted teams. Prose that merely explains a waitlist policy ("the waitlist will be pulled in order of application", "as space becomes available") is NOT a waitlist section and marks nothing. Mark a real waitlisted entry { number, robot, waitlisted: true, waitlistPosition: 1 } with its 1-based position; leave waitlistPosition null if the page shows no order. A registered team is waitlisted: false (or the field omitted). Do not merge the two lists: a team is either in the event or on the waitlist, and the section it sits under is what says which. When in doubt, a team is REGISTERED and MUST be returned; never drop a team because the word "waitlist" appears somewhere on the page.
 
 How to write it:
@@ -510,22 +521,41 @@ export async function generateTeamListParser(input: {
         const teams = await runAcrossFrames(page, script)
         const leaked = slotIndicesLeaked(teams)
         if (teams.length > 0 && !leaked) {
-          // Compare against the second reading: any team the reading found that
-          // this parser did NOT is a dropped entry, most often a second robot the
-          // selector collapsed. Only entries the reading is sure of count, so a
-          // parser that returns MORE (it saw a frame the reading's truncated HTML
-          // did not) is fine; one that returns LESS is sent back to fix it.
+          // Compare against the second reading both ways. MISSING (the reading
+          // found a team this parser did not) is almost always a dropped second
+          // robot or a whole skipped section, and a parser that returns a FEW
+          // more than the reading (it saw a frame the reading's HTML did not) is
+          // fine. But a MAJORITY of the result being teams the reading never saw
+          // at all is a different failure: the selector read the wrong section
+          // entirely - an intro paragraph naming the host committee, a sponsor
+          // list - not the roster. That one is caught by count, not presence,
+          // because the wrong section is still full of real, individually
+          // plausible team numbers; nothing about any single one of them looks
+          // fake.
           const producedKeys = new Set(teams.map(rosterKey))
           const missing = expected.filter((t) => !producedKeys.has(rosterKey(t)))
-          if (missing.length === 0 || verifyRetries >= MAX_VERIFY_RETRIES || attempt >= MAX_ATTEMPTS - 1) {
+          const extra = expectedKeys.size > 0 ? teams.filter((t) => !expectedKeys.has(rosterKey(t))) : []
+          const wrongSection = expectedKeys.size > 0 && extra.length > teams.length / 2
+          if ((missing.length === 0 && !wrongSection) || verifyRetries >= MAX_VERIFY_RETRIES || attempt >= MAX_ATTEMPTS - 1) {
             console.log(
               `[team-list-parser] ${input.eventName}: found ${teams.length} teams on attempt ${attempt + 1}` +
-                (missing.length ? ` (accepted with ${missing.length} unverified)` : ''),
+                (missing.length || wrongSection ? ` (accepted with ${missing.length} unverified, ${extra.length} unmatched)` : ''),
             )
             return { script, teams }
           }
           verifyRetries++
-          problem = `Your function returned ${teams.length} teams, but the page also lists ${missing.length} it dropped: ${missing.map(rosterLabel).join(', ')}. These are almost always a team's SECOND ROBOT — a "#2" marker, or the same number or row listed again (a B team) — or a whole section your selector skipped. A "#2" entry is { number, robot: "B" } (and "#3" is "C"). Include every one of them, then return the corrected function.`
+          const parts: string[] = []
+          if (missing.length > 0) {
+            parts.push(
+              `the page also lists ${missing.length} it dropped: ${missing.map(rosterLabel).join(', ')}. These are almost always a team's SECOND ROBOT — a "#2" marker, or the same number or row listed again (a B team) — or a whole section your selector skipped. A "#2" entry is { number, robot: "B" } (and "#3" is "C")`,
+            )
+          }
+          if (wrongSection) {
+            parts.push(
+              `most of what it returned (${extra.length} of ${teams.length}: ${extra.map(rosterLabel).join(', ')}) is NOT in the page's roster reading at all, which usually means you read the wrong section - an intro paragraph naming the host/organizing teams, a sponsor list, or similar prose that happens to contain real team numbers, instead of the actual list of who is competing`,
+            )
+          }
+          problem = `Your function returned ${teams.length} teams, but ${parts.join('; also, ')}. Find the real roster - often under its own heading further down the page - and return only teams genuinely listed there, then return the corrected function.`
         } else {
           problem = leaked
             ? `Your result is the sequence ${leaked}, which is NOT a roster. Real FRC team numbers are never consecutive, so a run like that is one of two things you read by mistake: a row or SLOT index column (1, 2, 3, ...) beside the real teams, or a YEAR archive (2007, 2008, ...) listing the event's past seasons. Watch for a bracket or seeding layout where each row reads "SLOT - TEAM", e.g. "6 - 4145": the number LEFT of the dash is the slot, the number RIGHT of the dash is the team. Empty slots still print their slot number with nothing after the dash ("16 -", "17 -", ... "32 -") — take only the value AFTER the separator, and skip any row that has no team after it. Otherwise the team list is usually a DATA TABLE whose columns are headed like "Number", "Team", "Team #" or "Team Number", next to "Team Name", "City" and "State". Find that table by its header row, read the cells under the team-number column, and ignore the leading index column and anything outside that table. Do not gate on a nearby prose heading: a Wix data grid has column headers, not a "Registered Teams" heading above it.`
