@@ -533,6 +533,8 @@ export interface EventEditProposalData {
   chiefDelphiUrl?: string | null
   contactEmail?: string | null
   notes?: string | null
+  /** The event's own team-list page (see eventListings.teamListUrl above). */
+  teamListUrl?: string | null
 }
 
 export const eventEditProposals = pgTable(

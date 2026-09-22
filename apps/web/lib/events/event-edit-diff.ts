@@ -36,6 +36,7 @@ export const EVENT_EDIT_KEY_LABELS: Record<keyof EventEditProposalData, string> 
   chiefDelphiUrl: 'Chief Delphi',
   contactEmail: 'Contact email',
   notes: 'Notes',
+  teamListUrl: 'Team list page',
 }
 
 /** A human-readable cell value. Empty and unset both read as a dash. */
