@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { getDb } from '@/lib/db'
-import { albumCandidates, events } from '@the-tool-pit/db'
+import { albumCandidates, albums, events } from '@the-tool-pit/db'
 import { adminPublishAlbum } from '@/lib/admin/publish-album'
 import { notifyAlbumPublished, notifyAlbumCandidateRejected } from '@/lib/notify/approvals'
 import { grantAlbumOwnership } from '@/lib/listings/submitter-ownership'
@@ -81,5 +81,75 @@ export async function suppressAlbumCandidateBody(candidateId: string, rejectionR
     .where(eq(albumCandidates.id, candidateId))
   // No-ops when there is no submission/submitter, so it is safe on scraped rows.
   await notifyAlbumCandidateRejected(candidateId, before.status === 'published', reason)
+  return {}
+}
+
+/**
+ * Set or change the event for a candidate by its full TBA key (year + code).
+ * Works for pending, matched, AND published candidates - for a published one it
+ * also repoints the live album and refreshes the affected event pages. On a
+ * candidate not yet published, setting the event IS the approval: it publishes.
+ *
+ * Shared by the admin action (which adds assertAdmin and revalidates the queue
+ * page) and /api/internal/queue-decisions.
+ */
+export async function setAlbumEventMatchBody(candidateId: string, eventKey: string): Promise<{ error?: string }> {
+  const raw = eventKey.trim().toLowerCase()
+  // The year is mandatory: only a full TBA key (year + code, e.g. "2023txbel") is
+  // accepted. A bare code is rejected so an album can never get the wrong year.
+  if (!/^(19|20)\d{2}[a-z0-9]+$/.test(raw)) {
+    return { error: 'Enter the full event key including the year, e.g. 2023txbel' }
+  }
+  const db = getDb()
+  const [event] = await db.select().from(events).where(eq(events.tbaKey, raw)).limit(1)
+  if (!event) return { error: `No event found for "${eventKey}"` }
+  if (event.startDate && new Date(event.startDate) > new Date()) {
+    return { error: 'That event has not happened yet.' }
+  }
+
+  const [cand] = await db
+    .select({ status: albumCandidates.status, matchedAlbumId: albumCandidates.matchedAlbumId, matchedEventId: albumCandidates.matchedEventId })
+    .from(albumCandidates)
+    .where(eq(albumCandidates.id, candidateId))
+    .limit(1)
+  if (!cand) return { error: 'Candidate not found' }
+
+  // Old event key (for revalidating the page the album is leaving).
+  let oldKey: string | undefined
+  if (cand.matchedEventId) {
+    const [oldEv] = await db.select({ tbaKey: events.tbaKey }).from(events).where(eq(events.id, cand.matchedEventId)).limit(1)
+    oldKey = oldEv?.tbaKey
+  }
+
+  await db
+    .update(albumCandidates)
+    .set({
+      matchedEventId: event.id,
+      status: cand.status === 'published' ? 'published' : 'matched',
+      classification: { eventCode: event.eventCode, method: 'none', reasoning: 'Admin-set' },
+      updatedAt: new Date(),
+    })
+    .where(eq(albumCandidates.id, candidateId))
+
+  // If it's already published, repoint the live album and refresh both pages
+  // (old + new, each parent-aware for championship divisions).
+  if (cand.matchedAlbumId) {
+    await db.update(albums).set({ eventId: event.id, updatedAt: new Date() }).where(eq(albums.id, cand.matchedAlbumId))
+    await revalidateEventPublic(event.id)
+    if (oldKey && oldKey !== event.tbaKey) revalidatePath(`/photos/event/${oldKey}`)
+  } else if (cand.status !== 'published') {
+    // Setting the event on a not-yet-published candidate IS the approval:
+    // publish it straight away so there's no separate approve step.
+    const result = await adminPublishAlbum(candidateId)
+    if ('error' in result) return { error: result.error }
+    // The second publish door, and it has to notify AND grant too: setting the
+    // event on a pending candidate IS the approval, so a submitter whose album
+    // went live this way would otherwise be the only one who never heard and
+    // the only one who never got their listing.
+    await grantAlbumOwnership(candidateId, result.albumId)
+    await notifyAlbumPublished(candidateId, result.eventId)
+    await revalidateEventPublic(result.eventId)
+  }
+
   return {}
 }

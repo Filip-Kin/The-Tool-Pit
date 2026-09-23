@@ -1,4 +1,3 @@
-import { timingSafeEqual } from 'crypto'
 import { NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { discordApprovalMessages } from '@the-tool-pit/db'
@@ -6,6 +5,7 @@ import type { ApprovalVertical } from '@the-tool-pit/types'
 import { getDb } from '@/lib/db'
 import { decide, DECIDABLE_VERTICALS, type Decision } from '@/lib/moderation/decide'
 import { recordDiscordDecision } from '@/lib/discord/decisions'
+import { authorised } from '@/lib/internal-auth'
 
 /**
  * POST /api/internal/moderate
@@ -36,15 +36,6 @@ import { recordDiscordDecision } from '@/lib/discord/decisions'
  */
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-function authorised(req: Request): boolean {
-  const expected = process.env.INTERNAL_API_SECRET?.trim()
-  if (!expected) return false
-  const given = req.headers.get('x-internal-secret')?.trim() ?? ''
-  const a = Buffer.from(given)
-  const b = Buffer.from(expected)
-  return a.length === b.length && timingSafeEqual(a, b)
-}
 
 interface ModerateBody {
   messageId?: unknown
