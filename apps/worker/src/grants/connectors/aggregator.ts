@@ -23,8 +23,8 @@
  *   - cap per page, so a 400-link directory does not file 400 review chores in
  *     one pass. The cap is reported on limits so it is visible, not silent.
  */
-import { and, eq, inArray } from 'drizzle-orm'
-import { getDb, grantSources } from '@the-tool-pit/db'
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { getDb, grantCandidates, grantSources } from '@the-tool-pit/db'
 import { parse } from 'node-html-parser'
 import { politeFetch, delay } from '../../connectors/base.js'
 import { canonicalGrantUrl, isNonFunderHost } from './shared.js'
@@ -45,6 +45,65 @@ const MAX_LINKS_PER_PAGE = 60
 const GRANTY = /\b(grants?|funding|funds?|awards?|scholarships?|apply|applications?|programs?|programmes?|opportunit(y|ies)|sponsorships?|fellowships?|stipends?|mini-?grants?)\b/i
 /** Anchor text that is site furniture, whatever the href. */
 const FURNITURE = /^(home|about( us)?|contact( us)?|log ?in|sign ?in|sign ?up|menu|search|privacy( policy)?|terms|donate|news|events?|blog|faq|careers|jobs|back|next|previous|more|read more|learn more|click here|share|print|email|subscribe|newsletter|calendar|gallery|photos|store|shop|cart)$/i
+
+/**
+ * A source is dead once it has filed this many candidates, published none, and
+ * not one of them is still waiting for a human. The 2026-09 review found 1,050
+ * auto-routed sources with yield_count 0 whose crawls only ever filed federal,
+ * college or directory-metadata pages; crawling them again files more of the same.
+ */
+export const DEAD_SOURCE_MIN_CANDIDATES = 15
+
+/** The line appended to grant_sources.notes when a source is switched off. */
+export function deadSourceNote(now: Date, minCandidates = DEAD_SOURCE_MIN_CANDIDATES): string {
+  return (
+    `Auto-disabled ${now.toISOString().slice(0, 10)}: ${minCandidates}+ candidates, none published, none pending; ` +
+    `every one was suppressed, a duplicate or another list page.`
+  )
+}
+
+/**
+ * Switch off aggregator sources that have proved to yield nothing. One UPDATE
+ * with a grouped subquery. A candidate that is pending, flagged, published, or
+ * matched to a real grant keeps its source alive; only suppressed, duplicate,
+ * and matched-without-a-grant (routed as another list) count as dead.
+ */
+export async function disableDeadAggregatorSources(now = new Date()): Promise<Array<{ id: string; label: string; target: string }>> {
+  const db = getDb()
+  const dead = db
+    .select({ id: grantCandidates.sourceId })
+    .from(grantCandidates)
+    .where(isNotNull(grantCandidates.sourceId))
+    .groupBy(grantCandidates.sourceId)
+    .having(
+      sql`count(*) >= ${DEAD_SOURCE_MIN_CANDIDATES} and count(*) filter (where not (
+        ${grantCandidates.status} in ('suppressed', 'duplicate')
+        or (${grantCandidates.status} = 'matched' and ${grantCandidates.matchedGrantId} is null)
+      )) = 0`,
+    )
+
+  const disabled = await db
+    .update(grantSources)
+    .set({
+      enabled: false,
+      notes: sql`concat_ws(E'\n', ${grantSources.notes}, ${deadSourceNote(now)}::text)`,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(grantSources.kind, 'aggregator'),
+        eq(grantSources.enabled, true),
+        eq(grantSources.yieldCount, 0),
+        inArray(grantSources.id, dead),
+      ),
+    )
+    .returning({ id: grantSources.id, label: grantSources.label, target: grantSources.target })
+
+  for (const s of disabled) {
+    console.log(`[grant-aggregator] auto-disabled dead source "${s.label}" (${s.target}): ${deadSourceNote(now)}`)
+  }
+  return disabled
+}
 
 interface ScoredLink {
   url: string
@@ -124,6 +183,9 @@ export class GrantAggregatorConnector implements GrantConnector {
     const limits: string[] = []
     const touchedSourceIds: string[] = []
     let skipped = 0
+
+    const disabled = await disableDeadAggregatorSources()
+    if (disabled.length > 0) limits.push(`${disabled.length} aggregator sources auto-disabled: ${DEAD_SOURCE_MIN_CANDIDATES}+ candidates, none published or pending`)
 
     const rows = await db
       .select()

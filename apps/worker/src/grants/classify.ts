@@ -329,6 +329,11 @@ FIRST, decide which of these three shapes the page is. Nearly every mistake this
 
 Tense does not decide C. "Applications are now open for the K-12 Robotics Competition Grant", written by a state senator's press office, is still C. The grant is real and its own page is a separate candidate; a team cannot apply from this one. The test is WHO published the page and whether they take the application, not whether the grant is real and not whether the page is in the past tense.
 
+NOT THE FUNDER'S SITE. Before you call a page shape B, ask: does THIS site take the application? Two kinds of site describe one programme in full detail, read exactly like shape B, and are not:
+  - VENDOR AND CONSULTANT WRITE-UPS. A company that sells kits, curriculum or grant-writing services summarises a state or foundation grant so that a school buys from it with the money. Examples: education.lego.com/en-us/grants-and-funding/<state>/..., forwardedu.com, nextwavestem.com, stemfinity.com, MindSpark. The tell: the organisation that owns the page is not the body that hands out the money, and the "apply" link, if there is one, leaves the site.
+  - GRANT-FINDER PROFILES. A third-party directory's page about one funder or one programme, often built from tax filings or copied listings. Examples: zeffy.com grant pages, fundsforngos.org, grantable.co/grants/..., instrumentl.com, grantwatch.com, grantexec.com, stemgrants.com. One profile is shape C. A filtered list of profiles is shape A. Never shape B.
+The domains are examples, not the whole rule. The rule is who owns the site and whether it takes the application. For both kinds: isGrant=false, isAnnouncement=true, funderName is the real funder (not the vendor or the directory), reasoning names the real funder so a person can find its own page, and funderPageUrl is set when this page links to the funder's own programme page.
+
 Then set isGrant=false for ALL of the following. The first one is by far the most common false positive, so check it first:
 
 1. PAST-TENSE AWARD ANNOUNCEMENTS AND PRESS RELEASES. "We are proud to announce our 2025 grant recipients", "Team 1234 receives $5,000 from...", "Foundation awards $2M to STEM programmes". These describe money that has already been handed out. The tell is past tense plus named recipients plus no instruction on how to apply. If the page tells you who GOT it rather than how to GET it, isGrant=false and isAnnouncement=true.
@@ -358,6 +363,7 @@ Return a JSON object with these fields:
 - deadlineType: one of ${GRANT_DEADLINE_TYPES.map((v) => `"${v}"`).join(', ')}. Use "unknown" freely, never guess.
 - confidence: 0.0 to 1.0, how sure you are that a team could apply for this
 - reasoning: one or two sentences naming the evidence you used, including the rejection rule number when you rejected
+- funderPageUrl: string or null - only when this page is NOT the funder's own site: the funder's own page for this programme, copied character for character from a URL printed in the page content or from the application link above. Null when no such URL is literally there. Never build, shorten or guess a URL.
 
 Do NOT return dates of any kind. Deadlines are read and confirmed elsewhere, by a person. A guessed deadline is worse than no deadline.
 Never infer a figure, a country or an eligibility rule that the page does not state. Leave it null or empty and say so in reasoning.
@@ -522,11 +528,29 @@ export function validateGrantClassification(
     const v = out[key]
     out[key] = typeof v === 'string' && v.trim() ? v.trim() : undefined
   }
+  // Only an absolute http(s) URL; the classify call then checks it was on the page.
+  const funderPageUrl = typeof out.funderPageUrl === 'string' ? out.funderPageUrl.trim() : ''
+  out.funderPageUrl = /^https?:\/\/\S+$/i.test(funderPageUrl) ? funderPageUrl : undefined
   // The summary is shown to readers when the extractor has none; a sentence
   // about the metadata is not a summary.
   if (out.summary) out.summary = scrubNarration(out.summary, 20) ?? undefined
 
   return out
+}
+
+/**
+ * Keep funderPageUrl only when it appears verbatim in what the model was shown.
+ * A URL the model assembled from a funder's name looks exactly as trustworthy
+ * as a copied one and is often a 404, so the check is a literal substring.
+ */
+export function keepFunderPageUrlIfShown(
+  classification: GrantClassification,
+  shownText: string,
+): GrantClassification {
+  const url = classification.funderPageUrl
+  if (!url || shownText.includes(url)) return classification
+  console.warn(`[grant-classify] dropped funderPageUrl not present on the page: ${url}`)
+  return { ...classification, funderPageUrl: undefined }
 }
 
 function parseClassification(text: string): GrantClassification {
@@ -558,6 +582,7 @@ export async function classifyGrantCandidate(
   }
 
   const url = candidate.canonicalUrl ?? candidate.sourceUrl
+  const userContent = buildUserContent(candidate, negatives)
 
   let response: Anthropic.Message
   try {
@@ -565,7 +590,7 @@ export async function classifyGrantCandidate(
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: buildUserContent(candidate, negatives) }],
+      messages: [{ role: 'user', content: userContent }],
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -587,12 +612,18 @@ export async function classifyGrantCandidate(
     throw new GrantClassifierUnavailable('bad_response', `No text block in reply for ${url}`)
   }
 
+  let parsed: GrantClassification
   try {
-    return parseClassification(textBlock.text)
+    parsed = parseClassification(textBlock.text)
   } catch {
     throw new GrantClassifierUnavailable(
       'bad_response',
       `Unparseable JSON for ${url}: ${textBlock.text.slice(0, 200)}`,
     )
   }
+  // The page's own text and its application link only; the suppression
+  // examples in the same message carry other pages' URLs.
+  const meta: RawGrantMetadata = candidate.rawMetadata ?? {}
+  const shown = [meta.applicationUrl ?? '', (meta.contentText ?? '').slice(0, MAX_CONTENT_CHARS)].join('\n')
+  return keepFunderPageUrlIfShown(parsed, shown)
 }

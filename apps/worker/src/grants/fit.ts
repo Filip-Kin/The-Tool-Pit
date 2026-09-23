@@ -26,11 +26,13 @@ Reply with JSON only: {"level": "robotics" | "stem" | "general" | "off", "reason
 - general: an open community, youth or education grant that any local nonprofit or school could apply to. A team could apply; it is not the point of the programme.
 - off: the purpose or the eligible population rules a robotics team out or makes an application unrealistic. Any of these is off:
   * the cause: disaster or wildfire relief, health care, foster care, housing, hunger, arts and culture, environment, conservation or marine work, climate, adult workforce, higher-education research, faith, a specific unrelated population;
-  * the eligibility: schools, school districts, PTOs, booster clubs or youth clubs are named as ineligible; an operating budget floor of $100,000 or more; a track record of several years of programming; invitation-only or "no unsolicited requests"; prior participants only;
-  * the mechanism: a formula allocation to districts or agencies rather than an application; a reimbursement, discount or referral bonus; wages or stipends; money paid only to individuals (a scholarship, an educator stipend);
+  * the eligibility: schools, school districts, PTOs, booster clubs or youth clubs are named as ineligible; an operating budget floor of $100,000 or more; a track record of several years of programming; invitation-only or "no unsolicited requests"; prior participants only; applicants limited to the schools or employees of ONE named school district, or to ONE company's employees (a district education foundation's teacher grants), because no team outside it can apply;
+  * the mechanism: a formula allocation to districts or agencies rather than an application; reimbursement of an individual's own expenses, an employee benefit, or a purchase discount or referral bonus; wages or stipends; money paid only to individuals (a scholarship, an educator stipend). A grant paid to the TEAM after it registers or competes is still money to the team and is not off;
   * a different competition: VEX-only, drone-only or another league named as the sole eligible programme.
 
-Judge only from the text you are given. A broad list of causes that includes education alongside unrelated causes is general, not off. A programme aimed at elementary or middle school only is still stem or general (FLL teams are that age). A closed round on a recurring programme is not off.`
+A 501(c)(3) requirement alone is never off: teams apply through a booster-club nonprofit, a school or a fiscal sponsor.
+
+Judge only from the text you are given. When the text describes several programmes from the same funder, judge the programme named on the "Name" line and ignore the others. A broad list of causes that includes education alongside unrelated causes is general, not off. A programme aimed at elementary or middle school only is still stem or general (FLL teams are that age). A closed round on a recurring programme is not off.`
 
 function field(v: unknown, limit = 1200): string {
   if (Array.isArray(v)) return v.map(String).join(', ')
