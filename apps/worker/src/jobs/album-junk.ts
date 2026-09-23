@@ -22,6 +22,8 @@ export const ALBUM_JUNK_REASONS = {
   notPhotoAlbum: 'not_a_photo_album',
   /** A team's general photo gallery rather than one event's photos. */
   notEventPhotos: 'not_event_photos',
+  /** Photos of a gathering that is not a competition (kickoff, banquet, demo, summit, fundraiser). */
+  notCompetition: 'not_competition_event',
 } as const
 
 /** Reason a candidate whose URL 404s is retired. Assigned by enrich, not here. */
@@ -66,6 +68,35 @@ const GENERAL_GALLERY_RE =
   /\b(?:team|club|our|all\s+our)\s+(?:photos|pics|pictures|gallery|galleries)\b|\bphoto\s+(?:archive|gallery)\b|\bmedia\s+gallery\b/i
 
 /**
+ * A gathering that is not a competition: kickoff, demos, banquets, golf outings,
+ * info meetings, conferences, alumni socials, Maker Faire, advocacy days,
+ * summits, fundraisers, galas, and the SmugMug "Folder Images" cover albums.
+ * Whole words only, so a competition like "Robots on Fire" is untouched.
+ * "Summit" alone is also a place name ("Summit City Showdown"), so it only
+ * counts after an audience word ("Youth Summit", "Leadership Summit").
+ */
+const NON_COMPETITION_RE = new RegExp(
+  [
+    String.raw`\bkick-?off\b`,
+    String.raw`\bdemonstrations?\b`,
+    String.raw`\bnotable events\b`,
+    String.raw`\bcommunity celebrations?\b`,
+    String.raw`\bbanquets?\b`,
+    String.raw`\bgolf\b`,
+    String.raw`\binfo(?:rmation(?:al)?)?\s+(?:meeting|session|night)s?\b`,
+    String.raw`\bconferences?\b`,
+    String.raw`\balumni\s+(?:social|reception|night|gathering|event)s?\b`,
+    String.raw`\bmaker\s*faire\b`,
+    String.raw`\badvocacy\s+day\b`,
+    String.raw`\b(?:youth|leadership|women'?s?|girls?(?:\s+(?:&|and)\s+allies)?|student|mentor|volunteer)\s+summit\b`,
+    String.raw`\bfundrais(?:er|ers|ing)\b`,
+    String.raw`\bgalas?\b`,
+    String.raw`\bfolder images\b`,
+  ].join('|'),
+  'i',
+)
+
+/**
  * Classify a candidate as junk from the signals ingest already has, or return
  * null to let it through. Pure - no I/O - so ingest, enrich and the tests share
  * exactly one definition of what counts as junk.
@@ -95,6 +126,14 @@ export function classifyAlbumJunk(input: AlbumJunkInput): { reason: string } | n
   const hasYear = /\b(?:19|20)\d{2}\b/.test(text)
   if (!input.targetEventCode && !hasYear && GENERAL_GALLERY_RE.test(text)) {
     return { reason: ALBUM_JUNK_REASONS.notEventPhotos }
+  }
+
+  // 4. Not a competition at all. Title/thread title only (a CD blurb can
+  //    mention a kickoff in passing), and only when the crawl did not tie it to
+  //    an event code.
+  const named = `${input.title ?? ''} ${input.threadTitle ?? ''}`
+  if (!input.targetEventCode && NON_COMPETITION_RE.test(named)) {
+    return { reason: ALBUM_JUNK_REASONS.notCompetition }
   }
 
   return null

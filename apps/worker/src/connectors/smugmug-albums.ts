@@ -35,12 +35,33 @@ const API_BASE = 'https://api.smugmug.com/api/v2'
 const MAX_DEPTH = 7
 const MAX_NODES = 4000
 
-/** Gallery names that aren't event albums. */
-const SKIP_NAME = /\b(robot gallery|photo booth|volunteers?|awards? (gallery|ceremony)|headshots?|portraits?|misc|test)\b/i
+/** Gallery names that aren't event albums. "Folder Images" holds a folder's cover shots. */
+const SKIP_NAME = /\b(robot gallery|photo booth|volunteers?|awards? (gallery|ceremony)|headshots?|portraits?|misc|test|folder images)\b/i
 
-/** A pure year folder ("2026") or a "Pre-2022"-style bucket. */
-function isYearName(name: string): boolean {
-  return /^(?:pre[- ]?)?(?:19|20)\d{2}$/i.test(name.trim())
+/**
+ * Folders whose whole subtree is not competitions: demos, kickoff, the "Notable
+ * Events" / "Community Celebrations" buckets. Not descended at all. Whole
+ * folder names only, so an event folder that mentions one of these words in
+ * passing is still walked.
+ */
+const SKIP_FOLDER =
+  /^(?:(?:first|frc|ftc)\s+)?(?:demonstrations?|demos?|notable\s+events|community\s+celebrations?|kick-?offs?)(?:\s+(?:19|20)\d{2})?$/i
+
+export function isSkippedFolder(name: string): boolean {
+  return SKIP_FOLDER.test(name.trim())
+}
+
+/** A pure year folder ("2026"). */
+export function isYearName(name: string): boolean {
+  return /^(?:19|20)\d{2}$/.test(name.trim())
+}
+
+/**
+ * A "Pre-2022"-style bucket: many seasons, so it names no year. Albums below it
+ * must take their year from their own name, never 2022.
+ */
+export function isPreYearBucket(name: string): boolean {
+  return /^pre[- ]?(?:19|20)\d{2}$/i.test(name.trim())
 }
 
 /** Program label folders ("FIRST Robotics Competition", "FTC") are not events. */
@@ -67,7 +88,7 @@ function isGenericLeaf(name: string): boolean {
   )
 }
 
-interface PathContext {
+export interface PathContext {
   /** Meaningful ancestor folder names (event location), root/year/program stripped. */
   names: string[]
   year?: number
@@ -75,7 +96,9 @@ interface PathContext {
 }
 
 /** Extend the path context by descending into a folder named `name`. */
-function descend(ctx: PathContext, name: string): PathContext {
+export function descend(ctx: PathContext, name: string): PathContext {
+  // A multi-season bucket clears any inherited year and adds no location name.
+  if (isPreYearBucket(name)) return { names: ctx.names, year: undefined, program: ctx.program }
   const prog = detectProgram(name)
   const next: PathContext = { names: ctx.names, year: ctx.year, program: prog ?? ctx.program }
   const yearMatch = name.match(/\b((?:19|20)\d{2})\b/)
@@ -90,7 +113,7 @@ function descend(ctx: PathContext, name: string): PathContext {
   return next
 }
 
-interface SmugNode {
+export interface SmugNode {
   Type: 'Folder' | 'Album' | string
   Name: string
   UrlPath: string
@@ -141,6 +164,7 @@ export class SmugmugAlbumsConnector implements AlbumConnector {
           const children = await this.children(id)
           for (const child of children) {
             if (child.Type === 'Folder') {
+              if (isSkippedFolder(child.Name)) continue
               if (depth + 1 <= MAX_DEPTH) queue.push({ id: child.NodeID, depth: depth + 1, ctx: descend(ctx, child.Name) })
             } else if (child.Type === 'Album') {
               const cand = this.albumToCandidate(child, root, ctx)
@@ -224,29 +248,36 @@ export class SmugmugAlbumsConnector implements AlbumConnector {
   }
 
   private albumToCandidate(node: SmugNode, sourceUrl: string, ctx: PathContext): AlbumCandidateInput | null {
-    if (SKIP_NAME.test(node.Name)) return null
-    const canonical = canonicalizeAlbumUrl(node.WebUri)
-    if (!canonical) return null
+    return smugAlbumToCandidate(node, sourceUrl, ctx)
+  }
+}
 
-    // The event name is the meaningful ancestor folders + the leaf name if the
-    // leaf itself carries identity (skip generic "Event Photos" / "2025 A").
-    const parts = [...ctx.names]
-    if (!isGenericLeaf(node.Name) && !ctx.names.includes(node.Name)) parts.push(node.Name)
+/** One SmugMug Album node -> candidate, or null if skipped. Pure. */
+export function smugAlbumToCandidate(node: SmugNode, sourceUrl: string, ctx: PathContext): AlbumCandidateInput | null {
+  if (SKIP_NAME.test(node.Name)) return null
+  const canonical = canonicalizeAlbumUrl(node.WebUri)
+  if (!canonical) return null
 
-    // Year: prefer a year already on the path/leaf; else read one from the leaf.
-    const fromLeaf = node.Name.match(/\b((?:19|20)\d{2})\b/)
-    const year = ctx.year ?? (fromLeaf ? parseInt(fromLeaf[1], 10) : undefined)
+  // The event name is the meaningful ancestor folders + the leaf name if the
+  // leaf itself carries identity (skip generic "Event Photos" / "2025 A").
+  const parts = [...ctx.names]
+  if (!isGenericLeaf(node.Name) && !ctx.names.includes(node.Name)) parts.push(node.Name)
 
-    let title = parts.join(' ').replace(/\s+/g, ' ').trim()
-    if (year && !new RegExp(`\\b${year}\\b`).test(title)) title = `${title} ${year}`.trim()
-    if (!title) title = node.Name
+  // Year: the leaf's own year wins ("Del Rio 2019"), else the path's. A
+  // "Pre-2022" bucket never sets a path year (see descend), so an album under
+  // it with no year of its own stays undefined rather than 2022.
+  const fromLeaf = node.Name.match(/\b((?:19|20)\d{2})\b/)
+  const year = fromLeaf ? parseInt(fromLeaf[1], 10) : ctx.year
 
-    return {
-      sourceUrl,
-      canonicalUrl: canonical.canonicalUrl,
-      provider: 'smugmug',
-      targetEventYear: year,
-      rawMetadata: { title, targetProgram: ctx.program },
-    }
+  let title = parts.join(' ').replace(/\s+/g, ' ').trim()
+  if (year && !new RegExp(`\\b${year}\\b`).test(title)) title = `${title} ${year}`.trim()
+  if (!title) title = node.Name
+
+  return {
+    sourceUrl,
+    canonicalUrl: canonical.canonicalUrl,
+    provider: 'smugmug',
+    targetEventYear: year,
+    rawMetadata: { title, targetProgram: ctx.program },
   }
 }
