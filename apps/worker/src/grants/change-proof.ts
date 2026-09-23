@@ -33,12 +33,13 @@
 import type { ExtractedGrantFields } from '@the-tool-pit/db'
 import { deriveCycleStatus } from './cadence.js'
 import { easternDay } from './change-filters.js'
+import { isArchiveUrl, isThirdPartyGrantUrl } from '@the-tool-pit/db/grant-urls'
 import { DATE_RE, DEADLINE_CUE, OTHER_DEADLINE_RE, isoFromMatch, windowsIn } from './deadline-proof.js'
 
 // #region rule
 
-export const AUTO_CYCLE_COLUMNS: ReadonlySet<string> = new Set(['deadlineAt', 'opensAt', 'decisionAt', 'deadlineNote', 'status'])
-export const AUTO_GRANT_FIELDS: ReadonlySet<string> = new Set(['awardMin', 'awardMax', 'awardNotes', 'awardCurrency'])
+export const AUTO_CYCLE_COLUMNS: ReadonlySet<string> = new Set(['deadlineAt', 'opensAt', 'decisionAt', 'status'])
+export const AUTO_GRANT_FIELDS: ReadonlySet<string> = new Set(['awardMin', 'awardMax', 'awardCurrency'])
 
 /** A deadline pulled forward by more than this is a misread, or news big enough for a person. */
 export const MAX_EARLIER_DEADLINE_DAYS = 60
@@ -74,7 +75,13 @@ export function proveChange(change: ChangeUnderTest, ctx: ProofContext): ProofVe
   if (!parsed) return no(`${change.field} is not on the auto-apply allowlist`)
 
   if (isEmpty(change.newValue)) return no('the change would clear the value')
-  if (ctx.pageUrl && /(^|\/\/|\.)web\.archive\.org\//i.test(ctx.pageUrl)) return no('page read from an archive copy')
+  // Proof comes from the funder's own page. A grant directory's projection
+  // ("Deadline January 30, 2027 130 days left", "Apply with Grantable") reads
+  // exactly like a funder's sentence and was the source of the dates the
+  // 2026-09-23 audit threw out. No URL means we cannot tell, so no proof.
+  if (!ctx.pageUrl) return no('the snapshot does not say which page it read')
+  if (isArchiveUrl(ctx.pageUrl)) return no('page read from an archive copy')
+  if (isThirdPartyGrantUrl(ctx.pageUrl)) return no('page is a grant directory, not the funder')
 
   const flat = ctx.pageText.replace(/\s+/g, ' ').trim()
   if (!flat) return no('no page text on the snapshot')

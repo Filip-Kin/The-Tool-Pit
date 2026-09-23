@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { proveChange, reasoningWithProof } from '../src/grants/change-proof.js'
 
 const NOW = new Date('2026-09-23T12:00:00Z')
-const page = (pageText: string, extra: Record<string, unknown> = {}) => ({ pageText, now: NOW, ...extra })
+const page = (pageText: string, extra: Record<string, unknown> = {}) => ({ pageText, pageUrl: 'https://funder.example.org/grants', now: NOW, ...extra })
 
 describe('proveChange: allowlist and guards', () => {
   const text = 'Grant name here. Applications are due March 1, 2027. Grants of up to $5,000 per team.'
@@ -92,9 +92,9 @@ describe('proveChange: dates', () => {
 describe('proveChange: notes, status, amounts', () => {
   it('proves a note only when it is verbatim on the page', () => {
     const text = 'Deadline March 1, 2027. Applications close at 5:00 pm Eastern on the deadline day.'
-    expect(proveChange({ field: 'cycle.2027.deadlineNote', oldValue: null, newValue: 'Applications close at 5:00 pm Eastern on the deadline day.' }, page(text)).proven).toBe(true)
+    expect(proveChange({ field: 'cycle.2027.deadlineNote', oldValue: null, newValue: 'Applications close at 5:00 pm Eastern on the deadline day.' }, page(text)).proven).toBe(false)
     expect(proveChange({ field: 'cycle.2027.deadlineNote', oldValue: null, newValue: 'Applications close at 5 pm ET.' }, page(text)).proven).toBe(false)
-    expect(proveChange({ field: 'awardNotes', oldValue: null, newValue: 'Grants of up to $5,000 per team' }, page('We offer Grants of up to $5,000 per team.')).proven).toBe(true)
+    expect(proveChange({ field: 'awardNotes', oldValue: null, newValue: 'Grants of up to $5,000 per team' }, page('We offer Grants of up to $5,000 per team.')).proven).toBe(false)
   })
 
   it('proves closed from the funder saying so', () => {
@@ -136,5 +136,14 @@ describe('proveChange: notes, status, amounts', () => {
     expect(reasoningWithProof('ai extraction (confidence 0.90): read the deadline', 'due March 1, 2027')).toBe(
       'Proof on the funder\'s page: "due March 1, 2027"\nai extraction (confidence 0.90): read the deadline',
     )
+  })
+})
+
+describe('proveChange: whose page', () => {
+  const text = 'Academic Enrichment Grants Funding Amount Varies Deadline January 30, 2027 130 days left'
+  it('never takes proof from a grant directory or an unnamed page', () => {
+    const c = { field: 'cycle.2027.deadlineAt', oldValue: null, newValue: '2027-01-30' }
+    expect(proveChange(c, { pageText: text, pageUrl: 'https://grantable.co/grants/youth-development-grant-program-x', now: NOW }).proven).toBe(false)
+    expect(proveChange(c, { pageText: text, now: NOW }).proven).toBe(false)
   })
 })
