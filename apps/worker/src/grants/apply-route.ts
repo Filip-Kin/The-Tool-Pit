@@ -21,6 +21,7 @@ import { parse } from 'node-html-parser'
 import { politeFetch } from '../connectors/base.js'
 import { withRenderedPage } from '../connectors/playwright-render.js'
 import { findApplyLinks, NOT_APPLICATION_PURPOSE } from './apply-links.js'
+import { fetchWithRelayFallback, refusalReason, relayRenderedHtml, type FetchVia } from './relay-fetch.js'
 import type { GrantApplyRouteStatus } from '@the-tool-pit/db/grant-enums'
 
 export interface ApplyRoute {
@@ -33,6 +34,8 @@ export interface ApplyRoute {
   /** Every page visited, in order. */
   chain: string[]
   checkedAt: string
+  /** Pages the NAS fetch relay read because the worker's IP was refused, as "url (relay|relay-render)". */
+  relayed?: string[]
 }
 
 /** Hosts that ARE application systems. Landing on one is the destination. */
@@ -172,16 +175,25 @@ async function fetchWithFallback(url: string): Promise<Response> {
 
 const NOT_FORM_PDF_RE = /(form 990|990-PF|return of (organization|private foundation)|annual report|financial statements|audited financial|meeting minutes|board minutes|permit application|notice of funding opportunity|request for proposals?\b.{0,40}\bresearch|newsletter)/i
 
-async function readHtml(url: string): Promise<{ html: string; status: number; how: 'fetch' | 'browser' | 'walled' | 'gone' | 'pdf'; finalUrl: string }> {
+type ReadHow = 'fetch' | 'relay' | 'relay-render' | 'browser' | 'walled' | 'gone' | 'pdf'
+
+async function readHtml(url: string): Promise<{ html: string; status: number; how: ReadHow; finalUrl: string; via: FetchVia }> {
   let finalUrl = url
+  // Direct unless the worker's IP was refused and the NAS relay read it instead.
+  let via: FetchVia = 'direct'
+  let relayTried = false
   try {
-    const res = await fetchWithFallback(url)
+    const outcome = await fetchWithRelayFallback(url, () => fetchWithFallback(url))
+    const res = outcome.res
+    via = outcome.via
+    relayTried = outcome.relayTried
+    const fetchedHow: ReadHow = via === 'direct' ? 'fetch' : via
     if (res.url && res.url !== url) finalUrl = res.url
     const ct = res.headers.get('content-type') ?? ''
     if (res.ok && /html|xhtml/i.test(ct)) {
       const html = await res.text()
       // A JS shell says nothing; render it.
-      if (html.replace(/<script[\s\S]*?<\/script>/gi, '').length > 2500) return { html, status: res.status, how: 'fetch', finalUrl }
+      if (html.replace(/<script[\s\S]*?<\/script>/gi, '').length > 2500) return { html, status: res.status, how: fetchedHow, finalUrl, via }
     }
     const looksPdf = /pdf/i.test(ct) || /\.pdf(\?|#|$)/i.test(url) || (!/html/i.test(ct) && !/json|image|video|audio/i.test(ct))
     if (res.ok && looksPdf) {
@@ -190,7 +202,7 @@ async function readHtml(url: string): Promise<{ html: string; status: number; ho
       try {
         const bytes = new Uint8Array(await res.arrayBuffer())
         if (bytes.length < 5 || String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== '%PDF') {
-          if (!/html/i.test(ct)) return { html: '', status: res.status, how: 'fetch', finalUrl }
+          if (!/html/i.test(ct)) return { html: '', status: res.status, how: 'fetch', finalUrl, via }
         }
         const { extractText } = await import('unpdf')
         const { text } = await extractText(bytes, { mergePages: true })
@@ -201,34 +213,50 @@ async function readHtml(url: string): Promise<{ html: string; status: number; ho
         // audit found a Form 990-PF, a groundwater permit and a 2020 report
         // published as application links).
         if (NOT_FORM_PDF_RE.test(text.slice(0, 6000))) {
-          return { html: '', status: res.status, how: 'gone', finalUrl }
+          return { html: '', status: res.status, how: 'gone', finalUrl, via }
         }
         if (/(application|apply|applicant|signature|name of (team|school|organization))/i.test(text) || /(application|app|form)[^/]*\.pdf/i.test(url)) {
-          return { html: `<pdf-form>${(text || 'application form').slice(0, 2000).replace(/</g, ' ')}</pdf-form>`, status: res.status, how: 'pdf', finalUrl }
+          return { html: `<pdf-form>${(text || 'application form').slice(0, 2000).replace(/</g, ' ')}</pdf-form>`, status: res.status, how: 'pdf', finalUrl, via }
         }
       } catch {
         // unreadable PDF: fall through
       }
-      return { html: '', status: res.status, how: 'fetch', finalUrl }
+      return { html: '', status: res.status, how: 'fetch', finalUrl, via }
     }
-    if (res.ok && !/html/i.test(ct)) return { html: '', status: res.status, how: 'fetch', finalUrl }
+    if (res.ok && !/html/i.test(ct)) return { html: '', status: res.status, how: 'fetch', finalUrl, via }
     // A 404 to curl is not always a 404 to a browser (Michigan's MiLogin answers
     // 404 with a working page). Ask the browser; gone only if it agrees.
     if (res.status === 404 || res.status === 410) {
       const rendered = await withRenderedPage(url, async (page) => page.content())
       if (rendered && rendered.length > 500 && !/(page not found|404|no longer available|does not exist)/i.test(rendered.replace(/<[^>]+>/g, ' ').slice(0, 3000))) {
-        return { html: rendered, status: 200, how: 'browser', finalUrl }
+        return { html: rendered, status: 200, how: 'browser', finalUrl, via: 'direct' }
       }
-      return { html: '', status: res.status, how: 'gone', finalUrl }
+      return { html: '', status: res.status, how: 'gone', finalUrl, via }
     }
   } catch {
     // fall through to the browser
   }
-  const rendered = await withRenderedPage(url, async (page) => page.content())
-  if (rendered && rendered.length > 500 && !/just a moment|checking your browser|verify you are human|access denied|request unsuccessful|incapsula/i.test(rendered.slice(0, 3000))) {
-    return { html: rendered, status: 200, how: 'browser', finalUrl }
+  // A browser next. The relay's browser first when the relay already read
+  // this page (the worker's IP is known to be refused, so the local browser
+  // would be too); the local one first otherwise, with the relay's as the
+  // second try when the local render hits a wall. When the relay already
+  // tried both reads and failed, only the local browser is left to try.
+  const localRender = async (): Promise<string | null> => {
+    const rendered = await withRenderedPage(url, async (page) => page.content())
+    if (rendered && rendered.length > 500 && !/just a moment|checking your browser|verify you are human|access denied|request unsuccessful|incapsula/i.test(rendered.slice(0, 3000)) && !refusalReason(200, rendered)) return rendered
+    return null
   }
-  return { html: '', status: 0, how: 'walled', finalUrl }
+  if (via !== 'direct') {
+    const relayed = await relayRenderedHtml(url)
+    if (relayed) return { html: relayed, status: 200, how: 'relay-render', finalUrl, via: 'relay-render' }
+  }
+  const local = await localRender()
+  if (local) return { html: local, status: 200, how: 'browser', finalUrl, via: 'direct' }
+  if (via === 'direct' && !relayTried) {
+    const relayed = await relayRenderedHtml(url)
+    if (relayed) return { html: relayed, status: 200, how: 'relay-render', finalUrl, via: 'relay-render' }
+  }
+  return { html: '', status: 0, how: 'walled', finalUrl, via }
 }
 
 /**
@@ -440,6 +468,9 @@ export async function resolveApplyRoute(startUrls: Array<string | null | undefin
   const seen = new Set<string>()
   let walledCount = 0
   let mailto: string | null = null
+  const relayed: string[] = []
+  // Only set when the relay read something, so a direct-only route is unchanged.
+  const withRelayed = (r: ApplyRoute): ApplyRoute => (relayed.length ? { ...r, relayed } : r)
 
   const queue: Array<{ url: string; depth: number }> = []
   for (const u of startUrls) if (u && !seen.has(u)) { seen.add(u); queue.push({ url: u, depth: 0 }) }
@@ -447,12 +478,13 @@ export async function resolveApplyRoute(startUrls: Array<string | null | undefin
   while (queue.length > 0) {
     const { url, depth } = queue.shift() as { url: string; depth: number }
     chain.push(url)
-    const { html, how, status, finalUrl } = await readHtml(url)
+    const { html, how, status, finalUrl, via } = await readHtml(url)
+    if (via !== 'direct') relayed.push(`${url} (${via})`)
     if (how === 'gone') {
       // The application link itself, or an "Apply" link, answering 404 means
       // closed. The info page answering 404 means nothing about the form.
       const wasApplicationLink = depth > 0 || (chain.length === 1 && startUrls[0] === url)
-      if (wasApplicationLink) return { status: 'closed', url, email: null, evidence: `HTTP ${status}: the application page is gone`, chain, checkedAt }
+      if (wasApplicationLink) return withRelayed({ status: 'closed', url, email: null, evidence: `HTTP ${status}: the application page is gone${via !== 'direct' ? `, read via ${via}` : ''}`, chain, checkedAt })
       continue
     }
     if (how === 'walled') {
@@ -461,7 +493,7 @@ export async function resolveApplyRoute(startUrls: Array<string | null | undefin
       try {
         const wu = new URL(url)
         const p = /\/(webinars?|help|faq|faqs|support|about|blog|news|training|resources?|guidelines?|tutorial|docs)(\/|$|[.?#])/i.test(wu.pathname) ? null : portalName(wu)
-        if (p) return { status: 'portal', url, email: null, evidence: `${p} portal (page refused automated reads, host is the destination)`, chain, checkedAt }
+        if (p) return withRelayed({ status: 'portal', url, email: null, evidence: `${p} portal (page refused automated reads, host is the destination)`, chain, checkedAt })
       } catch {
         // ignore
       }
@@ -478,6 +510,10 @@ export async function resolveApplyRoute(startUrls: Array<string | null | undefin
     // Judge by where the page ENDED UP: an apply link that redirects to the
     // member login is the login, and the portal host is the final one.
     let verdict = judge(finalUrl, html, how) ?? (finalUrl !== url ? judge(url, html, how) : null)
+    // No form, portal or mailto on a page that loaded: it may build its form
+    // with JavaScript. Render it once. The worker's own browser when the page
+    // came direct; the relay's browser when the worker's IP was refused,
+    // since a local browser would be refused the same way.
     let judgedHtml = html
     if (!verdict && how === 'fetch') {
       const rendered = await renderedHtml(url)
@@ -485,6 +521,14 @@ export async function resolveApplyRoute(startUrls: Array<string | null | undefin
       if (rendered) {
         verdict = judge(finalUrl, rendered, 'browser')
         judgedHtml = rendered
+      }
+    } else if (!verdict && how === 'relay') {
+      const rendered = await relayRenderedHtml(url)
+      if (rendered && offPurposeTitle(rendered)) continue
+      if (rendered) {
+        verdict = judge(finalUrl, rendered, 'relay-render')
+        judgedHtml = rendered
+        if (verdict) relayed.push(`${url} (relay-render)`)
       }
     }
     if (verdict) {
@@ -497,10 +541,12 @@ export async function resolveApplyRoute(startUrls: Array<string | null | undefin
         const infoProgrammes = info.html ? programmeChooser(info.html, info.finalUrl) : null
         if (infoProgrammes) {
           chain.push(infoUrl)
-          return chooserRoute(infoUrl, infoProgrammes, info.how, chain, checkedAt)
+          return withRelayed(chooserRoute(infoUrl, infoProgrammes, info.how, chain, checkedAt))
         }
       }
-      return { ...verdict, url: verdict.url ? (verdict.status === 'portal' || verdict.status === 'form' ? url : verdict.url) : verdict.url, chain, checkedAt }
+      // judge() names the read on portal and form verdicts; the others get it here.
+      const evidence = via !== 'direct' && !/via relay/.test(verdict.evidence) ? `${verdict.evidence}, read via ${via}` : verdict.evidence
+      return withRelayed({ ...verdict, evidence, url: verdict.url ? (verdict.status === 'portal' || verdict.status === 'form' ? url : verdict.url) : verdict.url, chain, checkedAt })
     }
     if (!mailto) mailto = applyMailto(html)
     if (depth < 2) {
@@ -518,9 +564,10 @@ export async function resolveApplyRoute(startUrls: Array<string | null | undefin
       }
     }
   }
-  if (mailto) return { status: 'email', url: null, email: mailto, evidence: `the page offers a mailto: ${mailto} and no form`, chain, checkedAt }
+  const relayNote = relayed.length ? `; ${relayed.length} read via the NAS relay` : ''
+  if (mailto) return withRelayed({ status: 'email', url: null, email: mailto, evidence: `the page offers a mailto: ${mailto} and no form${relayNote}`, chain, checkedAt })
   if (walledCount > 0 && walledCount === chain.length) {
-    return { status: 'walled', url: null, email: null, evidence: `every page refused automated reads (${chain.length} tried)`, chain, checkedAt }
+    return withRelayed({ status: 'walled', url: null, email: null, evidence: `every page refused automated reads (${chain.length} tried)`, chain, checkedAt })
   }
-  return { status: 'unverified', url: null, email: null, evidence: `no form, portal or mailto within two hops of ${chain[0] ?? 'the start page'} (${chain.length} pages read)`, chain, checkedAt }
+  return withRelayed({ status: 'unverified', url: null, email: null, evidence: `no form, portal or mailto within two hops of ${chain[0] ?? 'the start page'} (${chain.length} pages read${relayNote})`, chain, checkedAt })
 }

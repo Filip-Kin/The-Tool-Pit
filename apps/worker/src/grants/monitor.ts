@@ -41,6 +41,7 @@ import type { ExtractedGrantFields, Grant, GrantCycle } from '@the-tool-pit/db'
 import { politeFetch } from '../connectors/base.js'
 import { hashContent, stripToMainContent } from './strip.js'
 import { verifyListing } from './verify-listing.js'
+import { refusalReason, relayFetch } from './relay-fetch.js'
 import { extractGrantFields, type GrantExtractionResult } from './extract.js'
 import { deriveCycleStatus } from './cadence.js'
 import { DATE_ONLY_NOTE, endOfDayIn, funderTimeZone } from '@the-tool-pit/db/grant-dates'
@@ -460,6 +461,15 @@ async function fetchPage(url: string): Promise<FetchOutcome> {
       if ([401, 403, 406, 429, 503].includes(res.status)) {
         const html = await renderedHtml(url).catch(() => null)
         if (html && html.trim()) return { html, httpStatus: 200, error: null, redirectedTo }
+        // The wall is on the datacenter IP more often than on the browser: the
+        // NAS relay reads from a residential one, plain first, then rendered.
+        // The live page beats an archive.org copy, which the proof rules ignore.
+        for (const render of [false, true]) {
+          const relayed = await relayFetch(url, { render }).catch(() => null)
+          if (relayed && relayed.status >= 200 && relayed.status < 300 && relayed.body.trim() && !refusalReason(relayed.status, relayed.body, relayed.contentType ?? 'text/html')) {
+            return { html: relayed.body, httpStatus: 200, error: null, redirectedTo: relayed.finalUrl && relayed.finalUrl !== url ? relayed.finalUrl : redirectedTo }
+          }
+        }
         const copy = await archiveCopy(url)
         if (copy) return { html: copy.html, httpStatus: 200, error: null, redirectedTo: copy.url }
       }

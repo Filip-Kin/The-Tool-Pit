@@ -43,6 +43,8 @@ export interface DeadlineProof {
   /** For kind none: what was read. */
   urlsRead: string[]
   checkedAt: string
+  /** Pages among urlsRead that the NAS fetch relay read, as "url (relay|relay-render)". Set by verify-listing. */
+  relayed?: string[]
 }
 
 const MONTH = '(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec)'
