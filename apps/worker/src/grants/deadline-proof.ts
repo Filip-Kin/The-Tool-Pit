@@ -26,14 +26,14 @@ export interface DeadlineProof {
 }
 
 const MONTH = '(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec)'
-const DATE_RE = new RegExp(`\\b${MONTH}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(20\\d\\d)\\b|\\b(\\d{1,2})\\s+${MONTH}\\.?\\s+(20\\d\\d)\\b|\\b(20\\d\\d)-(\\d{2})-(\\d{2})\\b|\\b(\\d{1,2})/(\\d{1,2})/(20\\d\\d)\\b`, 'i')
+export const DATE_RE = new RegExp(`\\b${MONTH}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(20\\d\\d)\\b|\\b(\\d{1,2})\\s+${MONTH}\\.?\\s+(20\\d\\d)\\b|\\b(20\\d\\d)-(\\d{2})-(\\d{2})\\b|\\b(\\d{1,2})/(\\d{1,2})/(20\\d\\d)\\b`, 'i')
 /** A strong cue: a bare "by" or "through" next to a date is a schedule, not a deadline. */
-const DEADLINE_CUE = /(deadline|due (date|by|on)?\b|due\b|close[sd]?\b|closing|closes on|must be (submitted|received)|submit(ted)? (by|on or before|no later than)|received (by|on or before)|no later than|on or before|applications? (will )?(be )?(accepted|open) (until|through)|last day to (apply|submit)|final day)/i
+export const DEADLINE_CUE = /(deadline|due (date|by|on)?\b|due\b|close[sd]?\b|closing|closes on|must be (submitted|received)|submit(ted)? (by|on or before|no later than)|received (by|on or before)|no later than|on or before|applications? (will )?(be )?(accepted|open) (until|through)|last day to (apply|submit)|final day)/i
 /**
  * A deadline for something else: a scholarship on a grants page, a
  * recommendation letter, a report, an invoice, a webinar. Not the round.
  */
-const OTHER_DEADLINE_RE = /\b(scholarships?|fellowships?|recommendation letters?|letters? of recommendation|transcripts?|final report|progress report|interim report|reporting deadline|invoice|reimbursement request|webinar|info(rmation)? session|office hours|early bird|registration for the (conference|event|gala))\b/i
+export const OTHER_DEADLINE_RE = /\b(scholarships?|fellowships?|recommendation letters?|letters? of recommendation|transcripts?|final report|progress report|interim report|reporting deadline|invoice|reimbursement request|webinar|info(rmation)? session|office hours|early bird|registration for the (conference|event|gala))\b/i
 
 /**
  * The date that belongs to the deadline word. A timeline table reads
@@ -64,7 +64,7 @@ const NOT_PUBLIC_RE =
 const ROLLING_RE = /(rolling basis|reviewed as they arrive|no deadline|there are no deadlines|accepted (year|all year|year-round|throughout the year)|any time of (the )?year|ongoing basis)/i
 const MONTHS: Record<string, number> = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12, jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 }
 
-function isoFromMatch(m: RegExpMatchArray): string | null {
+export function isoFromMatch(m: RegExpMatchArray): string | null {
   const pad = (n: number) => String(n).padStart(2, '0')
   if (m[1] && m[2] && m[3]) return `${m[3]}-${pad(MONTHS[m[1].toLowerCase()] ?? 0)}-${pad(Number(m[2]))}`
   if (m[4] && m[5] && m[6]) return `${m[6]}-${pad(MONTHS[m[5].toLowerCase()] ?? 0)}-${pad(Number(m[4]))}`

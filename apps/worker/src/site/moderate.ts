@@ -15,11 +15,16 @@ const SECRET_ENV = 'INTERNAL_API_SECRET'
 
 export type ModerateTarget = { messageId: string } | { vertical: string; entityId: string }
 
-export function moderateUrl(): string {
+/** The site's base URL for internal calls, no trailing slash. */
+export function siteBaseUrl(): string {
   // The worker's own env may carry NEXT_PUBLIC_URL; siteUrl() reads it and
   // falls back to production. WEB_INTERNAL_URL overrides when the two services
   // can reach each other on a shorter path than the public one.
-  return `${(process.env.WEB_INTERNAL_URL?.trim() || siteUrl()).replace(/\/+$/, '')}/api/internal/moderate`
+  return (process.env.WEB_INTERNAL_URL?.trim() || siteUrl()).replace(/\/+$/, '')
+}
+
+export function moderateUrl(): string {
+  return `${siteBaseUrl()}/api/internal/moderate`
 }
 
 export function moderateConfigured(): boolean {

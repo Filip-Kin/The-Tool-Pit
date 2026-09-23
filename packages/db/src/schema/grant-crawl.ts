@@ -200,9 +200,11 @@ export const grantSnapshots = pgTable(
 //
 // The review queue that makes a moving deadline safe. A crawl NEVER writes a
 // new deadline straight onto a published grant; it files a change here and an
-// admin applies or dismisses it. Auto-apply is allowed only for the narrow
-// case flagged by `autoApplicable` (a new future cycle appearing on a grant
-// that had no cycle for that year at all), and even that is logged.
+// admin applies or dismisses it. Auto-apply is allowed only for a row flagged
+// `autoApplicable`: an allowlisted date or award field whose new value a
+// verbatim quote on the funder's page supports (apps/worker/src/grants/
+// change-proof.ts). The monitor asks the site to apply those as actor 'auto',
+// through the same apply body as the admin button.
 // ---------------------------------------------------------------------------
 
 export const grantChanges = pgTable(
@@ -219,7 +221,7 @@ export const grantChanges = pgTable(
     newValue: jsonb('new_value'),
     /** Extractor's own words on why it thinks this changed. */
     reasoning: text('reasoning'),
-    /** True only for a strictly-additive new cycle. Everything else is manual. */
+    /** True when change-proof.ts proved the value on the page; the quote leads `reasoning`. */
     autoApplicable: boolean('auto_applicable').notNull().default(false),
     /** pending | applied | dismissed */
     status: text('status').notNull().default('pending'),

@@ -22,6 +22,8 @@ export type QueueDecision =
       overrideVerification?: string
       status?: 'published' | 'pending'
     }
+  | { kind: 'grant_change'; id: string; action: 'apply' }
+  | { kind: 'grant_change'; id: string; action: 'dismiss'; note?: string }
 
 export interface QueueDecisionResult {
   id: string
@@ -127,6 +129,16 @@ export function parseQueueDecision(raw: unknown): QueueDecision | { error: strin
       default:
         return { error: `unknown grant action ${JSON.stringify(raw.action)}` }
     }
+  }
+
+  if (raw.kind === 'grant_change') {
+    if (raw.action === 'apply') return { kind: 'grant_change', id, action: 'apply' }
+    if (raw.action === 'dismiss') {
+      const note = optional('note')
+      if (note === false) return { error: 'note must be a string' }
+      return { kind: 'grant_change', id, action: 'dismiss', note }
+    }
+    return { error: `unknown grant_change action ${JSON.stringify(raw.action)}` }
   }
 
   return { error: `unknown kind ${JSON.stringify(raw.kind)}` }

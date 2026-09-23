@@ -179,7 +179,7 @@ export default async function AdminGrantChangesPage({
                             )}
                             {c.autoApplicable && (
                               <span className="rounded bg-surface-3 px-1.5 py-0.5 text-[10px] text-muted">
-                                new cycle, additive
+                                Proven
                               </span>
                             )}
                             <span className="font-mono text-[10px] text-muted-2">{c.field}</span>
