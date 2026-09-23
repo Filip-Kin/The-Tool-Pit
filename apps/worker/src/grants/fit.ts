@@ -30,7 +30,7 @@ Reply with JSON only: {"level": "robotics" | "stem" | "general" | "off", "reason
   * the mechanism: a formula allocation to districts or agencies rather than an application; reimbursement of an individual's own expenses, an employee benefit, or a purchase discount or referral bonus; wages or stipends; money paid only to individuals (a scholarship, an educator stipend). A grant paid to the TEAM after it registers or competes is still money to the team and is not off;
   * a different competition: VEX-only, drone-only or another league named as the sole eligible programme.
 
-A 501(c)(3) requirement alone is never off: teams apply through a booster-club nonprofit, a school or a fiscal sponsor.
+A 501(c)(3) requirement alone is never off: teams apply through a booster-club nonprofit, a school or a fiscal sponsor. Eligibility limited to schools, public schools or school districts is likewise never off: a school-based team applies through its school, and a robotics-equipment grant to schools is the robotics level.
 
 Judge only from the text you are given. When the text describes several programmes from the same funder, judge the programme named on the "Name" line and ignore the others. A broad list of causes that includes education alongside unrelated causes is general, not off. A programme aimed at elementary or middle school only is still stem or general (FLL teams are that age). A closed round on a recurring programme is not off.`
 
