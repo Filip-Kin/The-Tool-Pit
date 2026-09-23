@@ -61,6 +61,7 @@ import {
 import { braveSearch, BraveBudgetExhausted } from './brave.js'
 import { routeAggregatorToSource, autoRouteDenyReason, AUTO_ROUTE_CONFIDENCE } from './route-aggregator.js'
 import { findApplyLinks } from './apply-links.js'
+import { fetchWithRelayFallback, relayRenderedHtml, viaNote, type FetchVia } from './relay-fetch.js'
 import { deterministicGrantPrefilter } from './prefilter.js'
 import { verifyListing } from './verify-listing.js'
 import { judgeFit } from './fit.js'
@@ -137,10 +138,21 @@ const CANDIDATE_TEXT_LIMIT = 20_000
  * and NOT a suppression: it returns null, the gate is told to go easy, and the
  * candidate still reaches a human.
  */
-async function fetchCandidateText(url: string): Promise<string | null> {
+/**
+ * Record, once per URL, that a page came through the NAS fetch relay. The
+ * notes travel with the extraction, so a reviewer can see which evidence the
+ * worker read itself and which the relay read for it.
+ */
+function noteVia(notes: string[] | undefined, url: string, via: FetchVia): void {
+  const note = viaNote(url, via)
+  if (note && notes && !notes.includes(note)) notes.push(note)
+}
+
+async function fetchCandidateText(url: string, notes?: string[]): Promise<string | null> {
   try {
-    const res = await politeFetch(url)
+    const { res, via } = await fetchWithRelayFallback(url, () => politeFetch(url))
     if (!res.ok) return null
+    noteVia(notes, url, via)
     const contentType = res.headers.get('content-type') ?? ''
     if (PDF_CONTENT.test(contentType) || (!contentType && PDF_URL.test(url))) {
       const text = await pdfText(res)
@@ -148,6 +160,15 @@ async function fetchCandidateText(url: string): Promise<string | null> {
     }
     if (contentType && !READABLE_CONTENT.test(contentType)) return null
     const text = stripToMainContent(await res.text())
+    if (!text.trim() && via === 'relay') {
+      // A JS shell from the relay: the relay's browser, not ours, can render it.
+      const rendered = await relayRenderedHtml(url)
+      const renderedText = rendered ? stripToMainContent(rendered) : ''
+      if (renderedText.trim()) {
+        noteVia(notes, url, 'relay-render')
+        return renderedText.slice(0, CANDIDATE_TEXT_LIMIT)
+      }
+    }
     return text.trim() ? text.slice(0, CANDIDATE_TEXT_LIMIT) : null
   } catch {
     // politeFetch aborts at 15s. A timeout, a DNS failure and a TLS error are
@@ -168,10 +189,11 @@ export interface GrantEnrichOutcome {
 }
 
 /** Raw HTML of the candidate's page, for link finding. Null on any failure. */
-async function fetchCandidateHtml(url: string): Promise<string | null> {
+async function fetchCandidateHtml(url: string, notes?: string[]): Promise<string | null> {
   try {
-    const res = await politeFetch(url)
+    const { res, via } = await fetchWithRelayFallback(url, () => politeFetch(url))
     if (!res.ok) return null
+    noteVia(notes, url, via)
     const contentType = res.headers.get('content-type') ?? ''
     if (contentType && !READABLE_CONTENT.test(contentType)) return null
     return await res.text()
@@ -506,7 +528,7 @@ async function gatherEvidence(
       const info = await findInfoPage(String(funder), String(name), [url])
       if (info) {
         notes.push(`info page found for the entrance URL ${url}: ${info.url} (${info.evidence})`)
-        const infoText = await fetchCandidateText(info.url)
+        const infoText = await fetchCandidateText(info.url, notes)
         if (infoText) {
           funderPage = infoText
           meta.applicationUrl = meta.applicationUrl ?? url
@@ -523,7 +545,7 @@ async function gatherEvidence(
     }
   }
   if (deep || !funderPage.trim()) {
-    const fresh = await fetchCandidateText(url)
+    const fresh = await fetchCandidateText(url, notes)
     if (fresh) {
       funderPage = fresh
       urls.push(url)
@@ -548,12 +570,12 @@ async function gatherEvidence(
   // extra fetch, first-hand evidence, and the URL is quoted so the presence
   // check on applicationUrl passes.
   const followed = new Set<string>()
-  const html = await fetchCandidateHtml(url)
+  const html = await fetchCandidateHtml(url, notes)
   if (html) {
     const [best] = findApplyLinks(html, url)
     if (best && best.url !== url) {
       followed.add(best.url)
-      const applyText = await fetchCandidateText(best.url)
+      const applyText = await fetchCandidateText(best.url, notes)
       if (applyText) {
         urls.push(best.url)
         funderPage = `${funderPage}\n\nApply at: ${best.url}\n\n${applyText}`
@@ -572,7 +594,7 @@ async function gatherEvidence(
     //    where the deadline and the eligibility usually live in full.
     const applicationUrl = meta.applicationUrl ?? candidate.extraction?.fields.applicationUrl.value ?? null
     if (applicationUrl && applicationUrl !== url && !followed.has(applicationUrl)) {
-      const applicationText = await fetchCandidateText(applicationUrl)
+      const applicationText = await fetchCandidateText(applicationUrl, notes)
       if (applicationText) {
         // First-hand either way. An off-site portal (a Google Form, Submittable)
         // is still where the funder sends applicants, so it joins the page text
@@ -691,7 +713,7 @@ export async function processGrantExtractJob(payload: GrantExtractPayload): Prom
   //    reads a page, the resolver followed the button.
   try {
     const known = gathered.urls.length > 0 ? [{ url: gathered.urls[0], text: gathered.evidence.funderPage }] : []
-    const { route, proof } = await verifyListing(
+    const { route, proof, relayed } = await verifyListing(
       [extraction.fields.applicationUrl.value, meta.applicationUrl, url],
       known,
     )
@@ -709,6 +731,7 @@ export async function processGrantExtractJob(payload: GrantExtractPayload): Prom
       }
     }
     extraction.notes.push(`apply route: ${route.status} (${route.evidence})`, `timing: ${proof.kind}${proof.quote ? ` ("${proof.quote.slice(0, 120)}")` : ''}`)
+    if (relayed.length) extraction.notes.push(`read via the NAS fetch relay (the worker's IP was refused): ${relayed.join(', ')}`)
   } catch (err) {
     extraction.notes.push(`verification failed: ${err instanceof Error ? err.message : String(err)}`)
   }

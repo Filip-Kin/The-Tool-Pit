@@ -15,6 +15,7 @@ import { stripToMainContent } from './strip.js'
 import { resolveApplyRoute, renderedHtml, type ApplyRoute } from './apply-route.js'
 import { findDeadlineProof, type DeadlineProof } from './deadline-proof.js'
 import { archiveCopy } from './archive.js'
+import { fetchWithRelayFallback, relayRenderedHtml, type FetchVia } from './relay-fetch.js'
 
 const TEXT_LIMIT = 20_000
 const DATE_LINK_RE = /(deadline|dates?\b|timeline|calendar|schedule|how to apply|apply\b|application|guidelines?|faq|eligib|cycle|round|program details|grant details|request for proposals|rfp)/i
@@ -25,11 +26,14 @@ interface ReadPage {
   html: string | null
   /** Set when the words came from the Wayback Machine, so the proof says so. */
   archiveUrl?: string
+  /** Set when the NAS fetch relay read the page because the worker's IP was refused. */
+  via?: Exclude<FetchVia, 'direct'>
 }
 
 async function readPage(url: string): Promise<ReadPage> {
   try {
-    const res = await politeFetch(url)
+    const { res, via: fetchedVia } = await fetchWithRelayFallback(url, () => politeFetch(url))
+    const via = fetchedVia === 'direct' ? undefined : fetchedVia
     const ct = res.headers.get('content-type') ?? ''
     if (!res.ok) {
       // A bot wall is not an empty page; the browser reads it.
@@ -47,7 +51,7 @@ async function readPage(url: string): Promise<ReadPage> {
       if (bytes.length > 4 && String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) === '%PDF') {
         const { extractText } = await import('unpdf')
         const { text } = await extractText(bytes, { mergePages: true })
-        return { text: (text ?? '').replace(/\s+/g, ' ').slice(0, TEXT_LIMIT), html: null }
+        return { text: (text ?? '').replace(/\s+/g, ' ').slice(0, TEXT_LIMIT), html: null, via }
       }
       return { text: '', html: null }
     }
@@ -55,14 +59,19 @@ async function readPage(url: string): Promise<ReadPage> {
     const html = await res.text()
     let text = stripToMainContent(html).slice(0, TEXT_LIMIT)
     if (!text.trim()) {
-      // JS-only page: render it before calling it empty.
+      // JS-only page: render it before calling it empty. In the relay's
+      // browser when the relay read it, since the worker's IP was refused.
+      if (via === 'relay') {
+        const rendered = await relayRenderedHtml(url)
+        if (rendered) return { text: stripToMainContent(rendered).slice(0, TEXT_LIMIT), html: rendered, via: 'relay-render' }
+      }
       const rendered = await renderedHtml(url).catch(() => null)
       if (rendered) {
         text = stripToMainContent(rendered).slice(0, TEXT_LIMIT)
         return { text, html: rendered }
       }
     }
-    return { text, html }
+    return { text, html, via }
   } catch {
     return { text: '', html: null }
   }
@@ -106,6 +115,8 @@ export function dateLinks(html: string, pageUrl: string): string[] {
 export interface ListingVerification {
   route: ApplyRoute
   proof: DeadlineProof & { past?: { date: string; quote: string; url: string } }
+  /** Every page, on the route or the timing read, that came through the NAS fetch relay. */
+  relayed: string[]
 }
 
 /**
@@ -124,9 +135,11 @@ export async function verifyListing(
   const have = new Set(pages.map((p) => p.url))
   const wanted = [...startUrls.filter((u): u is string => Boolean(u)), ...route.chain].filter((u, i, all) => all.indexOf(u) === i)
   const hops: string[] = []
+  const relayedTiming: string[] = []
   for (const url of wanted) {
     if (have.has(url)) continue
     const page = await readPage(url)
+    if (page.via) relayedTiming.push(`${url} (${page.via})`)
     if (page.text.trim()) pages.push({ url: page.archiveUrl ?? url, text: page.text })
     if (page.html) for (const l of dateLinks(page.html, url)) if (!have.has(l) && !hops.includes(l)) hops.push(l)
     have.add(url)
@@ -135,10 +148,15 @@ export async function verifyListing(
   if (proof.kind !== 'dated' && hops.length > 0) {
     for (const url of hops.slice(0, MAX_HOPS)) {
       const page = await readPage(url)
+      if (page.via) relayedTiming.push(`${url} (${page.via})`)
       if (page.text.trim()) pages.push({ url: page.archiveUrl ?? url, text: page.text })
       have.add(url)
     }
     proof = findDeadlineProof(pages)
   }
-  return { route, proof }
+  // The proof says which of the pages it read came through the relay, so a
+  // reviewer can tell when the quote was read from the NAS, not the worker.
+  if (relayedTiming.length) proof = { ...proof, relayed: relayedTiming }
+  const relayed = [...(route.relayed ?? []), ...relayedTiming].filter((u, i, all) => all.indexOf(u) === i)
+  return { route, proof, relayed }
 }
