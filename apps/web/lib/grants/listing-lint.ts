@@ -86,7 +86,7 @@ export function lintListing(values: {
     out.push({ field: 'name', text: name, problem: 'names the portal or the form, not the programme' })
   }
   const funder = values.funderName ?? ''
-  if (funder && (funder.length > 70 || /[.!?]$/.test(funder.trim()) || /\b(in partnership with|in collaboration with|and its|which|that)\b/i.test(funder))) {
+  if (funder && (funder.length > 70 || /[.!?]$/.test(funder.trim().replace(/\b(inc|co|corp|ltd|llc|jr|sr|st)\.$/i, '')) || /\b(in partnership with|in collaboration with|and its|which|that)\b/i.test(funder))) {
     out.push({ field: 'funder', text: funder, problem: 'the funder field holds a sentence, not an organisation' })
   }
   if (!values.summary || values.summary.trim().length < 40) {

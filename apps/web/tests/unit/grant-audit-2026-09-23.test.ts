@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { GrantExtraction, GrantExtractionFields } from '@the-tool-pit/db'
 import { reviewDefaults, dateOnlyDeadline } from '@/lib/admin/grant-review'
 import { parseCycleFields } from '@/lib/admin/grants'
+import { lintListing } from '@/lib/grants/listing-lint'
 import { formFromReviewDefaults, publishBlockers } from '@/lib/admin/grant-publish'
 
 /**
@@ -123,5 +124,13 @@ describe('the info link must be the funder\'s programme page', () => {
   })
   it('passes the funder\'s own page', () => {
     expect(blockers('https://sheltering-arms.org/youth-development/').join(' ')).not.toMatch(/info link|application link/)
+  })
+})
+
+describe('funder names ending in an abbreviation', () => {
+  it('reads "Giving Hope Inc." as an organisation, not a sentence', () => {
+    const issues = lintListing({ name: 'Giving Hope Grant Program', funderName: 'Giving Hope Inc.', summary: 'Grants for youth education programmes in South Dakota, applied for online.' })
+    expect(issues.some((i) => i.field === 'funder')).toBe(false)
+    expect(lintListing({ name: 'X Grant', funderName: 'We fund schools.', summary: 'Grants for youth education programmes in South Dakota, applied for online.' }).some((i) => i.field === 'funder')).toBe(true)
   })
 })
