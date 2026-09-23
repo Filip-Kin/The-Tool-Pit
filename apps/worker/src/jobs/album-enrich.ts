@@ -8,11 +8,12 @@
 import { getDb } from '@the-tool-pit/db'
 import { events, albums, albumCandidates, albumSubmissions, users } from '@the-tool-pit/db'
 import type { AlbumCandidateMetadata, AlbumEventMatch } from '@the-tool-pit/db'
-import { eq, and, desc, sql, inArray } from 'drizzle-orm'
+import { eq, and, sql, inArray } from 'drizzle-orm'
 import { parse } from 'node-html-parser'
 import { politeFetch } from '../connectors/base.js'
 import { matchEventWithAI, type EventCandidate } from '../pipeline/match-event.js'
 import { classifyAlbumJunk, DEAD_LINK_REASON } from './album-junk.js'
+import { decideNameMatch, isFllOnlyTitle, type NameMatchDecision } from './album-match.js'
 import type { AlbumEnrichPayload } from '@the-tool-pit/types'
 import { askSiteToDecide } from '../site/moderate.js'
 
@@ -221,7 +222,10 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
   // schedule to match against), so they must never sit in the actionable queue.
   // Suppress them to a distinct, filterable reason and stop - no matching work,
   // no pending row a moderator has to triage.
-  if (meta.targetProgram === 'fll') {
+  // Also catch FLL named only in the title ("FIRST LEGO League ...") when the
+  // folder context did not set the program; a title that also names FTC/FRC
+  // ("FLL-FTC2026 - Prix") is a combined event and stays in play.
+  if (meta.targetProgram === 'fll' || isFllOnlyTitle(meta.title ?? '')) {
     await suppressCandidate(db, cand.id, meta, FLL_NO_EVENT_REASON, cand.submissionId)
     console.log(`[album-enrich] candidate ${cand.id} → suppressed (${FLL_NO_EVENT_REASON})`)
     return
@@ -282,60 +286,56 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
     }
   }
 
-  // 3b. Deterministic: word-similarity name match. word_similarity keys on the
-  // distinctive part of the name (e.g. "Troy") instead of the shared
-  // "FiM District Event" boilerplate, and costs no API credits.
-  const NAME_MATCH_THRESHOLD = 0.6
-  // Below this there is no plausible candidate, so don't spend AI on it either.
-  const AI_MIN_PLAUSIBLE = 0.4
-  let topWsim = 0
+  // 3b. Deterministic name match, scored in TS over every event of the year +
+  // program (a few hundred rows at most). See album-match.ts: the distinctive
+  // words of the event name ("Troy", "Seven Rivers") must appear in the title,
+  // and the best must clearly beat the runner-up, so "Michigan State
+  // Championship-NW" vs "-SE" or four "Wisconsin Championship" rows never
+  // auto-match on a tie. Those fall to the AI shortlist below, with the guess set.
+  let decision: NameMatchDecision<EventCandidate & { id: string; year: number }> | null = null
   if (!matchedEventId && matchText && year != null) {
-    const [top] = await db
+    const pool = await db
       .select({
         id: events.id,
         eventCode: events.eventCode,
         name: events.name,
         year: events.year,
-        wsim: sql<number>`word_similarity(${matchText}, ${events.name})`,
-      })
-      .from(events)
-      .where(and(eq(events.year, year), notFuture, programFilter))
-      .orderBy(desc(sql`word_similarity(${matchText}, ${events.name})`))
-      .limit(1)
-    if (top) {
-      topWsim = top.wsim
-      // Keep the single best guess even when it is below the auto-match bar, so
-      // the admin queue can show it by name + score for one-click confirmation.
-      classification.guessEventId = top.id
-      classification.guessEventCode = `${top.year}${top.eventCode}`
-      classification.guessEventName = top.name
-      classification.guessConfidence = top.wsim
-      if (top.wsim >= NAME_MATCH_THRESHOLD) {
-        matchedEventId = top.id
-        confidence = top.wsim
-        classification.eventCode = top.eventCode
-        classification.method = 'name_match'
-        classification.confidence = top.wsim
-      }
-    }
-  }
-
-  // 3c. AI - ONLY for the uncertain "maybe" band (a plausible but not confident
-  // name match). Hopeless candidates (topWsim < 0.4) stay pending without an AI
-  // call, so credits are only spent where they can actually help.
-  if (!matchedEventId && matchText && year != null && topWsim >= AI_MIN_PLAUSIBLE) {
-    const shortlist = (await db
-      .select({
-        eventCode: events.eventCode,
-        name: events.name,
         startDate: events.startDate,
         week: events.week,
         stateProv: events.stateProv,
       })
       .from(events)
       .where(and(eq(events.year, year), notFuture, programFilter))
-      .orderBy(desc(sql`similarity(${events.name}, ${matchText})`))
-      .limit(15)) as EventCandidate[]
+    decision = decideNameMatch(matchText, pool)
+    const top = decision.ranked[0]
+    if (top) {
+      // Keep the single best guess even when it is below the auto-match bar, so
+      // the admin queue can show it by name + score for one-click confirmation.
+      classification.guessEventId = top.event.id
+      classification.guessEventCode = `${top.event.year}${top.event.eventCode}`
+      classification.guessEventName = top.event.name
+      classification.guessConfidence = top.score
+    }
+    if (decision.match) {
+      matchedEventId = decision.match.event.id
+      confidence = decision.match.score
+      classification.eventCode = decision.match.event.eventCode
+      classification.method = 'name_match'
+      classification.confidence = decision.match.score
+    }
+  }
+
+  // 3c. AI - ONLY for the uncertain "maybe" band (a plausible but not clear
+  // name match, including ties). Hopeless candidates stay pending without an AI
+  // call, so credits are only spent where they can actually help.
+  if (!matchedEventId && matchText && year != null && decision?.maybe) {
+    const shortlist: EventCandidate[] = decision.ranked.slice(0, 15).map(({ event }) => ({
+      eventCode: event.eventCode,
+      name: event.name,
+      startDate: event.startDate,
+      week: event.week,
+      stateProv: event.stateProv,
+    }))
 
     const ai = await matchEventWithAI(
       { albumUrl: canonicalUrl, threadTitle: matchText, blurb: meta.blurb },

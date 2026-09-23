@@ -93,4 +93,26 @@ describe('classifyAlbumJunk', () => {
     expect(real({ canonicalUrl: 'https://www.flickr.com/photos/frc1234/albums/72177720312345678' })).toBeNull()
     expect(real({ canonicalUrl: 'https://drive.google.com/drive/folders/abc' })).toBeNull()
   })
+
+  it('flags non-competition gatherings with a distinct reason', () => {
+    for (const title of [
+      '2025 Girls & Allies Youth Summit',
+      '2024 FRC Kickoff',
+      '2025 Team Banquet',
+      '2024 Golf Outing Fundraiser',
+      '2025 Info Meeting',
+      'Maker Faire Milwaukee 2024',
+      '2025 Advocacy Day',
+      'Folder Images',
+      '2024 Alumni Social',
+    ]) {
+      expect(real({ targetEventCode: null, title })).toEqual({ reason: ALBUM_JUNK_REASONS.notCompetition })
+    }
+  })
+
+  it('leaves real competitions with look-alike words alone', () => {
+    expect(real({ targetEventCode: null, title: '2025 Robots on Fire' })).toBeNull()
+    expect(real({ targetEventCode: null, title: '2024 Summit City Showdown' })).toBeNull()
+    expect(real({ targetEventCode: 'wikick', title: '2024 Kickoff' })).toBeNull()
+  })
 })
