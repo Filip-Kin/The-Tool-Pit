@@ -16,10 +16,26 @@ describe('parseQueueRequest', () => {
         { kind: 'grant', id: 'g4', action: 'route' },
         { kind: 'grant', id: 'g5', action: 'attach', grantRef: 'some-grant' },
         { kind: 'grant', id: 'g6', action: 'publish', overrides: { programs: 'frc,ftc' }, status: 'pending' },
+        { kind: 'grant_change', id: 'c1', action: 'apply' },
+        { kind: 'grant_change', id: 'c2', action: 'dismiss', note: 'Last year' },
       ],
     })
     expect('error' in out).toBe(false)
-    if (!('error' in out)) expect(out.decisions).toHaveLength(8)
+    if (!('error' in out)) expect(out.decisions).toHaveLength(10)
+  })
+
+  it('parses grant change decisions and refuses a bad one', () => {
+    expect(parseQueueRequest({ actor: { name: 'auto' }, decisions: [{ kind: 'grant_change', id: 'c1', action: 'apply' }] })).toEqual({
+      actorName: 'auto',
+      decisions: [{ kind: 'grant_change', id: 'c1', action: 'apply' }],
+    })
+    expect(parseQueueRequest({ actor, decisions: [{ kind: 'grant_change', id: 'c1', action: 'dismiss' }] })).toEqual({
+      actorName: 'review-bot',
+      decisions: [{ kind: 'grant_change', id: 'c1', action: 'dismiss', note: undefined }],
+    })
+    expect(parseQueueRequest({ actor, decisions: [{ kind: 'grant_change', id: 'c1', action: 'publish' }] })).toHaveProperty('error')
+    expect(parseQueueRequest({ actor, decisions: [{ kind: 'grant_change', id: 'c1', action: 'dismiss', note: 3 }] })).toHaveProperty('error')
+    expect(parseQueueRequest({ actor, decisions: [{ kind: 'grant_change', action: 'apply' }] })).toHaveProperty('error')
   })
 
   it('rejects a missing actor, a missing field, and an unknown action', () => {

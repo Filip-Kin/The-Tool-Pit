@@ -12,6 +12,7 @@ import {
 import { formFromReviewDefaults, loadCandidate, publishCandidateFromForm } from '@/lib/admin/grant-publish'
 import { reviewDefaults } from '@/lib/admin/grant-review'
 import { revalidateGrantPublic } from '@/lib/admin/grants'
+import { applyGrantChangeBody, dismissGrantChangeBody } from '@/lib/admin/grant-change-decisions'
 import { recordDiscordDecision } from '@/lib/discord/decisions'
 import {
   parseQueueRequest,
@@ -30,11 +31,18 @@ import {
  *
  * NOT A SECOND PUBLISH PATH. Every decision runs the body the admin button
  * runs (lib/admin/album-decisions.ts, lib/admin/grant-decisions.ts,
- * publishCandidateFromForm), so the gates apply unchanged: a grant publish
+ * lib/admin/grant-change-decisions.ts, publishCandidateFromForm), so the gates
+ * apply unchanged: a grant publish
  * builds the same form the review deck posts, from reviewDefaults, and
  * publishBlockers / duplicateOfExisting refuse it the same way. The refusal
  * comes back verbatim in `error`. The only way past the gate is the named
  * overrideVerification field, the "publish anyway" reason an admin would type.
+ *
+ * A grant_change apply is the admin Apply button with the deadline tickbox
+ * ticked: the caller's decision is the confirmation. The grant monitor sends
+ * these as actor 'auto' for changes it proved against the funder's page
+ * (apps/worker/src/grants/change-proof.ts); the proof is the worker's gate,
+ * this route only carries the decision out.
  *
  * Body: { actor: { name }, decisions: QueueDecision[] } (lib/admin/queue-decisions.ts),
  * at most 200. A malformed decision fails the whole request with 400 before
@@ -48,6 +56,7 @@ export const dynamic = 'force-dynamic'
 
 const ALBUM_QUEUE_PATH = '/admin/album-candidates'
 const GRANT_QUEUE_PATH = '/admin/grants/candidates'
+const CHANGE_QUEUE_PATH = '/admin/grants/changes'
 
 type Outcome = Omit<QueueDecisionResult, 'id' | 'kind' | 'action' | 'ok'>
 
@@ -65,6 +74,15 @@ async function run(d: QueueDecision, who: string): Promise<Outcome> {
     if (out.error) return out
     await recordDiscordDecision('album', d.id, { status: 'rejected', by: who, via: 'site' })
     return {}
+  }
+
+  if (d.kind === 'grant_change') {
+    if (d.action === 'dismiss') return dismissGrantChangeBody(d.id, who, d.note)
+    const out = await applyGrantChangeBody(d.id, who, { confirmed: true })
+    if (out.error || !out.grant) return { error: out.error ?? 'Change not applied.' }
+    revalidatePath(`/admin/grants/${out.grant.id}`)
+    revalidateGrantPublic(out.grant.slug)
+    return { slug: out.grant.slug }
   }
 
   switch (d.action) {
@@ -122,9 +140,11 @@ export async function POST(req: Request): Promise<NextResponse> {
   const results: QueueDecisionResult[] = []
   let anyAlbum = false
   let anyGrant = false
+  let anyChange = false
   let anyRouted = false
   for (const d of parsed.decisions) {
     if (d.kind === 'album') anyAlbum = true
+    else if (d.kind === 'grant_change') anyChange = true
     else anyGrant = true
     let outcome: Outcome
     try {
@@ -139,6 +159,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   if (anyAlbum) revalidatePath(ALBUM_QUEUE_PATH)
   if (anyGrant) revalidatePath(GRANT_QUEUE_PATH)
+  if (anyChange) revalidatePath(CHANGE_QUEUE_PATH)
   if (anyRouted) revalidatePath('/admin/grants/sources')
 
   return NextResponse.json({ results })

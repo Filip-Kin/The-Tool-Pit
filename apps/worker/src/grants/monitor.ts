@@ -22,6 +22,13 @@
  * has no cycle row for is proposed as pending changes like everything else;
  * see the else-if in processGrantMonitorJob. The admin change queue is the
  * only route a scraped date takes onto a published listing.
+ *
+ * Proven changes (./change-proof.ts: an allowlisted field, no guard tripped,
+ * and a verbatim quote from this snapshot's page text supporting the value)
+ * still go through that queue. They are filed with autoApplicable true and the
+ * quote in reasoning, and this job asks the site to apply them via
+ * /api/internal/queue-decisions as actor 'auto', which runs the same apply
+ * body as the admin button. A refusal leaves the row pending for a person.
  */
 import { ne } from 'drizzle-orm'
 import { and, desc, eq, getDb, grantChanges, grantCycles, grantFunders, grants, grantSnapshots, grantWatches } from '@the-tool-pit/db'
@@ -37,6 +44,8 @@ import { verifyListing } from './verify-listing.js'
 import { extractGrantFields, type GrantExtractionResult } from './extract.js'
 import { deriveCycleStatus } from './cadence.js'
 import { enqueueGrantAlert, grantUrl } from './alerts.js'
+import { proveChange, reasoningWithProof } from './change-proof.js'
+import { askSiteToDecideGrantChanges } from '../site/queue-decisions.js'
 
 /**
  * Payload for the grant-monitor queue. Kept here rather than in
@@ -162,6 +171,7 @@ interface PendingChange {
   oldValue: unknown
   newValue: unknown
   reasoning: string
+  /** Proven by ./change-proof.ts; set just before filing, and asked to be applied after. */
   autoApplicable?: boolean
   /** Set when this row records something this job already wrote. */
   alreadyApplied?: boolean
@@ -229,6 +239,34 @@ async function notifyWatchersOfChange(
     if (queued > 0) console.log(`[grant-monitor] ${grant.slug}: queued ${queued} change alert(s)`)
   } catch (err) {
     notes.push(`change alerts could not be queued: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
+/**
+ * Ask the site to apply the rows this pass proved. Dates go before status so a
+ * cycle the first date creates is there when its status is set. A refusal
+ * (unset secret, site down, the apply body saying no) leaves the row pending
+ * and is logged; it never fails the pass.
+ */
+async function applyProvenChanges(grant: Grant, changes: PendingChange[], changeIds: string[], notes: string[]): Promise<void> {
+  const order = (field: string) => (/\.status$/.test(field) ? 1 : 0)
+  const proven = changes
+    .map((c, i) => ({ c, id: changeIds[i] }))
+    .filter((x) => x.id && x.c.autoApplicable && !x.c.alreadyApplied)
+    .sort((a, b) => order(a.c.field) - order(b.c.field))
+  if (proven.length === 0) return
+
+  const results = await askSiteToDecideGrantChanges(proven.map((x) => x.id), 'apply', 'auto')
+  for (const [i, r] of results.entries()) {
+    const { c } = proven[i]
+    if (r.ok) {
+      c.alreadyApplied = true
+      notes.push(`auto-applied ${c.field} (proven on the page)`)
+      console.log(`[grant-monitor] ${grant.slug}: auto-applied ${c.field} = ${JSON.stringify(c.newValue)}`)
+    } else {
+      notes.push(`auto-apply of ${c.field} refused, left pending: ${r.error ?? 'unknown error'}`)
+      console.warn(`[grant-monitor] ${grant.slug}: auto-apply of ${c.field} refused, left pending: ${r.error ?? 'unknown error'}`)
+    }
   }
 }
 
@@ -810,7 +848,6 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
           oldValue: null,
           newValue: deadlineAt.toISOString(),
           reasoning: why,
-          autoApplicable: isFutureYear,
         })
       }
 
@@ -820,7 +857,6 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
           oldValue: null,
           newValue: opensAt,
           reasoning: why,
-          autoApplicable: isFutureYear,
         })
       }
 
@@ -830,7 +866,6 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
           oldValue: null,
           newValue: fields.deadlineNote.trim(),
           reasoning: why,
-          autoApplicable: isFutureYear,
         })
       }
     }
@@ -905,6 +940,20 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
   const duplicates = proposed.length - toInsert.length
   if (duplicates > 0) notes.push(`${duplicates} change(s) already pending review, not re-filed`)
 
+  // Proven or not, decided against the text the snapshot keeps, so the
+  // backlog script (scripts/apply-proven-grant-changes.ts) reaches the same
+  // verdict from the stored row.
+  const snapshotText = text.slice(0, SNAPSHOT_TEXT_LIMIT)
+  for (const c of toInsert) {
+    c.autoApplicable = false
+    if (c.alreadyApplied) continue
+    const verdict = proveChange(c, { pageText: snapshotText, pageUrl: fetched.redirectedTo ?? grant.infoUrl, extracted: fields, now })
+    if (verdict.proven) {
+      c.autoApplicable = true
+      c.reasoning = reasoningWithProof(c.reasoning, verdict.quote)
+    }
+  }
+
   let insertedChangeIds: string[] = []
   if (toInsert.length > 0) {
     const inserted = await db
@@ -927,9 +976,14 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
           reviewedAt: c.alreadyApplied ? now : null,
         })),
       )
-      .returning({ id: grantChanges.id })
+      .returning({ id: grantChanges.id, field: grantChanges.field })
     insertedChangeIds = inserted.map((r) => r.id)
+    // Postgres returns a multi-row insert in VALUES order; if that ever does
+    // not hold, nothing is auto-applied rather than the wrong row.
+    const aligned = inserted.length === toInsert.length && inserted.every((r, i) => r.field === toInsert[i].field)
+    if (!aligned) for (const c of toInsert) c.autoApplicable = false
 
+    await applyProvenChanges(grant, toInsert, insertedChangeIds, notes)
     await notifyWatchersOfChange(grant, toInsert, insertedChangeIds, notes)
   }
 
