@@ -20,7 +20,7 @@
 import { parse } from 'node-html-parser'
 import { politeFetch } from '../connectors/base.js'
 import { withRenderedPage } from '../connectors/playwright-render.js'
-import { findApplyLinks } from './apply-links.js'
+import { findApplyLinks, NOT_APPLICATION_PURPOSE } from './apply-links.js'
 import type { GrantApplyRouteStatus } from '@the-tool-pit/db/grant-enums'
 
 export interface ApplyRoute {
@@ -72,6 +72,7 @@ const PORTAL_HOSTS: Array<[RegExp, string]> = [
   [/(^|\.)hubspot\.com$/i, 'HubSpot form'],
   [/(^|\.)milogin(tp)?\.michigan\.gov$/i, 'MiLogin (Michigan NexSys)'],
   [/(^|\.)netforum\.aiaa\.org$/i, 'AIAA member portal'],
+  [/(^|\.)docusign\.net$/i, 'DocuSign PowerForm'],
 ]
 
 /** Google Forms is only a form on its /forms/ path; docs.google.com hosts documents too. */
@@ -80,6 +81,8 @@ function portalName(url: URL): string | null {
   for (const [re, name] of PORTAL_HOSTS) {
     if (!re.test(host)) continue
     if (host.endsWith('docs.google.com') && !/\/forms\//.test(url.pathname)) return null
+    // DocuSign signs contracts too; only a PowerForm is a self-serve form.
+    if (host.endsWith('docusign.net') && !/\/PowerFormSigning/i.test(url.pathname)) return null
     return name
   }
   return null
@@ -292,7 +295,87 @@ function applyMailto(html: string): string | null {
   return null
 }
 
+/** The page's <title> and first <h1>: what the form says it is for. */
+export function pageTitle(html: string): string {
+  const clean = (s: string | undefined) => (s ?? '').replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim()
+  const title = clean(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1])
+  const h1 = clean(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1])
+  return [title, h1].filter(Boolean).join(' | ')
+}
+
+/**
+ * Giving money TO the organisation. "Donation request" is the other
+ * direction (Harbor Freight, Costco take in-kind requests that way) and stays.
+ */
+const DONATE_TO_US_RE = /\b(donate( now| today| online)?|make a (donation|gift)|give (now|today|online)|giving form)\b/i
+
+/**
+ * A form or portal whose own title says it is for something other than
+ * applying: a grantee's expenditure report (AMSTI), a meeting-space booking
+ * (Daniels Fund), a volunteer sign-up, a newsletter, a survey, a feedback
+ * form, a donation to the organisation. Returns the title when it is one.
+ */
+export function offPurposeTitle(html: string): string | null {
+  const title = pageTitle(html)
+  if (!title) return null
+  if (NOT_APPLICATION_PURPOSE.test(title)) return title
+  if (DONATE_TO_US_RE.test(title) && !/\brequests?\b/i.test(title)) return title
+  return null
+}
+
+/** The programme a form link names: a FIRST programme, or "<Name> Fund/Program/Grant ...". */
+const PROGRAMME_RES: Array<[RegExp, string]> = [
+  [/\bFRC\b|FIRST Robotics Competition/i, 'FRC'],
+  [/\bFTC\b|FIRST Tech Challenge/i, 'FTC'],
+  [/\bFLL\b|FIRST LEGO League/i, 'FLL'],
+  [/\bVEX ?IQ\b/i, 'VEX IQ'],
+  [/\bVEX\b(?! ?IQ)|\bVRC\b|\bV5RC\b/i, 'VEX V5'],
+]
+const PROGRAMME_STOP = new Set(['apply', 'start', 'submit', 'online', 'new', 'the', 'your', 'our', 'click', 'here', 'begin', 'now', 'this', 'a', 'an'])
+export function programmeOf(text: string): string | null {
+  for (const [re, key] of PROGRAMME_RES) if (re.test(text)) return key
+  const m = text.match(/\b((?:[A-Z][\w&'-]*\s+){0,4}[A-Z][\w&'-]*)\s+(Fund|Program|Programme|Grant|Scholarship|Award)s?\b/)
+  if (!m) return null
+  const words = m[1].split(/\s+/).filter((w) => !PROGRAMME_STOP.has(w.toLowerCase()))
+  return words.length > 0 ? `${words.join(' ')} ${m[2]}`.toLowerCase() : null
+}
+
+/**
+ * A page that links separate application forms for different programmes
+ * (REV Robotics: one JotForm for FTC teams, one for FRC teams) is the
+ * application route itself: publishing either form sends the other half of
+ * the audience to the wrong one. Returns the programmes when the page is such
+ * a chooser. A funder with a community-giving form AND a robotics form is
+ * not a chooser: the team form is the one a team wants, as before.
+ */
+export function programmeChooser(html: string, pageUrl: string): string[] | null {
+  const byProgramme = new Map<string, { url: string; team: boolean }>()
+  for (const l of findApplyLinks(html, pageUrl)) {
+    if (!/(appl(y|ication)|form|request|nominat)/i.test(l.text)) continue
+    const key = programmeOf(l.text)
+    if (!key) continue
+    const team = PROGRAMME_RES.some(([, k]) => k === key) || TEAM_CUE.test(l.text)
+    const had = byProgramme.get(key)
+    if (!had) byProgramme.set(key, { url: l.url, team })
+  }
+  const forms = [...byProgramme.values()]
+  if (forms.length < 2 || new Set(forms.map((f) => f.url)).size < 2) return null
+  const teamForms = forms.filter((f) => f.team).length
+  if (teamForms > 0 && teamForms < forms.length) {
+    // Exactly the team forms decide: several team forms is still a chooser.
+    const teamKeys = [...byProgramme.entries()].filter(([, f]) => f.team).map(([k]) => k)
+    return teamKeys.length >= 2 ? teamKeys : null
+  }
+  return [...byProgramme.keys()]
+}
+
 export function judge(url: string, html: string, how: string): Omit<ApplyRoute, 'chain' | 'checkedAt'> | null {
+  const verdict = judgeRaw(url, html, how)
+  if (verdict && (verdict.status === 'portal' || verdict.status === 'form' || verdict.status === 'closed') && offPurposeTitle(html)) return null
+  return verdict
+}
+
+function judgeRaw(url: string, html: string, how: string): Omit<ApplyRoute, 'chain' | 'checkedAt'> | null {
   let parsed: URL
   try {
     parsed = new URL(url)
@@ -343,6 +426,10 @@ export function judge(url: string, html: string, how: string): Omit<ApplyRoute, 
   return null
 }
 
+function chooserRoute(url: string, programmes: string[], how: string, chain: string[], checkedAt: string): ApplyRoute {
+  return { status: 'portal', url, email: null, evidence: `several application forms on one page, one per programme (${programmes.join(', ')}); the page is the route, read via ${how}`, chain, checkedAt }
+}
+
 /**
  * Resolve the application route from a start page. `startUrls` are tried in
  * order (the current applicationUrl first, then the info page).
@@ -381,14 +468,40 @@ export async function resolveApplyRoute(startUrls: Array<string | null | undefin
       continue
     }
     if (!html) continue
+    // A form for something else (an expenditure report, a meeting-room
+    // booking, a newsletter) is a dead end: not the route, and its links and
+    // mailtos are about that other thing.
+    if (offPurposeTitle(html)) continue
+    // A page offering one form per programme (FTC and FRC) is the route.
+    const programmes = programmeChooser(html, finalUrl)
+    if (programmes) return chooserRoute(url, programmes, how, chain, checkedAt)
     // Judge by where the page ENDED UP: an apply link that redirects to the
     // member login is the login, and the portal host is the final one.
     let verdict = judge(finalUrl, html, how) ?? (finalUrl !== url ? judge(url, html, how) : null)
+    let judgedHtml = html
     if (!verdict && how === 'fetch') {
       const rendered = await renderedHtml(url)
-      if (rendered) verdict = judge(finalUrl, rendered, 'browser')
+      if (rendered && offPurposeTitle(rendered)) continue
+      if (rendered) {
+        verdict = judge(finalUrl, rendered, 'browser')
+        judgedHtml = rendered
+      }
     }
-    if (verdict) return { ...verdict, url: verdict.url ? (verdict.status === 'portal' || verdict.status === 'form' ? url : verdict.url) : verdict.url, chain, checkedAt }
+    if (verdict) {
+      // A form for one programme, reached straight from the stored link:
+      // if the info page links one form per programme, the info page is the
+      // route (the published REV link was the FTC form; FRC teams need the other).
+      const infoUrl = startUrls.filter((u): u is string => Boolean(u)).at(-1)
+      if (depth === 0 && infoUrl && infoUrl !== url && (verdict.status === 'portal' || verdict.status === 'form') && programmeOf(pageTitle(judgedHtml))) {
+        const info = await readHtml(infoUrl)
+        const infoProgrammes = info.html ? programmeChooser(info.html, info.finalUrl) : null
+        if (infoProgrammes) {
+          chain.push(infoUrl)
+          return chooserRoute(infoUrl, infoProgrammes, info.how, chain, checkedAt)
+        }
+      }
+      return { ...verdict, url: verdict.url ? (verdict.status === 'portal' || verdict.status === 'form' ? url : verdict.url) : verdict.url, chain, checkedAt }
+    }
     if (!mailto) mailto = applyMailto(html)
     if (depth < 2) {
       // A funder with several portals (community giving AND a FIRST/SAE

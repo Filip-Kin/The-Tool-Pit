@@ -7,9 +7,8 @@
  * is one search away: "<funder> <programme>" on the funder's domain. One
  * Brave query per candidate, the budget guard is brave.ts's.
  */
-import { isEntranceUrl } from '@the-tool-pit/db/grant-urls'
+import { isEntranceUrl, isThirdPartyGrantUrl } from '@the-tool-pit/db/grant-urls'
 import { braveSearch } from './brave.js'
-import { SECONDHAND_HOSTS } from './prefilter.js'
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36'
 
@@ -40,7 +39,8 @@ export interface InfoPage {
 export function scoreInfoResult(r: { url: string; title: string; description: string }, funderName: string, grantName: string): number {
   const host = hostOf(r.url)
   if (!host || isEntranceUrl(r.url) || NOT_FUNDER_HOSTS.test(host)) return 0
-  if (SECONDHAND_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) return 0
+  // A grant-finder profile or an archive copy is never the funder's page.
+  if (isThirdPartyGrantUrl(r.url)) return 0
   // A homepage is not a programme page (murdocktrust.org/ was picked once),
   // and FIRST's own round-up of team grants is a list, not the funder.
   let path = ''

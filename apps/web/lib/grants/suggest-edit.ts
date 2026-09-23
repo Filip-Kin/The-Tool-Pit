@@ -13,6 +13,7 @@ import { and, eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { grantChanges, grantCycles, grants } from '@the-tool-pit/db'
 import { GRANT_APPLY_METHODS, GRANT_DEADLINE_TYPES, GRANT_EFFORT_LEVELS, GRANT_GEO_SCOPES, GRANT_PROGRAMS } from '@the-tool-pit/db/grant-enums'
+import { endOfDayIn, funderTimeZone } from '@the-tool-pit/db/grant-dates'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
 import { reviewQueueUrl, grantListingUrl } from '@the-tool-pit/types'
 import { adminSubmitter } from '@/lib/admin/auto-approve'
@@ -127,7 +128,9 @@ export async function createGrantEditSuggestion(grantId: string, input: GrantEdi
   const year = /^\d{4}-\d{2}-\d{2}$/.test(deadline) ? Number(deadline.slice(0, 4)) : /^\d{4}-\d{2}-\d{2}$/.test(opens) ? Number(opens.slice(0, 4)) + (opens.slice(5, 7) >= '07' ? 1 : 0) : null
   if (year) {
     const [cycle] = await db.select().from(grantCycles).where(and(eq(grantCycles.grantId, grant.id), eq(grantCycles.cycleYear, year))).limit(1)
-    if (/^\d{4}-\d{2}-\d{2}$/.test(deadline)) push(`cycle.${year}.deadlineAt`, cycle?.deadlineAt?.toISOString() ?? null, `${deadline}T23:59:59Z`)
+    // A date with no time: 23:59 in the grant's zone, one rule with the review deck (packages/db grant-dates.ts).
+    const endOfDay = /^\d{4}-\d{2}-\d{2}$/.test(deadline) ? endOfDayIn(deadline, funderTimeZone(grant)) : null
+    if (endOfDay) push(`cycle.${year}.deadlineAt`, cycle?.deadlineAt?.toISOString() ?? null, new Date(endOfDay).toISOString())
     if (/^\d{4}-\d{2}-\d{2}$/.test(opens)) push(`cycle.${year}.opensAt`, cycle?.opensAt ?? null, opens)
     if (/^\d{4}-\d{2}-\d{2}$/.test(decision)) push(`cycle.${year}.decisionAt`, cycle?.decisionAt ?? null, decision)
     const dnote = text('deadlineNote')

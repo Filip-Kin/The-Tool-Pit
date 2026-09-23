@@ -16,7 +16,7 @@ import { grantCandidates, grantCycles, grantFunders, grantRequirements, grants }
 import type { GrantExtraction, GrantSourceKind } from '@the-tool-pit/db'
 import { reviewRequirements, type ReviewDefaults } from '@/lib/admin/grant-review'
 import { lintListing } from '@/lib/grants/listing-lint'
-import { isEntranceUrl } from '@the-tool-pit/db/grant-urls'
+import { isArchiveUrl, isEntranceUrl, isPdfUrl, isSecondhandGrantHost, isThirdPartyGrantUrl } from '@the-tool-pit/db/grant-urls'
 import { bumpSourceCounter, parseCycleFields, parseGrantFields, resolveFunderByName, uniqueGrantSlug } from '@/lib/admin/grants'
 import { notifyGrantPublished } from '@/lib/notify/approvals'
 import { grantGrantOwnership } from '@/lib/listings/submitter-ownership'
@@ -136,10 +136,19 @@ export function publishBlockers(
   // The info link is what a mentor reads. A login, a portal, a form or a
   // PDF there means the listing was extracted from the entrance and has no
   // programme page behind it (AAUW's Fluxx login, Honda's CyberGrants quiz).
-  if (values.infoUrl && isEntranceUrl(values.infoUrl)) out.push(`the info link is the application entrance, not the funder's programme page: ${values.infoUrl}`)
+  // A grant-finder profile (grantable.co), an archive copy (web.archive.org)
+  // or a PDF is not the funder's programme page either. Six of 38 listings
+  // published on 2026-09-23 had one; grantable's pages also carried dates it
+  // had projected from last year.
+  if (values.infoUrl && isSecondhandGrantHost(values.infoUrl)) out.push(`the info link is a grant-finder directory, not the funder's programme page: ${values.infoUrl}`)
+  else if (values.infoUrl && isArchiveUrl(values.infoUrl)) out.push(`the info link is an archive copy, not the funder's live page: ${values.infoUrl}`)
+  else if (values.infoUrl && isPdfUrl(values.infoUrl)) out.push(`the info link is a PDF, not the funder's programme page: ${values.infoUrl}`)
+  else if (values.infoUrl && isEntranceUrl(values.infoUrl)) out.push(`the info link is the application entrance, not the funder's programme page: ${values.infoUrl}`)
+  const applicationUrl = form.get('applicationUrl') ? String(form.get('applicationUrl')) : ''
+  if (applicationUrl && isThirdPartyGrantUrl(applicationUrl)) out.push(`the application link is a grant-finder directory or an archive copy, not the funder's: ${applicationUrl}`)
   // The listing as a reader sees it: no sentences about the page or the
   // metadata, no "Unsure" printed as a fact, a name that is a name.
-  for (const issue of lintListing({ name: values.name, funderName: form.get('funderName') ? String(form.get('funderName')) : null, summary: values.summary, description: values.description, awardNotes: values.awardNotes, requirementLabels: reviewRequirements(form).map((r) => r.label) })) {
+  for (const issue of lintListing({ name: values.name, funderName: form.get('funderName') ? String(form.get('funderName')) : null, summary: values.summary, description: values.description, awardNotes: values.awardNotes, deadlineNote: form.get('deadlineNote') ? String(form.get('deadlineNote')) : null, requirementLabels: reviewRequirements(form).map((r) => r.label) })) {
     out.push(`${issue.field} ${issue.problem}: "${issue.text.slice(0, 120)}"`)
   }
   const stale = values.name ? staleSeasonInName(values.name, today) : null
@@ -250,6 +259,16 @@ export async function publishCandidateFromForm(
   // come from the extraction the worker verified (apply-route.ts,
   // deadline-proof.ts); a reviewer who knows better types a reason.
   const override = String(form.get('overrideVerification') ?? '').trim()
+  // "Publish anyway" overrides what a crawler could not verify (a walled
+  // page, a judge that read eligibility backwards). It never lets reviewer
+  // or pipeline narration onto a public page: six leaked that way on
+  // 2026-09-23 because the override skipped the lint too.
+  if (override) {
+    const narration = lintListing({ name: parsed.values.name, funderName: parsed.funderName ?? null, summary: parsed.values.summary, description: parsed.values.description, awardNotes: parsed.values.awardNotes, requirementLabels: reviewRequirements(form).map((r) => r.label) })
+    if (narration.length > 0) {
+      return { error: `Not ready to publish, even with "publish anyway": ${narration.map((i) => `${i.field} ${i.problem}: "${i.text.slice(0, 120)}"`).join('; ')}.` }
+    }
+  }
   if (!override) {
     const blocked = publishBlockers(candidate.extraction, parsed.values, form)
     const dup = await duplicateOfExisting(parsed.values.name!, parsed.funderName, parsed.values.applicationUrl ?? null)

@@ -1,6 +1,7 @@
 import { isJunkRequirementLabel, restatesRequirement } from '@/lib/grants/listing-lint'
 import { eligibilityNotesFrom } from '@/lib/admin/grants'
 import type { GrantProgram } from '@the-tool-pit/db/grant-enums'
+import { DATE_ONLY_NOTE, endOfDayIn, funderTimeZone, isDateOnlyNote } from '@the-tool-pit/db/grant-dates'
 /**
  * The review deck's pure half: what the deck shows, and what it writes.
  *
@@ -109,17 +110,20 @@ function tri(field: ExtractedField<GrantTriState> | undefined): GrantTriState {
 }
 
 /**
- * A deadline the funder gave as a date with no time is not a deadline the
- * cycle form accepts (parseCycleFields refuses a bare date: 11:59pm somewhere
- * is not a deadline). It used to reach the form anyway, so the cycle was
- * refused and the grant went live with no timing at all, 8 times in the
- * 2026-09 review. The date moves into the note in the funder's own terms and
- * the deadline box is left for a person to fill when the funder states a time.
+ * A deadline the funder gave as a date with no time is still the deadline:
+ * 23:59 that day in the funder's zone (the grant's first state or province
+ * for a state, local or regional grant, else Eastern), and the note says no
+ * time was given. The earlier rule moved the date into the note and left the
+ * deadline empty, which fixed a refused cycle and lost the date: 30 cycles
+ * published on 2026-09-23 had deadline_at NULL beside a known close date.
  */
-export function splitBareDeadline(at: string, note: string): { at: string; note: string } {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(at.trim())) return { at, note }
-  const closes = `Closes ${at.trim()} (the funder gives no time of day)`
-  return { at: '', note: note ? `${closes}. ${note}` : closes }
+export function dateOnlyDeadline(at: string, note: string, grant: { geoScope?: string | null; regions?: readonly string[] | null }): { at: string; note: string } {
+  const day = at.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { at, note }
+  const instant = endOfDayIn(day, funderTimeZone(grant))
+  if (!instant) return { at: '', note }
+  if (isDateOnlyNote(note)) return { at: instant, note }
+  return { at: instant, note: note ? `${DATE_ONLY_NOTE}. ${note}` : DATE_ONLY_NOTE }
 }
 
 /** The four-digit year at the front of an ISO date, or null. */
@@ -153,10 +157,23 @@ export function reviewDefaults(input: {
   // most of why the award columns were empty on 89% of candidates.
   const awardNotes = text(fields?.awardPhrase)
 
-  const deadline = splitBareDeadline(
-    text(fields?.deadlineAt, sub.deadlineAt ?? (input.extraction?.deadlineProof?.kind === 'dated' ? input.extraction.deadlineProof.date ?? '' : '')),
-    text(fields?.deadlineNote) || (!fields?.deadlineAt.value && input.extraction?.deadlineProof?.kind === 'dated' && input.extraction.deadlineProof.quote ? `"${input.extraction.deadlineProof.quote.slice(0, 200)}"` : ''),
+  const geoScope = text(fields?.geoScope, cls.geoScope ?? sub.geoScope ?? 'national') || 'national'
+  const regions = fields?.regions.value ?? cls.regions ?? sub.regions ?? []
+  const proof = input.extraction?.deadlineProof
+  const deadline = dateOnlyDeadline(
+    text(fields?.deadlineAt, sub.deadlineAt ?? (proof?.kind === 'dated' ? proof.date ?? '' : '')),
+    text(fields?.deadlineNote) || (!fields?.deadlineAt.value && proof?.kind === 'dated' && proof.quote ? `"${proof.quote.slice(0, 200)}"` : ''),
+    { geoScope, regions },
   )
+  // A deadline with no year ("due by April 17") says the grant comes round
+  // every year. It never becomes a dated cycle (deadline-proof.ts adds no year).
+  const chosenType = text(fields?.deadlineType, cls.deadlineType ?? sub.deadlineType ?? 'unknown') || 'unknown'
+  const deadlineType =
+    chosenType !== 'unknown' ? chosenType
+    : proof?.kind === 'rolling' ? 'rolling'
+    : proof?.kind === 'dated' ? 'fixed'
+    : proof?.kind === 'recurring' ? 'annual_window'
+    : 'unknown'
 
   return {
     name: text(fields?.name, cls.name ?? meta.title ?? ''),
@@ -169,9 +186,9 @@ export function reviewDefaults(input: {
     contactEmail: text(fields?.contactEmail, sub.contactEmail ?? ''),
     mailingAddress: text(fields?.mailingAddress),
     programs: fields?.programs.value ?? cls.programs ?? (sub.programs as GrantProgram[] | undefined) ?? ['any'],
-    geoScope: text(fields?.geoScope, cls.geoScope ?? sub.geoScope ?? 'national') || 'national',
+    geoScope,
     countries: fields?.countries.value ?? cls.countries ?? ['US'],
-    regions: fields?.regions.value ?? cls.regions ?? sub.regions ?? [],
+    regions,
     // Geography is one fact on the card. The restriction wording joins it when
     // the extractor gave no locality note; it is never a second box below.
     localityNote: text(fields?.localityNote) || (isJunkRequirementLabel(text(fields?.geographyRestriction)) ? '' : text(fields?.geographyRestriction)),
@@ -180,13 +197,14 @@ export function reviewDefaults(input: {
     awardCurrency: text(fields?.awardCurrency, 'USD') || 'USD',
     awardNotes,
     renewable: tri(fields?.renewable),
-    deadlineType: (text(fields?.deadlineType, cls.deadlineType ?? sub.deadlineType ?? 'unknown') || 'unknown') === 'unknown' && input.extraction?.deadlineProof?.kind === 'rolling' ? 'rolling' : (text(fields?.deadlineType, cls.deadlineType ?? sub.deadlineType ?? 'unknown') || 'unknown') === 'unknown' && input.extraction?.deadlineProof?.kind === 'dated' ? 'fixed' : (text(fields?.deadlineType, cls.deadlineType ?? sub.deadlineType ?? 'unknown') || 'unknown'),
+    deadlineType,
     effortLevel: text(fields?.effortLevel, sub.effortLevel ?? 'unknown') || 'unknown',
     // The year a cycle closes in is not a guess when a date is already in
     // hand: it is the year printed on that date. Only ever read off a date the
     // extraction supported with a quote.
-    cycleYear: fields?.cycleYear.value ?? yearOf(fields?.deadlineAt.value ?? fields?.opensAt.value ?? (input.extraction?.deadlineProof?.kind === 'dated' ? input.extraction.deadlineProof.date ?? null : null)),
-    opensAt: text(fields?.opensAt),
+    cycleYear: fields?.cycleYear.value ?? yearOf(fields?.deadlineAt.value ?? fields?.opensAt.value ?? (proof?.kind === 'dated' ? proof.date ?? null : null)),
+    // A window the proof pass read ("open September 17, 2026, and close October 17, 2026") gives both ends.
+    opensAt: text(fields?.opensAt) || (!fields?.deadlineAt.value && !sub.deadlineAt && proof?.kind === 'dated' ? proof.opens ?? '' : ''),
     // The extractor's date, else the submitter's, else the funder's own dated
     // sentence the proof pass found (dates are the fact a team needs most).
     deadlineAt: deadline.at,

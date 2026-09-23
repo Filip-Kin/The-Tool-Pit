@@ -13,7 +13,7 @@
 import { politeFetch } from '../connectors/base.js'
 import { stripToMainContent } from './strip.js'
 import { resolveApplyRoute, renderedHtml, type ApplyRoute } from './apply-route.js'
-import { findDeadlineProof, type DeadlineProof } from './deadline-proof.js'
+import { findDeadlineProof, type DeadlineProof, type ProofContext } from './deadline-proof.js'
 import { archiveCopy } from './archive.js'
 
 const TEXT_LIMIT = 20_000
@@ -118,6 +118,8 @@ export interface ListingVerification {
 export async function verifyListing(
   startUrls: Array<string | null | undefined>,
   knownTexts: Array<{ url: string; text: string }> = [],
+  /** The programme and funder, so a date in another fund's section on the same page is not taken. */
+  ctx: ProofContext = {},
 ): Promise<ListingVerification> {
   const route = await resolveApplyRoute(startUrls)
   const pages = [...knownTexts]
@@ -131,14 +133,15 @@ export async function verifyListing(
     if (page.html) for (const l of dateLinks(page.html, url)) if (!have.has(l) && !hops.includes(l)) hops.push(l)
     have.add(url)
   }
-  let proof = findDeadlineProof(pages)
+  const today = new Date().toISOString().slice(0, 10)
+  let proof = findDeadlineProof(pages, today, ctx)
   if (proof.kind !== 'dated' && hops.length > 0) {
     for (const url of hops.slice(0, MAX_HOPS)) {
       const page = await readPage(url)
       if (page.text.trim()) pages.push({ url: page.archiveUrl ?? url, text: page.text })
       have.add(url)
     }
-    proof = findDeadlineProof(pages)
+    proof = findDeadlineProof(pages, today, ctx)
   }
   return { route, proof }
 }

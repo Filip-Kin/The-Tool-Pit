@@ -31,7 +31,7 @@ import { anthropic } from '../anthropic.js'
 import type { SuppressionExample } from './suppression-feedback.js'
 import { formatSuppressionExamples } from './suppression-feedback.js'
 import { GRANT_AWARD_MAX } from '@the-tool-pit/db/grant-enums'
-import { scrubNarration } from '@the-tool-pit/db/listing-text'
+import { scrubListingText, scrubReviewerNotes } from '@the-tool-pit/db/listing-text'
 import {
   GRANT_PROGRAMS,
   GRANT_GEO_SCOPES,
@@ -380,7 +380,13 @@ function buildUserContent(
 
   if (meta.title) lines.push(`Title: ${meta.title}`)
   if (meta.funderName) lines.push(`Funder (as guessed by the crawler): ${meta.funderName}`)
-  if (meta.description) lines.push(`Meta description: ${meta.description}`)
+  // A sheet row's description is the sheet author's notes (describeRow), not
+  // the page's meta tag. It is labelled private so the model does not repeat
+  // it in the name or the summary, which readers see.
+  const curated = Boolean(meta.discoveredVia?.startsWith('sheet:'))
+  if (meta.description) {
+    lines.push(curated ? `Curated sheet row (private context: never quote or repeat it in name, funderName or summary): ${meta.description}` : `Meta description: ${meta.description}`)
+  }
   if (meta.ogDescription && meta.ogDescription !== meta.description) {
     lines.push(`OG description: ${meta.ogDescription}`)
   }
@@ -396,7 +402,8 @@ function buildUserContent(
         'Rules that differ from a crawled page: a sheet status of "Closed" means the current cycle is closed, NOT that this is not a grant; ' +
         'a login portal (Submittable, Fluxx, CyberGrants, SmartSimple) at the link is the way in, not a reason to reject; ' +
         'a funder\'s own index of its giving programmes counts as the grant page here, so do not mark it isAggregator; ' +
-        'and missing page text is not evidence against it. The sheet\'s facts in the description are first-hand.',
+        'and missing page text is not evidence against it. The sheet\'s facts are first-hand for this decision, but they are private: ' +
+        'the name, funderName and summary you write are published, so they describe the grant and never mention the sheet, its status, its notes or this lead.',
     )
   }
 
@@ -532,8 +539,11 @@ export function validateGrantClassification(
   const funderPageUrl = typeof out.funderPageUrl === 'string' ? out.funderPageUrl.trim() : ''
   out.funderPageUrl = /^https?:\/\/\S+$/i.test(funderPageUrl) ? funderPageUrl : undefined
   // The summary is shown to readers when the extractor has none; a sentence
-  // about the metadata is not a summary.
-  if (out.summary) out.summary = scrubNarration(out.summary, 20) ?? undefined
+  // about the metadata, or one repeating the curated sheet row ("Status on
+  // the sheet: Closed"), is not a summary.
+  if (out.summary) out.summary = scrubListingText(out.summary, 20) ?? undefined
+  if (out.name) out.name = scrubReviewerNotes(out.name) ?? undefined
+  if (out.funderName) out.funderName = scrubReviewerNotes(out.funderName) ?? undefined
 
   return out
 }

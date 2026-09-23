@@ -8,6 +8,7 @@
  */
 import { scrubNarration } from '@the-tool-pit/db/listing-text'
 import type { GrantDeadlineType } from '@the-tool-pit/db/grant-enums'
+import { DATE_ONLY_NOTE, deriveCycleStatus, endOfDayIn, funderTimeZone, isDateOnlyNote } from '@the-tool-pit/db/grant-dates'
 import { revalidatePath } from 'next/cache'
 import { and, eq, ne, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
@@ -507,9 +508,9 @@ export interface ParsedCycleFields {
  * picks up whatever zone the container is running in. Funders write "11:59pm
  * ET" and "5pm PT" and mean it, so the offset is typed out and checked.
  */
-export function parseCycleFields(form: FormData): ParsedCycleFields {
+export function parseCycleFields(form: FormData, opts: { timeZone?: string; now?: Date } = {}): ParsedCycleFields {
   const year = parseInt(String(form.get('cycleYear') ?? ''), 10)
-  const deadlineRaw = String(form.get('deadlineAt') ?? '').trim()
+  let deadlineRaw = String(form.get('deadlineAt') ?? '').trim()
   const opensRaw = String(form.get('opensAt') ?? '').trim()
   const decisionRaw = String(form.get('decisionAt') ?? '').trim()
 
@@ -534,6 +535,17 @@ export function parseCycleFields(form: FormData): ParsedCycleFields {
   ] as const) {
     if (raw && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return { values, error: `${label} date must be YYYY-MM-DD.` }
   }
+  // A date with no time is the funder's day: 23:59 in the funder's zone
+  // (the grant's state, else Eastern), with the note saying no time was
+  // given. Refusing it lost the date on 8 listings in the 2026-09 review and
+  // on most of the 38 published on 2026-09-23.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(deadlineRaw)) {
+    const zone = opts.timeZone ?? funderTimeZone({ geoScope: String(form.get('geoScope') ?? ''), regions: csv(form.get('regions')) })
+    const endOfDay = endOfDayIn(deadlineRaw, zone)
+    if (!endOfDay) return { values, error: `"${deadlineRaw}" is not a valid date.` }
+    deadlineRaw = endOfDay
+    if (!isDateOnlyNote(values.deadlineNote)) values.deadlineNote = values.deadlineNote ? `${DATE_ONLY_NOTE}. ${values.deadlineNote}` : DATE_ONLY_NOTE
+  }
   if (deadlineRaw) {
     if (!/(Z|[+-]\d{2}:?\d{2})$/.test(deadlineRaw)) {
       return { values, error: 'The deadline needs an explicit UTC offset, e.g. 2027-03-01T23:59:00-05:00 or ...Z.' }
@@ -556,9 +568,11 @@ export function parseCycleFields(form: FormData): ParsedCycleFields {
       const dec = Date.parse(`${values.decisionAt}T00:00:00Z`)
       if (!(dec >= d.getTime() - dayMs && dec - d.getTime() <= 366 * dayMs)) values.decisionAt = null
     }
-    // A closed round is a closed round, whatever the form said.
-    if (d.getTime() < Date.now() && (values.status === 'open' || values.status === 'upcoming' || values.status === 'unknown')) values.status = 'closed'
   }
+  // Status from the dates whenever there are dates; the form's status (what
+  // the page says) only where there are none, or when it says closed early.
+  // One rule with the worker: packages/db grant-dates.ts.
+  values.status = deriveCycleStatus(values.opensAt, values.deadlineAt, opts.now ?? new Date(), values.status)
   return { values }
 }
 

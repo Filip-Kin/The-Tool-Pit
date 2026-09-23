@@ -21,7 +21,7 @@
  */
 import { eq, inArray } from 'drizzle-orm'
 import { getDb, grants, grantCycles } from '@the-tool-pit/db'
-import type { Grant, GrantCycle, GrantCycleStatus } from '@the-tool-pit/db'
+import type { Grant, GrantCycle } from '@the-tool-pit/db'
 
 // #region cadence
 
@@ -93,30 +93,10 @@ export function pickNextCycle(cycles: GrantCycle[], now: Date = new Date()): Gra
 }
 
 /**
- * Cycle status from its dates. Derived, never typed by hand, so a cycle cannot
- * sit at 'open' for a year after it shut.
- *
- * 'unknown' when there is no deadline at all: an open window with no closing
- * date is a claim we cannot support from the page.
+ * Cycle status from its dates. One definition for the worker and the site:
+ * packages/db grant-dates.ts.
  */
-export function deriveCycleStatus(
-  opensAt: string | Date | null | undefined,
-  deadlineAt: Date | null | undefined,
-  now: Date = new Date(),
-): GrantCycleStatus {
-  if (deadlineAt && deadlineAt.getTime() < now.getTime()) return 'closed'
-
-  if (opensAt) {
-    // grant_cycles.opens_at is a DATE column, so drizzle hands back
-    // 'YYYY-MM-DD'. Parse as UTC midnight; a one-day error on an opening date
-    // is not worth carrying a timezone for.
-    const opens = opensAt instanceof Date ? opensAt : new Date(`${opensAt}T00:00:00Z`)
-    if (!Number.isNaN(opens.getTime()) && opens.getTime() > now.getTime()) return 'upcoming'
-  }
-
-  if (deadlineAt) return 'open'
-  return 'unknown'
-}
+export { deriveCycleStatus } from '@the-tool-pit/db/grant-dates'
 
 // #endregion
 

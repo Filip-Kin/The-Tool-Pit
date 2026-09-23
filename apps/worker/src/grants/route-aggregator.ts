@@ -19,7 +19,7 @@
 import { eq } from 'drizzle-orm'
 import { getDb, grantCandidates, grantSources } from '@the-tool-pit/db'
 import type { GrantCandidate, GrantClassification } from '@the-tool-pit/db'
-import { isSecondhandGrantHost } from './prefilter.js'
+import { isSecondhandGrantHost } from '@the-tool-pit/db/grant-urls'
 
 export const AUTO_ROUTE_CONFIDENCE = 0.85
 
@@ -33,16 +33,11 @@ export const AUTO_ROUTE_CONFIDENCE = 0.85
  * to funders; an agency index links to federal and college programmes a team
  * cannot apply to. The classifier is right that these are lists, they are just
  * not lists worth crawling, so they wait for the human button instead.
+ *
+ * The grant-finder directories are the shared SECONDHAND_GRANT_HOSTS list in
+ * packages/db (grant-urls.ts); only the agency indexes are listed here.
  */
 export const AUTO_ROUTE_DENY_HOSTS: Readonly<Record<string, string>> = {
-  'grantable.co': 'grant-finder directory; its lists link to its own funder profiles, not to funders',
-  'instrumentl.com': 'grant-finder directory built from tax filings; paywalled profiles',
-  'stemgrants.com': 'grant-finder directory; links to its own summaries',
-  'grantwatch.com': 'grant-finder directory; paywalled listings',
-  'grantexec.com': 'grant-finder directory; paywalled listings',
-  'tgci.com': 'grant-finder directory; state funding lists of foundation profiles',
-  'zeffy.com': 'grant-finder profiles generated from tax filings',
-  'fundsforngos.org': 'grant-finder directory; international NGO calls',
   'ed.gov': 'federal agency programme index; formula grants to states, districts and colleges',
   'ed.sc.gov': 'state agency programme index; allocations to districts, not team grants',
 }

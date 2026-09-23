@@ -51,19 +51,20 @@ describe('findDeadlineProof rejects furniture and schedules', () => {
   })
 })
 
-import { isoFromYearless, findDeadlineProof as fdp } from '../src/grants/deadline-proof.js'
+import { monthDayFromYearless, findDeadlineProof as fdp } from '../src/grants/deadline-proof.js'
 describe('deadlines written without a year', () => {
-  it('reads the next occurrence', () => {
-    expect(isoFromYearless('Applications are due November 15.', '2026-09-09')).toBe('2026-11-15')
-    expect(isoFromYearless('Deadline: March 1', '2026-09-09')).toBe('2027-03-01')
-    expect(isoFromYearless('Proposals must be received by 15 March.', '2026-09-09')).toBe('2027-03-15')
-    expect(isoFromYearless('Due 11/15', '2026-09-09')).toBe('2026-11-15')
-    expect(isoFromYearless('Applications are due November 15, 2025.', '2026-09-09')).toBeNull()
+  it('reads the day and adds no year', () => {
+    expect(monthDayFromYearless('Applications are due November 15.')).toBe('11-15')
+    expect(monthDayFromYearless('Deadline: March 1')).toBe('03-01')
+    expect(monthDayFromYearless('Proposals must be received by 15 March.')).toBe('03-15')
+    expect(monthDayFromYearless('Due 11/15')).toBe('11-15')
+    expect(monthDayFromYearless('Applications are due November 15, 2025.')).toBeNull()
   })
-  it('counts as a dated proof below a full date and above nothing', () => {
+  it('is a recurring note, never a dated deadline', () => {
     const p = fdp([{ url: 'https://f.org/grants', text: 'The AAUW Community Action Grant supports projects. Applications are due November 15. Awards are announced in April.' }], '2026-09-09')
-    expect(p.kind).toBe('dated')
-    expect(p.date).toBe('2026-11-15')
+    expect(p.kind).toBe('recurring')
+    expect(p.monthDay).toBe('11-15')
+    expect(p.date).toBeUndefined()
   })
 })
 

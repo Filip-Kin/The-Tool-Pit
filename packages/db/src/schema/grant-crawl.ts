@@ -558,13 +558,17 @@ export interface GrantExtraction {
   }
   /**
    * The funder's own words on timing (worker grants/deadline-proof.ts): a dated
-   * sentence, a "not announced yet" sentence, a rolling statement, or none with
+   * sentence, a yearless recurring one, a "not announced yet" sentence, a rolling statement, or none with
    * the pages that were read. The publish gate needs one of the first three or
    * a dated cycle.
    */
   deadlineProof?: {
-    kind: 'dated' | 'not_public' | 'rolling' | 'none'
+    /** recurring: a deadline given as a day with no year ("due by April 17"); never a dated round. */
+    kind: 'dated' | 'recurring' | 'not_public' | 'rolling' | 'none'
     date?: string
+    /** "MM-DD" when kind is recurring. */
+    monthDay?: string
+    opens?: string
     quote?: string
     url?: string
     urlsRead: string[]

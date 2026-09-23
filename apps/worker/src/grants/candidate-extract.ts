@@ -53,7 +53,7 @@ import { parseLooseDate } from './extract.js'
 import { GRANT_AWARD_MAX } from '@the-tool-pit/db/grant-enums'
 import { normaliseForQuoteMatch, quoteSource, urlSource } from '../model/evidence.js'
 import { parseModelJson } from '../model/json.js'
-import { scrubNarration } from '@the-tool-pit/db/listing-text'
+import { scrubListingText, scrubReviewerNotes } from '@the-tool-pit/db/listing-text'
 
 /** Bumped when the field set changes, so an old row reads as old. */
 export const GRANT_EXTRACTION_VERSION = 1
@@ -86,6 +86,15 @@ const MAX_QUOTE_CHARS = 300
 export interface GrantEvidence {
   funderPage: string
   aggregator: string
+  /**
+   * What the reviewers know that is not published anywhere: the curated
+   * sheet row (status, window, notes). The model may use it to know where to
+   * look, but it is never evidence: no quote verifies against it, and the
+   * prompt forbids repeating it. It used to ride in the aggregator bucket, and
+   * the model wrote "Filip's sheet marks 3M employee involvement as required"
+   * into a public requirement.
+   */
+  privateContext?: string
 }
 
 
@@ -391,24 +400,34 @@ type TriStateFieldKey = (typeof TRI_STATE_FIELDS)[number]
 /** Every field, with the cleaner that decides whether its value survives. */
 type ValueCleaner = (raw: unknown) => unknown
 
+/**
+ * Every text field that can reach a public page. Reviewer and pipeline
+ * context ("per sheet row", "the aggregator notes", "candidate classification
+ * wrongly lists") goes sentence by sentence; a field that was only such a
+ * note comes back null. The prompt asks for this too, and the prompt alone
+ * did not hold.
+ */
+const publicText = (raw: unknown, max: number): string | null => scrubReviewerNotes(cleanText(raw, max), 1)
+
 const VALUE_CLEANERS: Record<Exclude<keyof GrantExtractionFields, TriStateFieldKey>, ValueCleaner> = {
-  name: (raw) => cleanText(raw, 200),
-  funderName: (raw) => cleanText(raw, 200),
+  name: (raw) => publicText(raw, 200),
+  funderName: (raw) => publicText(raw, 200),
   // Prose about the grant, never about the reading: "the page is an
-  // eligibility quiz", "amounts are not stated in the metadata" go.
-  summary: (raw) => scrubNarration(cleanText(raw, 400), 20),
-  description: (raw) => scrubNarration(cleanText(raw, 4000), 40),
+  // eligibility quiz", "amounts are not stated in the metadata" go, and so
+  // does anything the reviewers know privately.
+  summary: (raw) => scrubListingText(cleanText(raw, 400), 20),
+  description: (raw) => scrubListingText(cleanText(raw, 4000), 40),
   applyMethod: (raw) => cleanEnum(raw, GRANT_APPLY_METHODS),
   applicationUrl: cleanUrl,
   contactEmail: cleanEmail,
-  mailingAddress: (raw) => cleanText(raw, 300),
+  mailingAddress: (raw) => publicText(raw, 300),
   awardMin: (raw) => cleanInteger(raw, 1, MAX_AWARD),
   awardMax: (raw) => cleanInteger(raw, 1, MAX_AWARD),
   awardCurrency: (raw) => {
     const text = cleanText(raw, 3)
     return text && /^[A-Za-z]{3}$/.test(text) ? text.toUpperCase() : null
   },
-  awardPhrase: (raw) => cleanText(raw, 300),
+  awardPhrase: (raw) => publicText(raw, 300),
   effortLevel: (raw) => cleanEnum(raw, GRANT_EFFORT_LEVELS),
   geoScope: (raw) => cleanEnum(raw, GRANT_GEO_SCOPES),
   countries: (raw) => {
@@ -417,7 +436,7 @@ const VALUE_CLEANERS: Record<Exclude<keyof GrantExtractionFields, TriStateFieldK
     return codes.length > 0 ? codes : null
   },
   regions: (raw) => cleanStringArray(raw, (s) => s.trim().toUpperCase()),
-  localityNote: (raw) => cleanText(raw, 200),
+  localityNote: (raw) => publicText(raw, 200),
   deadlineType: (raw) => cleanEnum(raw, GRANT_DEADLINE_TYPES),
   cycleYear: (raw) => {
     const { min, max } = yearWindow()
@@ -425,11 +444,11 @@ const VALUE_CLEANERS: Record<Exclude<keyof GrantExtractionFields, TriStateFieldK
   },
   opensAt: cleanDateOnly,
   deadlineAt: cleanDeadline,
-  deadlineNote: (raw) => cleanText(raw, 200),
+  deadlineNote: (raw) => publicText(raw, 200),
   decisionAt: cleanDateOnly,
-  ageRange: (raw) => cleanText(raw, 120),
-  geographyRestriction: (raw) => cleanText(raw, 300),
-  eligibilityText: (raw) => cleanText(raw, 2000),
+  ageRange: (raw) => publicText(raw, 120),
+  geographyRestriction: (raw) => publicText(raw, 300),
+  eligibilityText: (raw) => publicText(raw, 2000),
   programs: (raw) => {
     const list = cleanStringArray(raw, (s) => s.trim().toLowerCase())
     const valid = list?.filter((p) => (GRANT_PROGRAMS as readonly string[]).includes(p)) ?? []
@@ -620,6 +639,13 @@ RULES ON QUOTES. This is the part that matters most.
 - If you cannot find a quote that supports a value, return value null (or "unknown" for a yes/no field) with quote null. A value with an invented quote is thrown away and counted against this extraction.
 - If the funder page and the aggregator blurb disagree, use the FUNDER PAGE for the value and put one short sentence in "conflict" saying what the blurb said instead.
 
+PRIVATE CONTEXT. The message may carry a PRIVATE REVIEWER CONTEXT block (a row from the site owner's own spreadsheet) and a moderator's note. They tell you where to look and what was wrong last time. They are NOT evidence and NOT public:
+- Never quote them. A quote from them is thrown away.
+- Never repeat, summarise or refer to them in any field. Every value you write is published to teams as the funder's facts.
+- A fact only they state stays null or "unknown".
+
+EVERY TEXT FIELD IS PUBLIC. Write it as a fact about the grant, in the funder's terms. Never mention: the aggregator or the blurb, the sheet or its rows, the candidate, the classification or triage, a moderator or reviewer, an earlier or other version of the page, what is or is not verified, or a disagreement between sources (that goes in "conflict" and nowhere else). No "the funder states", no "I", no "we could not". Never "The aggregator notes...", never "per sheet row", never "Programs run are X, not FIRST": a field you can only fill with commentary is null.
+
 YES/NO FIELDS are "yes", "no" or "unknown". Never null, never "maybe". "unknown" means neither text says. "no" means a text says it is not required.
 
 FIELDS
@@ -676,10 +702,15 @@ function buildUserContent(input: ExtractionInput): string {
   const cls = input.classification
   if (cls?.name) lines.push(`Programme name from triage: ${cls.name}`)
   if (cls?.funderName) lines.push(`Funder from triage: ${cls.funderName}`)
+  // Both blocks below are for the model's eyes only. They are labelled as
+  // such because the model otherwise copied them into public fields.
   if (input.reviewNote) {
     // A flagged candidate is a second look, so say what was wrong the first
     // time rather than making the model find the same gap again.
-    lines.push('', `A moderator flagged the previous read as wrong or thin: ${input.reviewNote}`)
+    lines.push('', `PRIVATE MODERATOR NOTE (never quote or repeat it): the previous read was flagged as wrong or thin: ${input.reviewNote}`)
+  }
+  if (input.evidence.privateContext?.trim()) {
+    lines.push('', '--- PRIVATE REVIEWER CONTEXT (not evidence; never quote, repeat or mention it) ---', input.evidence.privateContext.trim())
   }
 
   lines.push('', '--- FUNDER PAGE ---', input.evidence.funderPage.trim() || '(no page text was captured)')
@@ -708,7 +739,7 @@ export function limitEvidence(evidence: GrantEvidence): { evidence: GrantEvidenc
     notes.push(`third-party blurb truncated to ${AGGREGATOR_TEXT_LIMIT} chars`)
     aggregator = aggregator.slice(0, AGGREGATOR_TEXT_LIMIT)
   }
-  return { evidence: { funderPage, aggregator }, notes }
+  return { evidence: { funderPage, aggregator, privateContext: evidence.privateContext }, notes }
 }
 
 let _client: Anthropic | undefined

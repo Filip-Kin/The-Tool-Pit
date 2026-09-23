@@ -41,6 +41,10 @@
       "bun": "./src/grant-urls.ts",
       "default": "./dist/grant-urls.js"
     },
+    "./grant-dates": {
+      "bun": "./src/grant-dates.ts",
+      "default": "./dist/grant-dates.js"
+    },
     "./event-enums": {
       "bun": "./src/event-enums.ts",
       "default": "./dist/event-enums.js"

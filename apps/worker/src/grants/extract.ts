@@ -20,6 +20,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { anthropic } from '../anthropic.js'
 import type { ExtractedGrantFields } from '@the-tool-pit/db'
 import { GRANT_AWARD_MIN, GRANT_AWARD_MAX } from '@the-tool-pit/db/grant-enums'
+import { scrubReviewerNotes } from '@the-tool-pit/db/listing-text'
 
 /** Cheapest model that reliably returns clean JSON. Same one classify.ts uses. */
 const EXTRACT_MODEL = 'claude-haiku-4-5-20251001'
@@ -586,11 +587,18 @@ function validateAiFields(payload: AiPayload): ExtractedGrantFields {
   if (min !== undefined) out.awardMin = min
   const max = clampAmount(payload.awardMax)
   if (max !== undefined) out.awardMax = max
-  const note = clampText(payload.deadlineNote, 300)
+  // These three become public text once a human applies the change. A
+  // sentence about the record ("currently on file", "not verified") is not
+  // the page speaking; with nothing left, the page had no opinion.
+  const publicText = (raw: unknown, max: number): string | null | undefined => {
+    const text = clampText(raw, max)
+    return typeof text === 'string' ? scrubReviewerNotes(text) ?? undefined : text
+  }
+  const note = publicText(payload.deadlineNote, 300)
   if (note !== undefined) out.deadlineNote = note
-  const awardNotes = clampText(payload.awardNotes, 300)
+  const awardNotes = publicText(payload.awardNotes, 300)
   if (awardNotes !== undefined) out.awardNotes = awardNotes
-  const eligibility = clampText(payload.eligibilityText, 1500)
+  const eligibility = publicText(payload.eligibilityText, 1500)
   if (eligibility !== undefined) out.eligibilityText = eligibility
   const applicationUrl = clampText(payload.applicationUrl, 500)
   if (applicationUrl !== undefined && (applicationUrl === null || /^https?:\/\//i.test(applicationUrl))) {
