@@ -640,7 +640,11 @@ export async function processGrantExtractJob(payload: GrantExtractPayload): Prom
     console.warn(`[grant-extract] candidate ${candidateId} not found`)
     return
   }
-  if (!shouldExtractCandidate(candidate)) {
+  // A flag is a person saying "this IS a grant, read it again". The classifier's
+  // earlier verdict is what they are overruling, so it cannot be the reason to
+  // skip: 33 of 77 flagged candidates in the 2026-09 review were skipped here
+  // because the classifier had called them lists.
+  if (candidate.status !== 'flagged' && !shouldExtractCandidate(candidate)) {
     // Not a refusal to work, a refusal to spend: an aggregator is a source to
     // crawl and an announcement is a page about a grant. Neither becomes a
     // listing, so neither is worth a call.

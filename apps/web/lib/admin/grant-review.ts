@@ -108,6 +108,20 @@ function tri(field: ExtractedField<GrantTriState> | undefined): GrantTriState {
   return field?.value ?? 'unknown'
 }
 
+/**
+ * A deadline the funder gave as a date with no time is not a deadline the
+ * cycle form accepts (parseCycleFields refuses a bare date: 11:59pm somewhere
+ * is not a deadline). It used to reach the form anyway, so the cycle was
+ * refused and the grant went live with no timing at all, 8 times in the
+ * 2026-09 review. The date moves into the note in the funder's own terms and
+ * the deadline box is left for a person to fill when the funder states a time.
+ */
+export function splitBareDeadline(at: string, note: string): { at: string; note: string } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(at.trim())) return { at, note }
+  const closes = `Closes ${at.trim()} (the funder gives no time of day)`
+  return { at: '', note: note ? `${closes}. ${note}` : closes }
+}
+
 /** The four-digit year at the front of an ISO date, or null. */
 function yearOf(value: string | null): number | null {
   if (!value) return null
@@ -138,6 +152,11 @@ export function reviewDefaults(input: {
   // when there is no figure at all. "varies" and "up to $5,000 in kind" are
   // most of why the award columns were empty on 89% of candidates.
   const awardNotes = text(fields?.awardPhrase)
+
+  const deadline = splitBareDeadline(
+    text(fields?.deadlineAt, sub.deadlineAt ?? (input.extraction?.deadlineProof?.kind === 'dated' ? input.extraction.deadlineProof.date ?? '' : '')),
+    text(fields?.deadlineNote) || (!fields?.deadlineAt.value && input.extraction?.deadlineProof?.kind === 'dated' && input.extraction.deadlineProof.quote ? `"${input.extraction.deadlineProof.quote.slice(0, 200)}"` : ''),
+  )
 
   return {
     name: text(fields?.name, cls.name ?? meta.title ?? ''),
@@ -170,8 +189,8 @@ export function reviewDefaults(input: {
     opensAt: text(fields?.opensAt),
     // The extractor's date, else the submitter's, else the funder's own dated
     // sentence the proof pass found (dates are the fact a team needs most).
-    deadlineAt: text(fields?.deadlineAt, sub.deadlineAt ?? (input.extraction?.deadlineProof?.kind === 'dated' ? input.extraction.deadlineProof.date ?? '' : '')),
-    deadlineNote: text(fields?.deadlineNote) || (!fields?.deadlineAt.value && input.extraction?.deadlineProof?.kind === 'dated' && input.extraction.deadlineProof.quote ? `"${input.extraction.deadlineProof.quote.slice(0, 200)}"` : ''),
+    deadlineAt: deadline.at,
+    deadlineNote: deadline.note,
     decisionAt: text(fields?.decisionAt),
     eligibility: {
       requires501c3: tri(fields?.requires501c3),
