@@ -11,15 +11,16 @@
  * They are separate calls on purpose. A classifier that also extracts is a
  * classifier that invents a deadline to fill a field. See ./candidate-extract.ts.
  *
- * The asymmetry with the tools pipeline is deliberate, so it is worth stating
- * plainly: ../jobs/enrich.ts publishes a tool by itself once confidence clears
- * 0.7. This job has NO publish threshold and never will. A grant only ever goes
- * PUBLIC through a human on the review deck, because a wrong deadline in front
- * of a team that misses a real one is worse than an empty directory. The tools
- * vertical auto-published its crawl output and filled with forum threads and
- * bot walls, and grants exist downstream of that lesson. grants.verifiedAt and
- * grantCycles.verifiedAt are human confirmations, and nothing in this file may
- * set them.
+ * Publishing. Nothing in this file writes a grant. After an extraction, a
+ * candidate that clears ./auto-publish.ts shouldAutoPublish is ASKED about:
+ * the site runs the review deck's own publish body, gate included, and a
+ * refusal is written back to the row and flagged. There is no override from
+ * automation, so a grant only goes public when the gate passes it: a verified
+ * apply route, timing on record, a fit verdict, clean listing text and no
+ * duplicate. The tools vertical auto-published raw crawl output and filled with
+ * forum threads and bot walls; the gate is what makes this different.
+ * grants.verifiedAt and grantCycles.verifiedAt are human confirmations, and
+ * nothing in this file may set them.
  *
  * What this job MAY do is keep the human queue readable. The pending queue is a
  * moderator's inbox, so it only holds rows a human still has to act on: a real
@@ -67,6 +68,8 @@ import { judgeFit } from './fit.js'
 import { findInfoPage } from './info-page.js'
 import { isEntranceUrl } from '@the-tool-pit/db/grant-urls'
 import { inferRegions } from './infer-regions.js'
+import { dedupeCandidateAtIntake } from './intake-dedupe.js'
+import { autoPublishCandidateById } from './auto-publish.js'
 import {
   loadSuppressionExamples,
   pickSuppressionExamples,
@@ -187,8 +190,8 @@ async function fetchCandidateHtml(url: string): Promise<string | null> {
  * it is one a human still has to act on. Two verdicts are still open questions
  * for a person and stay pending:
  *
- *   - isGrant: a real listing. Nothing here may publish it, so it waits for the
- *     review deck.
+ *   - isGrant: a real listing. It goes on to extraction, and publishes only if
+ *     the site's publish gate passes it (./auto-publish.ts).
  *   - isAggregator: a list page. Not a listing, but not a rejection either. It
  *     is a SOURCE to crawl, and a human routes it to grant_sources. Suppressing
  *     it would lose that route, so it stays pending.
@@ -386,6 +389,19 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
     })
     .where(eq(grantCandidates.id, candidateId))
 
+  // 4b. Intake dedupe. An accepted grant that is a second URL for a programme
+  //     we already list (a vendor repost, last cycle's page, a forum thread),
+  //     or a second open row for the same page, is marked duplicate here,
+  //     before the paid extraction. See ./intake-dedupe.ts.
+  const accepted = shouldExtractCandidate({ classification, rawMetadata: meta })
+  if (!rejectionKind && accepted) {
+    const dup = await dedupeCandidateAtIntake({ ...candidate, classification, rawMetadata: meta })
+    if (dup.duplicate) {
+      console.log(`[grant-enrich] ${candidateId} marked duplicate, not extracted: ${dup.reason} (${url})`)
+      return { extract: false }
+    }
+  }
+
   // 5. A confident list page becomes a crawl source on the spot. It used to
   //    wait in the queue for a human to press "route to source"; with the
   //    aggregator connector now mining these, the pending inbox should hold
@@ -425,7 +441,7 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
       `${fetched ? ' [page fetched]' : readThePage ? '' : ' [page NOT read]'} (${url})`,
   )
 
-  return { extract: shouldExtractCandidate({ classification, rawMetadata: meta }) }
+  return { extract: accepted }
 }
 
 // #region extraction job
@@ -622,9 +638,9 @@ async function gatherEvidence(
  * Fill in one candidate's record.
  *
  * Runs only on candidates the classifier accepted. Writes the extraction to the
- * candidate and NOTHING else: no grant, no cycle, no requirement, no status
- * change. The human gate on grants is unchanged, and this pass exists to make
- * that gate cheap to pass through, not to bypass it.
+ * candidate, then asks the site to publish when ./auto-publish.ts says the row
+ * is ready. The publish gate is unchanged and never overridden from here: this
+ * pass makes the gate cheap to pass through, it does not bypass it.
  */
 export async function processGrantExtractJob(payload: GrantExtractPayload): Promise<void> {
   const db = getDb()
@@ -753,6 +769,16 @@ export async function processGrantExtractJob(payload: GrantExtractPayload): Prom
     `[grant-extract] ${candidateId} extracted ${filled}/${Object.keys(extraction.fields).length} fields ` +
       `(${extraction.depth}, ${gathered.urls.length} page${gathered.urls.length === 1 ? '' : 's'} read): ${url}`,
   )
+
+  // 6. Ask the site to publish, when the row clears the pre-check. Re-read so
+  //    the decision sees the row as it is now (a person may have acted while
+  //    the model ran). A failure here must not fail the job: a BullMQ retry
+  //    would pay for the extraction again.
+  try {
+    await autoPublishCandidateById(candidateId)
+  } catch (err) {
+    console.error(`[grant-autopublish] ${candidateId} failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
 }
 
 // #endregion
