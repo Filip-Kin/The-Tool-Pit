@@ -1,5 +1,6 @@
 'use server'
 
+import { funderTimeZone } from '@the-tool-pit/db/grant-dates'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { and, eq, ne } from 'drizzle-orm'
@@ -32,7 +33,7 @@ import {
 async function loadGrant(grantId: string) {
   const db = getDb()
   const [row] = await db
-    .select({ id: grants.id, slug: grants.slug, status: grants.status })
+    .select({ id: grants.id, slug: grants.slug, status: grants.status, geoScope: grants.geoScope, regions: grants.regions })
     .from(grants)
     .where(eq(grants.id, grantId))
     .limit(1)
@@ -183,7 +184,8 @@ export async function saveCycleForm(grantId: string, cycleId: string, form: Form
   const existing = await loadGrant(grantId)
   if (!existing) backWithError(grantId, 'Grant not found.')
 
-  const parsed = parseCycleFields(form)
+  // A date with no time is read in the grant's own zone (its state, else Eastern).
+  const parsed = parseCycleFields(form, { timeZone: funderTimeZone(existing) })
   if (parsed.error) backWithError(grantId, parsed.error)
 
   const db = getDb()

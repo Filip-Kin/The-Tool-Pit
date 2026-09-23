@@ -66,7 +66,7 @@ import { deterministicGrantPrefilter } from './prefilter.js'
 import { verifyListing } from './verify-listing.js'
 import { judgeFit } from './fit.js'
 import { findInfoPage } from './info-page.js'
-import { isEntranceUrl } from '@the-tool-pit/db/grant-urls'
+import { isEntranceUrl, isThirdPartyGrantUrl } from '@the-tool-pit/db/grant-urls'
 import { inferRegions } from './infer-regions.js'
 import { dedupeCandidateAtIntake } from './intake-dedupe.js'
 import { autoPublishCandidateById } from './auto-publish.js'
@@ -515,7 +515,13 @@ async function gatherEvidence(
   // THAT as the funder page; the entrance stays as the application link. The
   // programme page becomes the candidate's canonical URL so the listing's
   // info link is a page a mentor can read.
-  if (isEntranceUrl(url)) {
+  // A grant-finder's profile or an archive copy is the same problem one step
+  // removed: the words are not the funder's (grantable.co gave Westfield
+  // Service League and Sheltering Arms their info links and invented dates,
+  // 2026-09 audit). Look for the funder's own page the same way; the
+  // secondhand page is never kept as the application link.
+  const thirdParty = isThirdPartyGrantUrl(url)
+  if (isEntranceUrl(url) || thirdParty) {
     const funder = candidate.classification?.funderName ?? meta.funderName ?? ''
     const name = candidate.classification?.name ?? meta.title ?? ''
     try {
@@ -525,14 +531,14 @@ async function gatherEvidence(
         const infoText = await fetchCandidateText(info.url)
         if (infoText) {
           funderPage = infoText
-          meta.applicationUrl = meta.applicationUrl ?? url
+          if (!thirdParty) meta.applicationUrl = meta.applicationUrl ?? url
           await getDb().update(grantCandidates).set({ canonicalUrl: info.url, updatedAt: new Date() }).where(eq(grantCandidates.id, candidate.id))
           url = info.url
         } else {
           notes.push(`info page ${info.url} could not be read`)
         }
       } else {
-        notes.push(`no programme page found for the entrance URL ${url}; the listing will read like a login page until a human adds one`)
+        notes.push(thirdParty ? `no funder page found for the secondhand URL ${url}; the publish gate refuses it as the info link` : `no programme page found for the entrance URL ${url}; the listing will read like a login page until a human adds one`)
       }
     } catch (err) {
       notes.push(`info page search failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -552,7 +558,15 @@ async function gatherEvidence(
 
   // The blurb someone else wrote. Both descriptions, because og:description is
   // sometimes the fuller one and they are rarely the same sentence.
-  const blurbs = [meta.description, meta.ogDescription]
+  //
+  // A curated sheet row's description is NOT a blurb: it is the sheet
+  // author's private notes ("Status on the sheet", "Notes: ..."), written by
+  // describeRow. As evidence the model quoted it and narrated it into public
+  // fields ("Filip's sheet marks 3M employee involvement as required", "per
+  // sheet row ... not verified"). It goes to the extractor as private
+  // context, which no quote can verify against.
+  const curatedRow = meta.discoveredVia?.startsWith('sheet:') ? meta.description : undefined
+  const blurbs = [curatedRow ? undefined : meta.description, meta.ogDescription]
     .filter((s): s is string => Boolean(s && s.trim()))
     .filter((s, i, all) => all.indexOf(s) === i)
   let aggregator = blurbs.join('\n\n')
@@ -631,7 +645,7 @@ async function gatherEvidence(
     }
   }
 
-  return { evidence: { funderPage, aggregator }, urls, notes }
+  return { evidence: { funderPage, aggregator, privateContext: curatedRow }, urls, notes }
 }
 
 /**
@@ -710,6 +724,7 @@ export async function processGrantExtractJob(payload: GrantExtractPayload): Prom
     const { route, proof } = await verifyListing(
       [extraction.fields.applicationUrl.value, meta.applicationUrl, url],
       known,
+      { programName: extraction.fields.name.value, funderName: extraction.fields.funderName.value },
     )
     extraction.applyRoute = route
     extraction.deadlineProof = proof

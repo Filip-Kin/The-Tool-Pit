@@ -33,3 +33,91 @@ export function isEntranceUrl(url: string | null | undefined): boolean {
   if (/^(apply|application|portal|grants?portal|login|forms?)\./i.test(host)) return true
   return false
 }
+
+// #region secondhand and archive hosts
+
+/**
+ * Grant-finder directories and databases: they describe real grants, but the
+ * page is not the funder's, it cannot take an application, and its dates are
+ * often its own projection from last year (grantable.co listed Westfield
+ * Service League's "January 26, 2027" and Sheltering Arms' "January 30, 2027";
+ * neither funder had posted a date, 2026-09 audit). One list for the crawler's
+ * prefilter, the aggregator router, the deadline proof and the publish gate.
+ */
+export const SECONDHAND_GRANT_HOSTS: readonly string[] = [
+  'grantable.co',
+  'grantwatch.com',
+  'instrumentl.com',
+  'grantedai.com',
+  'grantsoffice.com',
+  'thegrantportal.com',
+  'grantstation.com',
+  'candid.org',
+  'foundationdirectory.org',
+  'fundsnetservices.com',
+  'grantforward.com',
+  'pivot.proquest.com',
+  'grantselect.com',
+  'opengrants.io',
+  'grantsalert.com',
+  'getgrants.com',
+  'grantgopher.com',
+  'grantexec.com',
+  'fundsforngos.org',
+  'grantwriterteam.com',
+  'philanthropynewsdigest.org',
+  'tgci.com',
+  'grantsights.com',
+  'grantsmarts.com',
+  'grantreadyky.org',
+  'stemgrants.com',
+  'zeffy.com',
+  'linkprotect.cudasvc.com',
+]
+
+/** Copies of someone else's page. Evidence of what a page once said, never of what it says now. */
+export const ARCHIVE_HOSTS: readonly string[] = ['web.archive.org', 'archive.org', 'archive.ph', 'archive.today', 'archive.is', 'webcache.googleusercontent.com']
+
+function hostOf(url: string | null | undefined): string {
+  if (!url) return ''
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
+
+function onHost(host: string, list: readonly string[]): boolean {
+  return host !== '' && list.some((h) => host === h || host.endsWith(`.${h}`))
+}
+
+/** True when the URL is a grant-finder directory rather than the funder. */
+export function isSecondhandGrantHost(url: string | null | undefined): boolean {
+  return onHost(hostOf(url), SECONDHAND_GRANT_HOSTS)
+}
+
+/** True when the URL is an archive copy (Wayback Machine and friends). */
+export function isArchiveUrl(url: string | null | undefined): boolean {
+  return onHost(hostOf(url), ARCHIVE_HOSTS)
+}
+
+/** True when the URL is a PDF by its path. */
+export function isPdfUrl(url: string | null | undefined): boolean {
+  if (!url) return false
+  try {
+    return /\.pdf$/i.test(new URL(url).pathname)
+  } catch {
+    return /\.pdf(\?|#|$)/i.test(url)
+  }
+}
+
+/**
+ * Words on this URL are not the funder speaking now: a directory's summary or
+ * an archive copy. Such a page may point the way to the funder; it never
+ * proves a date, and it is never a listing's info link.
+ */
+export function isThirdPartyGrantUrl(url: string | null | undefined): boolean {
+  return isSecondhandGrantHost(url) || isArchiveUrl(url)
+}
+
+// #endregion

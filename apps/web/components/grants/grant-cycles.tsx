@@ -1,5 +1,6 @@
 import { ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { dateOnlyDeadlineDay, dateOnlyNoteRest, isDateOnlyNote } from '@the-tool-pit/db/grant-dates'
 import type { PublicGrantCycle } from '@/lib/grants/grant-display'
 import { DEADLINE_STATE_LABEL, cycleState, formatDay, formatDeadline, formatPlainDate } from '@/lib/grants/grant-display'
 
@@ -31,8 +32,8 @@ export function GrantCycles({ cycles, now }: { cycles: PublicGrantCycle[]; now: 
         // A funder that gives a date and no time gets a date on the card: the
         // stored instant is a placeholder and "8:00 pm EDT the day before"
         // is what it looks like once converted.
-        const dateOnly = /no time of day/i.test(cycle.deadlineNote ?? '')
-        const deadline = dateOnly && cycle.deadlineAt ? formatPlainDate(String(cycle.deadlineAt).slice(0, 10)) : formatDeadline(cycle.deadlineAt)
+        const dateOnly = isDateOnlyNote(cycle.deadlineNote)
+        const deadline = dateOnly && cycle.deadlineAt ? formatPlainDate(dateOnlyDeadlineDay(cycle.deadlineAt)) : formatDeadline(cycle.deadlineAt)
         const opens = formatPlainDate(cycle.opensAt)
         const decision = formatPlainDate(cycle.decisionAt)
         const verified = formatDay(cycle.verifiedAt)
@@ -78,8 +79,8 @@ export function GrantCycles({ cycles, now }: { cycles: PublicGrantCycle[]; now: 
                 next to the instant we render, because "by close of business"
                 and "11:59pm ET" are not the same promise. */}
             {cycle.deadlineNote && !dateOnly && <p className="text-xs text-muted">{cycle.deadlineNote}</p>}
-            {dateOnly && cycle.deadlineNote && cycle.deadlineNote.replace(/the funder states the date; no time of day given\.?/i, '').trim() && (
-              <p className="text-xs text-muted">{cycle.deadlineNote.replace(/the funder states the date; no time of day given\.?/i, '').trim()}</p>
+            {dateOnly && dateOnlyNoteRest(cycle.deadlineNote) && (
+              <p className="text-xs text-muted">{dateOnlyNoteRest(cycle.deadlineNote)}</p>
             )}
 
             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-2">

@@ -62,12 +62,22 @@ const APPLY_HOSTS = [
   'zengine.com',
 ]
 
-const APPLY_TEXT = /\b(apply|application|applications|submit (an |a |your )?(application|proposal|request)|register|nominate|request (funding|a grant|a sponsorship|a donation|a contribution|support)|grant (form|portal|application)|sponsorship (form|request|application)|(submissions?|request|contribution|giving|donation request|funding request|inquiry) form|start (your|an) application|how to apply|apply (here|now|online))\b/i
+const APPLY_TEXT = /\b(apply|application|applications|submit (an |a |your )?(application|proposal|request)|register|nominate|request (funding|a grant|a sponsorship|a donation|a contribution|support)|grant (form|portal|application)|sponsorship (form|request|application)|(submissions?|request|contribution|giving|donation request|funding request|inquiry) form|start (your|an) application|how to apply|apply (here|now|online)|grants? portal|eligibility quiz|grant inquiry)\b/i
 /** A path segment that IS the word, not a product called "application tooling". */
 const APPLY_PATH = /\/(apply|application|applications|grant-?application|submit|nominate|portal|request-form|donation-request|funding-request|grant-request|contribution-request)(\/|$|[.?#])/i
 /** Paths and link text that are never the way in, whatever else they match. */
 const NOT_APPLY_PATH = /\/(products?|tooling|catalog|catalogue|shop|store|cart|careers?|jobs?|press|news|investors?|privacy|terms|login|logout)(\/|$|[.?#-])/i
 const NOT_APPLY = /\b(unsubscribe|log ?out|donat(e|ion)|volunteer|job|career|press|news|privacy|terms)\b/i
+/**
+ * Link text for a form that is not the application, request or no request:
+ * a grantee's expenditure or final report (AMSTI's FY27 Expenditure Report
+ * Google Form was published as the application), a reimbursement claim, a
+ * meeting-room booking (Daniels Fund's "Book Now" meeting-space request form
+ * was too), a volunteer sign-up, a newsletter, a survey or a feedback form.
+ */
+export const NOT_APPLICATION_PURPOSE = /\b(reports?|reporting|expenditures?|reimburse(ment)?s?|meeting (space|rooms?)|(room|space|venue|facility) (request|booking|reservation|rental)s?|book (now|our|a|the|your)\b|booking|reservations?|volunteers?|volunteering|newsletters?|surveys?|feedback)\b/i
+/** Paths for the same purposes. */
+const NOT_APPLICATION_PATH = /\/(reports?|reporting|expenditure[\w-]*|reimbursement[\w-]*|meeting-(space|rooms?)|room-(booking|reservation|request)s?|space-request|volunteer[\w-]*|newsletter[\w-]*|survey|feedback)(\/|$|[.?#])/i
 
 export interface ApplyLink {
   url: string
@@ -93,6 +103,11 @@ function isGoogleForm(url: string): boolean {
   return /^https?:\/\/docs\.google\.com\/forms\//i.test(url)
 }
 
+/** A DocuSign PowerForm is a self-serve signing form (AMSTI's robotics grant application is one). */
+function isDocusignPowerForm(url: string): boolean {
+  return /^https?:\/\/[\w.-]*docusign\.net\/Member\/PowerFormSigning\.aspx/i.test(url)
+}
+
 /** Candidate apply links on a page, best first. Empty when none look like one. */
 export function findApplyLinks(html: string, pageUrl: string): ApplyLink[] {
   const root = parse(html)
@@ -113,9 +128,11 @@ export function findApplyLinks(html: string, pageUrl: string): ApplyLink[] {
     const text = a.textContent.replace(/\s+/g, ' ').trim()
     // "Donate" is the other direction; "Request a Donation" is ours.
     if (NOT_APPLY.test(text) && !/\brequest/i.test(text)) continue
+    if (NOT_APPLICATION_PURPOSE.test(text)) continue
 
     let score = 0
-    if (isApplyHost(abs) || isGoogleForm(abs)) score += 3
+    if (NOT_APPLICATION_PATH.test(abs)) continue
+    if (isApplyHost(abs) || isGoogleForm(abs) || isDocusignPowerForm(abs)) score += 3
     // A login on a grant portal IS the way in (bauschfoundation.versaic.com/login).
     if (NOT_APPLY_PATH.test(abs) && !(score > 0 && /log[io]n|sign-?in|register/i.test(abs))) continue
     if (APPLY_TEXT.test(text)) score += 2

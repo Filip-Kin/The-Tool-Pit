@@ -15,8 +15,8 @@ export function isJunkRequirementLabel(label: string): boolean {
   return JUNK_VALUE_RE.test(bare) || bare.trim().length < 3
 }
 
-export { splitSentences, isNarration, narrationIn, scrubNarration } from '@the-tool-pit/db/listing-text'
-import { splitSentences, narrationIn } from '@the-tool-pit/db/listing-text'
+export { splitSentences, isNarration, narrationIn, scrubNarration, isReviewerNote, reviewerNotesIn, scrubReviewerNotes, scrubListingText } from '@the-tool-pit/db/listing-text'
+import { splitSentences, narrationIn, reviewerNotesIn } from '@the-tool-pit/db/listing-text'
 
 const REQUIREMENT_TOPICS: Array<[RegExp, RegExp]> = [
   // [what the prose says, what a blocking row about it says]
@@ -42,7 +42,7 @@ export function restatesRequirement(prose: string, blocking: Array<{ label: stri
 const VOICE_RE = /\b(worth noting|it'?s worth|notably|crucially|importantly|in summary|in conclusion|overall,|additionally,|furthermore,|moreover,|leverage|robust|seamless|comprehensive|holistic|empower(s|ing)?|unlock|delve|landscape|ecosystem|tailored|cutting[- ]edge|state[- ]of[- ]the[- ]art)\b/i
 
 export interface ListingLintIssue {
-  field: 'name' | 'funder' | 'summary' | 'description' | 'requirement' | 'awardNotes'
+  field: 'name' | 'funder' | 'summary' | 'description' | 'requirement' | 'awardNotes' | 'deadlineNote'
   text: string
   problem: string
 }
@@ -54,9 +54,21 @@ export function lintListing(values: {
   summary?: string | null
   description?: string | null
   awardNotes?: string | null
+  deadlineNote?: string | null
   requirementLabels?: string[]
 }): ListingLintIssue[] {
   const out: ListingLintIssue[] = []
+  // Reviewer and pipeline context in public text: the sheet, the candidate,
+  // the classifier, the aggregator, an older page, a failed check. Every
+  // public field, including the short ones, because a requirement label and
+  // a deadline note are where the review agents wrote their notes.
+  const reviewerProblem = 'carries reviewer or pipeline notes, not facts about the grant'
+  for (const field of ['name', 'funderName', 'summary', 'description', 'awardNotes', 'deadlineNote'] as const) {
+    for (const s of reviewerNotesIn(values[field])) out.push({ field: field === 'funderName' ? 'funder' : field, text: s, problem: reviewerProblem })
+  }
+  for (const label of values.requirementLabels ?? []) {
+    for (const s of reviewerNotesIn(label)) out.push({ field: 'requirement', text: s, problem: reviewerProblem })
+  }
   for (const field of ['summary', 'description', 'awardNotes'] as const) {
     const text = values[field]
     if (!text) continue

@@ -615,7 +615,7 @@ export function ReviewDeck(props: ReviewDeckProps) {
 
               <DeckField
                 label="Deadline"
-                hint="Needs the funder's own time and offset, e.g. 2027-03-01T23:59:00-05:00. A bare date is refused, because 11:59pm somewhere is not a deadline."
+                hint="2027-03-01T23:59:00-05:00, or date only (23:59 funder's zone)"
                 evidence={ev.deadlineAt}
               >
                 <input

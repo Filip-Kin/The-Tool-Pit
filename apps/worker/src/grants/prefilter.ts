@@ -25,6 +25,7 @@
  *
  * Pure. Unit-testable without a fetch or a database.
  */
+import { isSecondhandGrantHost } from '@the-tool-pit/db/grant-urls'
 
 export interface PrefilterInput {
   url: string
@@ -41,34 +42,12 @@ export interface PrefilterVerdict {
   reason?: string
 }
 
-/** Commercial or catalogue grant databases: secondhand, often paywalled, never the place to apply. */
-export const SECONDHAND_HOSTS = [
-  'grantwatch.com',
-  'instrumentl.com',
-  'grantedai.com',
-  'grantsoffice.com',
-  'thegrantportal.com',
-  'grantstation.com',
-  'candid.org',
-  'foundationdirectory.org',
-  'fundsnetservices.com',
-  'grantforward.com',
-  'pivot.proquest.com',
-  'grantselect.com',
-  'opengrants.io',
-  'grantsalert.com',
-  'getgrants.com',
-  'grantgopher.com',
-  'grantexec.com',
-  'fundsforngos.org',
-  'grantwriterteam.com',
-  'philanthropynewsdigest.org',
-  'tgci.com',
-  'grantsights.com',
-  'grantsmarts.com',
-  'grantreadyky.org',
-  'linkprotect.cudasvc.com',
-]
+/**
+ * Commercial or catalogue grant databases: secondhand, often paywalled, never
+ * the place to apply. The list lives in packages/db (grant-urls.ts) so the
+ * web publish gate refuses the same hosts the crawler does.
+ */
+export { SECONDHAND_GRANT_HOSTS as SECONDHAND_HOSTS, isSecondhandGrantHost } from '@the-tool-pit/db/grant-urls'
 
 /**
  * Application portals. The funder sends applicants here to log in and submit;
@@ -94,10 +73,6 @@ function hostOf(url: string): string {
   }
 }
 
-export function isSecondhandGrantHost(url: string): boolean {
-  const host = hostOf(url)
-  return SECONDHAND_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))
-}
 
 /**
  * Money that is already the team's is not a grant. FIRST's "regrant" pays out

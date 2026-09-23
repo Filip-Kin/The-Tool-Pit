@@ -10,7 +10,11 @@
  *
  * Each row becomes one candidate at its application link, carrying the row's
  * own columns in rawMetadata.sheet and summarised in the description, so the
- * extractor reads them as evidence and the reviewer sees them on the card.
+ * reviewer sees them on the card. The row is PRIVATE: the classifier and the
+ * extractor get it labelled as context they must never repeat, and it is not
+ * quotable evidence (enrich.ts gatherEvidence). As evidence, the model wrote
+ * "Filip's sheet marks 3M employee involvement as required" and "per sheet
+ * row ... not verified" into published requirements (2026-09-23 audit).
  * Still a CANDIDATE: the sheet says the funder exists and roughly when it is
  * open; the funder's own page says the deadline.
  *
@@ -126,7 +130,7 @@ export function sheetRows(csv: string): SheetRow[] {
   return out
 }
 
-/** The row's facts as one paragraph the extractor and the reviewer both read. */
+/** The row's facts as one paragraph for the reviewer, and private context for the models. */
 export function describeRow(row: SheetRow, sheetLabel: string): string {
   const bits: string[] = []
   if (row.isOpen) bits.push(`Status on the sheet: ${row.isOpen}.`)

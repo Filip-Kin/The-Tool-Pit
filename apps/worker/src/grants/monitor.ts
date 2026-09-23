@@ -32,7 +32,7 @@
  */
 import { ne } from 'drizzle-orm'
 import { and, desc, eq, getDb, grantChanges, grantCycles, grantFunders, grants, grantSnapshots, grantWatches } from '@the-tool-pit/db'
-import { isEntranceUrl } from '@the-tool-pit/db/grant-urls'
+import { isEntranceUrl, isThirdPartyGrantUrl } from '@the-tool-pit/db/grant-urls'
 import { findInfoPage } from './info-page.js'
 import { renderedHtml } from './apply-route.js'
 import { awardNoteAddsFacts, eligibilityChanged, deadlineNoteIsWhole, applicationUrlIsNew, deadlineMovesTheDay } from './change-filters.js'
@@ -43,6 +43,7 @@ import { hashContent, stripToMainContent } from './strip.js'
 import { verifyListing } from './verify-listing.js'
 import { extractGrantFields, type GrantExtractionResult } from './extract.js'
 import { deriveCycleStatus } from './cadence.js'
+import { DATE_ONLY_NOTE, endOfDayIn, funderTimeZone } from '@the-tool-pit/db/grant-dates'
 import { enqueueGrantAlert, grantUrl } from './alerts.js'
 import { proveChange, reasoningWithProof } from './change-proof.js'
 import { askSiteToDecideGrantChanges } from '../site/queue-decisions.js'
@@ -526,7 +527,8 @@ async function verifyPublishedGrant(grant: Grant, now: Date, notes: string[]): P
   if (now.getTime() - last < VERIFY_EVERY_MS) return null
   const db = getDb()
   try {
-    const { route, proof } = await verifyListing([grant.applicationUrl, grant.infoUrl])
+    const funderName = grant.funderId ? (await db.select({ name: grantFunders.name }).from(grantFunders).where(eq(grantFunders.id, grant.funderId)))[0]?.name ?? '' : ''
+    const { route, proof } = await verifyListing([grant.applicationUrl, grant.infoUrl], [], { programName: grant.name, funderName })
     const patch: Partial<typeof grants.$inferInsert> = {
       applyRouteStatus: route.status,
       applyRouteEvidence: route.evidence.slice(0, 500),
@@ -537,14 +539,14 @@ async function verifyPublishedGrant(grant: Grant, now: Date, notes: string[]): P
     // The info link is the portal (the sheet only had the login): find the
     // funder's programme page, point the listing at it, and drop the content
     // hash so the next pass reads the award and the dates off it.
-    if (isEntranceUrl(grant.infoUrl)) {
+    // Same for a grant-finder profile or an archive copy: not the funder's words.
+    if (isEntranceUrl(grant.infoUrl) || isThirdPartyGrantUrl(grant.infoUrl)) {
       try {
-        const funderName = grant.funderId ? (await db.select({ name: grantFunders.name }).from(grantFunders).where(eq(grantFunders.id, grant.funderId)))[0]?.name ?? '' : ''
         const info = await findInfoPage(funderName, grant.name, [grant.infoUrl, grant.applicationUrl ?? ''])
         if (info) {
           patch.infoUrl = info.url
           patch.contentHash = null
-          if (!grant.applicationUrl) patch.applicationUrl = grant.infoUrl
+          if (!grant.applicationUrl && !isThirdPartyGrantUrl(grant.infoUrl)) patch.applicationUrl = grant.infoUrl
           notes.push(`info link was the entrance (${grant.infoUrl}); now the programme page ${info.url} (${info.evidence})`)
           console.log(`[grant-monitor] ${grant.slug}: info link moved from the entrance to ${info.url}`)
         } else {
@@ -581,6 +583,9 @@ async function verifyPublishedGrant(grant: Grant, now: Date, notes: string[]): P
     } else {
       patch.deadlineProof = proof.quote ?? null
       patch.deadlineProofUrl = proof.url ?? null
+      // "Due by April 17" with no year: the grant comes round every year.
+      // Its pattern, never a dated round (deadline-proof.ts adds no year).
+      if (proof.kind === 'recurring' && grant.deadlineType === 'unknown') patch.deadlineType = 'annual_window'
     }
     await db.update(grants).set(patch).where(eq(grants.id, grant.id))
     notes.push(`apply route ${route.status}; timing ${proof.kind}`)
@@ -898,16 +903,20 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
     for (const d of dated) {
       const year = Number(d.date.slice(0, 4))
       if (!Number.isFinite(year) || cycles.some((c) => c.cycleYear === year)) continue
-      const deadlineAt = new Date(`${d.date}T23:59:59Z`)
+      // A date with no time: 23:59 that day in the funder's zone
+      // (packages/db grant-dates.ts), the same rule the review deck uses.
+      const endOfDay = endOfDayIn(d.date, funderTimeZone(grant))
+      const deadlineAt = endOfDay ? new Date(endOfDay) : new Date(Number.NaN)
       if (Number.isNaN(deadlineAt.getTime())) continue
       const opens = proposed.find((c) => c.field === `cycle.${year}.opensAt`)
+      const opensAt = d.opens ?? (typeof opens?.newValue === 'string' ? opens.newValue : null)
       await db.insert(grantCycles).values({
         grantId: grant.id,
         cycleYear: year,
         deadlineAt,
-        opensAt: d.opens ?? (typeof opens?.newValue === 'string' ? opens.newValue : null),
-        deadlineNote: `The funder states the date; no time of day given. "${d.quote.slice(0, 200)}"`,
-        status: deadlineAt.getTime() < now.getTime() ? 'closed' : 'open',
+        opensAt,
+        deadlineNote: `${DATE_ONLY_NOTE}. "${d.quote.slice(0, 200)}"`,
+        status: deriveCycleStatus(opensAt, deadlineAt, now),
         sourceUrl: d.url,
         isEstimated: false,
         verifiedAt: now,

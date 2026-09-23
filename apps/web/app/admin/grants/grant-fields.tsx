@@ -254,7 +254,7 @@ export function CycleFields({ defaults = {} }: { defaults?: CycleFieldDefaults }
 
       <Field
         label="Deadline"
-        hint="Full ISO-8601 with the funder's own offset, e.g. 2027-03-01T23:59:00-05:00. Blank beats a guess."
+        hint="2027-03-01T23:59:00-05:00, or date only (23:59 funder's zone)"
       >
         <input
           name="deadlineAt"
