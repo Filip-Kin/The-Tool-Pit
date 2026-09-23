@@ -32,7 +32,13 @@ export type AutoPublishCandidate = Pick<
   'status' | 'matchedGrantId' | 'classification' | 'extraction' | 'confidenceScore'
 >
 
-export type AutoPublishDecision = { ok: true } | { ok: false; reason: string }
+/**
+ * `data` is true when the refusal is about the grant itself, read after the
+ * deep extraction (off-topic, no reachable application, no timing), as opposed
+ * to where the row is in the pipeline (not classified, not yet extracted, a
+ * fit check that errored). Only a data refusal ends a crawled candidate.
+ */
+export type AutoPublishDecision = { ok: true } | { ok: false; reason: string; data?: boolean }
 
 // #region pure
 
@@ -59,15 +65,15 @@ export function shouldAutoPublish(candidate: AutoPublishCandidate): AutoPublishD
   if (!extraction) return { ok: false, reason: 'no extraction' }
   const fit = extraction.fit?.level
   if (!fit) return { ok: false, reason: 'no fit verdict' }
-  if (!FIT_LEVELS.has(fit)) return { ok: false, reason: `fit is ${fit}` }
+  if (!FIT_LEVELS.has(fit)) return { ok: false, reason: `fit is ${fit}`, data: true }
 
   const route = extraction.applyRoute
-  if (!route) return { ok: false, reason: 'apply route not verified' }
+  if (!route) return { ok: false, reason: 'apply route not verified', data: true }
   if (route.status === 'closed') {
     const proof = extraction.deadlineProof?.kind ?? 'none'
-    if (proof === 'none') return { ok: false, reason: 'application closed and no timing on record' }
+    if (proof === 'none') return { ok: false, reason: 'application closed and no timing on record', data: true }
   } else if (!OPEN_ROUTES.has(route.status)) {
-    return { ok: false, reason: `apply route is ${route.status}` }
+    return { ok: false, reason: `apply route is ${route.status}`, data: true }
   }
   return { ok: true }
 }
@@ -87,6 +93,11 @@ export function blockedReviewNote(status: string, existing: string | null | unde
   return `${kept}\n${line}`
 }
 
+/** A person sent this in. Their data is what a reviewer weighs, so it never ends automatically. */
+export function isSubmission(c: Pick<GrantCandidate, 'rawMetadata' | 'submittedByUserId' | 'submitterContact'>): boolean {
+  return (c.rawMetadata as { discoveredVia?: string } | null)?.discoveredVia === 'public submission' || Boolean(c.submittedByUserId) || Boolean(c.submitterContact)
+}
+
 // #endregion
 
 export type AutoPublishOutcome =
@@ -95,10 +106,11 @@ export type AutoPublishOutcome =
   | { kind: 'published'; slug: string }
   | { kind: 'published_no_cycle'; slug: string; error: string }
   | { kind: 'blocked'; error: string }
+  | { kind: 'suppressed'; reason: string }
   | { kind: 'unavailable'; error: string }
 
 type LoadedCandidate = AutoPublishCandidate &
-  Pick<GrantCandidate, 'id' | 'canonicalUrl' | 'sourceUrl' | 'rawMetadata' | 'reviewNote' | 'createdAt'>
+  Pick<GrantCandidate, 'id' | 'canonicalUrl' | 'sourceUrl' | 'rawMetadata' | 'reviewNote' | 'createdAt' | 'submittedByUserId' | 'submitterContact'>
 
 /**
  * Run the decision on one candidate and act on it. Every outcome is logged with
@@ -108,6 +120,7 @@ export async function autoPublishCandidate(candidate: LoadedCandidate): Promise<
   const tag = `[grant-autopublish] ${candidate.id}`
   const decision = shouldAutoPublish(candidate)
   if (!decision.ok) {
+    if (decision.data && !isSubmission(candidate)) return suppressUnverifiable(candidate, decision.reason)
     console.log(`${tag} skipped: ${decision.reason}`)
     return { kind: 'skipped', reason: decision.reason }
   }
@@ -136,6 +149,7 @@ export async function autoPublishCandidate(candidate: LoadedCandidate): Promise<
       console.error(`${tag} could not ask the site: ${result.error}`)
       return { kind: 'unavailable', error: result.error }
     case 'refused': {
+      if (!isSubmission(candidate)) return suppressUnverifiable(candidate, result.error)
       await getDb()
         .update(grantCandidates)
         .set({
@@ -149,6 +163,29 @@ export async function autoPublishCandidate(candidate: LoadedCandidate): Promise<
       return { kind: 'blocked', error: result.error }
     }
   }
+}
+
+/**
+ * End a crawled candidate the deep read could not make publishable. Holding it
+ * in a queue asked a person to finish research the pipeline had already
+ * exhausted (relay, rendered page, application link). If the funder or a team
+ * sends the grant in later, the submission starts fresh with their data; a
+ * suppressed crawl row does not block it. No rejectionKind: "could not verify"
+ * is not a page shape, and the kinds feed the classifier's negative examples.
+ */
+async function suppressUnverifiable(candidate: LoadedCandidate, reason: string): Promise<AutoPublishOutcome> {
+  const offTopic = /^fit is off\b|not a fit for a robotics team/.test(reason)
+  await getDb()
+    .update(grantCandidates)
+    .set({
+      status: 'suppressed',
+      rejectionReason: `Not publishable after a deep read: ${reason}`.slice(0, 1000),
+      rejectionKind: offTopic ? 'out_of_scope' : null,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(grantCandidates.id, candidate.id), eq(grantCandidates.status, candidate.status)))
+  console.log(`[grant-autopublish] ${candidate.id} suppressed: ${reason}`)
+  return { kind: 'suppressed', reason }
 }
 
 /** Load one candidate by id and run autoPublishCandidate on it. */

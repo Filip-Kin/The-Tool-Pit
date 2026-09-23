@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { grantCandidates, grantSources, grants } from '@the-tool-pit/db'
 import type { RawGrantMetadata } from '@the-tool-pit/db'
@@ -181,19 +181,17 @@ export async function createGrantSubmission(
     }
   }
 
+  // Only a row still waiting blocks a new submission. A crawled page the
+  // pipeline suppressed because it could not verify the grant is exactly the
+  // case a person's own data fixes, so a submission for it starts fresh and a
+  // person reviews what they typed.
   const [queued] = await db
-    .select({ id: grantCandidates.id, status: grantCandidates.status })
+    .select({ id: grantCandidates.id })
     .from(grantCandidates)
-    .where(eq(grantCandidates.canonicalUrl, canonicalUrl))
+    .where(and(eq(grantCandidates.canonicalUrl, canonicalUrl), inArray(grantCandidates.status, ['pending', 'flagged'])))
     .limit(1)
   if (queued) {
-    return {
-      status: 'duplicate',
-      message:
-        queued.status === 'suppressed'
-          ? 'Thanks, but this one has been looked at before and turned down.'
-          : 'This one is already waiting to be reviewed. Nothing more needed from you.',
-    }
+    return { status: 'duplicate', message: 'This one is already waiting to be reviewed. Nothing more needed from you.' }
   }
 
   const applicationUrl = input.applicationUrl?.trim() || undefined

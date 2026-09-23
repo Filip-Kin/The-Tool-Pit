@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { shouldAutoPublish, blockedReviewNote, type AutoPublishCandidate } from '../src/grants/auto-publish.js'
+import { shouldAutoPublish, isSubmission, blockedReviewNote, type AutoPublishCandidate } from '../src/grants/auto-publish.js'
 import { readPublishResult } from '../src/site/queue-decisions.js'
 import type { GrantExtraction } from '@the-tool-pit/db'
 
@@ -38,7 +38,7 @@ describe('shouldAutoPublish', () => {
     for (const level of ['robotics', 'stem', 'general'] as const) {
       expect(shouldAutoPublish(candidate({ extraction: extraction({ fit: { level, reason: '', model: '', checkedAt: '' } }) })).ok).toBe(true)
     }
-    expect(shouldAutoPublish(candidate({ extraction: extraction({ fit: { level: 'off', reason: 'wildfire relief', model: '', checkedAt: '' } }) }))).toEqual({ ok: false, reason: 'fit is off' })
+    expect(shouldAutoPublish(candidate({ extraction: extraction({ fit: { level: 'off', reason: 'wildfire relief', model: '', checkedAt: '' } }) }))).toEqual({ ok: false, reason: 'fit is off', data: true })
     expect(shouldAutoPublish(candidate({ extraction: extraction({ fit: undefined }) })).ok).toBe(false)
   })
 
@@ -130,5 +130,23 @@ describe('readPublishResult', () => {
     expect(readPublishResult(false, 404, { error: 'Not found' }, id)).toEqual({ status: 'unavailable', error: 'Not found' })
     expect(readPublishResult(false, 502, {}, id)).toEqual({ status: 'unavailable', error: 'HTTP 502' })
     expect(readPublishResult(true, 200, { results: [] }, id).status).toBe('unavailable')
+  })
+})
+
+describe('what ends a crawled candidate', () => {
+  it('marks refusals about the grant itself as data, and pipeline states as not', () => {
+    const base = { status: 'flagged', matchedGrantId: null, classification: null, confidenceScore: null } as const
+    const off = shouldAutoPublish({ ...base, extraction: { fit: { level: 'off', reason: 'x' }, applyRoute: { status: 'portal' } } } as never)
+    expect(off.ok === false && off.data).toBe(true)
+    const walled = shouldAutoPublish({ ...base, extraction: { fit: { level: 'stem', reason: 'x' }, applyRoute: { status: 'walled' } } } as never)
+    expect(walled.ok === false && walled.data).toBe(true)
+    const noFit = shouldAutoPublish({ ...base, extraction: { applyRoute: { status: 'portal' } } } as never)
+    expect(noFit.ok === false && Boolean(noFit.data)).toBe(false)
+    const unextracted = shouldAutoPublish({ ...base, extraction: null } as never)
+    expect(unextracted.ok === false && Boolean(unextracted.data)).toBe(false)
+  })
+  it('knows a public submission', () => {
+    expect(isSubmission({ rawMetadata: { discoveredVia: 'public submission' }, submittedByUserId: null, submitterContact: null } as never)).toBe(true)
+    expect(isSubmission({ rawMetadata: { discoveredVia: 'web_search:x' }, submittedByUserId: null, submitterContact: null } as never)).toBe(false)
   })
 })
