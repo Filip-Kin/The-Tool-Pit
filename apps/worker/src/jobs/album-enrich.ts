@@ -13,7 +13,7 @@ import { parse } from 'node-html-parser'
 import { politeFetch } from '../connectors/base.js'
 import { matchEventWithAI, type EventCandidate } from '../pipeline/match-event.js'
 import { classifyAlbumJunk, DEAD_LINK_REASON } from './album-junk.js'
-import { decideNameMatch, isFllOnlyTitle, type NameMatchDecision } from './album-match.js'
+import { AI_MIN_PLAUSIBLE, decideNameMatch, isFllOnlyTitle, type NameMatchDecision } from './album-match.js'
 import type { AlbumEnrichPayload } from '@the-tool-pit/types'
 import { askSiteToDecide } from '../site/moderate.js'
 
@@ -41,6 +41,8 @@ interface AlbumClassification extends AlbumEventMatch {
 
 /** The rejection reason FLL albums carry: they cannot be tied to one event. */
 const FLL_NO_EVENT_REASON = 'fll_no_event_mapping'
+/** A crawled album of a known year whose event TBA and TOA do not list (unlisted scrimmages). */
+const NO_LISTED_EVENT_REASON = 'no_tba_toa_event'
 
 /**
  * Retire a candidate to a distinct, filterable rejection reason and reflect it
@@ -356,6 +358,20 @@ export async function processAlbumEnrichJob(payload: AlbumEnrichPayload): Promis
         classification.reasoning = ai.reasoning
       }
     }
+  }
+
+  // 3d. Every album on the site hangs off a TBA or TOA event. A crawled album
+  //     whose year is known and whose title resembles NO event of that year
+  //     (best score under AI_MIN_PLAUSIBLE) is an event neither lists: an
+  //     unlisted scrimmage or invitational. Leaving it pending asked a human to
+  //     confirm what the matcher already knows. A plausible-but-unsure match
+  //     (a tie between divisions, an AI "no" on a close name) still waits, and
+  //     so does a submission: a person sent it and may know the event.
+  const noPlausibleEvent = decision != null && !decision.maybe && (decision.ranked[0]?.score ?? 0) < AI_MIN_PLAUSIBLE
+  if (!matchedEventId && year != null && !cand.submissionId && noPlausibleEvent) {
+    await suppressCandidate(db, cand.id, meta, NO_LISTED_EVENT_REASON, null)
+    console.log(`[album-enrich] candidate ${cand.id} → suppressed (${NO_LISTED_EVENT_REASON})`)
+    return
   }
 
   // 4. Dedup against already-published albums (canonical URL is globally unique).
