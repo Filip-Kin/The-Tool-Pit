@@ -382,6 +382,12 @@ export interface GrantClassification {
   deadlineType?: string
   confidence?: number
   reasoning?: string
+  /**
+   * The real funder's own programme page, when this page is someone else's
+   * write-up (a vendor, a grant-finder profile) and links to it. Only kept when
+   * the URL is literally on the page.
+   */
+  funderPageUrl?: string
 }
 
 /** Structured fields the extractor reads off one fetch, used for diffing. */

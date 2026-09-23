@@ -59,7 +59,7 @@ import {
   type GrantEvidence,
 } from './candidate-extract.js'
 import { braveSearch, BraveBudgetExhausted } from './brave.js'
-import { routeAggregatorToSource, AUTO_ROUTE_CONFIDENCE } from './route-aggregator.js'
+import { routeAggregatorToSource, autoRouteDenyReason, AUTO_ROUTE_CONFIDENCE } from './route-aggregator.js'
 import { findApplyLinks } from './apply-links.js'
 import { deterministicGrantPrefilter } from './prefilter.js'
 import { verifyListing } from './verify-listing.js'
@@ -393,6 +393,20 @@ export async function processGrantEnrichJob(payload: GrantEnrichPayload): Promis
   if (classification.isAggregator && (classification.confidence ?? 0) >= AUTO_ROUTE_CONFIDENCE && !curated) {
     const routed = await routeAggregatorToSource({ ...candidate, rawMetadata: meta }, classification)
     console.log(`[grant-enrich] ${candidateId} aggregator auto-routed to grant_sources: ${routed} (${url})`)
+    // A list on a grant-finder or agency index is a list nobody will crawl
+    // and nobody needs to read: 281 grantable.co pages sat pending for a
+    // click each. Suppressed as a list, with the deny reason, not left pending.
+    if (routed === 'denied_host') {
+      await db
+        .update(grantCandidates)
+        .set({
+          status: 'suppressed',
+          rejectionKind: 'aggregator_list',
+          rejectionReason: `List page on a host that is never crawled (${autoRouteDenyReason(url)})`,
+          updatedAt: new Date(),
+        })
+        .where(eq(grantCandidates.id, candidateId))
+    }
   }
 
   // A list page is not a listing, it is a source. Log it distinctly so the
