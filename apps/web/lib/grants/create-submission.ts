@@ -318,8 +318,8 @@ export async function createGrantSubmission(
     facts: [
       { label: 'Funder', value: rawMetadata.funderName ?? null, inline: true },
       { label: 'Application', value: applicationUrl ?? null },
-      { label: 'What it funds', value: rawMetadata.description ?? null },
-      { label: 'What they told us', value: rawMetadata.contentText ?? null },
+      { label: 'Summary', value: input.summary?.trim() || null },
+      { label: 'Note', value: rawMetadata.contentText ?? null },
     ],
   })
 

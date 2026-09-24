@@ -179,9 +179,8 @@ export async function processCrawlJob(payload: CrawlJobPayload): Promise<void> {
     if (totalNew > 0) {
       sendApprovalNotice({
         vertical: 'crawl',
-        title: `${connectorName} found ${totalNew} new tool${totalNew === 1 ? '' : 's'}`,
+        title: `Tool leads: ${totalNew} new (${connectorName})`,
         reviewUrl: reviewQueueUrl('/admin/candidates?status=pending'),
-        description: `${totalNew} candidate${totalNew === 1 ? '' : 's'} waiting in the tools queue.`,
         facts: [
           { label: 'Connector', value: connectorName, inline: true },
           { label: 'Discovered', value: candidates.length, inline: true },

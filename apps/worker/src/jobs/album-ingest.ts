@@ -189,9 +189,8 @@ export async function processAlbumIngestJob(payload: AlbumIngestPayload): Promis
     if (totalNew > 0) {
       sendApprovalNotice({
         vertical: 'crawl',
-        title: `${connectorName} found ${totalNew} new album${totalNew === 1 ? '' : 's'}`,
+        title: `Album leads: ${totalNew} new (${connectorName})`,
         reviewUrl: reviewQueueUrl('/admin/album-candidates?status=pending'),
-        description: `${totalNew} candidate${totalNew === 1 ? '' : 's'} waiting in the albums queue.`,
         facts: [
           { label: 'Connector', value: connectorName, inline: true },
           { label: 'Season', value: year, inline: true },

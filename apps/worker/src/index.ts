@@ -212,9 +212,8 @@ const grantDiscoverWorker = new Worker<GrantDiscoverPayload>(
     if (found > 0) {
       sendApprovalNotice({
         vertical: 'crawl',
-        title: `${outcome.connector} found ${found} new grant lead${found === 1 ? '' : 's'}`,
+        title: `Grant leads: ${found} new (${outcome.connector})`,
         reviewUrl: reviewQueueUrl('/admin/grants/candidates?status=pending'),
-        description: `${found} candidate${found === 1 ? '' : 's'} waiting in the grants queue.`,
         facts: [
           { label: 'Connector', value: outcome.connector, inline: true },
           { label: 'New', value: found, inline: true },
@@ -372,9 +371,8 @@ const listingDiscoverWorker = new Worker<ListingDiscoverPayload>(
           : '/admin/event-listings/candidates'
       sendApprovalNotice({
         vertical: 'crawl',
-        title: `${outcome.connector} found ${filed} ${outcome.vertical} lead${filed === 1 ? '' : 's'}`,
+        title: `${outcome.vertical[0].toUpperCase()}${outcome.vertical.slice(1)} leads: ${filed} new (${outcome.connector})`,
         reviewUrl: reviewQueueUrl(queue),
-        description: `${filed} candidate${filed === 1 ? '' : 's'} waiting in the ${outcome.vertical} queue.`,
         facts: [
           { label: 'Connector', value: outcome.connector, inline: true },
           { label: 'New', value: filed, inline: true },

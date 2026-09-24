@@ -52,9 +52,8 @@ describe('the embed', () => {
     const embed = buildApprovalEmbed(NOTICE)
     expect(embed.url).toContain('/admin/album-candidates')
     expect(embed.url).toContain('#album-cand-1')
-    // The description repeats it, because a phone taps the heading and a
-    // desktop reads the sentence.
-    expect(embed.description).toContain(embed.url as string)
+    // No sentence under the heading: the heading is the link.
+    expect(embed.description).toBeUndefined()
   })
 
   it('drops blank and missing facts, which Discord rejects outright', () => {
@@ -74,7 +73,7 @@ describe('the embed', () => {
     // fact it is: signing in is optional on every public form here.
     const embed = buildApprovalEmbed({ ...NOTICE, submitter: null })
     const row = embed.fields.find((f) => f.name === 'Submitted by')
-    expect(row?.value).toBe('Anonymous (no account)')
+    expect(row?.value).toBe('Anonymous')
   })
 
   it('asks a crawl run no question it cannot answer', () => {
@@ -148,9 +147,9 @@ describe('the decided embed', () => {
 
   it('says who decided and where, in the first line', () => {
     const embed = decideApprovalEmbed(posted, { status: 'approved', by: 'Filip', via: 'discord' })
-    expect(embed.description).toBe('Approved by Filip in Discord.')
+    expect(embed.description).toBe('Approved · Filip · Discord')
     expect(decideApprovalEmbed(posted, { status: 'rejected', by: 'Filip', via: 'site' }).description).toBe(
-      'Rejected by Filip on the site.',
+      'Rejected · Filip · Site',
     )
   })
 

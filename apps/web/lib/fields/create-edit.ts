@@ -174,7 +174,7 @@ export async function createFieldEditProposal(
     reviewUrl: reviewFieldEditUrl(proposal.id),
     submitter: [input.submitterName, input.submitterContact].filter(Boolean).join(' · ') || null,
     facts: [
-      { label: 'What changed', value: input.note },
+      { label: 'Note', value: input.note },
       { label: 'Photos', value: photoChange || null },
     ],
   })

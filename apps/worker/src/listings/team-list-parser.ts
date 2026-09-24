@@ -574,10 +574,13 @@ export async function generateTeamListParser(input: {
     // team count that silently stops updating.
     sendApprovalNotice({
       vertical: 'event',
-      title: `Could not read the team list for ${input.eventName}`,
+      title: `Team list unreadable: ${input.eventName}`,
       reviewUrl: input.reviewUrl ?? input.url,
       sourceUrl: input.url,
-      description: `The team-list parser failed ${MAX_ATTEMPTS} times on this page. Its registered-team count will not update until someone checks the page or clears the team list URL.`,
+      facts: [
+        { label: 'Attempts', value: MAX_ATTEMPTS, inline: true },
+        { label: 'Team count', value: 'Frozen', inline: true },
+      ],
     })
     return null
   })

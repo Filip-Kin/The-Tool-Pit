@@ -200,7 +200,7 @@ export async function createEventEditProposal(
   const changes = eventEditChanges(listing, proposed)
   const changeFacts = changes.slice(0, 20).map((c) => ({ label: c.label, value: `${c.from} → ${c.to}` }))
   if (changes.length > changeFacts.length) {
-    changeFacts.push({ label: '…', value: `and ${changes.length - changeFacts.length} more` })
+    changeFacts.push({ label: 'More changes', value: String(changes.length - changeFacts.length) })
   }
   sendApprovalNotice({
     vertical: 'event_edit',
@@ -209,7 +209,7 @@ export async function createEventEditProposal(
     reviewUrl: reviewEventEditUrl(proposal.id),
     submitter: [input.submitterName, input.submitterContact].filter(Boolean).join(' · ') || null,
     facts: [
-      { label: 'What changed', value: input.note ?? null },
+      { label: 'Note', value: input.note ?? null },
       ...changeFacts,
     ],
   })

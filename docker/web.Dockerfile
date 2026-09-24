@@ -38,6 +38,10 @@ COPY . .
 # Build shared packages first (web depends on them)
 RUN bun run --filter @the-tool-pit/types build
 RUN bun run --filter @the-tool-pit/db build
+# Copy rules that have been broken more than once are enforced here, not in a
+# review: a push that puts a sentence back into a Discord approval post fails
+# its build and never deploys.
+RUN cd apps/web && bun test tests/unit/discord-copy-is-labels.test.ts
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_OUTPUT=standalone

@@ -263,7 +263,7 @@ export async function startClaim(
       submitter: user.displayName ?? user.email ?? null,
       facts: [
         { label: 'Listing', value: target.facts.subtitle },
-        { label: 'Signal', value: 'Auto-granted from the outreach email we sent the organiser' },
+        { label: 'Source', value: 'Outreach email, auto-granted' },
       ],
     })
     revalidatePath('/me/listings')
@@ -374,8 +374,8 @@ export async function startClaim(
     reviewUrl: reviewClaimUrl(filed.id),
     submitter: user.displayName ?? user.email ?? null,
     facts: [
-      { label: 'Contested', value: target.alreadyOwned ? 'Yes, this listing already has an owner' : 'No, nobody owns it yet' },
-      ...(note ? [{ label: 'They say', value: note }] : []),
+      { label: 'Has owner', value: target.alreadyOwned ? 'Yes' : 'No' },
+      ...(note ? [{ label: 'Note', value: note }] : []),
       { label: 'Listing', value: target.facts.subtitle },
     ],
   })
@@ -398,7 +398,7 @@ export async function startClaim(
       submitter: user.displayName ?? user.email ?? null,
       facts: [
         { label: 'Listing', value: target.facts.subtitle },
-        { label: 'Signal', value: 'Claimed after we emailed the organiser their listing' },
+        { label: 'Source', value: 'Outreach email' },
       ],
     })
   }
@@ -466,9 +466,10 @@ export async function verifyRepoClaim(claimId: string): Promise<OwnershipActionR
       reviewUrl: reviewClaimUrl(claim.id),
       submitter: user.displayName ?? user.email ?? null,
       facts: [
-        { label: 'Contested', value: 'Yes, and the claimant proved control of the repo' },
+        { label: 'Has owner', value: 'Yes' },
+        { label: 'Proof', value: 'File in the repo' },
         { label: 'Repo', value: claim.evidence.repoUrl },
-        { label: 'File we read', value: found.url },
+        { label: 'Proof file', value: found.url },
       ],
     })
     revalidatePath('/me/listings')

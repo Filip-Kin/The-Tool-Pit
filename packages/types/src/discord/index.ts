@@ -98,7 +98,7 @@ export interface ApprovalNotice {
 export interface DiscordEmbed {
   title: string
   url?: string
-  description: string
+  description?: string
   color: number
   fields: Array<{ name: string; value: string; inline: boolean }>
   image?: { url: string }
@@ -235,7 +235,7 @@ export function buildApprovalEmbed(notice: ApprovalNotice): DiscordEmbed {
   if (notice.vertical !== 'crawl') {
     fields.push({
       name: 'Submitted by',
-      value: clean(notice.submitter) ?? 'Anonymous (no account)',
+      value: clean(notice.submitter) ?? 'Anonymous',
       inline: false,
     })
   }
@@ -250,7 +250,7 @@ export function buildApprovalEmbed(notice: ApprovalNotice): DiscordEmbed {
     // The TITLE is the link, and it goes to the approval row. Whoever opens
     // this on a phone taps the heading, not a word buried in a sentence.
     url: notice.reviewUrl,
-    description: notice.description ?? `Nothing is public until it is approved. [Open the review row](${notice.reviewUrl})`,
+    ...(notice.description ? { description: notice.description } : {}),
     color: VERTICAL_COLOR[notice.vertical],
     fields,
     ...(clean(notice.imageUrl) ? { image: { url: notice.imageUrl as string } } : {}),
@@ -515,12 +515,12 @@ export function decideApprovalEmbed(embed: DiscordEmbed, decision: ApprovalDecis
   const bare = embed.title.replace(/^(✅|❌)\s+/u, '')
   const mark = decision.status === 'approved' ? APPROVE_EMOJI : REJECT_EMOJI
   const verb = decision.status === 'approved' ? 'Approved' : 'Rejected'
-  const where = decision.via === 'discord' ? 'in Discord' : 'on the site'
+  const where = decision.via === 'discord' ? 'Discord' : 'Site'
   return {
     ...embed,
     title: `${mark} ${bare}`.slice(0, TITLE_MAX),
     color: DECIDED_COLOR[decision.status],
-    description: `${verb} by ${decision.by} ${where}.`,
+    description: `${verb} · ${decision.by} · ${where}`,
   }
 }
 

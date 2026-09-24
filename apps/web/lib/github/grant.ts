@@ -247,7 +247,8 @@ export async function applyGithubGrants(
       reviewUrl: reviewClaimUrl(filed.id),
       submitter: user.displayName ?? user.email ?? null,
       facts: [
-        { label: 'Contested', value: 'Yes, and the claimant is inside the namespace that owns the repo' },
+        { label: 'Has owner', value: 'Yes' },
+        { label: 'Proof', value: 'Member of the repo namespace' },
         { label: 'GitHub account', value: identity.login },
         { label: 'Namespace', value: match.namespace },
         { label: 'Repo', value: match.url },
