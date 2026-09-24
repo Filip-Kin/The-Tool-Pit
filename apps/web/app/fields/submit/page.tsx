@@ -11,7 +11,7 @@ export default function SubmitFieldPage() {
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6">
-        <Link href="/" className="text-sm text-muted hover:text-foreground">← Back to the map</Link>
+        <Link href="/fields" className="text-sm text-muted hover:text-foreground">← Back to the map</Link>
         <h1 className="mt-2 text-2xl font-bold text-foreground">Add a practice field</h1>
         <p className="mt-2 text-sm text-muted">
           Sharing your field helps nearby teams practise. Submissions are reviewed before they go on the

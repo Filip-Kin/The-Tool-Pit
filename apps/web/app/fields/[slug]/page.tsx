@@ -54,7 +54,7 @@ export default async function FieldDetailPage({ params }: { params: Promise<{ sl
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
       <JsonLd data={fieldJsonLd(field)} />
-      <Link href="/" className="text-sm text-muted hover:text-foreground">← Back to the map</Link>
+      <Link href="/fields" className="text-sm text-muted hover:text-foreground">← Back to the map</Link>
       <div className="mt-4">
         <FieldDetail field={field} />
       </div>
