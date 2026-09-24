@@ -15,6 +15,7 @@ import { checkDuplicateByName } from '../pipeline/deduplicate.js'
 import { extractMetadata } from '../pipeline/extract.js'
 import { notifySubmissionAutoPublished } from '../notifications/submissions.js'
 import type { EnrichJobPayload } from '@the-tool-pit/types'
+import { askSiteToNotifyHeld, holdLabel } from '../site/moderate.js'
 
 // #region deterministic junk gate
 // Bot walls, error/redirect shells, and maintenance pages that the LLM classifier scores
@@ -252,6 +253,9 @@ async function resolveSubmission(
   logMessage?: string,
 ): Promise<void> {
   const db = getDb()
+  // Held for a person: this is the moment the approvals channel hears about
+  // it. A submission that publishes itself is never posted.
+  if (status === 'needs_review') await askSiteToNotifyHeld(submissionId, holdLabel(logMessage) ?? 'Needs review')
 
   if (logMessage) {
     const [sub] = await db

@@ -3,9 +3,8 @@ import { getDb } from '@/lib/db'
 import { submissions } from '@the-tool-pit/db'
 import { getSubmissionQueue } from './queue'
 import { containsHateSpeech, urlContainsHateSpeech } from '@the-tool-pit/db/hate-filter'
-import { reviewSubmissionUrl, type SubmitToolResponse } from '@the-tool-pit/types'
+import type { SubmitToolResponse } from '@the-tool-pit/types'
 import { adminSubmitter } from '@/lib/admin/auto-approve'
-import { sendApprovalNotice } from '@/lib/discord/notify'
 
 interface CreateSubmissionInput {
   url: string
@@ -92,17 +91,9 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Su
     }
   }
 
-  // The oldest submit form on the site and the only one that never pinged
-  // anybody: a tool submitted here sat in the queue until somebody thought to
-  // open it.
-  sendApprovalNotice({
-    vertical: 'tool',
-    entityId: created.id,
-    title: input.url,
-    reviewUrl: reviewSubmissionUrl(created.id),
-    sourceUrl: input.url,
-    facts: [{ label: 'Note', value: input.note ?? null }],
-  })
+  // No Discord post here. Most tool submissions publish themselves once the
+  // worker has read and scored the page; the worker asks the site to post
+  // (lib/submissions/notify-held.ts) only when it holds one for a person.
 
   return {
     submissionId: created.id,

@@ -51,3 +51,29 @@ export async function askSiteToDecide(
     return { ok: false, error: `could not reach the site: ${(err as Error).message}` }
   }
 }
+
+/**
+ * Ask the site to post a held tool submission to the approvals channel. Never
+ * throws; a failure is logged and the submission is still in the admin queue.
+ */
+export async function askSiteToNotifyHeld(submissionId: string, hold: string | null): Promise<void> {
+  const secret = process.env[SECRET_ENV]?.trim()
+  if (!secret) return
+  try {
+    const res = await fetch(`${siteBaseUrl()}/api/internal/notify-held`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-internal-secret': secret },
+      body: JSON.stringify({ submissionId, hold }),
+    })
+    if (!res.ok) console.warn(`[notify-held] ${submissionId}: HTTP ${res.status}`)
+  } catch (err) {
+    console.warn(`[notify-held] ${submissionId}: ${(err as Error).message}`)
+  }
+}
+
+/** The first clause of a pipeline reason, as a short label for the post. */
+export function holdLabel(reason: string | null | undefined): string | null {
+  const r = (reason ?? '').trim()
+  if (!r) return null
+  return r.split(/\s[—–-]\s|\.\s|;\s/)[0].slice(0, 120)
+}
