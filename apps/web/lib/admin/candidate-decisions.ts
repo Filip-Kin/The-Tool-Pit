@@ -15,6 +15,7 @@ import { grantToolOwnership } from '@/lib/listings/submitter-ownership'
 export async function approveCandidateBody(candidateId: string): Promise<{ error?: string; toolId?: string }> {
   const result = await adminPublishCandidate(candidateId)
   if ('error' in result) return { error: result.error }
+  if (result.alreadyPublished) return { toolId: result.toolId }
   // Only a candidate that came from a public submission has anyone to tell. One
   // found by a crawler falls straight through this without a query. Same for
   // ownership: nobody submitted a crawled tool, so nobody gets it.

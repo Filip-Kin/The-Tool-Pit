@@ -21,7 +21,7 @@ import type { NewTool } from '@the-tool-pit/db'
 import { buildSlug } from '@the-tool-pit/db/slug'
 import { githubRepoIdentity, siteIdentity, isDocsSubdomain } from '@the-tool-pit/db/tool-identity'
 
-export async function adminPublishCandidate(candidateId: string): Promise<{ toolId: string } | { error: string }> {
+export async function adminPublishCandidate(candidateId: string): Promise<{ toolId: string; alreadyPublished?: true } | { error: string }> {
   const db = getDb()
 
   const [candidate] = await db
@@ -31,6 +31,10 @@ export async function adminPublishCandidate(candidateId: string): Promise<{ tool
     .limit(1)
 
   if (!candidate) return { error: `Candidate ${candidateId} not found` }
+  // Approving what is already live is a no-op, not a second listing. The
+  // worker auto-publishes most tool submissions, and a ✅ on the approval post
+  // after that created a duplicate tool (CADProps, 2026-09-24).
+  if (candidate.status === 'published' && candidate.matchedToolId) return { toolId: candidate.matchedToolId, alreadyPublished: true }
 
   const classification = (candidate.classification ?? {}) as Record<string, unknown>
   const meta = (candidate.rawMetadata ?? {}) as Record<string, unknown>

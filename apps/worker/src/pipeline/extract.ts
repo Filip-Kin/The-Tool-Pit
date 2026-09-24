@@ -189,6 +189,27 @@ export function normalizeTitle(raw: string, siteName?: string): string {
 
   return t
 }
+/**
+ * On a site's own homepage the <title> is a tagline and og:site_name is the
+ * product: "Multi-Format CAD Viewer & Online Measurement Tools | CADProps" is
+ * CADProps. After normalizeTitle strips the site name, a homepage left with a
+ * several-word phrase takes the short site name instead. Deeper pages keep
+ * their own title (a docs page, a feature page, a repo).
+ */
+export function productTitle(title: string, siteName: string | undefined, pageUrl: string): string {
+  const site = siteName?.trim()
+  if (!site || site.length > 30 || site.split(/\s+/).length > 3) return title
+  let path = '/'
+  try {
+    path = new URL(pageUrl).pathname
+  } catch {
+    return title
+  }
+  if (path !== '/' && path !== '') return title
+  if (title.toLowerCase().includes(site.toLowerCase())) return title
+  if (title.split(/\s+/).length < 3) return title
+  return site
+}
 // #endregion
 
 // #region github link picker
@@ -449,7 +470,7 @@ export async function extractMetadata(url: string): Promise<RawCandidateMetadata
     const ogTitle = root.querySelector('meta[property="og:title"]')?.getAttribute('content')
     const titleTag = root.querySelector('title')?.innerText
     const siteName = root.querySelector('meta[property="og:site_name"]')?.getAttribute('content') ?? undefined
-    const rawTitle = normalizeTitle(ogTitle ?? titleTag ?? '', siteName).slice(0, 300)
+    const rawTitle = productTitle(normalizeTitle(ogTitle ?? titleTag ?? '', siteName), siteName, url).slice(0, 300)
     const isGenericCwsTitle = cwsDerivedTitle && (!rawTitle || /^chrome web store$/i.test(rawTitle))
     const title = isGenericCwsTitle ? cwsDerivedTitle! : rawTitle
 
