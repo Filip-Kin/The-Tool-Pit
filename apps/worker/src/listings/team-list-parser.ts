@@ -53,7 +53,10 @@ const MODEL = 'claude-opus-4-8'
 // not just the visible one) needs, rather than re-tuning this every time a
 // bigger page shows up.
 const MAX_HTML_CHARS = 120_000
-const MAX_PARSER_TOKENS = 3500
+// A careful parser for a multi-section page runs past 3,500 tokens. At that
+// limit every reply for the Great Lakes Bay Bot Bash page was cut off before
+// the function closed, read as "no function", and the page failed ten times.
+const MAX_PARSER_TOKENS = 8000
 const RUN_TIMEOUT_MS = 4_000
 const MAX_ATTEMPTS = 10
 
@@ -512,7 +515,9 @@ export async function generateTeamListParser(input: {
       const check = script ? staticCheck(script) : { ok: false as const, error: 'no function in the response' }
 
       let problem: string
-      if (!script) {
+      if (response.stop_reason === 'max_tokens') {
+        problem = `Your reply was cut off at ${MAX_PARSER_TOKENS} tokens before the function was complete. Write a shorter extractTeams: one pass over the team sections, no helper for every case, no comments.`
+      } else if (!script) {
         problem = 'You did not return a function named extractTeams.'
       } else if (!check.ok) {
         problem = `The function was rejected: ${check.error}. Use only the DOM and ordinary JavaScript.`
@@ -563,6 +568,7 @@ export async function generateTeamListParser(input: {
         }
       }
 
+      console.log(`[team-list-parser] ${input.eventName}: attempt ${attempt + 1} rejected: ${problem.slice(0, 200)}`)
       // Feed the failure back and let it fix its own script.
       if (textBlock) messages.push({ role: 'assistant', content: textBlock.text })
       messages.push({ role: 'user', content: `${problem}\nReturn only the corrected function.` })
