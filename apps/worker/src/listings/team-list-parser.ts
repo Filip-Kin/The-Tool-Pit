@@ -541,7 +541,12 @@ export async function generateTeamListParser(input: {
           const missing = expected.filter((t) => !producedKeys.has(rosterKey(t)))
           const extra = expectedKeys.size > 0 ? teams.filter((t) => !expectedKeys.has(rosterKey(t))) : []
           const wrongSection = expectedKeys.size > 0 && extra.length > teams.length / 2
-          if ((missing.length === 0 && !wrongSection) || verifyRetries >= MAX_VERIFY_RETRIES || attempt >= MAX_ATTEMPTS - 1) {
+          // A few extras the reading never saw are usually a number read out of
+          // a date, a count or a footer ("Last Updated 9/24/26" became team 9
+          // on Bot Bash). They get one round of pushback; if the parser still
+          // returns them after that, the reading may be the one that missed.
+          const strayExtras = !wrongSection && extra.length > 0 && verifyRetries === 0
+          if ((missing.length === 0 && !wrongSection && !strayExtras) || verifyRetries >= MAX_VERIFY_RETRIES || attempt >= MAX_ATTEMPTS - 1) {
             console.log(
               `[team-list-parser] ${input.eventName}: found ${teams.length} teams on attempt ${attempt + 1}` +
                 (missing.length || wrongSection ? ` (accepted with ${missing.length} unverified, ${extra.length} unmatched)` : ''),
@@ -553,6 +558,11 @@ export async function generateTeamListParser(input: {
           if (missing.length > 0) {
             parts.push(
               `the page also lists ${missing.length} it dropped: ${missing.map(rosterLabel).join(', ')}. These are almost always a team's SECOND ROBOT — a "#2" marker, or the same number or row listed again (a B team) — or a whole section your selector skipped. A "#2" entry is { number, robot: "B" } (and "#3" is "C")`,
+            )
+          }
+          if (strayExtras) {
+            parts.push(
+              `it also returned ${extra.map(rosterLabel).join(', ')}, which a second reading of the page did not find as a team entry. Check each: a number taken from a date ("Last Updated 9/24/26"), a count, a footer, a phone number or a year is not a team. Keep it only if it truly is a team row in the list`,
             )
           }
           if (wrongSection) {
