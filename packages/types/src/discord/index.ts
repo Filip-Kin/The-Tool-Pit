@@ -83,6 +83,11 @@ export interface ApprovalNotice {
    */
   description?: string | null
   /**
+   * A system alert, not something a person sent in: no vertical prefix on the
+   * title and no "Submitted by" row. A failed team-list read is an alert.
+   */
+  alert?: boolean
+  /**
    * The row a ✅ or ❌ on this message decides. Which table it names is fixed
    * by the vertical (see discord_approval_messages in @the-tool-pit/db).
    *
@@ -232,7 +237,7 @@ export function buildApprovalEmbed(notice: ApprovalNotice): DiscordEmbed {
   // Anonymous is the normal case on every public form here, so it is STATED
   // rather than left off: a missing row reads as a bug, "Anonymous" does not.
   // A crawl run has no submitter and is not asked the question.
-  if (notice.vertical !== 'crawl') {
+  if (notice.vertical !== 'crawl' && !notice.alert) {
     fields.push({
       name: 'Submitted by',
       value: clean(notice.submitter) ?? 'Anonymous',
@@ -240,7 +245,7 @@ export function buildApprovalEmbed(notice: ApprovalNotice): DiscordEmbed {
     })
   }
 
-  const title = `${VERTICAL_LABEL[notice.vertical]}: ${clean(notice.title) ?? 'untitled'}`.slice(
+  const title = (notice.alert ? clean(notice.title) ?? 'Alert' : `${VERTICAL_LABEL[notice.vertical]}: ${clean(notice.title) ?? 'untitled'}`).slice(
     0,
     TITLE_MAX,
   )

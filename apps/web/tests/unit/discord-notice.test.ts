@@ -181,3 +181,11 @@ describe('review links', () => {
     expect(reviewFieldUrl('f1')).not.toContain('localhost')
   })
 })
+
+describe('alerts', () => {
+  it('have no vertical prefix and no Submitted by row', () => {
+    const embed = buildApprovalEmbed({ vertical: 'event', alert: true, title: 'Team list unreadable: Bot Bash', reviewUrl: 'https://frc.tools/admin/event-listings' })
+    expect(embed.title).toBe('Team list unreadable: Bot Bash')
+    expect(embed.fields.some((f) => f.name === 'Submitted by')).toBe(false)
+  })
+})

@@ -580,6 +580,7 @@ export async function generateTeamListParser(input: {
     // team count that silently stops updating.
     sendApprovalNotice({
       vertical: 'event',
+      alert: true,
       title: `Team list unreadable: ${input.eventName}`,
       reviewUrl: input.reviewUrl ?? input.url,
       sourceUrl: input.url,
