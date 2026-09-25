@@ -668,33 +668,41 @@ export function findTbaMatch(
   events: TbaEventUpsert[],
 ): { tbaKey: string; reason: string } | null {
   const target = normEventName(listing.name)
-  // Too short to be distinctive: "CORI" or "MARC" alone would match loosely.
-  if (target.length < 5) return null
+  if (target.length < 4) return null
+  const acronym = (s: string) =>
+    s.split(/[^A-Za-z0-9]+/).filter((w) => w && !/^(the|of|and|at|for|a)$/i.test(w)).map((w) => w[0]).join('').toLowerCase()
   for (const ev of events) {
     const evName = normEventName(ev.name)
-    // A listing seeded from a flyer often carries a short name ("Grand Rapids
-    // Girls") while TBA holds the full one ("Grand Rapids Girls Robotics
-    // Competition"). Accept one being a prefix of the other, as long as the
-    // shorter is still distinctive; the date or city/region signal below is
-    // what actually confirms the match.
-    const namesAgree =
-      evName === target ||
-      (Math.min(evName.length, target.length) >= 8 &&
-        (evName.startsWith(target) || target.startsWith(evName)))
-    if (!namesAgree) continue
-    if (listing.startDate && ev.startDate && listing.startDate === ev.startDate) {
+    // A listing seeded from a flyer often carries a short name while TBA holds
+    // the full one: "Grand Rapids Girls" for "Grand Rapids Girls Robotics
+    // Competition", "Bot Bash" for "Great Lakes Bay Bot Bash", "WMRI" for "West
+    // Michigan Robotics Invitational". A contained name (either way) of at
+    // least 7 letters, or an acronym of 4+, counts as a name match. The second
+    // signal below is what confirms it, and it is stricter for the loose forms.
+    const exact = evName === target
+    const contained = Math.min(evName.length, target.length) >= 7 && (evName.includes(target) || target.includes(evName))
+    const acro = target.length >= 4 && target.length <= 6 && acronym(ev.name) === target
+    if (!exact && !contained && !acro) continue
+
+    const sameRegion = Boolean(listing.region && ev.stateProv && listing.region.toUpperCase() === ev.stateProv.toUpperCase())
+    const sameCity = Boolean(listing.city && ev.city && normEventName(listing.city) === normEventName(ev.city))
+    // TBA often starts an event a day early for load-in: a listing's date that
+    // falls inside TBA's span, or a day either side of it, is the same event.
+    const dayMs = 86_400_000
+    const inSpan = (() => {
+      if (!listing.startDate || !ev.startDate) return false
+      const d = Date.parse(listing.startDate)
+      const a = Date.parse(ev.startDate) - dayMs
+      const b = Date.parse(ev.endDate ?? ev.startDate) + dayMs
+      return d >= a && d <= b
+    })()
+
+    if (exact && listing.startDate && ev.startDate && listing.startDate === ev.startDate) {
       return { tbaKey: ev.tbaKey, reason: 'name + start date' }
     }
-    if (
-      listing.region &&
-      ev.stateProv &&
-      listing.city &&
-      ev.city &&
-      listing.region.toUpperCase() === ev.stateProv.toUpperCase() &&
-      normEventName(listing.city) === normEventName(ev.city)
-    ) {
-      return { tbaKey: ev.tbaKey, reason: 'name + city/region' }
-    }
+    if ((exact || contained) && sameRegion && sameCity) return { tbaKey: ev.tbaKey, reason: 'name + city/region' }
+    if ((exact || contained) && inSpan && (sameRegion || !listing.region)) return { tbaKey: ev.tbaKey, reason: 'name + dates' }
+    if (acro && inSpan && sameRegion) return { tbaKey: ev.tbaKey, reason: 'acronym + dates + region' }
   }
   return null
 }
@@ -716,7 +724,7 @@ async function processTbaRecheck(
   // worth having for its final roster; something that ran months ago is not.
   const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
 
-  const keyless = await db
+  const listed = await db
     .select({
       id: eventListings.id,
       name: eventListings.name,
@@ -725,12 +733,12 @@ async function processTbaRecheck(
       city: eventListings.city,
       region: eventListings.region,
       humanEditedFields: eventListings.humanEditedFields,
+      tbaKey: eventListings.tbaKey,
     })
     .from(eventListings)
     .where(
       and(
         eq(eventListings.status, 'published'),
-        isNull(eventListings.tbaKey),
         // A manual listing is not ours to key: its roster is the owner's, and a
         // TBA key would only invite a later read over the top of what they typed.
         ne(eventListings.teamListMode, 'manual'),
@@ -738,11 +746,11 @@ async function processTbaRecheck(
       ),
     )
 
-  if (keyless.length === 0) return { considered: 0, matched: 0, failed: 0 }
+  if (listed.length === 0) return { considered: 0, matched: 0, failed: 0 }
 
   const currentYear = new Date().getFullYear()
   const years = new Set<number>([currentYear, currentYear + 1])
-  for (const l of keyless) {
+  for (const l of listed) {
     if (l.seasonYear) years.add(l.seasonYear)
     else if (l.startDate) years.add(Number(l.startDate.slice(0, 4)))
   }
@@ -751,9 +759,13 @@ async function processTbaRecheck(
   // uses. skipTeams: we only want the event list, not four hundred rosters.
   const connector = new TbaEventsConnector()
   const offseasonByYear = new Map<number, TbaEventUpsert[]>()
+  // Every key TBA knows per season, to spot a listing carrying a key that does
+  // not exist (Stay Classy held 2026cascc, a 404, while TBA listed 2026casan1).
+  const knownKeysByYear = new Map<number, Set<string>>()
   for (const year of years) {
     try {
       const res = await connector.run(year, { skipTeams: true })
+      knownKeysByYear.set(year, new Set(res.events.map((e) => e.tbaKey)))
       offseasonByYear.set(
         year,
         res.events.filter((e) => e.eventType != null && OFFSEASON_EVENT_TYPES.has(e.eventType)),
@@ -766,7 +778,14 @@ async function processTbaRecheck(
 
   let matched = 0
   let failed = 0
-  for (const l of keyless) {
+  for (const l of listed) {
+    if (l.tbaKey) {
+      // A listing with a key is only reconsidered when TBA does not know that
+      // key at all for its season. A key TBA knows is never second-guessed.
+      const year = Number(l.tbaKey.slice(0, 4))
+      const known = knownKeysByYear.get(year)
+      if (!known || known.has(l.tbaKey)) continue
+    }
     // A key a person deliberately set (or cleared) is theirs; never touch it.
     if (isHumanEdited(l.humanEditedFields, 'tbaKey')) continue
 
@@ -793,7 +812,7 @@ async function processTbaRecheck(
         // Guard the write too: only if the key is still null, so two overlapping
         // passes cannot both claim it.
         .set({ tbaKey: match.tbaKey, updatedAt: new Date() })
-        .where(and(eq(eventListings.id, l.id), isNull(eventListings.tbaKey)))
+        .where(and(eq(eventListings.id, l.id), l.tbaKey ? eq(eventListings.tbaKey, l.tbaKey) : isNull(eventListings.tbaKey)))
       matched++
       console.log(`[roster-recheck] ${l.name}: attached TBA key ${match.tbaKey} (${match.reason})`)
 
@@ -813,7 +832,7 @@ async function processTbaRecheck(
     }
   }
 
-  return { considered: keyless.length, matched, failed }
+  return { considered: listed.length, matched, failed }
 }
 
 // #endregion

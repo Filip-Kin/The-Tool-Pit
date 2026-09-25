@@ -161,3 +161,20 @@ describe('decideScrapedRoster (auto-approve vs held)', () => {
     expect(d.writeCount).toBe(false)
   })
 })
+
+describe('findTbaMatch: short and flyer names', () => {
+  const ev = (o: Partial<import('../src/connectors/tba-events.js').TbaEventUpsert>) => ({ tbaKey: 'x', name: '', startDate: null, endDate: null, city: null, stateProv: null, eventType: 99, ...o }) as never
+  const events = [
+    ev({ tbaKey: '2026mimid1', name: 'Great Lakes Bay Bot Bash', startDate: '2026-10-30', endDate: '2026-10-31', city: 'Midland', stateProv: 'MI' }),
+    ev({ tbaKey: '2026wmri', name: 'West Michigan Robotics Invitational', startDate: '2026-10-24', endDate: '2026-10-24', city: 'Zeeland', stateProv: 'MI' }),
+    ev({ tbaKey: '2026mnros', name: 'Minnesota Robotics Invitational', startDate: '2026-10-03', endDate: '2026-10-03', city: 'Roseville', stateProv: 'MN' }),
+  ]
+  it('matches a suffix name inside TBA span', () => {
+    expect(findTbaMatch({ name: 'Bot Bash', startDate: '2026-10-31', city: 'Midland', region: 'MI' }, events)?.tbaKey).toBe('2026mimid1')
+  })
+  it('matches an acronym only with dates and region', () => {
+    expect(findTbaMatch({ name: 'WMRI', startDate: '2026-10-24', city: 'Zeeland', region: 'MI' }, events)?.tbaKey).toBe('2026wmri')
+    expect(findTbaMatch({ name: 'WMRI', startDate: '2026-11-24', city: 'Zeeland', region: 'MI' }, events)).toBeNull()
+    expect(findTbaMatch({ name: 'MRI', startDate: '2026-10-03', city: null, region: 'MN' }, events)).toBeNull()
+  })
+})
