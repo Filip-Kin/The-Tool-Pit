@@ -646,34 +646,30 @@ export function slotIndicesLeaked(teams: RosterTeam[]): string | null {
 }
 
 
-function extractFunctionSource(text: string): string | null {
+export function extractFunctionSource(text: string): string | null {
   const at = text.indexOf('function extractTeams')
   if (at === -1) return null
 
   // From the function keyword to its OWN closing brace, so the prose the model
-  // adds after it (a "How it works", an example fence) never rides along. That
-  // trailing text is what broke the wrapper on one page and tripped the
-  // forbidden-word check on another: the words were in the explanation, never
-  // in the code.
-  const open = text.indexOf('{', at)
-  if (open === -1) return null
-  let depth = 0
-  let inString: string | null = null
-  for (let i = open; i < text.length; i++) {
-    const ch = text[i]
-    const prev = text[i - 1]
-    if (inString) {
-      if (ch === inString && prev !== '\\') inString = null
-      continue
-    }
-    if (ch === '"' || ch === "'" || ch === '`') inString = ch
-    else if (ch === '{') depth++
-    else if (ch === '}') {
-      depth--
-      if (depth === 0) return text.slice(at, i + 1).trim()
+  // adds after it (a "How it works", an example fence) never rides along.
+  //
+  // The end is found by asking the JavaScript parser, not by counting braces:
+  // a brace counter that tracks quotes is thrown off by a regex literal such as
+  // /"([^"]+)"/ or a comment like "// the team's name", never finds the close,
+  // and a complete, correct function read as "no function" ten times running
+  // (Great Lakes Bay Bot Bash, 2026-09-24). The first closing brace at which the
+  // slice parses as a program is the function's own. Parsing never runs it.
+  for (let i = text.indexOf('{', at); i !== -1 && i < text.length; i = text.indexOf('}', i + 1)) {
+    if (text[i] !== '}') continue
+    const candidate = text.slice(at, i + 1)
+    try {
+      new Function(`${candidate}\nreturn extractTeams`)
+      return candidate.trim()
+    } catch {
+      // Not the end yet, or a syntax error further in; keep looking.
     }
   }
-  return null // never closed: a truncated reply
+  return null // never closed: a truncated reply, or not valid JavaScript
 }
 
 function staticCheck(script: string): { ok: true } | { ok: false; error: string } {

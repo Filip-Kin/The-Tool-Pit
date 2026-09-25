@@ -173,6 +173,14 @@ function hashTeams(teams: RosterTeam[]): string {
  * bad case is the other direction, old teams vanishing, which is what a broken
  * selector or a leaked slot column looks like.
  */
+/** Days a stored parser is trusted before it is rewritten and proven again. */
+export const PARSER_REPROOF_DAYS = 3
+
+export function parserIsStale(updatedAt: Date | null | undefined, now = new Date()): boolean {
+  if (!updatedAt) return true
+  return now.getTime() - updatedAt.getTime() > PARSER_REPROOF_DAYS * 86_400_000
+}
+
 /** Record the newly written parser and the URL it was written against. */
 async function storeParser(
   db: ReturnType<typeof getDb>,
@@ -303,6 +311,7 @@ export async function processRosterRefreshJob(
       startDate: eventListings.startDate,
       seasonYear: eventListings.seasonYear,
       teamListParser: eventListings.teamListParser,
+      teamListParserUpdatedAt: eventListings.teamListParserUpdatedAt,
       teamListParserSourceUrl: eventListings.teamListParserSourceUrl,
     })
     .from(eventListings)
@@ -464,6 +473,30 @@ export async function processRosterRefreshJob(
         await storeParser(db, listing.id, gen.script, url)
         teams = gen.teams
         via = hasParser ? 'parser regenerated (page moved)' : 'parser generated'
+      } else if (parserIsStale(listing.teamListParserUpdatedAt)) {
+        // A stored parser that still runs clean can quietly UNDERCOUNT a page
+        // that grew a new section: Bot Bash's read 15 teams for weeks while the
+        // page listed 21, and nothing in suspectRosterChange fires on a count
+        // that holds steady. So every few days the parser is rewritten and
+        // proven against a fresh second reading of the page. A failed rewrite
+        // keeps the stored one running; nothing gets worse.
+        const gen = await generateTeamListParser({ eventName: listing.name, url })
+        const fresh = gen?.teams ?? []
+        if (gen && !suspectRosterChange(previousTeams, fresh).suspect) {
+          await storeParser(db, listing.id, gen.script, url)
+          teams = fresh
+          via = 'parser re-proven'
+        } else {
+          const run = await runTeamListParser(url, listing.teamListParser as string)
+          if (run.ok && !suspectRosterChange(previousTeams, run.teams).suspect) {
+            teams = run.teams
+            via = 'stored parser (re-proof failed)'
+          } else {
+            stats.failed++
+            console.warn(`[roster-refresh] ${listing.name}: stored parser suspect and re-proof failed`)
+            continue
+          }
+        }
       } else {
         // Run the stored parser with no model call.
         const run = await runTeamListParser(url, listing.teamListParser as string)
