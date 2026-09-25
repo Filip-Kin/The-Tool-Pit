@@ -13,6 +13,13 @@ import { formFromReviewDefaults, loadCandidate, publishCandidateFromForm } from 
 import { reviewDefaults } from '@/lib/admin/grant-review'
 import { revalidateGrantPublic } from '@/lib/admin/grants'
 import { applyGrantChangeBody, dismissGrantChangeBody } from '@/lib/admin/grant-change-decisions'
+import {
+  acceptEventCandidateBody,
+  attachEventCandidateBody,
+  loadEventCandidate,
+  markEventCandidateDuplicateBody,
+  suppressEventCandidateBody,
+} from '@/lib/admin/event-candidate-decisions'
 import { recordDiscordDecision } from '@/lib/discord/decisions'
 import {
   parseQueueRequest,
@@ -31,8 +38,8 @@ import {
  *
  * NOT A SECOND PUBLISH PATH. Every decision runs the body the admin button
  * runs (lib/admin/album-decisions.ts, lib/admin/grant-decisions.ts,
- * lib/admin/grant-change-decisions.ts, publishCandidateFromForm), so the gates
- * apply unchanged: a grant publish
+ * lib/admin/grant-change-decisions.ts, lib/admin/event-candidate-decisions.ts,
+ * publishCandidateFromForm), so the gates apply unchanged: a grant publish
  * builds the same form the review deck posts, from reviewDefaults, and
  * publishBlockers / duplicateOfExisting refuse it the same way. The refusal
  * comes back verbatim in `error`. The only way past the gate is the named
@@ -44,12 +51,19 @@ import {
  * (apps/worker/src/grants/change-proof.ts); the proof is the worker's gate,
  * this route only carries the decision out.
  *
+ * An event_candidate accept is the review form's Accept button. `values` uses
+ * the form's field names (EVENT_CANDIDATE_VALUE_KEYS); a key left out keeps
+ * what the reader extracted, '' clears it, and name defaults to the extracted
+ * name. The publish bar (eventPublishBlockers) still decides: a row short of it
+ * is saved pending and `pending` names the missing field. `listingId` is the
+ * row written either way.
+ *
  * Body: { actor: { name }, decisions: QueueDecision[] } (lib/admin/queue-decisions.ts),
  * at most 200. A malformed decision fails the whole request with 400 before
  * anything runs. After that, decisions run in order and one failure never stops
  * the rest.
  *
- * Response: { results: [{ id, kind, action, ok, error?, slug?, label?, queued? }] }
+ * Response: { results: [{ id, kind, action, ok, error?, slug?, label?, queued?, listingId?, pending? }] }
  */
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -57,6 +71,7 @@ export const dynamic = 'force-dynamic'
 const ALBUM_QUEUE_PATH = '/admin/album-candidates'
 const GRANT_QUEUE_PATH = '/admin/grants/candidates'
 const CHANGE_QUEUE_PATH = '/admin/grants/changes'
+const EVENT_QUEUE_PATH = '/admin/event-listings/candidates'
 
 type Outcome = Omit<QueueDecisionResult, 'id' | 'kind' | 'action' | 'ok'>
 
@@ -83,6 +98,29 @@ async function run(d: QueueDecision, who: string): Promise<Outcome> {
     revalidatePath(`/admin/grants/${out.grant.id}`)
     revalidateGrantPublic(out.grant.slug)
     return { slug: out.grant.slug }
+  }
+
+  if (d.kind === 'event_candidate') {
+    switch (d.action) {
+      case 'accept': {
+        const values = { ...(d.values ?? {}) }
+        // The form prefills the name from the read; do the same here.
+        if (!values.name?.trim()) {
+          const candidate = await loadEventCandidate(d.id)
+          if (!candidate) return { error: 'Candidate not found.' }
+          values.name = candidate.extracted?.name ?? ''
+        }
+        const out = await acceptEventCandidateBody(d.id, values)
+        if (out.error) return { error: out.error }
+        return { listingId: out.listingId, pending: out.pending }
+      }
+      case 'attach':
+        return attachEventCandidateBody(d.id, d.listingRef)
+      case 'duplicate':
+        return markEventCandidateDuplicateBody(d.id, d.listingRef ?? '')
+      case 'suppress':
+        return suppressEventCandidateBody(d.id, d.reason)
+    }
   }
 
   switch (d.action) {
@@ -142,9 +180,11 @@ export async function POST(req: Request): Promise<NextResponse> {
   let anyGrant = false
   let anyChange = false
   let anyRouted = false
+  let anyEvent = false
   for (const d of parsed.decisions) {
     if (d.kind === 'album') anyAlbum = true
     else if (d.kind === 'grant_change') anyChange = true
+    else if (d.kind === 'event_candidate') anyEvent = true
     else anyGrant = true
     let outcome: Outcome
     try {
@@ -161,6 +201,10 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (anyGrant) revalidatePath(GRANT_QUEUE_PATH)
   if (anyChange) revalidatePath(CHANGE_QUEUE_PATH)
   if (anyRouted) revalidatePath('/admin/grants/sources')
+  if (anyEvent) {
+    revalidatePath(EVENT_QUEUE_PATH)
+    revalidatePath('/admin/event-listings')
+  }
 
   return NextResponse.json({ results })
 }
