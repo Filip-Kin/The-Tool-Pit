@@ -18,10 +18,38 @@ describe('parseQueueRequest', () => {
         { kind: 'grant', id: 'g6', action: 'publish', overrides: { programs: 'frc,ftc' }, status: 'pending' },
         { kind: 'grant_change', id: 'c1', action: 'apply' },
         { kind: 'grant_change', id: 'c2', action: 'dismiss', note: 'Last year' },
+        { kind: 'event_candidate', id: 'e1', action: 'accept' },
+        { kind: 'event_candidate', id: 'e2', action: 'accept', values: { name: 'Rumble', costUsd: '40', latitude: '42.5' } },
+        { kind: 'event_candidate', id: 'e3', action: 'attach', listingRef: '2026miket' },
+        { kind: 'event_candidate', id: 'e4', action: 'duplicate', listingRef: '2026miket' },
+        { kind: 'event_candidate', id: 'e5', action: 'duplicate' },
+        { kind: 'event_candidate', id: 'e6', action: 'suppress', reason: 'Last year' },
       ],
     })
     expect('error' in out).toBe(false)
-    if (!('error' in out)) expect(out.decisions).toHaveLength(10)
+    if (!('error' in out)) expect(out.decisions).toHaveLength(16)
+  })
+
+  it('parses event candidate decisions and refuses a bad one', () => {
+    expect(
+      parseQueueRequest({
+        actor,
+        decisions: [{ kind: 'event_candidate', id: 'e1', action: 'accept', values: { name: 'Rumble', city: '' } }],
+      }),
+    ).toEqual({
+      actorName: 'review-bot',
+      decisions: [{ kind: 'event_candidate', id: 'e1', action: 'accept', values: { name: 'Rumble', city: '' } }],
+    })
+    const bad = (d: Record<string, unknown>) =>
+      expect(parseQueueRequest({ actor, decisions: [{ kind: 'event_candidate', id: 'e', ...d }] })).toHaveProperty('error')
+    bad({ action: 'accept', values: { venue: 'Typo key' } })
+    bad({ action: 'accept', values: { costUsd: 40 } })
+    bad({ action: 'accept', values: 'name=x' })
+    bad({ action: 'attach' })
+    bad({ action: 'suppress' })
+    bad({ action: 'suppress', reason: '  ' })
+    bad({ action: 'duplicate', listingRef: 3 })
+    bad({ action: 'publish' })
   })
 
   it('parses grant change decisions and refuses a bad one', () => {

@@ -24,6 +24,52 @@ export type QueueDecision =
     }
   | { kind: 'grant_change'; id: string; action: 'apply' }
   | { kind: 'grant_change'; id: string; action: 'dismiss'; note?: string }
+  | { kind: 'event_candidate'; id: string; action: 'accept'; values?: Record<string, string> }
+  | { kind: 'event_candidate'; id: string; action: 'attach'; listingRef: string }
+  | { kind: 'event_candidate'; id: string; action: 'duplicate'; listingRef?: string }
+  | { kind: 'event_candidate'; id: string; action: 'suppress'; reason: string }
+
+/**
+ * The field names the event candidate review form posts
+ * (app/admin/event-listings/candidates/page.tsx, plus the pin's hidden
+ * latitude/longitude). An accept's `values` may carry only these, so a typo
+ * fails the request instead of vanishing. A key left out keeps what the reader
+ * extracted; a key sent as '' clears it, as an emptied box does.
+ */
+export const EVENT_CANDIDATE_VALUE_KEYS = [
+  'name',
+  'program',
+  'hostTeamNumber',
+  'startDate',
+  'endDate',
+  'days',
+  'capacity',
+  'costUsd',
+  'costNote',
+  'eventStatus',
+  'registrationStatus',
+  'registrationOpensAt',
+  'registrationClosesAt',
+  'volunteerStatus',
+  'venueName',
+  'address',
+  'city',
+  'region',
+  'country',
+  'website',
+  'registrationUrl',
+  'volunteerUrl',
+  'teamListUrl',
+  'chiefDelphiUrl',
+  'contactEmail',
+  'tbaKey',
+  'parallelDivisions',
+  'notes',
+  'latitude',
+  'longitude',
+] as const
+
+const EVENT_VALUE_KEY_SET: ReadonlySet<string> = new Set(EVENT_CANDIDATE_VALUE_KEYS)
 
 export interface QueueDecisionResult {
   id: string
@@ -34,6 +80,10 @@ export interface QueueDecisionResult {
   slug?: string
   label?: string
   queued?: boolean
+  /** event_candidate accept: the listing written, published or not. */
+  listingId?: string
+  /** event_candidate accept: set when the listing was saved but not published, naming what is missing. */
+  pending?: string
 }
 
 export type ParsedQueueRequest = { actorName: string; decisions: QueueDecision[] } | { error: string }
@@ -139,6 +189,41 @@ export function parseQueueDecision(raw: unknown): QueueDecision | { error: strin
       return { kind: 'grant_change', id, action: 'dismiss', note }
     }
     return { error: `unknown grant_change action ${JSON.stringify(raw.action)}` }
+  }
+
+  if (raw.kind === 'event_candidate') {
+    switch (raw.action) {
+      case 'accept': {
+        let values: Record<string, string> | undefined
+        if (raw.values !== undefined && raw.values !== null) {
+          if (!isObj(raw.values)) return { error: 'values must be an object of strings' }
+          values = {}
+          for (const [k, v] of Object.entries(raw.values)) {
+            if (!EVENT_VALUE_KEY_SET.has(k)) return { error: `unknown values key ${JSON.stringify(k)}` }
+            if (typeof v !== 'string') return { error: `values.${k} must be a string` }
+            values[k] = v
+          }
+        }
+        return { kind: 'event_candidate', id, action: 'accept', values }
+      }
+      case 'attach': {
+        const listingRef = nonEmpty(raw.listingRef)
+        if (!listingRef) return { error: 'event_candidate attach needs listingRef' }
+        return { kind: 'event_candidate', id, action: 'attach', listingRef }
+      }
+      case 'duplicate': {
+        const listingRef = optional('listingRef')
+        if (listingRef === false) return { error: 'listingRef must be a string' }
+        return { kind: 'event_candidate', id, action: 'duplicate', listingRef }
+      }
+      case 'suppress': {
+        const reason = nonEmpty(raw.reason)
+        if (!reason) return { error: 'event_candidate suppress needs reason' }
+        return { kind: 'event_candidate', id, action: 'suppress', reason }
+      }
+      default:
+        return { error: `unknown event_candidate action ${JSON.stringify(raw.action)}` }
+    }
   }
 
   return { error: `unknown kind ${JSON.stringify(raw.kind)}` }
