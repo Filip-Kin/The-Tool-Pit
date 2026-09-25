@@ -35,7 +35,7 @@ import { and, desc, eq, getDb, grantChanges, grantCycles, grantFunders, grants, 
 import { isEntranceUrl, isThirdPartyGrantUrl } from '@the-tool-pit/db/grant-urls'
 import { findInfoPage } from './info-page.js'
 import { renderedHtml } from './apply-route.js'
-import { awardNoteAddsFacts, eligibilityChanged, deadlineNoteIsWhole, applicationUrlIsNew, deadlineMovesTheDay } from './change-filters.js'
+import { awardNoteAddsFacts, eligibilityChanged, applicationUrlIsNew, wholeDeadlineNote } from './change-filters.js'
 import { archiveCopy } from './archive.js'
 import type { ExtractedGrantFields, Grant, GrantCycle } from '@the-tool-pit/db'
 import { politeFetch } from '../connectors/base.js'
@@ -46,7 +46,7 @@ import { extractGrantFields, type GrantExtractionResult } from './extract.js'
 import { deriveCycleStatus } from './cadence.js'
 import { DATE_ONLY_NOTE, endOfDayIn, funderTimeZone } from '@the-tool-pit/db/grant-dates'
 import { enqueueGrantAlert, grantUrl } from './alerts.js'
-import { proveChange, reasoningWithProof } from './change-proof.js'
+import { MAX_AWARD_FACTOR, proveChange, reasoningWithProof } from './change-proof.js'
 import { askSiteToDecideGrantChanges } from '../site/queue-decisions.js'
 
 /**
@@ -142,26 +142,257 @@ function toDeadlineDate(value: string): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
-/**
- * Has the deadline actually moved?
- *
- * Compared at the precision the page offered. A page that says only
- * "15 January 2027" cannot contradict a stored 11:59 pm ET on that day, so a
- * date-only read is compared day to day. A page that states a time is compared
- * to the instant, because 5 pm and 11:59 pm on the same day is a real change a
- * team needs to see.
- */
-function deadlineDiffers(current: Date | null, extracted: string): boolean {
-  const next = toDeadlineDate(extracted)
-  if (!next) return false
-  if (!current) return true
-  if (isDateOnly(extracted)) return usCalendarDate(current) !== extracted.trim()
-  return current.getTime() !== next.getTime()
-}
-
 /** grant_cycles.opens_at is a DATE column, so drizzle hands back 'YYYY-MM-DD'. */
 function opensDiffers(current: string | null, extracted: string): boolean {
   return (current ?? '') !== extracted.trim().slice(0, 10)
+}
+
+// #endregion
+
+// #region noise rules
+//
+// A review of 15 pending rows on 2026-09-25 found 11 the monitor should never
+// have filed. Each rule below is one of those causes, pure, and tested in
+// tests/grant-monitor-noise.test.ts with the real rows.
+
+/** The columns of a stored cycle the noise rules read. */
+export type StoredCycle = Pick<GrantCycle, 'cycleYear' | 'opensAt' | 'deadlineAt' | 'deadlineNote' | 'status'>
+
+/**
+ * The calendar day a proposed deadline names when it carries no clock time:
+ * a bare "YYYY-MM-DD", or exact UTC midnight (how the extractor and this file
+ * write a date with no time). Null for a value with a real time of day.
+ */
+export function proposedDay(value: string): string | null {
+  const s = value.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})T00:00(?::00(?:\.0+)?)?(?:Z|[+-]00:?00)$/)
+  return m ? m[1] : null
+}
+
+/** The calendar day an instant falls on in `zone`. */
+export function dayInZone(instant: Date, zone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(instant)
+}
+
+/** The calendar day a proposed deadline names in `zone`, time or no time. Null when it does not parse. */
+function proposedDeadlineDay(value: string, zone: string): string | null {
+  const day = proposedDay(value)
+  if (day) return day
+  const ms = Date.parse(value.trim())
+  return Number.isNaN(ms) ? null : dayInZone(new Date(ms), zone)
+}
+
+/**
+ * Rule 1, same instant in another form. A proposed deadline equals the stored
+ * one when it names the same calendar day in the grant's zone (grant-dates.ts
+ * funderTimeZone). "2026-11-16" is the stored 2026-11-17T04:59Z (23:59 on the
+ * 16th in New York); "2026-04-30T00:00:00.000Z" is a stored 20:00Z on the 30th
+ * (3 pm Central). A time on the same day is the extractor guessing a clock,
+ * not a move, so it is equal too.
+ */
+export function sameDeadline(proposed: string, stored: Date | null, zone: string): boolean {
+  if (!stored) return false
+  const day = proposedDeadlineDay(proposed, zone)
+  return day !== null && day === dayInZone(stored, zone)
+}
+
+/**
+ * A deadline proposal worth filing: it parses, it is not the round's opening
+ * date read as the close, and it moves the day (rule 1).
+ */
+export function deadlineIsNews(proposed: string, stored: Date | null, opensAt: string | null, zone: string): boolean {
+  const day = proposedDeadlineDay(proposed, zone)
+  if (!day) return false
+  if (opensAt && day === opensAt.slice(0, 10)) return false
+  return !sameDeadline(proposed, stored, zone)
+}
+
+/**
+ * Rule 2, same window under another year. Proposed dates for year Y that equal
+ * a cycle of another year are that cycle, read off the page with a different
+ * year label (cycle.2026 opens 2025-08-01, deadline 2026-02-28, beside a
+ * stored 2025 cycle with those dates). Every proposed date the other cycle
+ * holds must match, and at least one must.
+ */
+export function cycleWithSameWindow(
+  year: number,
+  dates: { opensAt?: string | null; deadlineAt?: string | null },
+  cycles: readonly StoredCycle[],
+  zone: string,
+): StoredCycle | null {
+  const opens = dates.opensAt?.trim().slice(0, 10) || null
+  const deadline = dates.deadlineAt?.trim() || null
+  if (!opens && !deadline) return null
+  for (const c of cycles) {
+    if (c.cycleYear === year) continue
+    let matched = 0
+    if (deadline) {
+      if (!sameDeadline(deadline, c.deadlineAt, zone)) continue
+      matched++
+    }
+    if (opens && c.opensAt) {
+      if (c.opensAt.slice(0, 10) !== opens) continue
+      matched++
+    }
+    if (matched > 0) return c
+  }
+  return null
+}
+
+/**
+ * Rule 3, status already there. The status a cycle shows is the one its
+ * stored dates derive (grant-dates.ts rule 1), falling back to the stored
+ * column; a proposal equal to either changes nothing a team sees.
+ */
+export function statusIsNews(proposed: string, cycle: StoredCycle | null | undefined, now: Date): boolean {
+  if (!cycle) return true
+  if (proposed === cycle.status) return false
+  return proposed !== deriveCycleStatus(cycle.opensAt, cycle.deadlineAt, now, cycle.status)
+}
+
+/**
+ * Rule 5, a past round. A deadline already gone, for a year older than the
+ * grant's newest stored cycle, is history: "(for 2025-2026 grant cycle)"
+ * read as cycle.2026 on a grant tracking 2027.
+ */
+export function isPastRound(year: number, deadline: string | Date | null | undefined, cycles: readonly StoredCycle[], now: Date): boolean {
+  if (!deadline) return false
+  const newest = cycles.reduce((max, c) => Math.max(max, c.cycleYear), Number.NEGATIVE_INFINITY)
+  if (!(year < newest)) return false
+  const at = deadline instanceof Date ? deadline : toDeadlineDate(deadline)
+  return at !== null && at.getTime() < now.getTime()
+}
+
+/** "per team", "up to $X per", "grants of": the amount is the size of one award. */
+const PER_AWARD_CUE_RE = /\bper (team|school|program(me)?|organi[sz]ation|applicant|recipient|project|award|grant(ee)?|club|chapter|site|classroom)\b|\bup to [$€£]?\s?[\d,.]+\s?(k|thousand)?\s+(each|per)\b|\b(grants?|awards?) of\b/i
+/** "total", "pool", "of the grant funds", "budget", "funds will be used": the amount is a whole programme's money. */
+const POOL_CUE_RE = /\b(total(s|ing|ling)?|pool(ed)?|of the (grant )?funds?|budget(ed)?|funds? will be used)\b/i
+
+/**
+ * Rule 6, an award from another programme on the page. A move of more than
+ * change-proof.ts's MAX_AWARD_FACTOR is filed only when its quote says the
+ * amount is per award and nothing in it says pool: "up to $100,000 of the
+ * grant funds will be used to provide grants to elementary robotics programs"
+ * is a pool, and 3,500 -> 100,000 is not this grant's award.
+ */
+export function awardMoveIsPerAward(oldValue: unknown, newValue: unknown, quote: string | null | undefined): boolean {
+  const old = typeof oldValue === 'number' ? oldValue : null
+  const next = typeof newValue === 'number' ? newValue : null
+  if (old === null || next === null || old <= 0 || next <= 0) return true
+  if (Math.max(next / old, old / next) <= MAX_AWARD_FACTOR) return true
+  const q = quote ?? ''
+  return PER_AWARD_CUE_RE.test(q) && !POOL_CUE_RE.test(q)
+}
+
+/**
+ * The words behind a proposed amount: the extractor's award note when it
+ * carries the figure, else every page sentence that writes it. Empty when
+ * neither does, which rule 6 reads as "no per-award cue".
+ */
+export function awardQuote(amount: number, awardNotes: string | null | undefined, pageText: string): string {
+  const forms = amountForms(amount)
+  const holds = (s: string) => forms.some((f) => s.includes(f))
+  if (awardNotes && holds(awardNotes)) return awardNotes
+  const sentences = pageText.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z0-9$])/)
+  return sentences.filter(holds).join(' ')
+}
+
+function amountForms(n: number): string[] {
+  const plain = String(Math.round(n))
+  const grouped = Math.round(n).toLocaleString('en-US')
+  const out = new Set([grouped, `$${plain}`])
+  if (n >= 1000 && n % 1000 === 0) out.add(`$${n / 1000}k`).add(`$${n / 1000}K`).add(`$${n / 1000},000`)
+  if (n >= 1_000_000 && n % 100_000 === 0) out.add(`$${n / 1_000_000} million`)
+  return [...out]
+}
+
+export interface NoiseContext {
+  /** The grant's cycles as stored when the rows are filed, not when the pass began. */
+  cycles: readonly StoredCycle[]
+  /** funderTimeZone(grant). */
+  zone: string
+  now: Date
+  /** The extractor's award wording, for rule 6. */
+  awardNotes?: string | null
+  /** The snapshot's page text, for rule 6. */
+  pageText: string
+}
+
+export interface DroppedChange {
+  field: string
+  reason: string
+}
+
+/**
+ * The last gate before grant_changes: every rule above over the proposals of
+ * one pass, against the cycles stored at filing time. Rows this job already
+ * wrote (alreadyApplied) are audit records and pass untouched. A kept
+ * deadline note comes back trimmed to its sentence (rule 4).
+ */
+export function dropMonitorNoise(proposed: readonly PendingChange[], ctx: NoiseContext): { kept: PendingChange[]; dropped: DroppedChange[] } {
+  const dropped: DroppedChange[] = []
+  const drop = (c: PendingChange, reason: string) => { dropped.push({ field: c.field, reason }); return false }
+  const cycleOf = (year: number) => ctx.cycles.find((c) => c.cycleYear === year)
+  const yearOf = (field: string) => { const m = field.match(/^cycle\.(\d{4})\.(\w+)$/); return m ? { year: Number(m[1]), column: m[2] } : null }
+
+  // Year-level verdicts first: a whole proposed round is either another
+  // year's round (rule 2) or history (rule 5).
+  const yearVerdict = new Map<number, string | null>()
+  for (const c of proposed) {
+    const p = yearOf(c.field)
+    if (!p || yearVerdict.has(p.year)) continue
+    const rows = proposed.filter((r) => !r.alreadyApplied && r.field.startsWith(`cycle.${p.year}.`))
+    const value = (column: string) => { const r = rows.find((x) => x.field === `cycle.${p.year}.${column}`); return typeof r?.newValue === 'string' ? r.newValue : null }
+    const dates = { opensAt: value('opensAt'), deadlineAt: value('deadlineAt') }
+    const twin = cycleWithSameWindow(p.year, dates, ctx.cycles, ctx.zone)
+    if (twin) { yearVerdict.set(p.year, `dates are the stored ${twin.cycleYear} cycle's`); continue }
+    const deadline = dates.deadlineAt ?? cycleOf(p.year)?.deadlineAt ?? null
+    if (isPastRound(p.year, deadline, ctx.cycles, ctx.now)) { yearVerdict.set(p.year, `past ${p.year} round, the grant already tracks a later one`); continue }
+    yearVerdict.set(p.year, null)
+  }
+
+  const firstPass = proposed.filter((c) => {
+    if (c.alreadyApplied) return true
+    const p = yearOf(c.field)
+    if (p) {
+      const verdict = yearVerdict.get(p.year)
+      if (verdict) return drop(c, verdict)
+      const stored = cycleOf(p.year)
+      if (p.column === 'deadlineAt' && typeof c.newValue === 'string' && stored && !deadlineIsNews(c.newValue, stored.deadlineAt, stored.opensAt, ctx.zone)) {
+        return drop(c, 'same deadline as stored')
+      }
+      if (p.column === 'opensAt' && typeof c.newValue === 'string' && stored && !opensDiffers(stored.opensAt, c.newValue)) {
+        return drop(c, 'same opening date as stored')
+      }
+      if (p.column === 'deadlineNote' && typeof c.newValue === 'string') {
+        const whole = wholeDeadlineNote(c.newValue)
+        if (!whole) return drop(c, 'note is a fragment, no whole sentence in it')
+        if (stored && whole === stored.deadlineNote?.trim()) return drop(c, 'same note as stored')
+        c.newValue = whole
+      }
+      if (p.column === 'status' && typeof c.newValue === 'string' && !statusIsNews(c.newValue, stored, ctx.now)) {
+        return drop(c, `status is already ${c.newValue}`)
+      }
+      return true
+    }
+    if ((c.field === 'awardMin' || c.field === 'awardMax') && typeof c.newValue === 'number') {
+      if (!awardMoveIsPerAward(c.oldValue, c.newValue, awardQuote(c.newValue, ctx.awardNotes, ctx.pageText))) {
+        return drop(c, `award moves more than ${MAX_AWARD_FACTOR}x with no per-award wording`)
+      }
+    }
+    return true
+  })
+
+  // Rule 3, second half: a status derived from the page's dates stands only
+  // when one of those dates is itself still being filed.
+  const kept = firstPass.filter((c) => {
+    if (!c.derivedFromDates || c.alreadyApplied) return true
+    const p = yearOf(c.field)
+    const dateKept = p && firstPass.some((r) => r.field === `cycle.${p.year}.deadlineAt` || r.field === `cycle.${p.year}.opensAt`)
+    return dateKept ? true : drop(c, 'status rests on a date that was not filed')
+  })
+  return { kept, dropped }
 }
 
 // #endregion
@@ -177,6 +408,8 @@ interface PendingChange {
   autoApplicable?: boolean
   /** Set when this row records something this job already wrote. */
   alreadyApplied?: boolean
+  /** A status derived from the page's dates, not stated by the page. */
+  derivedFromDates?: boolean
 }
 
 /**
@@ -368,11 +601,12 @@ function diffCycleFields(
   fields: ExtractedGrantFields,
   reasoning: string,
   now: Date,
+  zone: string,
 ): PendingChange[] {
   const out: PendingChange[] = []
   const prefix = `cycle.${cycle.cycleYear}`
 
-  if (typeof fields.deadlineAt === 'string' && deadlineDiffers(cycle.deadlineAt, fields.deadlineAt) && deadlineMovesTheDay(fields.deadlineAt, cycle.deadlineAt, cycle.opensAt)) {
+  if (typeof fields.deadlineAt === 'string' && deadlineIsNews(fields.deadlineAt, cycle.deadlineAt, cycle.opensAt, zone)) {
     out.push({
       field: `${prefix}.deadlineAt`,
       oldValue: cycle.deadlineAt?.toISOString() ?? null,
@@ -390,16 +624,12 @@ function diffCycleFields(
     })
   }
 
-  if (
-    typeof fields.deadlineNote === 'string' &&
-    fields.deadlineNote.trim() &&
-    fields.deadlineNote !== cycle.deadlineNote &&
-    deadlineNoteIsWhole(fields.deadlineNote)
-  ) {
+  const note = typeof fields.deadlineNote === 'string' ? wholeDeadlineNote(fields.deadlineNote) : null
+  if (note && note !== cycle.deadlineNote?.trim()) {
     out.push({
       field: `${prefix}.deadlineNote`,
       oldValue: cycle.deadlineNote,
-      newValue: fields.deadlineNote,
+      newValue: note,
       reasoning,
     })
   }
@@ -432,6 +662,7 @@ function diffCycleFields(
         oldValue: cycle.status,
         newValue: derived,
         reasoning: `${reasoning} (status derived from the dates on the page)`,
+        derivedFromDates: true,
       })
     }
   }
@@ -821,10 +1052,11 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
     proposed.push(...diffGrantFields(grant, fields, reasoning, previousEligibility))
 
     const cycleYear = resolveCycleYear(fields, now)
+    const zone = funderTimeZone(grant)
     const existing = cycles.find((c) => c.cycleYear === cycleYear)
 
     if (existing) {
-      proposed.push(...diffCycleFields(existing, fields, reasoning, now))
+      proposed.push(...diffCycleFields(existing, fields, reasoning, now, zone))
     } else if ((typeof fields.deadlineAt === 'string' || typeof fields.opensAt === 'string') && (cycleYear >= now.getUTCFullYear() || cycles.length === 0)) {
       // A past year is a backfill, and a backfill next to a round already on
       // file is a stale page, not news.
@@ -846,7 +1078,7 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
       // extractor. The insert branch in changes/actions.ts creates the cycle
       // on first apply, so the first column applied makes the row.
       const opensAt = typeof fields.opensAt === 'string' ? fields.opensAt.trim().slice(0, 10) : null
-      const deadlineAt = typeof fields.deadlineAt === 'string' && deadlineMovesTheDay(fields.deadlineAt, null, opensAt) ? toDeadlineDate(fields.deadlineAt) : null
+      const deadlineAt = typeof fields.deadlineAt === 'string' && deadlineIsNews(fields.deadlineAt, null, opensAt, zone) ? toDeadlineDate(fields.deadlineAt) : null
       const isFutureYear = cycleYear >= now.getUTCFullYear()
       const prefix = `cycle.${cycleYear}`
 
@@ -875,11 +1107,12 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
         })
       }
 
-      if (typeof fields.deadlineNote === 'string' && deadlineNoteIsWhole(fields.deadlineNote)) {
+      const note = typeof fields.deadlineNote === 'string' ? wholeDeadlineNote(fields.deadlineNote) : null
+      if (note) {
         proposed.push({
           field: `${prefix}.deadlineNote`,
           oldValue: null,
-          newValue: fields.deadlineNote.trim(),
+          newValue: note,
           reasoning: why,
         })
       }
@@ -943,6 +1176,22 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
     }
   }
 
+  // The noise rules (see the region above), against the cycles as stored NOW:
+  // the pass began with an older read, and the deadline-proof write above
+  // may have added a round since.
+  const storedCycles = await db
+    .select({ cycleYear: grantCycles.cycleYear, opensAt: grantCycles.opensAt, deadlineAt: grantCycles.deadlineAt, deadlineNote: grantCycles.deadlineNote, status: grantCycles.status })
+    .from(grantCycles)
+    .where(eq(grantCycles.grantId, grant.id))
+  const { kept, dropped } = dropMonitorNoise(proposed, {
+    cycles: storedCycles,
+    zone: funderTimeZone(grant),
+    now,
+    awardNotes: fields.awardNotes,
+    pageText: text.slice(0, SNAPSHOT_TEXT_LIMIT),
+  })
+  for (const d of dropped) notes.push(`not filed, ${d.field}: ${d.reason}`)
+
   // Do not re-file something already sitting in the queue. A page that
   // flip-flops between two wordings would otherwise hand a reviewer the same
   // row over and over.
@@ -953,10 +1202,10 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
 
   const pendingKeys = new Set(alreadyPending.map((c) => `${c.field} ${JSON.stringify(c.newValue ?? null)}`))
 
-  const toInsert = proposed.filter(
+  const toInsert = kept.filter(
     (c) => !pendingKeys.has(`${c.field} ${JSON.stringify(c.newValue ?? null)}`),
   )
-  const duplicates = proposed.length - toInsert.length
+  const duplicates = kept.length - toInsert.length
   if (duplicates > 0) notes.push(`${duplicates} change(s) already pending review, not re-filed`)
 
   // Proven or not, decided against the text the snapshot keeps, so the

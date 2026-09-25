@@ -61,14 +61,45 @@ export function eligibilityChanged(next: string, previous: string | null): boole
   return false
 }
 
-/** A deadline note is a sentence about the closing time, not a fragment cut mid-sentence. */
+const TIME_CUE_RE = /\b\d{1,2}(:\d{2})?\s?(a\.?m\.?|p\.?m\.?)(?![a-z])|\b(noon|midnight|eastern|pacific|central|mountain|et|pt|ct|mt)\b/i
+/** Where a sentence or clause may start: a capital, a digit, or an opening quote or bracket. */
+const CLAUSE_START_RE = /^["“(]?[A-Z0-9]/
+/** A sentence end, closing quote or bracket included. */
+const SENTENCE_END_RE = /[.!?]["”)]?$/
+
+/**
+ * A deadline note as a whole sentence or clause, or null.
+ *
+ * The extractor copies a window of page text, and a window is cut wherever
+ * its character count ran out: "ment via Memo: July 2026 Grant Application
+ * Submitted online no later than September 30, 2026, at 5:00 p.m. Funds
+ * expend" (2026-09-25 review). A note that starts mid-word is trimmed to the
+ * next sentence or clause start (after . ! ? : ;), one that stops mid-sentence
+ * back to its last sentence end. What is left must still say something: a
+ * clock time or zone, or six words.
+ */
+export function wholeDeadlineNote(note: string): string | null {
+  let t = note.replace(/\s+/g, ' ').trim()
+  if (!CLAUSE_START_RE.test(t)) {
+    const m = t.match(/[.!?:;]["”)]?\s+(?=["“(]?[A-Z0-9])/)
+    if (!m || m.index === undefined) return null
+    t = t.slice(m.index + m[0].length)
+  }
+  if (!SENTENCE_END_RE.test(t)) {
+    const ends = [...t.matchAll(/[.!?]["”)]?(?=\s)/g)]
+    const last = ends[ends.length - 1]
+    if (!last || last.index === undefined) return null
+    t = t.slice(0, last.index + last[0].length)
+  }
+  t = t.trim()
+  if (t.length < 12) return null
+  if (TIME_CUE_RE.test(t)) return t
+  return t.split(/\s+/).length >= 6 ? t : null
+}
+
+/** A deadline note is a whole sentence about the closing time, not a fragment cut mid-sentence. */
 export function deadlineNoteIsWhole(note: string): boolean {
-  const t = note.trim()
-  if (t.length < 12) return false
-  if (/\b\d{1,2}(:\d{2})?\s?(a\.?m\.?|p\.?m\.?)\b|\b(noon|midnight|eastern|pacific|central|mountain|et|pt|ct|mt)\b/i.test(t)) return true
-  if (!/^[A-Z"“(]/.test(t)) return false
-  if (!/[.!?]$/.test(t)) return false
-  return t.split(/\s+/).length >= 6
+  return wholeDeadlineNote(note) === note.replace(/\s+/g, ' ').trim()
 }
 
 function keyOf(url: string): string {

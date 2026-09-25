@@ -16,7 +16,7 @@ describe('monitor proposals worth a person', () => {
   })
   it('deadline note: a sentence or a time of day, not a fragment', () => {
     expect(deadlineNoteIsWhole('Applications close at 5:00 pm Eastern.')).toBe(true)
-    expect(deadlineNoteIsWhole('by 11:59 PM ET')).toBe(true)
+    expect(deadlineNoteIsWhole('by 11:59 PM ET')).toBe(false)
     expect(deadlineNoteIsWhole('and returned to the office no later than')).toBe(false)
     expect(deadlineNoteIsWhole('Proposals are reviewed in the order received.')).toBe(true)
   })
