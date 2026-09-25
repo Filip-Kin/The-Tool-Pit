@@ -47,6 +47,7 @@ import {
   runTeamListParser,
   slotIndicesLeaked,
 } from './team-list-parser.js'
+import { isChiefDelphiThread, readChiefDelphiRoster } from './chief-delphi-roster.js'
 
 const TBA_BASE = 'https://www.thebluealliance.com/api/v3'
 
@@ -460,8 +461,46 @@ export async function processRosterRefreshJob(
 
       let teams: RosterTeam[] | null = null
       let via: string
+      // Where this run's roster was read, for the snapshot. A Chief Delphi
+      // thread records the exact post, so a person can see which reply it used.
+      let sourceUrl = url
 
-      if (!hasParser || urlChanged) {
+      if (isChiefDelphiThread(url)) {
+        // A Chief Delphi thread: the organiser posts each new roster as a NEW
+        // reply, so a stored DOM parser does not fit. Pick the newest roster post
+        // every run and read it (see chief-delphi-roster.ts). No parser is stored.
+        const cd = await readChiefDelphiRoster(url, listing.name)
+        if (!cd) {
+          stats.failed++
+          console.warn(`[cd-roster] ${listing.name}: no readable roster post in ${url}`)
+          continue
+        }
+        sourceUrl = cd.postUrl
+        const suspect = suspectRosterChange(previousTeams, cd.teams)
+        if (suspect.suspect) {
+          // Same rule as a suspect site parse: keep the last good count, and
+          // store this read REJECTED so it never becomes the next baseline.
+          await db.insert(eventRosterSnapshots).values({
+            eventListingId: listing.id,
+            sourceUrl,
+            httpStatus: 200,
+            teamCount: cd.teams.length,
+            teams: cd.teams,
+            contentHash: hashTeams(cd.teams),
+            changed: false,
+            day: siteDay,
+            status: 'rejected',
+            error: `suspect roster kept out: ${suspect.reason}`,
+          })
+          stats.failed++
+          console.warn(
+            `[cd-roster] ${listing.name}: post #${cd.postNumber} SUSPECT (${suspect.reason}); kept last good count`,
+          )
+          continue
+        }
+        teams = cd.teams
+        via = `Chief Delphi post #${cd.postNumber} (${cd.method})`
+      } else if (!hasParser || urlChanged) {
         // No parser, or the page moved. Write one and prove it before trusting
         // it; generate retries ten times and pings Discord on total failure.
         const gen = await generateTeamListParser({ eventName: listing.name, url })
@@ -566,7 +605,7 @@ export async function processRosterRefreshJob(
 
       await db.insert(eventRosterSnapshots).values({
         eventListingId: listing.id,
-        sourceUrl: url,
+        sourceUrl,
         httpStatus: 200,
         teamCount: teams.length,
         teams,
