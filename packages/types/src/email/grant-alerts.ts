@@ -14,125 +14,145 @@
  *   2. Every email carries a working preferences link. There is no
  *      "unsubscribe by replying" and no dead footer.
  */
-import { formatAward, formatDeadline, layout, type EmailBody, type EmailFact } from './layout'
+import {
+  formatAward,
+  formatDeadline,
+  layout,
+  type EmailBody,
+  type EmailListItem,
+  type EmailSection,
+} from './layout'
 
-// #region new match
+// #region daily digest
 
-export interface NewMatchEmailInput {
+/** Most items one digest section lists before it links to the rest. */
+export const GRANT_DIGEST_SECTION_CAP = 10
+
+/** One grant in a digest section. Dates are Dates, parsed by the caller. */
+export interface GrantDigestItem {
   grantName: string
   grantUrl: string
   funderName?: string | null
-  teamLabel?: string | null
-  /** 'eligible' or 'likely'. Anything else should not be emailed. */
-  verdict: string
   awardMin?: number | null
   awardMax?: number | null
   awardCurrency?: string | null
   deadlineAt?: Date | null
   deadlineNote?: string | null
-  /** Requirement labels the team passes. Shown so the match explains itself. */
-  passedReasons?: string[]
-  /** Requirement labels we could not test, so the team knows what is unproven. */
-  unknownReasons?: string[]
+}
+
+/** Everything one digest says about one team profile. */
+export interface GrantDigestGroup {
+  /** e.g. "FRC team 3476". Null for rows with no team, e.g. a watched grant. */
+  teamLabel: string | null
+  /** Deadline reminders. Every item here has a deadlineAt. */
+  closingSoon: GrantDigestItem[]
+  newMatches: GrantDigestItem[]
+}
+
+export interface GrantDigestEmailInput {
+  groups: GrantDigestGroup[]
+  /** Send time, for the days-left count. */
+  now: Date
+  /** Where "and N more" points. */
+  moreUrl: string
   preferencesUrl: string
   /** No-login "unsubscribe from everything" link for this recipient. */
   unsubscribeUrl?: string
 }
 
-export function renderNewMatchEmail(input: NewMatchEmailInput): EmailBody {
-  const who = input.teamLabel ? `${input.teamLabel} looks` : 'You look'
-  const strength = input.verdict === 'eligible' ? 'eligible for' : 'a likely fit for'
+function daysLeftLabel(at: Date, now: Date): string {
+  const days = Math.max(0, Math.ceil((at.getTime() - now.getTime()) / 86_400_000))
+  return days <= 0 ? 'Closes today' : days === 1 ? '1 day left' : `${days} days left`
+}
 
-  const paragraphs = [`${who} ${strength} ${input.grantName}.`]
+function closingItem(item: GrantDigestItem, now: Date): EmailListItem {
+  const at = item.deadlineAt as Date
+  const when = `${daysLeftLabel(at, now)} · ${formatDeadline(at)}`
+  // The funder's own wording stays verbatim beside the date: "5pm PT on the
+  // Friday" and our converted timestamp are both real and both matter.
+  const details = [item.deadlineNote ? `${when} · ${item.deadlineNote}` : when]
+  if (item.funderName) details.push(item.funderName)
+  return { title: item.grantName, url: item.grantUrl, details }
+}
 
-  if (input.passedReasons?.length) {
-    paragraphs.push(`Why: ${input.passedReasons.slice(0, 4).join('; ')}.`)
+function newMatchItem(item: GrantDigestItem): EmailListItem {
+  const award = formatAward(item.awardMin ?? null, item.awardMax ?? null, item.awardCurrency ?? 'USD')
+  const first = [item.funderName, award].filter(Boolean).join(' · ')
+  const details = first ? [first] : []
+  if (item.deadlineAt) details.push(`Deadline ${formatDeadline(item.deadlineAt)}`)
+  return { title: item.grantName, url: item.grantUrl, details }
+}
+
+/** One capped section, with the "and N more" line when the cap cut it. */
+function capped(
+  heading: string,
+  level: 2 | 3,
+  items: EmailListItem[],
+  moreUrl: string,
+): EmailSection | null {
+  if (items.length === 0) return null
+  const extra = items.length - GRANT_DIGEST_SECTION_CAP
+  return {
+    heading,
+    level,
+    items: items.slice(0, GRANT_DIGEST_SECTION_CAP),
+    more: extra > 0 ? { label: `and ${extra} more`, url: moreUrl } : undefined,
   }
-  if (input.unknownReasons?.length) {
-    // Named, never hidden. An untested requirement is the difference between
-    // "you qualify" and "we could not check", and the team has to know which.
-    paragraphs.push(
-      `We could not check ${input.unknownReasons.slice(0, 3).join('; ')}. Fill those in on your team profile and the match gets firmer.`,
-    )
-  }
-  paragraphs.push(
-    'Check the funder’s own page before you apply. We match on what we have recorded, and the funder is always the last word.',
-  )
+}
 
-  const facts: EmailFact[] = []
-  if (input.funderName) facts.push({ label: 'Funder', value: input.funderName })
-  const award = formatAward(input.awardMin ?? null, input.awardMax ?? null, input.awardCurrency ?? 'USD')
-  if (award) facts.push({ label: 'Award', value: award })
-  if (input.deadlineAt) facts.push({ label: 'Deadline', value: formatDeadline(input.deadlineAt) })
-  if (input.deadlineNote) facts.push({ label: 'Funder’s wording', value: input.deadlineNote })
+/** "Grants for FRC team 3476", "Grants for FRC team 3476 and FRC team 254", "Grants for 3 teams". */
+function digestTitle(groups: GrantDigestGroup[]): string {
+  const labels = groups.map((g) => g.teamLabel).filter((l): l is string => !!l)
+  if (labels.length === 0) return 'Grants'
+  if (labels.length === 1) return `Grants for ${labels[0]}`
+  if (labels.length === 2) return `Grants for ${labels[0]} and ${labels[1]}`
+  return `Grants for ${labels.length} teams`
+}
+
+/**
+ * The one daily grant email: every due match and deadline reminder for one
+ * person, grouped by team profile. Replaces one email per alert row, which sent
+ * a new profile's mentor 35 emails in a few minutes on its first sweep.
+ */
+export function renderGrantDigestEmail(input: GrantDigestEmailInput): EmailBody {
+  const groups = input.groups.filter((g) => g.closingSoon.length + g.newMatches.length > 0)
+  const multi = groups.length > 1
+
+  const sections: EmailSection[] = []
+  let newCount = 0
+  let closingCount = 0
+
+  for (const group of groups) {
+    const closing = [...group.closingSoon]
+      .filter((i) => i.deadlineAt)
+      .sort((a, b) => (a.deadlineAt as Date).getTime() - (b.deadlineAt as Date).getTime())
+    newCount += group.newMatches.length
+    closingCount += closing.length
+
+    const level = multi ? 3 : 2
+    if (multi) sections.push({ heading: group.teamLabel ?? 'Other grants', level: 2, items: [] })
+    const soon = capped('Closing soon', level, closing.map((i) => closingItem(i, input.now)), input.moreUrl)
+    const fresh = capped('New matches', level, group.newMatches.map(newMatchItem), input.moreUrl)
+    if (soon) sections.push(soon)
+    if (fresh) sections.push(fresh)
+  }
+
+  const title = digestTitle(groups)
+  const counts = [newCount ? `${newCount} new` : '', closingCount ? `${closingCount} closing soon` : '']
+    .filter(Boolean)
+    .join(', ')
+  const subject = counts ? `${title}: ${counts}` : title
 
   const { html, text } = layout({
-    heading: `New grant match: ${input.grantName}`,
-    paragraphs,
-    facts,
-    cta: { label: 'Open the listing', url: input.grantUrl },
-    reason: 'You are getting this because grant matching is on for your team.',
+    heading: title,
+    paragraphs: [],
+    sections,
+    reason: 'Daily grant digest: team profiles and watched grants',
     preferencesUrl: input.preferencesUrl,
     unsubscribeUrl: input.unsubscribeUrl,
   })
 
-  return { subject: `New grant match: ${input.grantName}`, html, text }
-}
-
-// #endregion
-
-// #region deadline
-
-export interface DeadlineEmailInput {
-  grantName: string
-  grantUrl: string
-  funderName?: string | null
-  /** Real days remaining, computed from the deadline, not the reminder offset. */
-  daysLeft: number
-  deadlineAt: Date
-  deadlineNote?: string | null
-  applicationUrl?: string | null
-  /** When a human last confirmed these dates against the funder's page. */
-  verifiedAt?: Date | null
-  preferencesUrl: string
-  /** No-login "unsubscribe from everything" link for this recipient. */
-  unsubscribeUrl?: string
-}
-
-export function renderDeadlineEmail(input: DeadlineEmailInput): EmailBody {
-  const days =
-    input.daysLeft <= 0 ? 'Closes today' : input.daysLeft === 1 ? '1 day left' : `${input.daysLeft} days left`
-
-  const paragraphs = [`${days} to apply for ${input.grantName}.`]
-
-  if (input.verifiedAt) {
-    paragraphs.push(
-      `These dates were last confirmed against the funder’s page on ${formatDeadline(input.verifiedAt).split(',')[1]?.trim() ?? formatDeadline(input.verifiedAt)}.`,
-    )
-  } else {
-    // We only ever remind on a funder-published date, so this branch means the
-    // date is published but nobody has re-checked it lately. Say so plainly.
-    paragraphs.push('Nobody has re-checked this date recently, so open the funder’s page before you rely on it.')
-  }
-
-  const facts: EmailFact[] = [{ label: 'Deadline', value: formatDeadline(input.deadlineAt) }]
-  if (input.deadlineNote) facts.push({ label: 'Funder’s wording', value: input.deadlineNote })
-  if (input.funderName) facts.push({ label: 'Funder', value: input.funderName })
-
-  const { html, text } = layout({
-    heading: `${days}: ${input.grantName}`,
-    paragraphs,
-    facts,
-    cta: {
-      label: input.applicationUrl ? 'Start the application' : 'Open the listing',
-      url: input.applicationUrl || input.grantUrl,
-    },
-    reason: 'You are getting this because you are watching this grant.',
-    preferencesUrl: input.preferencesUrl,
-    unsubscribeUrl: input.unsubscribeUrl,
-  })
-
-  return { subject: `${days}: ${input.grantName}`, html, text }
+  return { subject, html, text }
 }
 
 // #endregion

@@ -44,6 +44,14 @@ export function unsubscribeUrl(email: string, token: string): string {
   return `${siteUrl()}/unsubscribe?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`
 }
 
+/**
+ * The public grants index. The digest's "and N more" line links here: the
+ * explorer has no per-team matches filter, so there is no narrower page yet.
+ */
+export function grantsIndexUrl(): string {
+  return `${siteUrl()}/grants`
+}
+
 /** Public URL of one grant listing. */
 export function grantListingUrl(slug: string): string {
   return `${siteUrl()}/grants/${slug}`

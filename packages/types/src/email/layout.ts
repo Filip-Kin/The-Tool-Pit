@@ -76,6 +76,26 @@ export function formatAward(min: number | null, max: number | null, currency = '
   return null
 }
 
+/** One linked row in a list section, e.g. one grant in a digest. */
+export interface EmailListItem {
+  title: string
+  url: string
+  /** Short detail lines under the title, e.g. funder, award, deadline. */
+  details: string[]
+}
+
+/**
+ * A headed list of linked items, for emails that carry more than one thing
+ * (the daily grant digest). `level` 2 is a section, 3 a subsection under it.
+ * `more` is one trailing link for the items the cap left out.
+ */
+export interface EmailSection {
+  heading: string
+  level?: 2 | 3
+  items: EmailListItem[]
+  more?: { label: string; url: string }
+}
+
 export interface LayoutInput {
   /** Big line at the top. Usually the same as the subject, minus the prefix. */
   heading: string
@@ -83,6 +103,8 @@ export interface LayoutInput {
   paragraphs: string[]
   /** Optional label/value rows, e.g. Deadline, Award, Funder. */
   facts?: EmailFact[]
+  /** Optional headed lists of linked items, rendered after the facts. */
+  sections?: EmailSection[]
   /** The main action. Rendered as the primary (indigo) button. */
   cta?: { label: string; url: string }
   /**
@@ -182,8 +204,18 @@ const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-s
  * shell. See the visual-system note above for why every colour is a literal.
  */
 export function layout(input: LayoutInput): { html: string; text: string } {
-  const { heading, paragraphs, facts = [], cta, secondaryCta, ctaIntro, reason, preferencesUrl, unsubscribeUrl } =
-    input
+  const {
+    heading,
+    paragraphs,
+    facts = [],
+    sections = [],
+    cta,
+    secondaryCta,
+    ctaIntro,
+    reason,
+    preferencesUrl,
+    unsubscribeUrl,
+  } = input
 
   const factRows = facts
     .map((f) => {
@@ -193,6 +225,32 @@ export function layout(input: LayoutInput): { html: string; text: string } {
       return (
         `<tr><td class="e-muted" style="padding:5px 16px 5px 0;color:${MUTED};font-size:14px;vertical-align:top;white-space:nowrap">${esc(f.label)}</td>` +
         `<td class="${f.muted ? 'e-muted' : 'e-text'}" style="padding:5px 0;color:${valueColor};font-size:14px">${esc(f.value)}</td></tr>`
+      )
+    })
+    .join('')
+
+  const sectionHtml = sections
+    .map((sec) => {
+      const size = sec.level === 3 ? 15 : 16
+      const top = sec.level === 3 ? 16 : 24
+      const items = sec.items
+        .map(
+          (it) =>
+            `<p class="e-text" style="margin:0 0 10px;font-size:15px;color:${TEXT}">` +
+            `<a href="${esc(it.url)}" style="color:${PRIMARY};text-decoration:none;font-weight:600">${esc(it.title)}</a>` +
+            it.details
+              .map((d) => `<br><span class="e-muted" style="font-size:13px;color:${MUTED}">${esc(d)}</span>`)
+              .join('') +
+            '</p>',
+        )
+        .join('')
+      const more = sec.more
+        ? `<p style="margin:0 0 10px;font-size:14px"><a href="${esc(sec.more.url)}" style="color:${PRIMARY};text-decoration:underline">${esc(sec.more.label)}</a></p>`
+        : ''
+      return (
+        `<h${sec.level ?? 2} class="e-text" style="margin:${top}px 0 10px;font-size:${size}px;font-weight:600;color:${TEXT}">${esc(sec.heading)}</h${sec.level ?? 2}>` +
+        items +
+        more
       )
     })
     .join('')
@@ -221,6 +279,7 @@ export function layout(input: LayoutInput): { html: string; text: string } {
     factRows
       ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse">${factRows}</table>`
       : '',
+    sectionHtml,
     ctaIntro ? `<p class="e-text" style="margin:16px 0 0;font-size:15px;color:${TEXT}">${esc(ctaIntro)}</p>` : '',
     cta ? `<p style="margin:16px 0 4px">${primaryButton}${secondaryButton}</p>` : '',
     `<hr class="e-hr" style="border:none;border-top:1px solid ${BORDER};margin:24px 0 12px">`,
@@ -242,6 +301,12 @@ export function layout(input: LayoutInput): { html: string; text: string } {
     // An empty label continues the row above (a list under one heading), so in
     // plain text it indents rather than printing a bare colon.
     ...(facts.length ? [...facts.map((f) => (f.label ? `${f.label}: ${f.value}` : `  ${f.value}`)), ''] : []),
+    ...sections.flatMap((sec) => [
+      sec.level === 3 ? `${sec.heading}` : sec.heading.toUpperCase(),
+      '',
+      ...sec.items.flatMap((it) => [`- ${it.title}`, `  ${it.url}`, ...it.details.map((d) => `  ${d}`), '']),
+      ...(sec.more ? [`${sec.more.label}: ${sec.more.url}`, ''] : []),
+    ]),
     ...(ctaIntro ? [ctaIntro, ''] : []),
     ...(cta ? [`${cta.label}: ${cta.url}`, ''] : []),
     ...(secondaryCta ? [`${secondaryCta.label}: ${secondaryCta.url}`, ''] : []),
