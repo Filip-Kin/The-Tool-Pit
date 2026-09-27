@@ -37,8 +37,8 @@ describe('claimAffordance', () => {
     expect((out as { href: string }).href).toBe((inn as { href: string }).href)
   })
 
-  it('offers a disputed claim on a listing someone else owns', () => {
-    expect(claimAffordance('album', 'a1', 'owned_by_other')).toEqual({ kind: 'claim', label: 'Claim this listing', href: '/me/listings/claim?type=album&id=a1' })
+  it('offers nothing on a listing someone else owns', () => {
+    expect(claimAffordance('album', 'a1', 'owned_by_other')).toBeNull()
   })
 
   it('sends an owner to their edit form, not to a claim they already won', () => {

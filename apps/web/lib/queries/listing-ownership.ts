@@ -350,7 +350,7 @@ export type ListingClaimState =
   | 'owner'
   /** This visitor has already asked. Say so rather than asking again. */
   | 'claim_pending'
-  /** Someone else owns it. Still claimable: the claim is a dispute a reviewer decides. */
+  /** Someone else owns it. Not claimable, and not the visitor's business. */
   | 'owned_by_other'
   /** Nobody owns it and nothing is pending. This is the only claimable case. */
   | 'claimable'
