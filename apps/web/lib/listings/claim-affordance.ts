@@ -24,13 +24,17 @@ export type ClaimAffordance =
   | { kind: 'pending'; label: string }
   | { kind: 'claim'; label: string; href: string; signInFirst?: boolean }
 
-/** Null only for someone else's listing, where there is nothing honest to offer. */
+/** Never null: every visitor has one honest thing to do with a listing. */
 export function claimAffordance(
   entityType: ListingEntityType,
   entityId: string,
   state: ListingClaimState,
-): ClaimAffordance | null {
-  if (state === 'owned_by_other') return null
+): ClaimAffordance {
+  // Someone else's listing still offers the claim. The claim page and the
+  // server already treat it as a dispute a reviewer decides ("Someone already
+  // manages this listing"), but the link was hidden, so a team whose field was
+  // claimed by the wrong person had no way in (Code Orange 3476, 2026-09-26).
+  if (state === 'owned_by_other') return { kind: 'claim', label: 'Claim this listing', href: claimHref(entityType, entityId) }
   // Signed out still gets the offer. It used to render nothing, on the grounds
   // that claiming needs an account so the button was really a sign-in prompt.
   // That reasoning was backwards: a visitor who owns the thing has no way to
