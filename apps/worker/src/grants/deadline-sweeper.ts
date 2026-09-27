@@ -413,7 +413,11 @@ export async function processGrantDeadlineSweepJob(
       continue
     }
 
-    const payload = buildDeadlinePayload(found.grant, found.funderName, check.cycle, check.deadlineAt, offset)
+    // The team goes on the row so the daily digest can list it under that team.
+    const payload: DeadlineAlertPayload = {
+      ...buildDeadlinePayload(found.grant, found.funderName, check.cycle, check.deadlineAt, offset),
+      teamLabel,
+    }
     for (const userId of members) {
       // Collides by design with the watch-derived key above when the same
       // person is watching the same cycle, so they get one email.

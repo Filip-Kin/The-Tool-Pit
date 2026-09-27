@@ -16,22 +16,35 @@
  *     A recipient we silently never mail is exactly the kind of quiet cap this
  *     product does not allow.
  *
+ * DAILY DIGEST. new_match and deadline rows are not sent one per row: the
+ * drain groups them per user into one email a day (digest.ts has the rule).
+ *
  * The bodies live in @the-tool-pit/types, shared with apps/web. They were
  * mirrored here until the module was lifted into packages/types: the worker's
  * tsconfig sets `rootDir: ./src`, so tsc rejects any import that reaches
  * outside apps/worker/src (TS6059), and a copy is how the two drifted.
  */
-import { and, asc, eq, isNull, lt, lte, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNotNull, isNull, lt, lte, max, not, sql } from 'drizzle-orm'
 import { getDb, grantAlerts, isEmailSuppressed, signUnsubscribe, type AlertChannel, type AlertKind } from '@the-tool-pit/db'
 import {
+  grantsIndexUrl,
   preferencesUrl,
   unsubscribeUrl,
-  renderDeadlineEmail,
   renderGrantChangeEmail,
-  renderNewMatchEmail,
+  renderGrantDigestEmail,
   type EmailBody,
 } from '@the-tool-pit/types'
 import { canDeliverTo, sandboxRefusalReason, sendEmail } from './mailer.js'
+import {
+  DEADLINE_PASSED_ERROR,
+  DIGEST_HOUR_UTC,
+  DIGEST_KINDS,
+  MAX_ATTEMPTS,
+  digestWindowOpen,
+  groupByUser,
+  planDigest,
+  planDigestFailure,
+} from './digest.js'
 import { resolveEmailRecipient } from '../notifications/recipients.js'
 
 /**
@@ -45,21 +58,7 @@ export { grantListingUrl as grantUrl, preferencesUrl } from '@the-tool-pit/types
 
 // #region policy
 
-/**
- * How many delivery attempts one alert gets before it is parked.
- *
- * Parked means "stop trying", not "deleted": the row keeps its error text and
- * an admin can requeue it by resetting `attempts`. There is no `failed` column
- * on grant_alerts, so parking is expressed as attempts stamped at the cap,
- * which is also what keeps the row out of the next drain's SELECT.
- */
-export const MAX_ATTEMPTS = 5
-
-/** First retry gap. Doubles per attempt up to RETRY_MAX_MS. */
-const RETRY_BASE_MS = 10 * 60 * 1000
-
-/** Longest gap between retries. Beyond this, waiting longer helps nobody. */
-const RETRY_MAX_MS = 6 * 60 * 60 * 1000
+export { MAX_ATTEMPTS } from './digest.js'
 
 /**
  * How long an alert waits for a deliverable address before it is given up on.
@@ -128,6 +127,11 @@ export type DeadlineAlertPayload = {
   verifiedAt?: string | null
   /** The reminder offset that produced this row, for the log and the admin. */
   daysBefore: number
+  /**
+   * e.g. "FRC team 3538" when the reminder came from a team's match. Absent on
+   * a watch-derived reminder. The digest groups by it.
+   */
+  teamLabel?: string | null
 }
 
 export type GrantChangeAlertPayload = {
@@ -200,63 +204,50 @@ export async function enqueueGrantAlert(input: EnqueueGrantAlertInput): Promise<
 // #region rendering
 
 /**
- * Turn a queued row into a body.
+ * How a kind is delivered.
  *
- * The templates themselves live in @the-tool-pit/types. They used to be copied
- * into this file, because the worker tsconfig sets `rootDir: ./src` and tsc
- * refuses a source outside it (TS6059), so apps/web/lib/email/templates.ts was
- * unreachable from here. Lifting the module into packages/types, which both
- * apps already depend on, removed the copy rather than maintaining it.
- *
- * All this function does now is the jsonb-to-argument conversion: dates come
- * back off a jsonb column as ISO strings, and the templates take Date objects.
+ * new_match and deadline go in the daily digest (see digest.ts). grant_change
+ * and watch_update still go one email per row: they are rare, they come from a
+ * grant someone chose to watch, and they were not part of the flood.
  */
-function renderAlert(kind: string, payload: unknown, now: Date, unsub?: string): EmailBody | null {
-  if (!payload || typeof payload !== 'object') return null
-  const prefs = preferencesUrl()
-
-  /** A jsonb ISO string as a Date, or null when it is absent or unparseable. */
-  const asDate = (raw: string | null | undefined): Date | null => {
-    if (!raw) return null
-    const at = new Date(raw)
-    return Number.isNaN(at.getTime()) ? null : at
-  }
-
+function deliveryFor(kind: string): 'digest' | 'single' | null {
   switch (kind) {
-    case 'new_match': {
-      const p = payload as NewMatchAlertPayload
-      return renderNewMatchEmail({ ...p, deadlineAt: asDate(p.deadlineAt), preferencesUrl: prefs, unsubscribeUrl: unsub })
-    }
-    case 'deadline': {
-      const p = payload as DeadlineAlertPayload
-      const at = asDate(p.deadlineAt)
-      if (!at) return null
-      // Real days remaining at send time, not the offset the row was queued at.
-      // A reminder that sat in the outbox for two days must not still say 14.
-      const daysLeft = Math.max(0, Math.ceil((at.getTime() - now.getTime()) / 86_400_000))
-      return renderDeadlineEmail({
-        ...p,
-        deadlineAt: at,
-        daysLeft,
-        verifiedAt: asDate(p.verifiedAt),
-        preferencesUrl: prefs, unsubscribeUrl: unsub,
-      })
-    }
+    case 'new_match':
+    case 'deadline':
+      return 'digest'
     case 'grant_change':
     case 'watch_update':
-      return renderGrantChangeEmail({ ...(payload as GrantChangeAlertPayload), preferencesUrl: prefs, unsubscribeUrl: unsub })
+      return 'single'
     default:
       return null
   }
 }
 
-// #endregion
+/**
+ * Body for a row sent on its own (grant_change, watch_update). The digest
+ * kinds render through renderGrantDigestEmail instead.
+ */
+function renderAlert(kind: string, payload: unknown, unsub?: string): EmailBody | null {
+  if (!payload || typeof payload !== 'object') return null
+  if (deliveryFor(kind) !== 'single') return null
+  return renderGrantChangeEmail({
+    ...(payload as GrantChangeAlertPayload),
+    preferencesUrl: preferencesUrl(),
+    unsubscribeUrl: unsub,
+  })
+}
 
+// #endregion
 
 export interface GrantAlertDrainStats {
   /** Rows selected as due this pass. */
   considered: number
+  /** Rows delivered, counting every row a digest carried. */
   sent: number
+  /** Digest emails sent. Each carries one or more rows. */
+  digestsSent: number
+  /** Digest rows due but held: before 13:00 UTC, or a digest in the last 20 hours. */
+  waitingForDigest: number
   /** Push rows held because push delivery is not built yet. */
   pushHeld: number
   /** Deferred: the user has no verified address yet. Retried later. */
@@ -287,6 +278,8 @@ function emptyStats(): GrantAlertDrainStats {
   return {
     considered: 0,
     sent: 0,
+    digestsSent: 0,
+    waitingForDigest: 0,
     pushHeld: 0,
     deferredNoAddress: 0,
     retryable: 0,
@@ -297,15 +290,25 @@ function emptyStats(): GrantAlertDrainStats {
 }
 
 export interface GrantAlertDrainOptions {
-  /** Most alerts to handle in one pass. Defaults to 200. */
+  /** Most single-send rows, and most digest emails, in one pass. Defaults to 200. */
   limit?: number
   now?: Date
 }
 
+/** Due digest rows read in one pass. A user's whole backlog has to fit, so this is generous. */
+const DIGEST_ROW_CAP = 5000
+
+type AlertRow = typeof grantAlerts.$inferSelect
+
 /**
  * Drain the outbox.
  *
- * One pass over the alerts whose sendAfter has come and gone, oldest first.
+ * Two paths. grant_change and watch_update rows, and anything on a non-email
+ * channel, go one row at a time as before, oldest first. new_match and
+ * deadline email rows go in the daily digest: grouped by user, one email per
+ * user per day, sent on the first pass at or after 13:00 UTC to users with no
+ * digest in the last 20 hours (see digest.ts for the rule and why).
+ *
  * Never throws for a single bad row: a thrown exception halfway through a batch
  * would leave the rest untouched with nothing written down about why, which is
  * the failure mode the outbox exists to prevent.
@@ -318,20 +321,41 @@ export async function processGrantAlertDrainJob(
   const limit = opts.limit ?? DEFAULT_DRAIN_LIMIT
   const stats = emptyStats()
 
+  const dueBase = and(
+    isNull(grantAlerts.sentAt),
+    lte(grantAlerts.sendAfter, now),
+    lt(grantAlerts.attempts, MAX_ATTEMPTS),
+  )
+  const isDigestRow = and(eq(grantAlerts.channel, 'email'), inArray(grantAlerts.kind, [...DIGEST_KINDS]))
+
   const due = await db
     .select()
     .from(grantAlerts)
-    .where(
-      and(
-        isNull(grantAlerts.sentAt),
-        lte(grantAlerts.sendAfter, now),
-        lt(grantAlerts.attempts, MAX_ATTEMPTS),
-      ),
-    )
+    .where(and(dueBase, not(isDigestRow!)))
     .orderBy(asc(grantAlerts.sendAfter))
     .limit(limit)
 
-  stats.considered = due.length
+  // Digest rows are only read inside the window. Before 13:00 UTC every one of
+  // them waits, and there is nothing to decide.
+  const digestDue: AlertRow[] =
+    now.getUTCHours() >= DIGEST_HOUR_UTC
+      ? await db
+          .select()
+          .from(grantAlerts)
+          .where(and(dueBase, isDigestRow))
+          .orderBy(asc(grantAlerts.sendAfter))
+          .limit(DIGEST_ROW_CAP)
+      : []
+
+  if (digestDue.length === 0 && now.getUTCHours() < DIGEST_HOUR_UTC) {
+    const [waiting] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(grantAlerts)
+      .where(and(dueBase, isDigestRow))
+    stats.waitingForDigest = waiting?.n ?? 0
+  }
+
+  stats.considered = due.length + digestDue.length
 
   // Count what is already parked before doing anything else. A parked alert is
   // an alert nobody received, and the number has to be visible somewhere other
@@ -344,6 +368,14 @@ export async function processGrantAlertDrainJob(
 
   /** One resolved address per user per pass, not per alert. */
   const addressCache = new Map<string, string | null>()
+  const addressFor = async (userId: string): Promise<string | null> => {
+    let address = addressCache.get(userId)
+    if (address === undefined) {
+      address = await resolveEmailRecipient(userId)
+      addressCache.set(userId, address)
+    }
+    return address
+  }
 
   /** Recipients refused by the sandbox this pass, named once in the summary. */
   const sandboxRefused = new Set<string>()
@@ -356,6 +388,28 @@ export async function processGrantAlertDrainJob(
       .where(eq(grantAlerts.id, id))
     stats.parked++
   }
+
+  /** No verified address: park past the grace window, otherwise push forward without spending an attempt. */
+  const deferNoAddress = async (alert: AlertRow) => {
+    const age = now.getTime() - alert.createdAt.getTime()
+    if (age > UNDELIVERABLE_GRACE_MS) {
+      await park(alert.id, alert.attempts, 'no verified email address after 30 days')
+      stats.parkedBy.noAddress++
+    } else {
+      // Not a failure, just nowhere to send yet. Confirming an address later
+      // still delivers it.
+      await db
+        .update(grantAlerts)
+        .set({
+          sendAfter: new Date(now.getTime() + NO_CHANNEL_RETRY_MS),
+          error: 'waiting for a verified email address',
+        })
+        .where(eq(grantAlerts.id, alert.id))
+      stats.deferredNoAddress++
+    }
+  }
+
+  // #region single rows
 
   for (const alert of due) {
     // Push is a real channel row with a real endpoint waiting for it, it just
@@ -374,40 +428,9 @@ export async function processGrantAlertDrainJob(
       continue
     }
 
-    // A deadline reminder that missed its own deadline is worse than no email.
-    if (alert.kind === 'deadline') {
-      const raw = (alert.payload as DeadlineAlertPayload | null)?.deadlineAt
-      const at = raw ? new Date(raw) : null
-      if (at && !Number.isNaN(at.getTime()) && at.getTime() < now.getTime()) {
-        await park(alert.id, alert.attempts, 'deadline passed before the alert could be delivered')
-        stats.parkedBy.stale++
-        continue
-      }
-    }
-
-    let address = addressCache.get(alert.userId)
-    if (address === undefined) {
-      address = await resolveEmailRecipient(alert.userId)
-      addressCache.set(alert.userId, address)
-    }
-
+    const address = await addressFor(alert.userId)
     if (!address) {
-      const age = now.getTime() - alert.createdAt.getTime()
-      if (age > UNDELIVERABLE_GRACE_MS) {
-        await park(alert.id, alert.attempts, 'no verified email address after 30 days')
-        stats.parkedBy.noAddress++
-      } else {
-        // Not a failure, just nowhere to send yet. Push the row forward without
-        // spending an attempt, so confirming an address later still delivers it.
-        await db
-          .update(grantAlerts)
-          .set({
-            sendAfter: new Date(now.getTime() + NO_CHANNEL_RETRY_MS),
-            error: 'waiting for a verified email address',
-          })
-          .where(eq(grantAlerts.id, alert.id))
-        stats.deferredNoAddress++
-      }
+      await deferNoAddress(alert)
       continue
     }
 
@@ -432,7 +455,7 @@ export async function processGrantAlertDrainJob(
       continue
     }
 
-    const body = renderAlert(alert.kind, alert.payload, now, unsubscribeUrl(address, signUnsubscribe(address)))
+    const body = renderAlert(alert.kind, alert.payload, unsubscribeUrl(address, signUnsubscribe(address)))
     if (!body) {
       await park(alert.id, alert.attempts, `no email body for kind '${alert.kind}'`)
       stats.parkedBy.unrenderable++
@@ -455,27 +478,124 @@ export async function processGrantAlertDrainJob(
       continue
     }
 
-    const attempts = alert.attempts + 1
-
-    if (!result.retryable) {
-      await park(alert.id, attempts, result.error)
-      stats.parkedBy.transport++
-      continue
-    }
-
-    if (attempts >= MAX_ATTEMPTS) {
-      await park(alert.id, attempts, `gave up after ${attempts} attempts: ${result.error}`)
-      stats.parkedBy.attempts++
-      continue
-    }
-
-    const backoff = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** (attempts - 1))
-    await db
-      .update(grantAlerts)
-      .set({ attempts, error: result.error, sendAfter: new Date(now.getTime() + backoff) })
-      .where(eq(grantAlerts.id, alert.id))
-    stats.retryable++
+    await applyFailure([alert], result)
   }
+
+  // #endregion
+
+  // #region digests
+
+  /** Write a failed send onto every row it carried. */
+  async function applyFailure(rows: AlertRow[], failure: { retryable: boolean; error: string }) {
+    for (const u of planDigestFailure(rows, failure, now)) {
+      if (u.park) {
+        await park(u.id, u.attempts, u.error)
+        stats.parkedBy[u.park]++
+      } else {
+        await db
+          .update(grantAlerts)
+          .set({ attempts: u.attempts, error: u.error, sendAfter: u.sendAfter })
+          .where(eq(grantAlerts.id, u.id))
+        stats.retryable++
+      }
+    }
+  }
+
+  const byUser = groupByUser(digestDue)
+
+  // Last digest per user, off sent_at. Rows stamped by an unsubscribe carry an
+  // error and are not a digest anybody received, so they do not count.
+  const lastDigest = new Map<string, Date>()
+  if (byUser.size > 0) {
+    const lastRows = await db
+      .select({ userId: grantAlerts.userId, at: max(grantAlerts.sentAt) })
+      .from(grantAlerts)
+      .where(
+        and(
+          inArray(grantAlerts.userId, [...byUser.keys()]),
+          inArray(grantAlerts.kind, [...DIGEST_KINDS]),
+          isNotNull(grantAlerts.sentAt),
+          isNull(grantAlerts.error),
+        ),
+      )
+      .groupBy(grantAlerts.userId)
+    for (const r of lastRows) if (r.at) lastDigest.set(r.userId, r.at)
+  }
+
+  let digestsHandled = 0
+  for (const [userId, rows] of byUser) {
+    if (!digestWindowOpen(now, lastDigest.get(userId) ?? null) || digestsHandled >= limit) {
+      stats.waitingForDigest += rows.length
+      continue
+    }
+    digestsHandled++
+
+    const plan = planDigest(rows, now)
+
+    // A deadline reminder that missed its own deadline is worse than no email.
+    for (const row of plan.passed) {
+      await park(row.id, row.attempts, DEADLINE_PASSED_ERROR)
+      stats.parkedBy.stale++
+    }
+    for (const row of plan.unrenderable) {
+      await park(row.id, row.attempts, `no email body for kind '${row.kind}'`)
+      stats.parkedBy.unrenderable++
+    }
+    if (plan.include.length === 0) continue
+
+    const address = await addressFor(userId)
+    if (!address) {
+      for (const row of plan.include) await deferNoAddress(row)
+      continue
+    }
+
+    if (!canDeliverTo(address)) {
+      sandboxRefused.add(address)
+      for (const row of plan.include) {
+        await park(row.id, row.attempts, sandboxRefusalReason(address))
+        stats.parkedBy.sandbox++
+      }
+      continue
+    }
+
+    const ids = plan.include.map((r) => r.id)
+
+    if (await isEmailSuppressed(address)) {
+      await db
+        .update(grantAlerts)
+        .set({
+          sentAt: new Date(),
+          attempts: sql`${grantAlerts.attempts} + 1`,
+          error: 'recipient unsubscribed from all email',
+        })
+        .where(inArray(grantAlerts.id, ids))
+      continue
+    }
+
+    const body = renderGrantDigestEmail({
+      groups: plan.groups,
+      now,
+      moreUrl: grantsIndexUrl(),
+      preferencesUrl: preferencesUrl(),
+      unsubscribeUrl: unsubscribeUrl(address, signUnsubscribe(address)),
+    })
+
+    const result = await sendEmail({ to: address, subject: body.subject, html: body.html, text: body.text })
+
+    if (result.ok) {
+      await db
+        .update(grantAlerts)
+        .set({ sentAt: new Date(), attempts: sql`${grantAlerts.attempts} + 1`, error: null })
+        .where(inArray(grantAlerts.id, ids))
+      stats.sent += ids.length
+      stats.digestsSent++
+      continue
+    }
+
+    await applyFailure(plan.include, result)
+  }
+
+  // #endregion
 
   if (stats.pushHeld > 0) {
     console.warn(
@@ -496,11 +616,10 @@ export async function processGrantAlertDrainJob(
   }
 
   console.log(
-    `[grant-alerts] drained ${stats.considered}: sent=${stats.sent} retry=${stats.retryable} ` +
+    `[grant-alerts] drained ${stats.considered}: sent=${stats.sent} digests=${stats.digestsSent} ` +
+      `waiting=${stats.waitingForDigest} retry=${stats.retryable} ` +
       `parked=${stats.parked} pushHeld=${stats.pushHeld} noAddress=${stats.deferredNoAddress}`,
   )
 
   return stats
 }
-
-// #endregion
