@@ -298,6 +298,28 @@ const grantMatchWorker = new Worker<GrantMatchJobPayload>(
   { connection, concurrency: CONCURRENCY },
 )
 
+/**
+ * A failing email drain posts to the approvals channel, at most once every six
+ * hours. The drain runs every five minutes, so without the throttle one broken
+ * setting would post 72 times a day; without the post at all, it stayed broken
+ * for 17 days before anyone noticed an email was missing.
+ */
+async function alertDrainFailure(failures: string[]): Promise<void> {
+  try {
+    const first = await getRedis().set('email-drain:alerted', '1', 'EX', 6 * 3600, 'NX')
+    if (first !== 'OK') return
+    sendApprovalNotice({
+      vertical: 'crawl',
+      alert: true,
+      title: 'Email sending failed',
+      reviewUrl: reviewQueueUrl('/admin'),
+      facts: failures.map((f) => ({ label: 'Error', value: f.slice(0, 300) })),
+    })
+  } catch (err) {
+    console.error(`[email-drain] could not post the failure alert: ${(err as Error).message}`)
+  }
+}
+
 const grantAlertWorker = new Worker(
   'grant-alert-drain',
   async () => {
@@ -309,11 +331,26 @@ const grantAlertWorker = new Worker(
     // notification outbox in parallel would step straight over that pacing, so
     // the two run in sequence inside this one serial worker instead.
     //
-    // Sequential also means a broken grant drain cannot silently stop approval
-    // emails: each call handles its own row failures and returns stats rather
-    // than throwing.
-    await processGrantAlertDrainJob()
-    await processNotificationDrainJob()
+    // Each drain runs on its own. A throw in one (the grant drain threw on a
+    // missing SESSION_SECRET from 2026-09-10) must not stop the other: it
+    // silently held every approval and publish email for over two weeks.
+    const failures: string[] = []
+    for (const [name, drain] of [
+      ['grant alerts', processGrantAlertDrainJob],
+      ['notifications', processNotificationDrainJob],
+    ] as const) {
+      try {
+        await drain()
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`[email-drain] ${name} drain failed: ${msg}`)
+        failures.push(`${name}: ${msg}`)
+      }
+    }
+    if (failures.length > 0) {
+      await alertDrainFailure(failures)
+      throw new Error(failures.join('; '))
+    }
   },
   // Concurrency MUST stay 1, for the pacing reason above.
   { connection, concurrency: 1 },
