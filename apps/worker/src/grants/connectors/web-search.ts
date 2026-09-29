@@ -161,10 +161,13 @@ export class GrantWebSearchConnector implements GrantConnector {
       // every run, so a handful of states were skipped each pass and a given
       // state could go many runs unseen while the limits line below claimed
       // they would be picked up next time.
-      await redis.set(CURSOR_KEY, String(cursor + states.length))
+      // Stored as a position in the state list, not a running total: the
+      // total grew past the list length (220 of 104) and read as nonsense.
+      const statePos = stateQueries.length > 0 ? cursor % stateQueries.length : 0
+      await redis.set(CURSOR_KEY, String(stateQueries.length > 0 ? (statePos + states.length) % stateQueries.length : 0))
       if (plan.length < totalPlan) {
         limits.push(
-          `per-run cap: ran ${plan.length} of ${totalPlan} planned queries, cursor at ${cursor}, remaining queries run on later passes`,
+          `per-run cap: ${plan.length} of ${totalPlan} queries this run, state queries ${statePos + 1}-${statePos + states.length} of ${stateQueries.length}`,
         )
       }
     }
@@ -234,8 +237,10 @@ export class GrantWebSearchConnector implements GrantConnector {
 
     // Rewind the cursor to the queries we actually ran, so a budget stop does
     // not silently skip the states we never got to.
-    if (budgetStopped && !pinnedQuery) {
-      await redis.set(CURSOR_KEY, String(cursor + ran))
+    if (budgetStopped && !pinnedQuery && stateQueries.length > 0) {
+      // Only state queries move the cursor; the national ones run first.
+      const statesRan = Math.max(0, ran - Math.min(NATIONAL_SHARE, maxQueries))
+      await redis.set(CURSOR_KEY, String(((cursor % stateQueries.length) + statesRan) % stateQueries.length))
     }
 
     console.log(

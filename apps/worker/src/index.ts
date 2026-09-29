@@ -30,6 +30,7 @@ import { processGrantMonitorJob } from './grants/monitor.js'
 import { processGrantMatchJob } from './grants/matcher.js'
 import { processGrantAlertDrainJob } from './grants/alerts.js'
 import { processNotificationDrainJob } from './notifications/outbox.js'
+import { processNewListingsReportJob } from './jobs/new-listings-report.js'
 import { processGrantDeadlineSweepJob } from './grants/deadline-sweeper.js'
 import { enqueueDueGrantMonitors } from './grants/cadence.js'
 import { sendApprovalNotice, reviewQueueUrl } from '@the-tool-pit/types'
@@ -205,25 +206,6 @@ const grantDiscoverWorker = new Worker<GrantDiscoverPayload>(
       `[grant-discover] ${outcome.connector} queued ${outcome.insertedCandidateIds.length} candidates for enrichment`,
     )
 
-    // ONE SUMMARY PER RUN, not one per candidate: a discovery pass files
-    // dozens, and a message each would bury the human submissions this channel
-    // exists for. A run that found nothing says nothing.
-    const found = outcome.insertedCandidateIds.length
-    if (found > 0) {
-      sendApprovalNotice({
-        vertical: 'crawl',
-        title: `Grant leads: ${found} new (${outcome.connector})`,
-        reviewUrl: reviewQueueUrl('/admin/grants/candidates?status=pending'),
-        facts: [
-          { label: 'Connector', value: outcome.connector, inline: true },
-          { label: 'New', value: found, inline: true },
-          // A capped run and a complete run look identical otherwise, and a
-          // silent cap reads as "we found everything there is".
-          { label: 'Coverage limits', value: outcome.stats.limits.join('; ') || null },
-          { label: 'Errors', value: outcome.stats.errors.slice(0, 3).join('; ') || null },
-        ],
-      })
-    }
   },
   { connection, concurrency: CONCURRENCY },
 )
@@ -356,6 +338,14 @@ const grantAlertWorker = new Worker(
   { connection, concurrency: 1 },
 )
 
+const newListingsReportWorker = new Worker(
+  'new-listings-report',
+  async () => {
+    await processNewListingsReportJob()
+  },
+  { connection, concurrency: 1 },
+)
+
 const grantDeadlineWorker = new Worker(
   'grant-deadline-sweep',
   async () => {
@@ -399,25 +389,6 @@ const listingDiscoverWorker = new Worker<ListingDiscoverPayload>(
       `[listing-discover] ${outcome.connector} filed ${outcome.insertedCandidateIds.length} ${outcome.vertical} candidates for review`,
     )
 
-    // One summary per run, same rule as the other three queues.
-    const filed = outcome.insertedCandidateIds.length
-    if (filed > 0) {
-      const queue =
-        outcome.vertical === 'field'
-          ? '/admin/practice-fields/candidates'
-          : '/admin/event-listings/candidates'
-      sendApprovalNotice({
-        vertical: 'crawl',
-        title: `${outcome.vertical[0].toUpperCase()}${outcome.vertical.slice(1)} leads: ${filed} new (${outcome.connector})`,
-        reviewUrl: reviewQueueUrl(queue),
-        facts: [
-          { label: 'Connector', value: outcome.connector, inline: true },
-          { label: 'New', value: filed, inline: true },
-          { label: 'Coverage limits', value: outcome.stats.limits.join('; ') || null },
-          { label: 'Errors', value: outcome.stats.errors.slice(0, 3).join('; ') || null },
-        ],
-      })
-    }
   },
   // Serial. Both Chief Delphi connectors pace themselves inside the Discourse
   // client, and two of them running at once would double the request rate at
@@ -485,7 +456,7 @@ const seasonRenewalWorker = new Worker(
 // #endregion
 
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, listingDiscoverWorker, readCandidatesWorker, rosterRefreshWorker, tbaPushWorker, tbaTeamsSyncWorker, seasonRenewalWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, newListingsReportWorker, listingDiscoverWorker, readCandidatesWorker, rosterRefreshWorker, tbaPushWorker, tbaTeamsSyncWorker, seasonRenewalWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -534,6 +505,7 @@ async function shutdown() {
     grantMatchWorker.close(),
     grantAlertWorker.close(),
     grantDeadlineWorker.close(),
+    newListingsReportWorker.close(),
     listingDiscoverWorker.close(),
     readCandidatesWorker.close(),
     rosterRefreshWorker.close(),

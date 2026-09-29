@@ -217,6 +217,12 @@ export const grantAlertQueue = new Queue('grant-alert-drain', {
 })
 
 /** Turns upcoming deadlines on watched grants into queued alerts. Idempotent. */
+/** Daily approvals-channel post of listings that went live. See jobs/new-listings-report.ts. */
+export const newListingsReportQueue = new Queue('new-listings-report', {
+  connection,
+  defaultJobOptions: { attempts: 1, removeOnComplete: { count: 30 }, removeOnFail: { count: 30 } },
+})
+
 export const grantDeadlineQueue = new Queue('grant-deadline-sweep', {
   connection,
   defaultJobOptions: {
@@ -391,6 +397,11 @@ export async function scheduleRecurringJobs() {
   // fired its full fan-out of GitHub requests on every single deploy. 22:15 UTC
   // sits well clear of the 02:10-09:10 discovery/renewal block and the 07:20
   // popularity sweep, so the two GitHub-heavy passes never overlap.
+  // 13:30 UTC, half an hour after the grant digest window opens.
+  await newListingsReportQueue.upsertJobScheduler('new-listings-report', { pattern: '30 13 * * *' }, {
+    name: 'new-listings-report',
+    data: {},
+  })
   await freshnessQueue.upsertJobScheduler('freshness-pass', { pattern: '15 22 * * *' }, {
     name: 'freshness-pass-trigger',
     data: { toolId: '__all__' },
