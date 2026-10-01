@@ -19,8 +19,9 @@
  * here anyway.
  */
 import { and, eq, sql } from 'drizzle-orm'
-import { getDb, eventListings, type ExtractedEventListingFields } from '@the-tool-pit/db'
+import { getDb, eventListings } from '@the-tool-pit/db'
 import { readEventCandidate } from './read-event.js'
+import { FILLABLE } from './event-refresh-plan.js'
 import { geocodeVenue, matchTbaEvent } from './locate.js'
 import { fetchChiefDelphiTopic, parseChiefDelphiTopicId } from '../connectors/discourse.js'
 
@@ -31,14 +32,6 @@ export interface EnrichListingStats {
   noSource: number
   failed: number
 }
-
-/** Which extracted fields may fill a blank listing column. The pin and tbaKey are handled apart. */
-const FILLABLE: (keyof ExtractedEventListingFields)[] = [
-  'venueName', 'address', 'city', 'region', 'country', 'hostTeamNumber',
-  'startDate', 'endDate', 'days', 'capacity', 'costUsd', 'costNote',
-  'eventStatus', 'registrationStatus', 'registrationOpensAt', 'registrationClosesAt', 'volunteerStatus', 'registrationUrl', 'volunteerUrl',
-  'website', 'teamListUrl', 'contactEmail', 'notes',
-]
 
 function isBlank(value: unknown, key: string): boolean {
   if (value === null || value === undefined || value === '') return true
