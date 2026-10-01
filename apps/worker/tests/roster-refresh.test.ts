@@ -44,3 +44,12 @@ describe('eventIsOver', () => {
     expect(eventIsOver({ startDate: null, endDate: null }, '2026-09-26')).toBe(false)
   })
 })
+
+describe('reproofOutcome: a proven fresh parser beats a bad baseline', () => {
+  it('uses a fresh read even when it shares little with the old baseline', () => {
+    const baseline = [2025, 1540, 2374].map((n) => ({ number: n, robot: null }))
+    const fresh = [955, 957, 1359, 1425, 1540, 2374, 2471, 2521].map((n) => ({ number: n, robot: null }))
+    const storedJunk = { ok: true as const, teams: [1, 4, 6, 7, 8, 9, 1540, 2374, 2025].map((n) => ({ number: n, robot: null })) }
+    expect(reproofOutcome(baseline, fresh, storedJunk)).toEqual({ use: 'fresh', alert: false })
+  })
+})

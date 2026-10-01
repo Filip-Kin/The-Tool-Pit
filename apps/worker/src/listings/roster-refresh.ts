@@ -319,7 +319,12 @@ export function reproofOutcome(
   fresh: RosterTeam[] | null,
   storedRun: ParserRunResult | null,
 ): { use: 'fresh' | 'stored' | 'none'; alert: boolean } {
-  if (fresh && !suspectRosterChange(previous, fresh).suspect) return { use: 'fresh', alert: false }
+  // A fresh parser was just proven against an independent second reading of
+  // the page, which is better evidence than the old baseline: FIRST Chance's
+  // baseline held the year "2025" as a team, so a correct 23-team read looked
+  // like "most old teams gone" and the stale stored parser's 37 (slot numbers,
+  // a street name) won instead. Only a slot-index leak disqualifies it.
+  if (fresh && fresh.length > 0 && !slotIndicesLeaked(fresh)) return { use: 'fresh', alert: false }
   if (storedRun?.ok && !suspectRosterChange(previous, storedRun.teams).suspect) return { use: 'stored', alert: false }
   return { use: 'none', alert: true }
 }
