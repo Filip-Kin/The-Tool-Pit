@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { normaliseCountry } from '@the-tool-pit/db/country'
 import { getDb } from '@/lib/db'
 import { eventListings, eventEditProposals } from '@the-tool-pit/db'
 import type { EventEditProposalData } from '@the-tool-pit/db'
@@ -14,6 +15,7 @@ function patchFromProposal(p: EventEditProposalData): Record<string, unknown> {
     'website', 'registrationUrl', 'volunteerUrl', 'chiefDelphiUrl', 'contactEmail', 'notes', 'teamListUrl',
   ]
   for (const k of keys) if (p[k] !== undefined) patch[k] = p[k]
+  if (typeof patch.country === 'string') patch.country = normaliseCountry(patch.country)
   return patch
 }
 

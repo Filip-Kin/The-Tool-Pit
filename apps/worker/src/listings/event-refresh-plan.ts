@@ -31,9 +31,25 @@
  *   - a text field the reader merely REWORDED: the old venue name still on the
  *     page while the reader wrote it shorter is the same venue, not a move.
  *     Without this every free-text field would churn on every read.
+ *   - anything the shared refresh rules refuse (refresh-rules.ts, the same
+ *     rules fields and tools use): a respelled street or country, an address
+ *     read off a contact page, a sign-up link that is a contact or home page,
+ *     a contact email replaced while the old one is still on the page.
  */
 import { isHumanEdited, offseasonSeasonYear, type ExtractedEventListingFields } from '@the-tool-pit/db'
 import { normaliseForQuoteMatch, quoteSource, urlSource, type NamedText } from '../model/evidence.js'
+import {
+  countryCode,
+  guardRefusal,
+  ORG_NAME_KEYS,
+  sameMeaningText,
+  sameStreet,
+  streetKey,
+  type GuardKind,
+} from './refresh-rules.js'
+
+// Kept as exports here too: tests and callers have imported them from this module.
+export { countryCode, streetKey }
 
 // #region keys
 
@@ -104,37 +120,6 @@ function isEmpty(value: unknown): boolean {
   return value === null || value === undefined || (typeof value === 'string' && value.trim() === '')
 }
 
-const COUNTRY_ALIASES: Record<string, string> = {
-  us: 'US', usa: 'US', 'united states': 'US', 'united states of america': 'US',
-  ca: 'CA', canada: 'CA', mx: 'MX', mexico: 'MX', au: 'AU', australia: 'AU',
-  il: 'IL', israel: 'IL', tr: 'TR', turkey: 'TR', turkiye: 'TR', cn: 'CN', china: 'CN',
-}
-
-/** "United States", "USA" and "US" are one country. */
-export function countryCode(value: string): string {
-  const k = value.trim().toLowerCase().replace(/\./g, '')
-  return COUNTRY_ALIASES[k] ?? k.toUpperCase()
-}
-
-const STREET_ABBR: Array<[RegExp, string]> = [
-  [/\bsoutheast\b/g, 'se'], [/\bsouthwest\b/g, 'sw'], [/\bnortheast\b/g, 'ne'], [/\bnorthwest\b/g, 'nw'],
-  [/\bnorth\b/g, 'n'], [/\bsouth\b/g, 's'], [/\beast\b/g, 'e'], [/\bwest\b/g, 'w'],
-  [/\bstreet\b/g, 'st'], [/\bavenue\b/g, 'ave'], [/\broad\b/g, 'rd'], [/\bdrive\b/g, 'dr'],
-  [/\bboulevard\b/g, 'blvd'], [/\bhighway\b/g, 'hwy'], [/\blane\b/g, 'ln'], [/\bparkway\b/g, 'pkwy'],
-  [/\bcourt\b/g, 'ct'], [/\bplace\b/g, 'pl'], [/\bcircle\b/g, 'cir'],
-]
-
-/**
- * The street line only, abbreviations folded: "23499 Southeast Tahoma Way"
- * and "23499 SE Tahoma Way, Maple Valley, Washington, 98038" are one address.
- * City, state and zip have their own columns.
- */
-export function streetKey(value: string): string {
-  let v = value.split(/[,\n]/)[0].toLowerCase().replace(/[.#]/g, ' ')
-  for (const [re, to] of STREET_ABBR) v = v.replace(re, to)
-  return v.replace(/\s+/g, ' ').trim()
-}
-
 /** Event notes are written by the owner or a reviewer, never re-read from a page. */
 export const NEVER_REFRESHED: ReadonlySet<string> = new Set(['notes'])
 
@@ -151,8 +136,8 @@ export function sameRefreshValue(key: RefreshKey, a: unknown, b: unknown): boole
   if (NUMBER_KEYS.has(key)) return Number(a) === Number(b)
   if (DATE_KEYS.has(key)) return String(a).slice(0, 10) === String(b).slice(0, 10)
   if (key === 'country') return countryCode(String(a)) === countryCode(String(b))
-  if (key === 'address') return streetKey(String(a)) === streetKey(String(b))
-  return normaliseForQuoteMatch(String(a)) === normaliseForQuoteMatch(String(b))
+  if (key === 'address') return sameStreet(String(a), String(b))
+  return sameMeaningText(String(a), String(b))
 }
 
 /** A value as one side of "old → new" in an alert or a log line. */
@@ -175,6 +160,7 @@ export type HoldReason =
   | 'reworded'
   | 'status_not_refreshable'
   | 'several_hosts'
+  | 'refresh_rule'
 
 export interface RefreshChange {
   key: RefreshKey
@@ -185,6 +171,18 @@ export interface RefreshChange {
 
 export interface HeldChange extends RefreshChange {
   reason: HoldReason
+  /** For 'refresh_rule': which rule, in words. */
+  detail?: string
+}
+
+/** Which shared rule guards which column (refresh-rules.ts). */
+const GUARDS: Partial<Record<RefreshKey, GuardKind>> = {
+  address: 'address',
+  city: 'place',
+  region: 'place',
+  registrationUrl: 'signupLink',
+  volunteerUrl: 'signupLink',
+  contactEmail: 'contactText',
 }
 
 export interface RefreshPlan {
@@ -251,7 +249,8 @@ export function planEventRefresh(input: RefreshPlanInput): RefreshPlan {
 
   for (const key of REFRESH_KEYS) {
     if (!(key in fields)) continue
-    const next = fields[key]
+    const raw = fields[key]
+    const next = key === 'country' && typeof raw === 'string' ? countryCode(raw) : raw
     const before = current[key]
     if (sameRefreshValue(key, before, next)) continue
     // A status that read 'unknown' and still reads 'unknown' is caught above.
@@ -264,7 +263,7 @@ export function planEventRefresh(input: RefreshPlanInput): RefreshPlan {
     }
     const hold = (reason: HoldReason) => held.push({ ...change, reason })
 
-    if (NEVER_REFRESHED.has(key)) continue
+    if (NEVER_REFRESHED.has(key) || ORG_NAME_KEYS.has(key)) continue
     if (isHumanEdited(claimed, key)) { hold('human_claimed'); continue }
     if (isEmpty(next) || (STATUS_KEYS.has(key) && next === 'unknown' && !isEmpty(before) && before !== 'unknown')) {
       hold('clears')
@@ -279,6 +278,9 @@ export function planEventRefresh(input: RefreshPlanInput): RefreshPlan {
     // Rumble 11 lists $350 and $225 and the read picked the B-team one.
     if (key === 'costUsd' && before != null && stillOnPage(`$${Number(before)}`, sources)) { hold('reworded'); continue }
     if (REWORDABLE_KEYS.has(key) && stillOnPage(before, sources)) { hold('reworded'); continue }
+    const guard = GUARDS[key]
+    const why = guard ? guardRefusal(guard, { from: before, to: next, quote: evidence[key]?.quote ?? '', source: evidence[key]?.source, sources }) : null
+    if (why) { held.push({ ...change, reason: 'refresh_rule', detail: why }); continue }
     if (key === 'hostTeamNumber') {
       const hosts = Array.isArray(current.hostTeamNumbers) ? (current.hostTeamNumbers as unknown[]).map(Number) : []
       if (hosts.includes(Number(next))) continue

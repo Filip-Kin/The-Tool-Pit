@@ -1,5 +1,6 @@
 'use server'
 
+import { normaliseCountry, normaliseCountries } from '@the-tool-pit/db/country'
 import { randomBytes, createHash } from 'crypto'
 import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
@@ -852,6 +853,9 @@ function columnSet(
   for (const key of keys) {
     if (values[key] !== undefined) out[key] = values[key]
   }
+  // Countries are stored as ISO 3166-1 alpha-2 codes on every table.
+  if (typeof out.country === 'string') out.country = normaliseCountry(out.country)
+  if (Array.isArray(out.countries)) out.countries = normaliseCountries(out.countries as string[])
   return out
 }
 

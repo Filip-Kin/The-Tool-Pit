@@ -28,7 +28,7 @@
  */
 import { createHash } from 'node:crypto'
 import { Queue } from 'bullmq'
-import { eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { getDb, eventListings } from '@the-tool-pit/db'
 import { sendApprovalNotice, siteUrl } from '@the-tool-pit/types'
 import { fetchChiefDelphiTopic, parseChiefDelphiTopicId } from '../connectors/discourse.js'
@@ -36,7 +36,8 @@ import { normaliseForQuoteMatch, type NamedText } from '../model/evidence.js'
 import { getRedis } from '../redis.js'
 import { geocodeVenue } from './locate.js'
 import { readEventCandidate } from './read-event.js'
-import { planEventRefresh, type RefreshKey } from './event-refresh-plan.js'
+import { planEventRefresh, sameRefreshValue, REFRESH_KEYS, type RefreshKey } from './event-refresh-plan.js'
+import { applyLoggedPatch } from './change-log.js'
 
 /** Pages hashed per listing, at most. The reader opens up to 8. */
 const MAX_HASHED_PAGES = 10
@@ -162,7 +163,7 @@ export async function refreshPublishedEvent(
   })
 
   for (const h of plan.held) {
-    console.log(`[event-refresh] ${row.name}: held ${h.key} (${h.reason}): ${h.from} -> ${h.to}`)
+    console.log(`[event-refresh] ${row.name}: held ${h.key} (${h.reason}${h.detail ? `: ${h.detail}` : ''}): ${h.from} -> ${h.to}`)
   }
 
   // EVENT_REFRESH_DRY=1: log the plan, write nothing, post nothing. For checking
@@ -190,9 +191,33 @@ export async function refreshPublishedEvent(
       }
     }
 
-    await db.update(eventListings).set({ ...patch, updatedAt: new Date() }).where(eq(eventListings.id, row.id))
+    // One transaction: the old value of every column goes to listing_changes,
+    // then the write. A column a person changed while the model was reading
+    // is dropped (stillCurrent), and a listing no longer live is not written.
+    const proof: Record<string, { quote?: string | null; source?: string | null }> = {}
+    for (const c of plan.applied) {
+      const ev = (read.evidence as Record<string, { quote?: string; source?: string } | undefined>)[c.key]
+      proof[c.key] = { quote: ev?.quote ?? null, source: ev?.source ?? null }
+    }
+    const refreshKeys = new Set<string>(REFRESH_KEYS)
+    const written = await applyLoggedPatch({
+      entityType: 'event',
+      table: eventListings,
+      id: row.id,
+      actor: 'event-refresh',
+      patch,
+      proof,
+      where: and(eq(eventListings.status, 'published'), inArray(eventListings.eventStatus, ['tentative', 'confirmed'])),
+      stillCurrent: (key, value) =>
+        !refreshKeys.has(key) || sameRefreshValue(key as RefreshKey, value, (row as Record<string, unknown>)[key]),
+    })
+    if (written.length === 0) {
+      console.log(`[event-refresh] ${row.name}: listing moved during the read, nothing written`)
+      return { outcome: 'unchanged', applied: 0, held: plan.held.length }
+    }
+    const appliedNow = plan.applied.filter((c) => written.includes(c.key))
     console.log(
-      `[event-refresh] ${row.name}: applied ${plan.applied.map((c) => `${c.key} ${c.from} -> ${c.to}`).join('; ')}`,
+      `[event-refresh] ${row.name}: applied ${appliedNow.map((c) => `${c.key} ${c.from} -> ${c.to}`).join('; ')}`,
     )
 
     if (plan.needsRosterRefresh) await enqueueRosterRefresh(row.id)
@@ -203,7 +228,7 @@ export async function refreshPublishedEvent(
       title: `Event updated: ${(patch.name as string | undefined) ?? row.name}`,
       reviewUrl: `${siteUrl()}/admin/event-listings?status=published#event-${row.id}`,
       sourceUrl: (patch.website as string | undefined) ?? row.website ?? row.chiefDelphiUrl,
-      facts: plan.applied.map((c) => ({ label: c.label, value: `${c.from} → ${c.to}` })),
+      facts: appliedNow.map((c) => ({ label: c.label, value: `${c.from} → ${c.to}` })),
     })
   }
 

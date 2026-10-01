@@ -1,4 +1,5 @@
 import { and, eq, inArray, ne, or } from 'drizzle-orm'
+import { normaliseCountry } from '@the-tool-pit/db/country'
 import { Queue } from 'bullmq'
 import { getDb } from '@/lib/db'
 import { getRedis } from '@/lib/redis'
@@ -265,7 +266,7 @@ export async function acceptEventCandidateBody(
 
   // A stable human slug for the public /events/<slug> page, built once from the
   // name. Unique within the table via the suffix loop.
-  const base = { ...row, slug: await uniqueEventSlug(row.name ?? 'event') }
+  const base = { ...row, country: normaliseCountry(row.country), slug: await uniqueEventSlug(row.name ?? 'event') }
 
   const [created] = await db
     .insert(eventListings)

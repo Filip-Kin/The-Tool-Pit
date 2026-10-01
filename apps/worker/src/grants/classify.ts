@@ -25,6 +25,7 @@
  * worse than no deadline. A classification is only ever a routing decision
  * for the review queue.
  */
+import { normaliseCountries } from '@the-tool-pit/db/country'
 import { parseModelJson } from '../model/json.js'
 import Anthropic from '@anthropic-ai/sdk'
 import { anthropic } from '../anthropic.js'
@@ -497,7 +498,7 @@ export function validateGrantClassification(
   // ISO 3166-1 alpha-2 only. "United States" is not a country code and would
   // never match a team profile.
   if (out.countries !== undefined) {
-    out.countries = cleanStringArray(out.countries, (s) => s.trim().toUpperCase()).filter((c) =>
+    out.countries = normaliseCountries(cleanStringArray(out.countries, (s) => s.trim())).filter((c) =>
       /^[A-Z]{2}$/.test(c),
     )
   }

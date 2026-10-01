@@ -21,6 +21,7 @@
  *
  * NOTHING HERE PUBLISHES.
  */
+import { normaliseCountry } from '@the-tool-pit/db/country'
 import {
   FIELD_PROGRAMS,
   FIELD_COVERAGE,
@@ -175,7 +176,8 @@ export function validateFieldRead(
         rejected.push(`${key}: expected text`)
         continue
       }
-      fields[key] = value.trim().slice(0, TEXT_MAX[key] ?? 300)
+      // Countries are stored as ISO 3166-1 alpha-2 codes everywhere.
+      fields[key] = key === 'country' ? normaliseCountry(value) : value.trim().slice(0, TEXT_MAX[key] ?? 300)
     }
 
     kept[key] = { quote: quoteText.slice(0, 300), source }

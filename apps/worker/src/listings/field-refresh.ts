@@ -28,6 +28,17 @@
  *     is an APPLIED community edit (field_edit_proposals). A column whose
  *     stored value is what an applied edit set is left alone.
  *  6. "The field is closed", quoted, unpublishes it (status 'suppressed').
+ *  7. The shared refresh rules (refresh-rules.ts), which the first run
+ *     (2026-10-01, 20 of 31 edits reverted) showed fields needed: a respelling
+ *     is not a change (street, country, punctuation in hours), a team name is
+ *     never rewritten, an address only from a page about the place, hours
+ *     only as a recurring schedule, availability only on explicit words, a
+ *     sign-up link never a contact page, contact text kept while it is still
+ *     on the page.
+ *
+ * Every write logs each column's full old value to listing_changes in the same
+ * transaction (change-log.ts), so any run can be undone with
+ * scripts/revert-listing-changes.ts.
  *
  * NO QUEUE FOR HUMANS. A change that fails a rule is logged and dropped. Next
  * week's read tries again, and a page that really changed will say so again.
@@ -52,6 +63,16 @@ import { politeFetch } from '../connectors/base.js'
 import { fetchWithRelayFallback } from '../grants/relay-fetch.js'
 import { normaliseForQuoteMatch, quoteSource, urlSource, type NamedText } from '../model/evidence.js'
 import { getRedis } from '../redis.js'
+import { applyLoggedPatch } from './change-log.js'
+import {
+  countryCode,
+  guardRefusal,
+  ORG_NAME_KEYS,
+  sameCountry,
+  sameMeaningText,
+  sameStreet,
+  type GuardKind,
+} from './refresh-rules.js'
 
 // #region vocabulary
 
@@ -94,6 +115,17 @@ export const REFRESH_LABELS: Record<RefreshKey | 'status', string> = {
 }
 
 const URL_KEYS = new Set<string>(['contactUrl', 'website'])
+/** Which shared rule guards which column (refresh-rules.ts). */
+const GUARDS: Partial<Record<RefreshKey, GuardKind>> = {
+  teamName: 'orgName',
+  address: 'address',
+  city: 'place',
+  region: 'place',
+  hours: 'hours',
+  availability: 'availability',
+  contactUrl: 'signupLink',
+  contactInfo: 'contactText',
+}
 /** Shorter than this is a match by accident, the same floor read-field.ts uses. */
 const MIN_QUOTE = 10
 
@@ -129,9 +161,12 @@ const bareUrl = (u: string) =>
   u.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '')
 
 /**
- * Same value, loosely. Case, spacing and typographic quotes are not a change,
- * nor is a URL that differs only by scheme, www or a trailing slash, nor 12
- * against 12.0. A change of that size would be an alert about nothing.
+ * Same value, loosely. Case, spacing, punctuation and filler words are not a
+ * change ("9:00 pm; SATURDAY" against "9:00 pm, SATURDAY"), nor a street
+ * respelled ("Street" / "St", "North" / "N."), nor a country respelled
+ * ("United States" / "US"), nor a URL that differs only by scheme, www or a
+ * trailing slash, nor 12 against 12.0. A change of that size would be an
+ * alert about nothing.
  */
 export function sameFieldValue(key: string, a: unknown, b: unknown): boolean {
   if (isEmptyValue(key, a) && isEmptyValue(key, b)) return true
@@ -139,7 +174,9 @@ export function sameFieldValue(key: string, a: unknown, b: unknown): boolean {
   if (typeof a === 'number' || typeof b === 'number') return Number(a) === Number(b)
   if (typeof a === 'boolean' || typeof b === 'boolean') return a === b
   if (URL_KEYS.has(key)) return bareUrl(String(a)) === bareUrl(String(b))
-  return normaliseForQuoteMatch(String(a)) === normaliseForQuoteMatch(String(b))
+  if (key === 'country') return sameCountry(a, b)
+  if (key === 'address') return sameStreet(String(a), String(b))
+  return sameMeaningText(String(a), String(b))
 }
 
 /**
@@ -200,12 +237,17 @@ export function planFieldRefresh(input: {
 
   for (const key of REFRESH_KEYS) {
     if (!(key in input.read)) continue
-    const next = input.read[key]
+    const raw = input.read[key]
+    const next = key === 'country' && typeof raw === 'string' ? countryCode(raw) : raw
     const prev = input.current[key]
     if (sameFieldValue(key, prev, next)) continue
 
     if (isEmptyValue(key, next)) {
       refused.push(`${key}: would clear the stored value`)
+      continue
+    }
+    if (ORG_NAME_KEYS.has(key)) {
+      refused.push(`${key}: team or organisation name, never refreshed`)
       continue
     }
     if (input.personSet?.has(key)) {
@@ -216,6 +258,12 @@ export function planFieldRefresh(input: {
     const source = proofSource(key, next, quote, input.sources)
     if (!source) {
       refused.push(`${key}: quote not in the fetched text`)
+      continue
+    }
+    const guard = GUARDS[key]
+    const why = guard ? guardRefusal(guard, { from: prev, to: next, quote, source, sources: input.sources }) : null
+    if (why) {
+      refused.push(`${key}: ${why}`)
       continue
     }
     changes.push({ key, from: prev ?? null, to: next, quote, source })
@@ -329,6 +377,11 @@ const HASH_TTL_SECONDS = 60 * 24 * 60 * 60
 export async function processFieldRefreshJob(payload: FieldRefreshPayload = {}): Promise<FieldRefreshStats> {
   const db = getDb()
   const redis = getRedis()
+  // FIELD_REFRESH_DRY=1: read every field (ignoring the page hash), log the
+  // plan, write nothing, post nothing. For checking a change to the rules
+  // against real pages before it goes live, like EVENT_REFRESH_DRY.
+  const dry = process.env.FIELD_REFRESH_DRY === '1'
+
   const stats: FieldRefreshStats = {
     considered: 0, claimed: 0, noSource: 0, unchanged: 0, read: 0, updated: 0, closed: 0, refused: 0, failed: 0,
   }
@@ -391,7 +444,7 @@ export async function processFieldRefreshJob(payload: FieldRefreshPayload = {}):
       }
 
       const hash = sourcesHash(sources)
-      if (!payload.fieldId && (await redis.get(HASH_KEY(field.id))) === hash) {
+      if (!dry && !payload.fieldId && (await redis.get(HASH_KEY(field.id))) === hash) {
         stats.unchanged++
         continue
       }
@@ -427,11 +480,21 @@ export async function processFieldRefreshJob(payload: FieldRefreshPayload = {}):
       for (const why of plan.refused) console.log(`[field-refresh] ${field.name}: not applied, ${why}`)
       stats.refused += plan.refused.length
 
+      if (dry) {
+        for (const c of plan.changes) {
+          console.log(`[field-refresh] DRY ${field.name}: would apply ${c.key} ${showValue(c.from)} -> ${showValue(c.to)} ("${c.quote.slice(0, 120)}", ${c.source})`)
+        }
+        if (plan.changes.length > 0) stats.updated++
+        continue
+      }
+
       if (plan.changes.length > 0) {
-        await applyChanges(field, plan.changes)
-        stats.updated++
-        if (plan.changes.some((c) => c.key === 'status')) stats.closed++
-        notifyFieldUpdated(field, plan.changes)
+        const written = await applyChanges(field, plan.changes)
+        if (written.length > 0) {
+          stats.updated++
+          if (written.some((c) => c.key === 'status')) stats.closed++
+          notifyFieldUpdated(field, written)
+        }
       }
 
       await redis.set(HASH_KEY(field.id), hash, 'EX', HASH_TTL_SECONDS)
@@ -449,18 +512,39 @@ export async function processFieldRefreshJob(payload: FieldRefreshPayload = {}):
   return stats
 }
 
-async function applyChanges(field: PracticeField, changes: readonly RefreshChange[]): Promise<void> {
-  const patch: Record<string, unknown> = { updatedAt: new Date() }
-  for (const c of changes) patch[c.key] = c.to
-  await getDb()
-    .update(practiceFields)
-    .set(patch as Partial<PracticeField>)
-    .where(eq(practiceFields.id, field.id))
+/**
+ * Write the changes and their listing_changes rows in one transaction. A
+ * column whose stored value moved since the plan was made (a person saved
+ * while the model was reading) is dropped. Returns what was written.
+ */
+async function applyChanges(field: PracticeField, changes: readonly RefreshChange[]): Promise<RefreshChange[]> {
+  const patch: Record<string, unknown> = {}
+  const proof: Record<string, { quote: string; source: string }> = {}
   for (const c of changes) {
+    patch[c.key] = c.to
+    proof[c.key] = { quote: c.quote, source: c.source }
+  }
+  const byKey = new Map(changes.map((c) => [c.key as string, c]))
+  const writtenKeys = await applyLoggedPatch({
+    entityType: 'field',
+    table: practiceFields,
+    id: field.id,
+    actor: 'field-refresh',
+    patch,
+    proof,
+    where: eq(practiceFields.status, 'published'),
+    stillCurrent: (key, value) => {
+      const c = byKey.get(key)
+      return !c || (key === 'status' ? value === c.from : sameFieldValue(key, value, c.from))
+    },
+  })
+  const written = changes.filter((c) => writtenKeys.includes(c.key))
+  for (const c of written) {
     console.log(
       `[field-refresh] ${field.name}: ${c.key} ${showValue(c.from)} -> ${showValue(c.to)} ("${c.quote.slice(0, 120)}", ${c.source})`,
     )
   }
+  return written
 }
 
 function notifyFieldUpdated(field: PracticeField, changes: readonly RefreshChange[]): void {

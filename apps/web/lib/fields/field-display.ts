@@ -4,6 +4,7 @@
  * shape. Used by the map, list, card, legend, and admin. No React here.
  */
 import type { FieldCoverage, FieldElements, FieldAvailability, FieldPerimeter } from '@the-tool-pit/db'
+import { placeLine } from '@the-tool-pit/db/country'
 
 /** A single photo in a field's gallery, as sent to the client. */
 export interface FieldPhotoRef {
@@ -161,4 +162,9 @@ export function fieldSpecSummary(
   const parts = [COVERAGE_LABEL[f.coverage], ELEMENTS_LABEL[f.elements].toLowerCase()]
   if (f.hasFms && opts?.fms !== false) parts.push('FMS')
   return parts.join(' · ')
+}
+
+/** "City, Region", plus the country written out when it is not the US. */
+export function fieldLocation(f: Pick<PublicField, 'city' | 'region' | 'country'>): string {
+  return placeLine([f.city, f.region], f.country)
 }

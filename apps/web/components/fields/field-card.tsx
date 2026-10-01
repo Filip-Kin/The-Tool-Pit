@@ -12,6 +12,7 @@ import {
   AVAILABILITY_LABEL,
   accessLabel,
   isLowCeiling,
+  fieldLocation,
 } from '@/lib/fields/field-display'
 
 /** Team line shown as a subtitle under the field name. Null if no team info. */
@@ -22,7 +23,7 @@ function teamSubtitle(f: PublicField): string | null {
 }
 
 function locationOf(f: PublicField): string {
-  return [f.city, f.region, f.country].filter(Boolean).join(', ')
+  return fieldLocation(f)
 }
 
 /** A small round swatch matching this field's pin. */

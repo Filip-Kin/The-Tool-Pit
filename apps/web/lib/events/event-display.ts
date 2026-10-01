@@ -5,6 +5,7 @@
  * columns, date and cost and fullness formatting, and the public DTO shape.
  * Used by the map, list, card, legend, and admin. No React here.
  */
+import { placeLine } from '@the-tool-pit/db/country'
 import type {
   EventStatus,
   RegistrationStatus,
@@ -505,9 +506,14 @@ export const VOLUNTEER_STATUS_LABEL: Record<VolunteerStatus, string> = {
   unknown: 'Volunteer status unknown',
 }
 
-/** A one-line location string from the parts we have. */
+/** A one-line location string from the parts we have. The country is left off for the US, and written out otherwise. */
 export function eventLocation(ev: Pick<PublicEvent, 'venueName' | 'city' | 'region' | 'country'>): string {
-  return [ev.venueName, ev.city, ev.region, ev.country].filter(Boolean).join(', ')
+  return placeLine([ev.venueName, ev.city, ev.region], ev.country)
+}
+
+/** The full street line: address, city, region, and the country when it is not the US. */
+export function eventAddressLine(ev: Pick<PublicEvent, 'address' | 'city' | 'region' | 'country'>): string {
+  return placeLine([ev.address, ev.city, ev.region], ev.country)
 }
 
 /** Day-count phrase: "1 day", "2 days", "2x 1-day events" when each day is its own event. */

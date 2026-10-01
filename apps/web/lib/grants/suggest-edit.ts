@@ -9,6 +9,7 @@
  * admin applies or dismisses it on the same screen; nothing here touches a
  * listing.
  */
+import { normaliseCountries } from '@the-tool-pit/db/country'
 import { and, eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { grantChanges, grantCycles, grants } from '@the-tool-pit/db'
@@ -112,7 +113,7 @@ export async function createGrantEditSuggestion(grantId: string, input: GrantEdi
   if (/^[A-Z]{3}$/.test(currency)) push('awardCurrency', grant.awardCurrency, currency)
   // Lists: comma-separated codes, upper-cased, deduped; programs are the enum.
   const list = (k: string) => text(k).split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i)
-  const countries = list('countries').filter((c) => /^[A-Z]{2}$/.test(c))
+  const countries = normaliseCountries(list('countries')).filter((c) => /^[A-Z]{2}$/.test(c))
   if (text('countries')) push('countries', grant.countries, countries)
   const regions = list('regions').filter((r) => /^[A-Z]{2,3}$/.test(r))
   if (text('regions')) push('regions', grant.regions, regions)

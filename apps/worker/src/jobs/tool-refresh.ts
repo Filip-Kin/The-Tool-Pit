@@ -33,6 +33,7 @@ import { parseGitHubUrl } from '../connectors/github.js'
 import { fetchWithRelayFallback } from '../grants/relay-fetch.js'
 import { extractHtmlMetadata, isYouTubeUrl } from '../pipeline/extract.js'
 import { getRedis } from '../redis.js'
+import { applyLoggedPatch } from '../listings/change-log.js'
 import {
   fetchVerdict,
   monthKey,
@@ -156,11 +157,15 @@ async function suppressTool(tool: EligibleTool, strikes: [Strike, Strike]): Prom
   const line = `Suppressed: homepage gone (${strikes[0].month} ${strikes[0].reason}; ${strikes[1].month} ${strikes[1].reason})`
   // Appended, never replaced: a moderator's note stays readable above it.
   const notes = [tool.adminNotes, line].filter(Boolean).join('\n')
-  const done = await getDb()
-    .update(tools)
-    .set({ status: 'suppressed', adminNotes: notes, updatedAt: new Date() })
-    .where(and(eq(tools.id, tool.id), eq(tools.status, 'published'), notClaimed(['status'])))
-    .returning({ id: tools.id })
+  const done = await applyLoggedPatch({
+    entityType: 'tool',
+    table: tools,
+    id: tool.id,
+    actor: 'tool-refresh',
+    patch: { status: 'suppressed', adminNotes: notes },
+    proof: { status: { quote: line, source: tool.url } },
+    where: and(eq(tools.status, 'published'), notClaimed(['status'])),
+  })
   return done.length > 0
 }
 
@@ -210,11 +215,16 @@ async function refreshTool(tool: EligibleTool, month: string): Promise<ToolRunRe
   let applied = plan.changes
   if (plan.changes.length > 0) {
     const keys = Object.keys(plan.set)
-    const done = await getDb()
-      .update(tools)
-      .set({ ...plan.set, updatedAt: new Date() })
-      .where(and(eq(tools.id, tool.id), eq(tools.status, 'published'), notClaimed(keys)))
-      .returning({ id: tools.id })
+    // Old values to listing_changes and the write, in one transaction.
+    const done = await applyLoggedPatch({
+      entityType: 'tool',
+      table: tools,
+      id: tool.id,
+      actor: 'tool-refresh',
+      patch: plan.set,
+      proof: Object.fromEntries(keys.map((k) => [k, { quote: null, source: tool.url }])),
+      where: and(eq(tools.status, 'published'), notClaimed(keys)),
+    })
     if (done.length === 0) applied = []
   }
 

@@ -1,4 +1,5 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm'
+import { normaliseCountry as toCountryCode } from '@the-tool-pit/db/country'
 import { getDb } from '@the-tool-pit/db'
 import {
   grants,
@@ -92,11 +93,9 @@ interface Evaluation {
  * the crawler copies whatever the funder's page says. Fold the handful of
  * spellings we actually see; anything else compares as written, uppercased.
  */
+/** ISO 3166-1 alpha-2, the shared normaliser ('UK' is 'GB'). */
 function normaliseCountry(value: string): string {
-  const v = value.trim().toUpperCase()
-  if (v === 'USA' || v === 'UNITED STATES' || v === 'UNITED STATES OF AMERICA') return 'US'
-  if (v === 'CAN' || v === 'CANADA') return 'CA'
-  return v
+  return toCountryCode(value) ?? ''
 }
 
 function normaliseScalar(value: unknown): string | number | boolean | null {

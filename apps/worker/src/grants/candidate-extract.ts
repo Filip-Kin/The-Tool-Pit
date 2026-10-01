@@ -31,6 +31,7 @@
  * Nothing here publishes. The output lands on the candidate for a human, and
  * the review deck turns approving a grant into confirming a reading.
  */
+import { normaliseCountry, normaliseCountries } from '@the-tool-pit/db/country'
 import Anthropic from '@anthropic-ai/sdk'
 import { anthropic } from '../anthropic.js'
 import {
@@ -431,8 +432,8 @@ const VALUE_CLEANERS: Record<Exclude<keyof GrantExtractionFields, TriStateFieldK
   effortLevel: (raw) => cleanEnum(raw, GRANT_EFFORT_LEVELS),
   geoScope: (raw) => cleanEnum(raw, GRANT_GEO_SCOPES),
   countries: (raw) => {
-    const list = cleanStringArray(raw, (s) => s.trim().toUpperCase())
-    const codes = list?.filter((c) => /^[A-Z]{2}$/.test(c)) ?? []
+    const list = cleanStringArray(raw, (s) => normaliseCountry(s) ?? '')
+    const codes = normaliseCountries(list ?? []).filter((c) => /^[A-Z]{2}$/.test(c))
     return codes.length > 0 ? codes : null
   },
   regions: (raw) => cleanStringArray(raw, (s) => s.trim().toUpperCase()),
