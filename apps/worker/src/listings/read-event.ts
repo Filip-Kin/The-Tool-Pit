@@ -228,6 +228,12 @@ export interface EventRead {
   fields: ExtractedEventListingFields
   evidence: EventFieldEvidence
   pagesRead: string[]
+  /**
+   * The text of every page opened, links included: what the quotes were
+   * checked against. The weekly refresh re-checks a changed value's quote
+   * against exactly this, plus the thread body.
+   */
+  pages: Array<{ url: string; text: string }>
   /** Everything dropped, and why. Shown to the reviewer, never hidden. */
   rejected: string[]
 }
@@ -427,6 +433,7 @@ export async function readEventCandidate(input: {
     fields: checked.fields,
     evidence: checked.evidence,
     pagesRead: answer.pages.map((p) => p.url),
+    pages: answer.pages.map((p) => ({ url: p.url, text: `${p.text}\n${p.links.join('\n')}` })),
     rejected: [...checked.rejected, ...answer.failed.map((u) => `could not open ${u}`)],
   }
 }

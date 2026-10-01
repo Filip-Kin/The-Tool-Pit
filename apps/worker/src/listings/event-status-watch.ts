@@ -27,9 +27,15 @@
  *
  * eventStatus is a human-editable column (HUMAN_EDITABLE_EVENT_KEYS), which is
  * why the claim is checked on a fresh read of the row right before the write.
+ *
+ * THE SAME RUN REFRESHES EVERYTHING ELSE. Every published, still-upcoming
+ * event (end date, else start date, today or later) is then re-read the way
+ * intake reads it and every proven change is applied: see event-refresh.ts.
+ * The two share one memoised page read per URL, and a listing this run just
+ * cancelled is not refreshed.
  */
 import { createHash } from 'node:crypto'
-import { and, eq, gte, inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { getDb, eventListings, isHumanEdited } from '@the-tool-pit/db'
 import { sendApprovalNotice, siteUrl } from '@the-tool-pit/types'
 import { anthropic, hasAnthropicCredentials } from '../anthropic.js'
@@ -38,6 +44,8 @@ import { htmlToText, renderPage } from '../connectors/playwright-render.js'
 import { fetchWithRelayFallback } from '../grants/relay-fetch.js'
 import { normaliseForQuoteMatch, parseJsonObject, quoteSource } from '../model/evidence.js'
 import { getRedis } from '../redis.js'
+import { isRefreshable } from './event-refresh-plan.js'
+import { refreshPublishedEvent } from './event-refresh.js'
 
 const MODEL = 'claude-sonnet-5'
 /** An event that started up to this many days ago is still watched. */
@@ -231,10 +239,21 @@ export interface EventStatusWatchStats {
   cancelled: number
   postponed: number
   failed: number
+  /** Listings the weekly refresh looked at. */
+  refreshConsidered: number
+  /** Skipped without a model call: the same pages as last week. */
+  refreshSamePages: number
+  /** Listings with at least one field applied, and the fields. */
+  refreshUpdated: number
+  refreshFieldsApplied: number
+  refreshFailed: number
 }
 
 export async function processEventStatusWatch(): Promise<EventStatusWatchStats> {
-  const stats: EventStatusWatchStats = { considered: 0, flagged: 0, cancelled: 0, postponed: 0, failed: 0 }
+  const stats: EventStatusWatchStats = {
+    considered: 0, flagged: 0, cancelled: 0, postponed: 0, failed: 0,
+    refreshConsidered: 0, refreshSamePages: 0, refreshUpdated: 0, refreshFieldsApplied: 0, refreshFailed: 0,
+  }
   const db = getDb()
   const today = new Date().toISOString().slice(0, 10)
 
@@ -249,26 +268,37 @@ export async function processEventStatusWatch(): Promise<EventStatusWatchStats> 
       seasonYear: eventListings.seasonYear,
       website: eventListings.website,
       teamListUrl: eventListings.teamListUrl,
+      chiefDelphiUrl: eventListings.chiefDelphiUrl,
     })
     .from(eventListings)
-    .where(
-      and(
-        eq(eventListings.status, 'published'),
-        inArray(eventListings.eventStatus, ['tentative', 'confirmed']),
-        gte(eventListings.startDate, addDays(today, -WATCH_LOOKBACK_DAYS)),
-      ),
-    )
+    .where(and(eq(eventListings.status, 'published'), inArray(eventListings.eventStatus, ['tentative', 'confirmed'])))
 
-  const listings = rows.filter((l) => isWatchable(l, today) && (l.website || l.teamListUrl))
-  stats.considered = listings.length
+  const watched = new Set(rows.filter((l) => isWatchable(l, today) && (l.website || l.teamListUrl)).map((l) => l.id))
+  const listings = rows.filter((l) => watched.has(l.id) || (isRefreshable(l, today) && (l.website || l.chiefDelphiUrl)))
+  stats.considered = watched.size
   const canAsk = hasAnthropicCredentials()
 
   for (const listing of listings) {
-    const urls = [...new Set([listing.website, listing.teamListUrl].filter((u): u is string => Boolean(u)))]
+    // One read per URL per listing, shared by the cancellation check and the
+    // refresh's page hash.
+    const pageCache = new Map<string, Promise<string | null>>()
+    const readText = (url: string) => {
+      let p = pageCache.get(url)
+      if (!p) {
+        p = readPageText(url).catch(() => null)
+        pageCache.set(url, p)
+      }
+      return p
+    }
+
+    const urls = watched.has(listing.id)
+      ? [...new Set([listing.website, listing.teamListUrl].filter((u): u is string => Boolean(u)))]
+      : []
     let flagged = false
+    let cancelledNow = false
     try {
       for (const url of urls) {
-        const text = await readPageText(url)
+        const text = await readText(url)
         if (!text) continue
         const hits = cancellationHits(text)
         if (hits.length === 0) continue
@@ -284,7 +314,10 @@ export async function processEventStatusWatch(): Promise<EventStatusWatchStats> 
           continue
         }
         const acted = await actOnVerdict(listing, url, verdict)
-        if (acted === 'cancelled') stats.cancelled++
+        if (acted === 'cancelled') {
+          stats.cancelled++
+          cancelledNow = true
+        }
         if (acted === 'postponed') stats.postponed++
         break
       }
@@ -292,12 +325,31 @@ export async function processEventStatusWatch(): Promise<EventStatusWatchStats> 
       stats.failed++
       console.error(`[event-status-watch] ${listing.name}: ${String(err)}`)
     }
+
+    if (!cancelledNow && canAsk && isRefreshable(listing, today)) {
+      stats.refreshConsidered++
+      try {
+        const r = await refreshPublishedEvent(listing, readText, today)
+        if (r.outcome === 'same_pages') stats.refreshSamePages++
+        if (r.outcome === 'updated') {
+          stats.refreshUpdated++
+          stats.refreshFieldsApplied += r.applied
+        }
+      } catch (err) {
+        stats.refreshFailed++
+        console.error(`[event-refresh] ${listing.name}: ${String(err)}`)
+      }
+    }
     await delay(500)
   }
 
   console.log(
     `[event-status-watch] ${stats.considered} listings: ${stats.flagged} flagged by the pre-check, ` +
       `${stats.cancelled} cancelled, ${stats.postponed} postponed, ${stats.failed} failed`,
+  )
+  console.log(
+    `[event-refresh] ${stats.refreshConsidered} listings: ${stats.refreshSamePages} unchanged pages, ` +
+      `${stats.refreshUpdated} updated (${stats.refreshFieldsApplied} fields), ${stats.refreshFailed} failed`,
   )
   return stats
 }

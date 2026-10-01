@@ -65,8 +65,9 @@ export interface RosterRefreshPayload {
   /**
    * Run the weekly cancellation / postponement watch instead of a roster
    * refresh: re-read each upcoming published event's own site for a notice
-   * that it was called off. Its own weekly job in queues.ts. See
-   * event-status-watch.ts.
+   * that it was called off, then re-read each one the way intake does and
+   * apply every proven change. Its own weekly job in queues.ts. See
+   * event-status-watch.ts and event-refresh.ts.
    */
   eventStatusWatch?: boolean
 }
@@ -339,8 +340,8 @@ export async function processRosterRefreshJob(
   if (payload.eventStatusWatch) {
     const r = await processEventStatusWatch()
     stats.considered = r.considered
-    stats.changed = r.cancelled + r.postponed
-    stats.failed = r.failed
+    stats.changed = r.cancelled + r.postponed + r.refreshUpdated
+    stats.failed = r.failed + r.refreshFailed
     return stats
   }
 
