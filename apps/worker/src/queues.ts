@@ -15,6 +15,7 @@ import type { RosterRefreshPayload } from './listings/roster-refresh.js'
 import type { TbaPushPayload } from './listings/tba-push.js'
 import type { TbaTeamsSyncPayload } from './listings/tba-teams-sync.js'
 import type { PopularityRefreshPayload } from './jobs/popularity.js'
+import type { ToolRefreshPayload } from './jobs/tool-refresh.js'
 // The offseason season rule and the renewal date live beside the column they
 // describe, so the schedule below and the migration that backfills the season
 // cannot drift apart.
@@ -79,6 +80,22 @@ export const popularityQueue = new Queue<PopularityRefreshPayload>('popularity',
     attempts: 1,
     removeOnComplete: { count: 30 },
     removeOnFail: { count: 60 },
+  },
+})
+
+/**
+ * The monthly re-read of every homepage-only tool. See jobs/tool-refresh.ts.
+ *
+ * attempts: 1, the popularity reasoning: one long paced sweep, and a retry
+ * would re-read every homepage again. The strike rule counts months, so a
+ * second run in the same month could not suppress anything anyway.
+ */
+export const toolRefreshQueue = new Queue<ToolRefreshPayload>('tool-refresh', {
+  connection,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: { count: 12 },
+    removeOnFail: { count: 24 },
   },
 })
 
@@ -427,6 +444,15 @@ export async function scheduleRecurringJobs() {
   // move daily and a directory that is a week behind on WPILib looks unmanned.
   await popularityQueue.upsertJobScheduler('popularity-refresh', { pattern: '20 7 * * *' }, {
     name: 'popularity-refresh',
+    data: {},
+  })
+
+  // Homepage refresh — monthly, 07:00 UTC on the 1st. Clear of the 02:10-06:40
+  // discovery block; the 07:20 popularity sweep beside it talks to GitHub, not
+  // to these hosts. Monthly because the two-strike rule counts months: a site
+  // has to be gone on two of these runs, a month apart, before it is suppressed.
+  await toolRefreshQueue.upsertJobScheduler('tool-refresh', { pattern: '0 7 1 * *' }, {
+    name: 'tool-refresh',
     data: {},
   })
 

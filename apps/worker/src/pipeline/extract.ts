@@ -431,6 +431,72 @@ export function pickGitHubUrl(html: string, pageUrl: string, title: string): Git
 }
 // #endregion
 
+/**
+ * Everything extractMetadata reads off a page's HTML, without the fetch.
+ *
+ * Pure, so the monthly homepage refresh (jobs/tool-refresh.ts) reads a page it
+ * fetched itself (through the relay when the worker's IP is refused) with the
+ * exact rules the crawler applied on intake. Two copies of these rules would
+ * drift, and a drifted copy would rename every listing on its first run.
+ */
+export function extractHtmlMetadata(html: string, url: string): RawCandidateMetadata {
+  const root = parse(html)
+
+  // Title: prefer og:title > title tag.
+  // Normalise first — decode HTML entities and strip trailing "| SiteName" chrome, using
+  // og:site_name as the strongest signal for what to strip.
+  const ogTitle = root.querySelector('meta[property="og:title"]')?.getAttribute('content')
+  const titleTag = root.querySelector('title')?.innerText
+  const siteName = root.querySelector('meta[property="og:site_name"]')?.getAttribute('content') ?? undefined
+  const title = productTitle(normalizeTitle(ogTitle ?? titleTag ?? '', siteName), siteName, url).slice(0, 300)
+
+  // Description
+  const ogDesc = root.querySelector('meta[property="og:description"]')?.getAttribute('content')
+  const metaDesc = root.querySelector('meta[name="description"]')?.getAttribute('content')
+  const description = decodeHtmlEntities((ogDesc ?? metaDesc ?? '').trim()).slice(0, 1000)
+
+  // Keywords
+  const kwContent = root.querySelector('meta[name="keywords"]')?.getAttribute('content') ?? ''
+  const keywords = kwContent
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean)
+    .slice(0, 20)
+
+  // Find this page's own GitHub repo, ignoring chrome and deep links.
+  const { githubUrl, referencedGitHubUrl } = pickGitHubUrl(html, url, title)
+
+  // Find docs links (heuristic)
+  const docsLinks = root
+    .querySelectorAll('a[href*="docs."], a[href*="/docs"], a[href*="documentation"]')
+    .map((a) => a.getAttribute('href') ?? '')
+    .filter(Boolean)
+    .slice(0, 2)
+
+  // Extract readable page text for AI classification.
+  // Remove non-content elements first, then get structured text.
+  const bodyClone = root.querySelector('body') ?? root
+  for (const el of bodyClone.querySelectorAll('script, style, noscript, svg, iframe, nav, footer')) {
+    el.remove()
+  }
+  const pageText = bodyClone.structuredText
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, 20000)
+
+  return {
+    title,
+    description,
+    ogDescription: ogDesc ?? undefined,
+    githubUrl,
+    referencedGitHubUrl,
+    docsUrl: docsLinks[0],
+    keywords,
+    rawHtml: pageText || undefined,
+  }
+}
+
 export async function extractMetadata(url: string): Promise<RawCandidateMetadata> {
   // GitHub repo URLs — use API, not HTML (HTML gives GitHub's own chrome, not repo data)
   if (parseGitHubUrl(url)) {
@@ -462,63 +528,9 @@ export async function extractMetadata(url: string): Promise<RawCandidateMetadata
     }
 
     const html = await res.text()
-    const root = parse(html)
-
-    // Title: prefer og:title > title tag; fall back to CWS-derived slug title if generic.
-    // Normalise first — decode HTML entities and strip trailing "| SiteName" chrome, using
-    // og:site_name as the strongest signal for what to strip.
-    const ogTitle = root.querySelector('meta[property="og:title"]')?.getAttribute('content')
-    const titleTag = root.querySelector('title')?.innerText
-    const siteName = root.querySelector('meta[property="og:site_name"]')?.getAttribute('content') ?? undefined
-    const rawTitle = productTitle(normalizeTitle(ogTitle ?? titleTag ?? '', siteName), siteName, url).slice(0, 300)
-    const isGenericCwsTitle = cwsDerivedTitle && (!rawTitle || /^chrome web store$/i.test(rawTitle))
-    const title = isGenericCwsTitle ? cwsDerivedTitle! : rawTitle
-
-    // Description
-    const ogDesc = root.querySelector('meta[property="og:description"]')?.getAttribute('content')
-    const metaDesc = root.querySelector('meta[name="description"]')?.getAttribute('content')
-    const description = decodeHtmlEntities((ogDesc ?? metaDesc ?? '').trim()).slice(0, 1000)
-
-    // Keywords
-    const kwContent = root.querySelector('meta[name="keywords"]')?.getAttribute('content') ?? ''
-    const keywords = kwContent
-      .split(',')
-      .map((k) => k.trim())
-      .filter(Boolean)
-      .slice(0, 20)
-
-    // Find this page's own GitHub repo, ignoring chrome and deep links.
-    const { githubUrl, referencedGitHubUrl } = pickGitHubUrl(html, url, title)
-
-    // Find docs links (heuristic)
-    const docsLinks = root
-      .querySelectorAll('a[href*="docs."], a[href*="/docs"], a[href*="documentation"]')
-      .map((a) => a.getAttribute('href') ?? '')
-      .filter(Boolean)
-      .slice(0, 2)
-
-    // Extract readable page text for AI classification.
-    // Remove non-content elements first, then get structured text.
-    const bodyClone = root.querySelector('body') ?? root
-    for (const el of bodyClone.querySelectorAll('script, style, noscript, svg, iframe, nav, footer')) {
-      el.remove()
-    }
-    const pageText = bodyClone.structuredText
-      .replace(/[ \t]+/g, ' ')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
-      .slice(0, 20000)
-
-    return {
-      title,
-      description,
-      ogDescription: ogDesc ?? undefined,
-      githubUrl,
-      referencedGitHubUrl,
-      docsUrl: docsLinks[0],
-      keywords,
-      rawHtml: pageText || undefined,
-    }
+    const meta = extractHtmlMetadata(html, url)
+    const isGenericCwsTitle = cwsDerivedTitle && (!meta.title || /^chrome web store$/i.test(meta.title))
+    return isGenericCwsTitle ? { ...meta, title: cwsDerivedTitle } : meta
   } catch (err) {
     console.error(`[extract] error for ${url}:`, err)
     return {}

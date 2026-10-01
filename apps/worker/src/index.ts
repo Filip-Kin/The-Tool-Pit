@@ -20,6 +20,8 @@ import { processEnrichJob } from './jobs/enrich.js'
 import { processFreshnessJob } from './jobs/freshness.js'
 import { processLinkCheckerJob } from './jobs/link-checker.js'
 import { processPopularityRefreshJob } from './jobs/popularity.js'
+import { processToolRefreshJob } from './jobs/tool-refresh.js'
+import type { ToolRefreshPayload } from './jobs/tool-refresh.js'
 import { processReindexJob } from './jobs/reindex.js'
 import { processSubmissionJob } from './jobs/submission.js'
 import { processAlbumIngestJob } from './jobs/album-ingest.js'
@@ -132,6 +134,17 @@ const popularityWorker = new Worker<PopularityRefreshPayload>(
   // Concurrency MUST stay 1. The pass holds the GitHub rate-limit budget in its
   // own loop and stops when it runs low, and a second copy running beside it
   // would spend that budget behind its back.
+  { connection, concurrency: 1 },
+)
+
+const toolRefreshWorker = new Worker<ToolRefreshPayload>(
+  'tool-refresh',
+  async (job) => {
+    console.log(`[tool-refresh] starting pass ${job.id}`)
+    await processToolRefreshJob(job.data)
+  },
+  // One pass at a time. The pass paces itself with a small pool inside; two
+  // copies would double the load on the same hosts and race on the strikes.
   { connection, concurrency: 1 },
 )
 
@@ -456,7 +469,7 @@ const seasonRenewalWorker = new Worker(
 // #endregion
 
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, newListingsReportWorker, listingDiscoverWorker, readCandidatesWorker, rosterRefreshWorker, tbaPushWorker, tbaTeamsSyncWorker, seasonRenewalWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, toolRefreshWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, newListingsReportWorker, listingDiscoverWorker, readCandidatesWorker, rosterRefreshWorker, tbaPushWorker, tbaTeamsSyncWorker, seasonRenewalWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -493,6 +506,7 @@ async function shutdown() {
     enrichWorker.close(),
     freshnessWorker.close(),
     popularityWorker.close(),
+    toolRefreshWorker.close(),
     linkCheckWorker.close(),
     reindexWorker.close(),
     submissionWorker.close(),
