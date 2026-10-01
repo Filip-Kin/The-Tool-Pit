@@ -75,9 +75,24 @@ const ENUMS: Record<string, readonly string[]> = {
   elements: FIELD_ELEMENTS,
 }
 
+/**
+ * Appended to the prompt on a weekly refresh of a field that is already
+ * published (listings/field-refresh.ts). A candidate read never asks it: a
+ * thread offering a field cannot also say the field is gone.
+ */
+const REFRESH_PROMPT = `
+
+This field is ALREADY LISTED. You are re-reading its own pages to keep the listing current, not reading an offer.
+
+One more field:
+  closed         true only when a page says this field is closed, shut down, no longer offered or no longer
+                 available to other teams. Quote those words. Otherwise {"value": null, "quote": null}.
+                 A field closed for a holiday or for the build season is NOT closed.`
+
 const URL_FIELDS = new Set(['contactUrl', 'website'])
 const INT_FIELDS = new Set(['teamNumber', 'ceilingHeightFt'])
-const BOOL_FIELDS = new Set(['hasFms'])
+// `closed` is only ever returned on a refresh read; see REFRESH_PROMPT.
+const BOOL_FIELDS = new Set(['hasFms', 'closed'])
 const TEXT_MAX: Record<string, number> = {
   name: 160, teamName: 120, address: 200, city: 120, region: 60, country: 8,
   hours: 200, contactInfo: 300, notes: 400,
@@ -88,6 +103,12 @@ export interface FieldRead {
   evidence: Record<string, { quote: string; source: string }>
   pagesRead: string[]
   rejected: string[]
+  /**
+   * Every text the evidence was checked against, by source. Kept so a caller
+   * that writes to a PUBLISHED row (the weekly refresh) can check each quote
+   * again itself rather than trust that this module did.
+   */
+  sources: NamedText<string>[]
 }
 
 export function validateFieldRead(
@@ -169,16 +190,21 @@ export async function readFieldCandidate(input: {
   title: string
   threadText: string
   links?: string[]
+  /**
+   * A re-read of a published field. The text is the field's own pages rather
+   * than a thread, and the reader is also asked whether the field has closed.
+   */
+  refresh?: boolean
 }): Promise<FieldRead | null> {
   const answer = await askWithPages({
     model: 'claude-sonnet-5',
-    system: SYSTEM_PROMPT,
+    system: input.refresh ? SYSTEM_PROMPT + REFRESH_PROMPT : SYSTEM_PROMPT,
     user: [
-      `Chief Delphi thread: ${input.threadUrl}`,
-      `Thread title: ${input.title}`,
+      input.refresh ? `Field page: ${input.threadUrl}` : `Chief Delphi thread: ${input.threadUrl}`,
+      input.refresh ? `Field: ${input.title}` : `Thread title: ${input.title}`,
       input.links?.length ? `Links in the post: ${input.links.slice(0, 8).join(', ')}` : '',
       '',
-      'Opening post:',
+      input.refresh ? 'The field\'s pages:' : 'Opening post:',
       input.threadText.slice(0, 20_000),
     ]
       .filter(Boolean)
@@ -210,5 +236,6 @@ export async function readFieldCandidate(input: {
     evidence: checked.evidence,
     pagesRead: answer.pages.map((p) => p.url),
     rejected: [...checked.rejected, ...answer.failed.map((u) => `could not open ${u}`)],
+    sources,
   }
 }
