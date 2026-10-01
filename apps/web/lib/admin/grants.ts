@@ -6,6 +6,7 @@
  * screens needs, so the rules live in one place rather than being re-typed per
  * route.
  */
+import { normaliseCountries } from '@the-tool-pit/db/country'
 import { scrubNarration } from '@the-tool-pit/db/listing-text'
 import type { GrantDeadlineType } from '@the-tool-pit/db/grant-enums'
 import { DATE_ONLY_NOTE, deriveCycleStatus, endOfDayIn, funderTimeZone, isDateOnlyNote } from '@the-tool-pit/db/grant-dates'
@@ -276,7 +277,7 @@ export function parseGrantFields(form: FormData): ParsedGrantFields {
   const name = String(form.get('name') ?? '').trim()
   const infoUrl = String(form.get('infoUrl') ?? '').trim()
   const geoScope = pick(form.get('geoScope'), GRANT_GEO_SCOPES, 'national')
-  const countries = csv(form.get('countries')).map((c) => c.toUpperCase())
+  const countries = normaliseCountries(csv(form.get('countries')))
   const regions = csv(form.get('regions')).map((r) => r.toUpperCase())
   const programs = form.getAll('programs').map(String).filter((p) => (GRANT_PROGRAMS as readonly string[]).includes(p))
   const renewableRaw = String(form.get('renewable') ?? '')

@@ -1,4 +1,5 @@
 import { eq, and, inArray } from 'drizzle-orm'
+import { normaliseCountry } from '@the-tool-pit/db/country'
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos } from '@the-tool-pit/db'
 import type { FieldEditProposalData } from '@the-tool-pit/db'
@@ -40,6 +41,7 @@ export async function applyFieldEditProposal(
   assign('city', 'city')
   assign('region', 'region')
   assign('country', 'country')
+  if (typeof patch.country === 'string') patch.country = normaliseCountry(patch.country)
   assign('coverage', 'coverage')
   assign('perimeter', 'perimeter')
   assign('elements', 'elements')

@@ -1,4 +1,5 @@
 import { getDb } from '@/lib/db'
+import { normaliseCountry } from '@the-tool-pit/db/country'
 import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS, FIELD_SOURCES } from '@the-tool-pit/db'
 import type { FieldSource, NewPracticeField } from '@the-tool-pit/db'
 import { uniqueFieldSlug } from '@/lib/queries/fields'
@@ -160,7 +161,7 @@ export async function createFieldSubmission(
     address: input.address?.trim() || null,
     city: input.city?.trim() || null,
     region: input.region?.trim() || null,
-    country: input.country?.trim() || null,
+    country: normaliseCountry(input.country),
     coverage,
     perimeter,
     elements,

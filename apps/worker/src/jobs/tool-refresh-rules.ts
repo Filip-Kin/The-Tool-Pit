@@ -19,6 +19,7 @@
  */
 import { createHash } from 'node:crypto'
 import { isHumanEdited } from '@the-tool-pit/db'
+import { sameMeaningText } from '../listings/refresh-rules.js'
 
 // #region months
 
@@ -260,6 +261,8 @@ const SUMMARY_MAX = 300
  * - A field a person claimed is never written.
  * - Never cleared to empty: an empty read is ignored.
  * - A generic or parking-page name is never applied.
+ * - A rewrite that only changes case, spacing, punctuation or filler words is
+ *   not a change, on the page or against the row (refresh-rules.ts).
  * - The long description is cleared only when it was the crawler's copy of
  *   the old page text, now superseded by a shorter one in the summary.
  */
@@ -273,21 +276,27 @@ export function planToolUpdate(row: ToolRow, prev: PageSnapshot | null, fresh: P
   const claimed = (k: string) => isHumanEdited(row.humanEditedFields, k)
 
   const name = fresh.name.replace(/\s+/g, ' ').trim()
-  if (name && name !== prev.name.trim() && name !== row.name && !isGenericName(name) && !claimed('name')) {
+  if (
+    name &&
+    !sameMeaningText(name, prev.name) &&
+    !sameMeaningText(name, row.name) &&
+    !isGenericName(name) &&
+    !claimed('name')
+  ) {
     set.name = name
     changes.push({ field: 'name', from: row.name, to: name })
   }
 
   const desc = fresh.description.trim()
-  if (desc && desc !== prev.description.trim()) {
+  if (desc && !sameMeaningText(desc, prev.description)) {
     const summary = desc.slice(0, SUMMARY_MAX)
-    if (!claimed('summary') && summary !== (row.summary ?? '')) {
+    if (!claimed('summary') && !sameMeaningText(summary, row.summary)) {
       set.summary = summary
       changes.push({ field: 'summary', from: row.summary ?? '', to: summary })
     }
     if (!claimed('description')) {
       if (desc.length > SUMMARY_MAX) {
-        if (desc !== (row.description ?? '')) {
+        if (!sameMeaningText(desc, row.description)) {
           set.description = desc
           changes.push({ field: 'description', from: row.description ?? '', to: desc })
         }

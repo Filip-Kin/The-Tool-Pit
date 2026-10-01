@@ -1,4 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm'
+import { normaliseCountry } from '@the-tool-pit/db/country'
 import { getDb } from '@/lib/db'
 import {
   eventListings,
@@ -211,7 +212,7 @@ export async function createEventSubmission(
     address: input.address?.trim() || null,
     city: input.city?.trim() || null,
     region: input.region?.trim() || null,
-    country: input.country?.trim() || null,
+    country: normaliseCountry(input.country),
     seasonYear,
     previousListingId,
     startDate,
@@ -278,7 +279,7 @@ export async function createEventSubmission(
     venueName: values.venueName ?? null,
     city: values.city ?? null,
     region: values.region ?? null,
-    country: values.country ?? null,
+    country: normaliseCountry(values.country),
     capacity: values.capacity ?? null,
     costUsd: values.costUsd ?? null,
     costNote: values.costNote ?? null,

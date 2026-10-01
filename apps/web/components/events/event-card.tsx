@@ -21,6 +21,7 @@ import {
   effectiveRegistrationStatus,
   eventDateRange,
   eventLocation,
+  eventAddressLine,
   costLabel,
   daysLabel,
   fullnessLabel,
@@ -256,7 +257,7 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
         {loc && (
           <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-2">
             <MapPin className="h-4 w-4" />
-            {ev.address ? `${ev.address}, ${[ev.city, ev.region, ev.country].filter(Boolean).join(', ')}` : loc}
+            {ev.address ? eventAddressLine(ev) : loc}
           </p>
         )}
       </div>

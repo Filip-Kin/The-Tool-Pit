@@ -1,5 +1,6 @@
 'use server'
 
+import { normaliseCountry } from '@the-tool-pit/db/country'
 import { isAdmin, adminIdentity } from '@/lib/admin/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
@@ -333,7 +334,7 @@ export async function updateEvent(id: string, input: EventEditInput): Promise<{ 
   if (input.address !== undefined) patch.address = input.address?.trim() || null
   if (input.city !== undefined) patch.city = input.city?.trim() || null
   if (input.region !== undefined) patch.region = input.region?.trim() || null
-  if (input.country !== undefined) patch.country = input.country?.trim() || null
+  if (input.country !== undefined) patch.country = normaliseCountry(input.country)
   if (input.startDate !== undefined) patch.startDate = cleanDate(input.startDate)
   if (input.endDate !== undefined) patch.endDate = cleanDate(input.endDate)
   if (input.days !== undefined) patch.days = input.days === 1 || input.days === 2 ? input.days : null

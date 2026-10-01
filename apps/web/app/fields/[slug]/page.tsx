@@ -6,7 +6,7 @@ import { FieldDetail } from '@/components/fields/field-card'
 import { ClaimListingButton } from '@/components/auth/claim-listing-button'
 import { listingClaimState } from '@/lib/queries/listing-ownership'
 import { fieldUrl } from '@the-tool-pit/types'
-import { fieldSpecSummary } from '@/lib/fields/field-display'
+import { fieldLocation, fieldSpecSummary } from '@/lib/fields/field-display'
 import { JsonLd } from '@/components/seo/json-ld'
 import { fieldJsonLd } from '@/lib/seo/structured-data'
 
@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const title = field.teamNumber ? `${field.teamNumber} · ${field.name}` : field.name
   // Canonical always points at the slug URL, never the UUID.
   const url = fieldUrl(field.slug)
-  const location = [field.city, field.region, field.country].filter(Boolean).join(', ')
+  const location = fieldLocation(field)
   // One-line summary: where the field is and what it offers.
   const description = [location, fieldSpecSummary(field)].filter(Boolean).join(' · ') || field.name
   const image = { url: `${url}/opengraph-image`, width: 1200, height: 630, alt: title }

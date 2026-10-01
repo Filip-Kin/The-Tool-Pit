@@ -1,5 +1,5 @@
 import { getPublishedFieldBySlug, getPublishedFieldById } from '@/lib/queries/fields'
-import { fieldSpecSummary } from '@/lib/fields/field-display'
+import { fieldLocation, fieldSpecSummary } from '@/lib/fields/field-display'
 import { OG_CONTENT_TYPE, OG_SIZE, renderOgCard, renderOgFallback } from '@/lib/og/card'
 import { ogPhotoDataUri } from '@/lib/og/photo'
 
@@ -23,7 +23,7 @@ export default async function FieldOgImage({ params }: { params: Promise<{ slug:
   const field = (await getPublishedFieldBySlug(slug)) ?? (UUID_RE.test(slug) ? await getPublishedFieldById(slug) : null)
   if (!field) return renderOgFallback(EYEBROW)
 
-  const location = [field.city, field.region, field.country].filter(Boolean).join(', ')
+  const location = fieldLocation(field)
   const spec = fieldSpecSummary(field)
   const eyebrow = field.teamNumber ? `Practice field · Team ${field.teamNumber}` : EYEBROW
 

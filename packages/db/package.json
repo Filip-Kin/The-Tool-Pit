@@ -100,6 +100,10 @@
     "./roster-days": {
       "bun": "./src/roster-days.ts",
       "default": "./dist/roster-days.js"
+    },
+    "./country": {
+      "bun": "./src/country.ts",
+      "default": "./dist/country.js"
     }
   },
   "main": "./dist/index.js",

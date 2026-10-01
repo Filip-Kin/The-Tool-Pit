@@ -1,4 +1,5 @@
 import { eq, and, inArray } from 'drizzle-orm'
+import { normaliseCountry } from '@the-tool-pit/db/country'
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import type { FieldEditProposalData } from '@the-tool-pit/db'
@@ -98,7 +99,7 @@ export async function createFieldEditProposal(
     address: input.address?.trim() || null,
     city: input.city?.trim() || null,
     region: input.region?.trim() || null,
-    country: input.country?.trim() || null,
+    country: normaliseCountry(input.country),
     coverage: pickEnum(input.coverage, FIELD_COVERAGE, 'full'),
     perimeter: pickEnum(input.perimeter, FIELD_PERIMETER, 'none'),
     elements: pickEnum(input.elements, FIELD_ELEMENTS, 'wood'),
