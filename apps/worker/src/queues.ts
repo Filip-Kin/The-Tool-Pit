@@ -623,6 +623,17 @@ export async function scheduleRecurringJobs() {
     data: { recheckTba: true },
   })
 
+  // Cancellation / postponement watch, weekly. Re-reads each upcoming published
+  // event's own site for a notice that it was called off, which nothing else
+  // does after publishing (Blue Streaks Blitz said "Canceled" for days while
+  // the listing said confirmed). Same queue and worker as the refresh, told
+  // apart by the eventStatusWatch flag. Wednesday 06:40, after the 06:20
+  // re-check and clear of the daily 05:50 sweep.
+  await rosterRefreshQueue.upsertJobScheduler('event-status-watch-weekly', { pattern: '40 6 * * 3' }, {
+    name: 'event-status-watch-weekly',
+    data: { eventStatusWatch: true },
+  })
+
   // Team-name cache, weekly. Teams rename between seasons, not between rosters,
   // so a daily walk of TBA's whole directory would spend a lot of somebody
   // else's bandwidth to change nothing. A cron pattern, not `every`, for the

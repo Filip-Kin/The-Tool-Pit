@@ -44,9 +44,12 @@ import { delay } from '../connectors/base.js'
 import { TbaEventsConnector, type TbaEventUpsert } from '../connectors/tba-events.js'
 import {
   generateTeamListParser,
+  notifyTeamListUnreadable,
   runTeamListParser,
   slotIndicesLeaked,
+  type ParserRunResult,
 } from './team-list-parser.js'
+import { processEventStatusWatch } from './event-status-watch.js'
 import { isChiefDelphiThread, readChiefDelphiRoster } from './chief-delphi-roster.js'
 
 const TBA_BASE = 'https://www.thebluealliance.com/api/v3'
@@ -59,6 +62,13 @@ export interface RosterRefreshPayload {
    * published listings that have none yet. Its own scheduled job in queues.ts.
    */
   recheckTba?: boolean
+  /**
+   * Run the weekly cancellation / postponement watch instead of a roster
+   * refresh: re-read each upcoming published event's own site for a notice
+   * that it was called off. Its own weekly job in queues.ts. See
+   * event-status-watch.ts.
+   */
+  eventStatusWatch?: boolean
 }
 
 /** TBA event_type ints kept as off-season. 99 = OFFSEASON, 100 = PRESEASON. */
@@ -79,22 +89,41 @@ const OFFSEASON_EVENT_TYPES = new Set([99, 100])
  *   - One source only                      -> that source.
  *   - No startDate                         -> treat as NOT started (most
  *     listings are upcoming), so the website wins when it exists.
+ *   - Website only, event over             -> NOTHING. The roster that turned up
+ *     is the last count read; an organiser clears or reworks the page after the
+ *     event, and reading that as a broken parser posted a false alert (Blue
+ *     Streaks Blitz, four days after it ended). "Over" is the day after
+ *     endDate, else after startDate.
+ *   - Event cancelled                      -> NOTHING, from either source.
  *
  * `today` is an ISO date (YYYY-MM-DD); startDate is the same shape, so a string
  * compare is a date compare.
  */
 export function chooseRosterSource(
-  listing: { tbaKey?: string | null; teamListUrl?: string | null; startDate?: string | null },
+  listing: {
+    tbaKey?: string | null
+    teamListUrl?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    eventStatus?: string | null
+  },
   today: string,
 ): 'tba' | 'site' | null {
+  if (listing.eventStatus === 'cancelled') return null
   const hasTba = Boolean(listing.tbaKey)
   const hasUrl = Boolean(listing.teamListUrl)
   if (!hasTba && !hasUrl) return null
   if (hasTba && !hasUrl) return 'tba'
-  if (hasUrl && !hasTba) return 'site'
+  if (hasUrl && !hasTba) return eventIsOver(listing, today) ? null : 'site'
   // Both exist: the website until the event starts, TBA once it has.
   const started = Boolean(listing.startDate) && today >= (listing.startDate as string)
   return started ? 'tba' : 'site'
+}
+
+/** The event's last day (endDate, else startDate) is before `today`. No date: not over. */
+export function eventIsOver(listing: { startDate?: string | null; endDate?: string | null }, today: string): boolean {
+  const last = listing.endDate || listing.startDate
+  return Boolean(last) && today > (last as string)
 }
 
 export interface RosterRefreshStats {
@@ -273,10 +302,42 @@ export function decideScrapedRoster(previous: RosterTeam[], next: RosterTeam[]):
   return { status: 'approved', writeCount: true, reason: null }
 }
 
+/**
+ * What a re-proof run (or a suspect stored parser's regeneration) settles on.
+ *
+ * ONE RULE FOR THE "Team list unreadable" ALERT: it goes out only when NO
+ * parser gives a sane roster. A fresh parser that reads sanely wins. Failing
+ * that, a stored parser that still reads sanely keeps the count going, and no
+ * alert: FIRST Chance's stored parser read 12 teams on 2026-09-30 while the
+ * re-proof gave up, and the alert it posted was false. Only when both fail is a
+ * person needed.
+ *
+ * `storedRun` is null when the stored parser was not (or not yet) run.
+ */
+export function reproofOutcome(
+  previous: RosterTeam[],
+  fresh: RosterTeam[] | null,
+  storedRun: ParserRunResult | null,
+): { use: 'fresh' | 'stored' | 'none'; alert: boolean } {
+  if (fresh && !suspectRosterChange(previous, fresh).suspect) return { use: 'fresh', alert: false }
+  if (storedRun?.ok && !suspectRosterChange(previous, storedRun.teams).suspect) return { use: 'stored', alert: false }
+  return { use: 'none', alert: true }
+}
+
 export async function processRosterRefreshJob(
   payload: RosterRefreshPayload = {},
 ): Promise<RosterRefreshStats> {
   const stats: RosterRefreshStats = { considered: 0, changed: 0, unchanged: 0, empty: 0, failed: 0, fromSite: 0 }
+
+  // The weekly cancellation watch shares this queue and worker; it needs no
+  // TBA key, so it runs before that check.
+  if (payload.eventStatusWatch) {
+    const r = await processEventStatusWatch()
+    stats.considered = r.considered
+    stats.changed = r.cancelled + r.postponed
+    stats.failed = r.failed
+    return stats
+  }
 
   const apiKey = process.env.TBA_API_KEY
   if (!apiKey) {
@@ -307,6 +368,7 @@ export async function processRosterRefreshJob(
       tbaKeyDay2: eventListings.tbaKeyDay2,
       parallelDivisions: eventListings.parallelDivisions,
       endDate: eventListings.endDate,
+      eventStatus: eventListings.eventStatus,
       teamListUrl: eventListings.teamListUrl,
       teamListMode: eventListings.teamListMode,
       startDate: eventListings.startDate,
@@ -331,6 +393,8 @@ export async function processRosterRefreshJob(
       // the unit builder below; a non-parallel manual listing is still skipped.
       (l.teamListMode !== 'manual' || (l.parallelDivisions && (l.tbaKey || l.tbaKeyDay2))) &&
       (l.tbaKey || l.teamListUrl || l.tbaKeyDay2) &&
+      // A cancelled event has no roster to keep current. Its last count stays.
+      l.eventStatus !== 'cancelled' &&
       (!payload.listingId || l.id === payload.listingId),
   )
   // Source per listing decided by timing, not by "does it have a key". A listing
@@ -429,8 +493,10 @@ export async function processRosterRefreshJob(
   // returns nothing against a known roster, or loses more than half the teams,
   // and a freshly generated parser cannot do better either, the bad run is stored
   // 'rejected', the last good count is kept, and nothing reaches the public card.
-  // A parser that fails ten generation attempts pings Discord from
-  // generateTeamListParser. So a clean roster updates the count automatically;
+  // Discord gets a "Team list unreadable" alert only when no parser gives a
+  // sane roster: from generateTeamListParser when there is no stored parser to
+  // fall back on, and from reproofOutcome below when there is one. So a clean
+  // roster updates the count automatically;
   // only a suspicious change waits for a person.
   //
   // A MODEL-AUTHORED PARSER, not a shared heuristic. Every event's list is
@@ -518,23 +584,28 @@ export async function processRosterRefreshJob(
         // page listed 21, and nothing in suspectRosterChange fires on a count
         // that holds steady. So every few days the parser is rewritten and
         // proven against a fresh second reading of the page. A failed rewrite
-        // keeps the stored one running; nothing gets worse.
-        const gen = await generateTeamListParser({ eventName: listing.name, url })
-        const fresh = gen?.teams ?? []
-        if (gen && !suspectRosterChange(previousTeams, fresh).suspect) {
+        // keeps the stored one running; nothing gets worse. The rewrite does
+        // NOT post its own give-up alert: the stored parser may still read the
+        // page fine, and reproofOutcome posts only when neither does.
+        const gen = await generateTeamListParser({ eventName: listing.name, url, notifyOnGiveUp: false })
+        let outcome = reproofOutcome(previousTeams, gen?.teams ?? null, null)
+        let run: ParserRunResult | null = null
+        if (outcome.use !== 'fresh') {
+          run = await runTeamListParser(url, listing.teamListParser as string)
+          outcome = reproofOutcome(previousTeams, gen?.teams ?? null, run)
+        }
+        if (gen && outcome.use === 'fresh') {
           await storeParser(db, listing.id, gen.script, url)
-          teams = fresh
+          teams = gen.teams
           via = 'parser re-proven'
+        } else if (run?.ok && outcome.use === 'stored') {
+          teams = run.teams
+          via = 'stored parser (re-proof failed)'
         } else {
-          const run = await runTeamListParser(url, listing.teamListParser as string)
-          if (run.ok && !suspectRosterChange(previousTeams, run.teams).suspect) {
-            teams = run.teams
-            via = 'stored parser (re-proof failed)'
-          } else {
-            stats.failed++
-            console.warn(`[roster-refresh] ${listing.name}: stored parser suspect and re-proof failed`)
-            continue
-          }
+          stats.failed++
+          console.warn(`[roster-refresh] ${listing.name}: stored parser suspect and re-proof failed`)
+          if (outcome.alert) notifyTeamListUnreadable({ eventName: listing.name, url })
+          continue
         }
       } else {
         // Run the stored parser with no model call.
@@ -550,7 +621,9 @@ export async function processRosterRefreshJob(
         } else {
           // The stored parser looks broken. Rewrite it and try the fresh one.
           console.warn(`[roster-refresh] ${listing.name}: stored parser SUSPECT (${suspect.reason}); regenerating`)
-          const gen = await generateTeamListParser({ eventName: listing.name, url })
+          // The give-up alert is posted below, once, under the same rule as the
+          // re-proof: only when no parser gives a sane roster.
+          const gen = await generateTeamListParser({ eventName: listing.name, url, notifyOnGiveUp: false })
           const fresh = gen?.teams ?? []
           const freshSuspect = gen
             ? suspectRosterChange(previousTeams, fresh)
@@ -581,6 +654,9 @@ export async function processRosterRefreshJob(
             console.warn(
               `[roster-refresh] ${listing.name}: kept last good count; a fresh parser was still suspect (${freshSuspect.reason ?? suspect.reason})`,
             )
+            if (reproofOutcome(previousTeams, gen ? fresh : null, run).alert) {
+              notifyTeamListUnreadable({ eventName: listing.name, url })
+            }
             continue
           }
         }

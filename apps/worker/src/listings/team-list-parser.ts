@@ -133,22 +133,72 @@ How to write it:
 - Match the pattern, not the exact page. It will be re-read on a schedule and can come back with a team added, removed, or reordered, or with extra whitespace. Do not hard-code a row count or a fixed position.
 - It reads the DOM and returns an array. Nothing else. No network, no eval, no timers, no storage. Only \`document\` and ordinary JavaScript.
 - Synchronous. No async, no await, no Promise.
+- SHADOW DOM. Content inside a <shadow-root> element in the HTML is in its parent element's shadowRoot on the live page. document.querySelectorAll does NOT reach it, and neither does querySelector, closest or textContent from outside it. When the list is inside a <shadow-root>, search every shadow root recursively, for example:
+  function deepAll(sel, root = document, out = []) { out.push(...root.querySelectorAll(sel)); for (const el of root.querySelectorAll('*')) if (el.shadowRoot) deepAll(sel, el.shadowRoot, out); return out; }
+  then use deepAll('tr') (or the selector you need) in place of document.querySelectorAll. The <shadow-root> element itself does not exist on the live page: never select it.
 
 Return ONLY the function declaration. No explanation, no markdown fence.`
 
-const CLEAN_DOM_EXPR = `
+/**
+ * The page's DOM, cleaned for the model, WITH the content of every open shadow
+ * root.
+ *
+ * WHY NOT document.cloneNode(true). A clone carries no shadow-root content.
+ * Salesforce Experience Cloud pages (ortop.my.site.com, FIRST Chance 2026-09)
+ * render the whole event, team table included, inside components with shadow
+ * roots, so the clone the model was shown held no teams and all ten attempts
+ * returned 0.
+ *
+ * WHY NOT A PARALLEL WALK OF ORIGINAL AND CLONE. Tried first, against the live
+ * FIRST Chance page: ortop runs LWC's SYNTHETIC shadow, where the shadow content
+ * is physically in the light tree but document.querySelectorAll, children and
+ * childNodes are patched to hide it. The live document reported 137 elements and
+ * its clone 378, so no index lined up, and the clone showed the content with no
+ * sign of the boundary that a parser using document.querySelectorAll then fails
+ * to cross.
+ *
+ * So the copy is BUILT by walking the live tree through the same APIs a parser
+ * will use: each element's open shadowRoot first, as a <shadow-root> element
+ * inside its host, then its own childNodes. That is right for native shadow
+ * (childNodes never include shadow content) and for synthetic shadow (childNodes
+ * are patched to exclude it), and nested roots recurse. Junk tags are skipped as
+ * the copy is built rather than removed after.
+ */
+export const CLEAN_DOM_EXPR = `
   (() => {
-    const doc = document.cloneNode(true);
-    doc.querySelectorAll('script,style,svg,link,meta,noscript,iframe').forEach((el) => el.remove());
-    doc.querySelectorAll('*').forEach((el) => {
-      el.removeAttribute('style');
-      // Wix and Squarespace hang data-* soup off everything; the tag, id and
-      // class are what a selector keys off.
-      for (const name of [...el.getAttributeNames()]) {
-        if (name.startsWith('data-') || name.startsWith('aria-')) el.removeAttribute(name);
+    if (!document.body) return '';
+    const out = document.implementation.createHTMLDocument('');
+    const SKIP = new Set(['script', 'style', 'svg', 'link', 'meta', 'noscript', 'iframe', 'template']);
+    const copyChildren = (src, dst, depth) => {
+      if (depth > 200) return;
+      const shadow = src.shadowRoot;
+      if (shadow) {
+        const wrap = out.createElement('shadow-root');
+        dst.appendChild(wrap);
+        for (const c of Array.from(shadow.childNodes)) copyNode(c, wrap, depth + 1);
       }
-    });
-    return doc.body ? doc.body.innerHTML : '';
+      for (const c of Array.from(src.childNodes)) copyNode(c, dst, depth + 1);
+    };
+    const copyNode = (node, dst, depth) => {
+      if (node.nodeType === 3) {
+        dst.appendChild(out.createTextNode(node.data));
+        return;
+      }
+      if (node.nodeType !== 1) return;
+      const tag = node.localName;
+      if (SKIP.has(tag)) return;
+      const el = out.createElement(tag);
+      for (const name of node.getAttributeNames()) {
+        // Wix and Squarespace hang data-* soup off everything; the tag, id and
+        // class are what a selector keys off.
+        if (name === 'style' || name.startsWith('data-') || name.startsWith('aria-')) continue;
+        try { el.setAttribute(name, node.getAttribute(name)); } catch {}
+      }
+      dst.appendChild(el);
+      copyChildren(node, el, depth);
+    };
+    copyChildren(document.body, out.body, 0);
+    return out.body.innerHTML;
   })()
 `
 
@@ -199,9 +249,27 @@ async function revealTeamListControls(page: Page): Promise<void> {
     (() => {
       const RE = new RegExp(${JSON.stringify(REVEAL_INTENT.source)}, ${JSON.stringify(REVEAL_INTENT.flags)});
       const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim();
-      const controls = document.querySelectorAll(
-        'input[type=radio], [role=radio], [role=tab], [role=switch], button, [role=button]'
-      );
+      // Text including every open shadow root below the node.
+      const deepText = (n, depth) => {
+        if (depth > 60 || !n) return '';
+        if (n.nodeType === 3) return n.data;
+        if (n.nodeType !== 1 && n.nodeType !== 11) return '';
+        let out = '';
+        if (n.shadowRoot) for (const c of Array.from(n.shadowRoot.childNodes)) out += deepText(c, depth + 1);
+        for (const c of Array.from(n.childNodes)) out += deepText(c, depth + 1);
+        return out;
+      };
+      // Every open shadow root too: a Salesforce Experience Cloud page keeps its
+      // "Registered Teams" radio inside a component's shadow root, where
+      // document.querySelectorAll does not reach.
+      const SEL = 'input[type=radio], [role=radio], [role=tab], [role=switch], button, [role=button]';
+      const controls = [];
+      const collect = (root, depth) => {
+        if (depth > 50) return;
+        controls.push(...root.querySelectorAll(SEL));
+        for (const el of root.querySelectorAll('*')) if (el.shadowRoot) collect(el.shadowRoot, depth + 1);
+      };
+      collect(document, 0);
       const clicked = [];
       for (const el of controls) {
         if (clicked.length >= ${MAX_REVEAL_CLICKS}) break;
@@ -210,12 +278,20 @@ async function revealTeamListControls(page: Page): Promise<void> {
         // Never submit a form or follow a link: only toggle-like controls.
         if (tag === 'button' && type === 'submit') continue;
         if (el.closest('a[href]')) continue;
-        // The control's OWN label: aria-label, associated <label>s, its text, or
-        // the <label> it sits inside (a radio often has no text of its own).
+        // The control's OWN label: aria-label, associated <label>s, the element
+        // aria-labelledby names, its text, or the <label> it sits inside (a radio
+        // often has no text of its own). Read with deepText, because on a
+        // Salesforce page the label's words sit in a rich-text component's
+        // shadow root and textContent comes back empty.
         let label = norm(el.getAttribute('aria-label'));
-        if (!label && el.labels && el.labels.length) label = norm(Array.from(el.labels).map((l) => l.textContent).join(' '));
-        if (!label) label = norm(el.textContent);
-        if (!label) { const p = el.closest('label'); if (p) label = norm(p.textContent); }
+        if (!label && el.labels && el.labels.length) label = norm(Array.from(el.labels).map((l) => deepText(l, 0)).join(' '));
+        if (!label && el.getAttribute('aria-labelledby')) {
+          const root = el.getRootNode();
+          const ids = el.getAttribute('aria-labelledby').split(/\\s+/);
+          label = norm(ids.map((id) => { const t = root.getElementById ? root.getElementById(id) : null; return t ? deepText(t, 0) : ''; }).join(' '));
+        }
+        if (!label) label = norm(deepText(el, 0));
+        if (!label) { const p = el.closest('label'); if (p) label = norm(deepText(p, 0)); }
         if (!label || label.length > 60) continue;
         if (!RE.test(label)) continue;
         // Leave an already-chosen option alone; clicking it can toggle it off.
@@ -465,6 +541,13 @@ export async function generateTeamListParser(input: {
   url: string
   /** The listing's admin page, for the Discord ping when generation gives up. */
   reviewUrl?: string
+  /**
+   * Post the "Team list unreadable" alert when generation gives up. Default
+   * true. The 3-day re-proof passes false: a stored parser may still read the
+   * page fine (FIRST Chance, 2026-09-30, still read 12 teams while the re-proof
+   * gave up), so the caller posts only when no parser gives a sane roster.
+   */
+  notifyOnGiveUp?: boolean
 }): Promise<GeneratedParser | null> {
   if (!hasAnthropicCredentials()) return null
 
@@ -588,18 +671,28 @@ export async function generateTeamListParser(input: {
     // A page that beat ten attempts is one a person has to look at: the widget
     // is unusually shaped, or moved, or gone. Better a Discord ping than a
     // team count that silently stops updating.
-    sendApprovalNotice({
-      vertical: 'event',
-      alert: true,
-      title: `Team list unreadable: ${input.eventName}`,
-      reviewUrl: input.reviewUrl ?? input.url,
-      sourceUrl: input.url,
-      facts: [
-        { label: 'Attempts', value: MAX_ATTEMPTS, inline: true },
-        { label: 'Team count', value: 'Frozen', inline: true },
-      ],
-    })
+    if (input.notifyOnGiveUp !== false) notifyTeamListUnreadable(input)
     return null
+  })
+}
+
+/**
+ * The "Team list unreadable" alert. One call site, so its copy is checked by
+ * the labels test in one place. Posted by generateTeamListParser on give-up,
+ * and by roster-refresh when neither the stored parser nor a fresh one reads a
+ * sane roster.
+ */
+export function notifyTeamListUnreadable(input: { eventName: string; url: string; reviewUrl?: string }): void {
+  sendApprovalNotice({
+    vertical: 'event',
+    alert: true,
+    title: `Team list unreadable: ${input.eventName}`,
+    reviewUrl: input.reviewUrl ?? input.url,
+    sourceUrl: input.url,
+    facts: [
+      { label: 'Attempts', value: MAX_ATTEMPTS, inline: true },
+      { label: 'Team count', value: 'Frozen', inline: true },
+    ],
   })
 }
 
