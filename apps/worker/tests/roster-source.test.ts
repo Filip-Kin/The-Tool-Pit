@@ -40,10 +40,39 @@ describe('chooseRosterSource', () => {
     expect(chooseRosterSource({ tbaKey: '2026miket', teamListUrl: null, startDate: '2026-07-20' }, TODAY)).toBe('tba')
   })
 
-  it('uses the website when that is the only source, even after the event', () => {
-    expect(chooseRosterSource({ tbaKey: null, teamListUrl: 'https://x/teams', startDate: '2026-01-01' }, TODAY)).toBe(
-      'site',
-    )
+  it('uses the website when that is the only source, up to and including the last day', () => {
+    expect(
+      chooseRosterSource({ tbaKey: null, teamListUrl: 'https://x/teams', startDate: '2026-07-14', endDate: TODAY }, TODAY),
+    ).toBe('site')
+    expect(chooseRosterSource({ tbaKey: null, teamListUrl: 'https://x/teams', startDate: TODAY }, TODAY)).toBe('site')
+  })
+
+  // Blue Streaks Blitz: the page was cleared after the event and read as a
+  // broken parser four days later.
+  it('stops scraping a website-only listing once the event is over', () => {
+    expect(
+      chooseRosterSource({ tbaKey: null, teamListUrl: 'https://x/teams', startDate: '2026-07-10', endDate: '2026-07-11' }, TODAY),
+    ).toBeNull()
+    // No endDate: the start date is the last day.
+    expect(chooseRosterSource({ tbaKey: null, teamListUrl: 'https://x/teams', startDate: '2026-01-01' }, TODAY)).toBeNull()
+  })
+
+  it('keeps reading TBA after the event when a key exists', () => {
+    expect(
+      chooseRosterSource({ tbaKey: '2026miket', teamListUrl: null, startDate: '2026-07-10', endDate: '2026-07-11' }, TODAY),
+    ).toBe('tba')
+    expect(
+      chooseRosterSource({ tbaKey: '2026miket', teamListUrl: 'https://x/teams', startDate: '2026-07-10', endDate: '2026-07-11' }, TODAY),
+    ).toBe('tba')
+  })
+
+  it('reads nothing for a cancelled event', () => {
+    expect(
+      chooseRosterSource({ tbaKey: null, teamListUrl: 'https://x/teams', startDate: '2026-07-20', eventStatus: 'cancelled' }, TODAY),
+    ).toBeNull()
+    expect(
+      chooseRosterSource({ tbaKey: '2026miket', teamListUrl: null, startDate: '2026-07-10', eventStatus: 'cancelled' }, TODAY),
+    ).toBeNull()
   })
 
   it('returns null when there is nothing to read', () => {
