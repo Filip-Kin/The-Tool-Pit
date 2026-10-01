@@ -14,6 +14,7 @@ import type { ReadCandidatesPayload } from './listings/read-candidates.js'
 import type { RosterRefreshPayload } from './listings/roster-refresh.js'
 import type { TbaPushPayload } from './listings/tba-push.js'
 import type { TbaTeamsSyncPayload } from './listings/tba-teams-sync.js'
+import type { FieldRefreshPayload } from './listings/field-refresh.js'
 import type { PopularityRefreshPayload } from './jobs/popularity.js'
 // The offseason season rule and the renewal date live beside the column they
 // describe, so the schedule below and the migration that backfills the season
@@ -328,6 +329,23 @@ export const tbaTeamsSyncQueue = new Queue<TbaTeamsSyncPayload>('tba-teams-sync'
 })
 
 /**
+ * The weekly re-read of every published, unclaimed practice field.
+ * See listings/field-refresh.ts for the rules on what it may write.
+ *
+ * attempts: 1. A pass is a browser and a model call per field, and every write
+ * in it is idempotent, so a retry would only re-spend that on the fields that
+ * already finished. Next week's pass picks up whatever this one missed.
+ */
+export const fieldRefreshQueue = new Queue<FieldRefreshPayload>('field-refresh', {
+  connection,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: { count: 20 },
+    removeOnFail: { count: 50 },
+  },
+})
+
+/**
  * The yearly "are you running it again" ask for last season's event listings.
  *
  * attempts: 1, the same reasoning as grant-alert-drain. The retry story lives
@@ -632,6 +650,15 @@ export async function scheduleRecurringJobs() {
   await rosterRefreshQueue.upsertJobScheduler('event-status-watch-weekly', { pattern: '40 6 * * 3' }, {
     name: 'event-status-watch-weekly',
     data: { eventStatusWatch: true },
+  })
+
+  // Practice-field refresh, weekly. Re-reads each published, unclaimed field's
+  // own pages and applies what changed, when a quote on the page proves it.
+  // Thursday 06:40 UTC: the day after the Wednesday event-status watch, and
+  // clear of the 06:10 Thursday grant aggregator sweep.
+  await fieldRefreshQueue.upsertJobScheduler('field-refresh-weekly', { pattern: '40 6 * * 4' }, {
+    name: 'field-refresh-weekly',
+    data: {},
   })
 
   // Team-name cache, weekly. Teams rename between seasons, not between rosters,

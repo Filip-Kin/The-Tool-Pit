@@ -46,6 +46,8 @@ import { closeBrowser } from './connectors/playwright-render.js'
 import { startDiscordListener } from './discord/listener.js'
 import type { ReadCandidatesPayload } from './listings/read-candidates.js'
 import { processSeasonRenewalJob } from './listings/season-renewal.js'
+import { processFieldRefreshJob } from './listings/field-refresh.js'
+import type { FieldRefreshPayload } from './listings/field-refresh.js'
 import type { CrawlJobPayload, EnrichJobPayload, FreshnessCheckPayload, LinkCheckPayload, ReindexPayload, SubmissionJobPayload, AlbumIngestPayload, AlbumEnrichPayload } from '@the-tool-pit/types'
 import type { GrantDiscoverPayload } from './grants/discover.js'
 import type { GrantEnrichPayload, GrantExtractPayload } from './grants/enrich.js'
@@ -453,10 +455,20 @@ const seasonRenewalWorker = new Worker(
   { connection, concurrency: 1 },
 )
 
+const fieldRefreshWorker = new Worker<FieldRefreshPayload>(
+  'field-refresh',
+  async (job) => {
+    console.log(`[field-refresh] processing job ${job.id}`)
+    return processFieldRefreshJob(job.data)
+  },
+  // One at a time: each field opens a real browser and makes a model call.
+  { connection, concurrency: 1 },
+)
+
 // #endregion
 
 // Log worker errors without crashing
-for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, newListingsReportWorker, listingDiscoverWorker, readCandidatesWorker, rosterRefreshWorker, tbaPushWorker, tbaTeamsSyncWorker, seasonRenewalWorker]) {
+for (const worker of [crawlWorker, enrichWorker, freshnessWorker, popularityWorker, linkCheckWorker, reindexWorker, submissionWorker, albumIngestWorker, albumEnrichWorker, grantDiscoverWorker, grantEnrichWorker, grantExtractWorker, grantMonitorWorker, grantMatchWorker, grantAlertWorker, grantDeadlineWorker, newListingsReportWorker, listingDiscoverWorker, readCandidatesWorker, rosterRefreshWorker, tbaPushWorker, tbaTeamsSyncWorker, seasonRenewalWorker, fieldRefreshWorker]) {
   worker.on('failed', (job, err) => {
     console.error(`[worker] job ${job?.id} failed:`, err.message)
   })
@@ -512,6 +524,7 @@ async function shutdown() {
     tbaPushWorker.close(),
     tbaTeamsSyncWorker.close(),
     seasonRenewalWorker.close(),
+    fieldRefreshWorker.close(),
   ])
   // The shared browser outlives any single job, so it is closed here rather
   // than by whoever happened to render last.
