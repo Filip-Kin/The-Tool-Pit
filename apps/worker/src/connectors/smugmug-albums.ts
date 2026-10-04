@@ -22,6 +22,7 @@ const SMUGMUG_ROOTS = [
   'https://firstwisconsin.smugmug.com/',
   'https://nefirst.smugmug.com/',
   'https://ferrisphotos.smugmug.com/Academic/Engineering-Technology/FIRST-Robotics-Competition',
+  'https://robotphoto.smugmug.com/',
 ]
 
 /**
