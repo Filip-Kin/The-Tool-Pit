@@ -121,6 +121,31 @@ export function chooseRosterSource(
   return started ? 'tba' : 'site'
 }
 
+/**
+ * The event's own team-list page cannot be loaded at all: the name does not
+ * resolve, nothing answers, or the server says the page is gone or broken.
+ * CMRC (2026-10-04): jumpstartrobotics.org went on registrar hold, every read
+ * failed with ERR_NAME_NOT_RESOLVED, and the parser was blamed with a "Team
+ * list unreadable" alert while TBA had the same 14 teams all along.
+ *
+ * 403 and 429 are NOT down: a bot check or a rate limit still serves the page
+ * to the rendering browser, so the site read goes ahead as normal.
+ */
+export function pageIsDown(probe: { status: number } | { error: string }): boolean {
+  if ('error' in probe) return true
+  return probe.status === 404 || probe.status === 410 || probe.status >= 500
+}
+
+async function probePage(url: string): Promise<{ status: number } | { error: string }> {
+  try {
+    const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(20_000) })
+    await res.body?.cancel().catch(() => {})
+    return { status: res.status }
+  } catch (err) {
+    return { error: String(err).split('\n')[0] }
+  }
+}
+
 /** The event's last day (endDate, else startDate) is before `today`. No date: not over. */
 export function eventIsOver(listing: { startDate?: string | null; endDate?: string | null }, today: string): boolean {
   const last = listing.endDate || listing.startDate
@@ -412,6 +437,19 @@ export async function processRosterRefreshJob(
     (l) => chooseRosterSource(l, today) === 'tba' || (!l.tbaKey && !l.teamListUrl && l.tbaKeyDay2),
   )
   const siteOnly = wanted.filter((l) => l.teamListMode !== 'manual' && chooseRosterSource(l, today) === 'site')
+  // A site-routed listing whose own page is down reads TBA this run instead,
+  // when it has a TBA key, and posts no alert: the roster is still known, and
+  // the page is the organiser's to fix. See pageIsDown.
+  for (const listing of [...siteOnly]) {
+    if (!listing.tbaKey || !listing.teamListUrl) continue
+    const probe = await probePage(listing.teamListUrl)
+    if (!pageIsDown(probe)) continue
+    console.warn(
+      `[roster-refresh] ${listing.name}: team list page down (${'error' in probe ? probe.error : `HTTP ${probe.status}`}); reading TBA ${listing.tbaKey}`,
+    )
+    siteOnly.splice(siteOnly.indexOf(listing), 1)
+    withKey.push(listing)
+  }
   stats.considered = wanted.length
 
   // ONE READ PER DAY on a two-1-day-events listing (each day is its own TBA
