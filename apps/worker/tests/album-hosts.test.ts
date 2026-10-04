@@ -66,6 +66,12 @@ describe('canonicalizeAlbumUrl', () => {
 
   it('rejects SmugMug folder listings (single path segment) and old-format photo URLs', () => {
     expect(canonicalizeAlbumUrl('https://davewilson.smugmug.com/Robotics')).toBeNull()
+    // The SmugMug connector knows from the API that a node is a gallery, so a
+    // custom one-segment gallery URL is kept (robotphoto, 2026-10-04). The
+    // account root never is.
+    expect(canonicalizeAlbumUrl('https://robotphoto.smugmug.com/2026cri', { knownAlbum: true }))
+      .toEqual({ canonicalUrl: 'https://robotphoto.smugmug.com/2026cri', provider: 'smugmug' })
+    expect(canonicalizeAlbumUrl('https://robotphoto.smugmug.com/', { knownAlbum: true })).toBeNull()
     expect(canonicalizeAlbumUrl('http://billbo911.smugmug.com/Hobbies/Cal-Games-2009/9936059_Q79X9/1/677895428_FkvhD'))
       .toEqual({ canonicalUrl: 'https://billbo911.smugmug.com/Hobbies/Cal-Games-2009', provider: 'smugmug' })
   })

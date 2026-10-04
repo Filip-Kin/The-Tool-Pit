@@ -16,10 +16,12 @@ function stripTrailingSlash(s: string): string {
  * @param opts.allowUnknown when true, URLs on unrecognized hosts are still
  *   accepted with provider 'other' (used by trusted sources like FiM and manual
  *   submissions). Default false (used by CD to filter arbitrary forum links).
+ * @param opts.knownAlbum when true, a one-segment SmugMug path is a gallery
+ *   (the SmugMug API said so), not a folder listing.
  */
 export function canonicalizeAlbumUrl(
   raw: string,
-  opts: { allowUnknown?: boolean } = {},
+  opts: { allowUnknown?: boolean; knownAlbum?: boolean } = {},
 ): { canonicalUrl: string; provider: AlbumProvider } | null {
   let u: URL
   try {
@@ -45,8 +47,11 @@ export function canonicalizeAlbumUrl(
       .replace(/\/\d{3,}_[A-Za-z0-9].*$/, '')
     path = stripTrailingSlash(path)
     // A real gallery has at least Folder/Gallery; a single segment is a folder
-    // listing or the account root, not a specific album.
-    if (path.split('/').filter(Boolean).length < 2) return null
+    // listing or the account root, not a specific album. Unless the caller
+    // knows it is a gallery: the SmugMug API says Type 'Album', and a gallery
+    // with a custom URL sits one segment deep (robotphoto.smugmug.com/2026cri).
+    const segments = path.split('/').filter(Boolean).length
+    if (segments === 0 || (segments < 2 && !opts.knownAlbum)) return null
     return { canonicalUrl: `https://${u.host}${path}`, provider: 'smugmug' }
   }
 

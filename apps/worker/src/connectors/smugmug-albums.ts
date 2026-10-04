@@ -256,7 +256,7 @@ export class SmugmugAlbumsConnector implements AlbumConnector {
 /** One SmugMug Album node -> candidate, or null if skipped. Pure. */
 export function smugAlbumToCandidate(node: SmugNode, sourceUrl: string, ctx: PathContext): AlbumCandidateInput | null {
   if (SKIP_NAME.test(node.Name)) return null
-  const canonical = canonicalizeAlbumUrl(node.WebUri)
+  const canonical = canonicalizeAlbumUrl(node.WebUri, { knownAlbum: true })
   if (!canonical) return null
 
   // The event name is the meaningful ancestor folders + the leaf name if the
