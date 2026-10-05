@@ -25,7 +25,7 @@
  * NOTHING HERE PUBLISHES. It fills in a candidate a person still has to accept
  * and then approve.
  */
-import { normaliseCountry } from '@the-tool-pit/db/country'
+import { normaliseCountry, streetLine } from '@the-tool-pit/db/country'
 import {
   EVENT_PROGRAMS,
   EVENT_STATUSES,
@@ -315,6 +315,12 @@ export function validateEventRead(
     }
 
     kept[key] = { quote: quoteText.slice(0, 300), source }
+  }
+
+  // The street line only: city, region and country have their own columns,
+  // and a whole postal address here prints the city twice on the page.
+  if (typeof fields.address === 'string') {
+    fields.address = streetLine(fields.address, { city: fields.city as string | undefined, region: fields.region as string | undefined })
   }
 
   // A SPECIFIC LINK HAS TO BE MORE SPECIFIC THAN THE SITE.

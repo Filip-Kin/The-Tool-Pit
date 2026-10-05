@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import { normaliseCountry } from '@the-tool-pit/db/country'
+import { normaliseCountry, streetLine } from '@the-tool-pit/db/country'
 import { getDb } from '@/lib/db'
 import {
   eventListings,
@@ -122,7 +122,7 @@ export async function createEventEditProposal(
     latitude: lat,
     longitude: lng,
     venueName: input.venueName?.trim() || null,
-    address: input.address?.trim() || null,
+    address: streetLine(input.address, { city: input.city, region: input.region }),
     city: input.city?.trim() || null,
     region: input.region?.trim() || null,
     country: normaliseCountry(input.country),

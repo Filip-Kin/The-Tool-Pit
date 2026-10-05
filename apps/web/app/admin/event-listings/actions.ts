@@ -1,6 +1,6 @@
 'use server'
 
-import { normaliseCountry } from '@the-tool-pit/db/country'
+import { normaliseCountry, streetLine } from '@the-tool-pit/db/country'
 import { isAdmin, adminIdentity } from '@/lib/admin/auth'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
@@ -331,7 +331,7 @@ export async function updateEvent(id: string, input: EventEditInput): Promise<{ 
   if (input.latitude !== undefined) patch.latitude = input.latitude
   if (input.longitude !== undefined) patch.longitude = input.longitude
   if (input.venueName !== undefined) patch.venueName = input.venueName?.trim() || null
-  if (input.address !== undefined) patch.address = input.address?.trim() || null
+  if (input.address !== undefined) patch.address = streetLine(input.address, { city: input.city, region: input.region })
   if (input.city !== undefined) patch.city = input.city?.trim() || null
   if (input.region !== undefined) patch.region = input.region?.trim() || null
   if (input.country !== undefined) patch.country = normaliseCountry(input.country)

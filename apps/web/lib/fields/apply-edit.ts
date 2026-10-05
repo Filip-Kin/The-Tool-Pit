@@ -1,5 +1,5 @@
 import { eq, and, inArray } from 'drizzle-orm'
-import { normaliseCountry } from '@the-tool-pit/db/country'
+import { normaliseCountry, streetLine } from '@the-tool-pit/db/country'
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos } from '@the-tool-pit/db'
 import type { FieldEditProposalData } from '@the-tool-pit/db'
@@ -42,6 +42,9 @@ export async function applyFieldEditProposal(
   assign('region', 'region')
   assign('country', 'country')
   if (typeof patch.country === 'string') patch.country = normaliseCountry(patch.country)
+  if (typeof patch.address === 'string') {
+    patch.address = streetLine(patch.address, { city: p.city as string | undefined, region: p.region as string | undefined })
+  }
   assign('coverage', 'coverage')
   assign('perimeter', 'perimeter')
   assign('elements', 'elements')

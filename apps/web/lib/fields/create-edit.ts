@@ -1,5 +1,5 @@
 import { eq, and, inArray } from 'drizzle-orm'
-import { normaliseCountry } from '@the-tool-pit/db/country'
+import { normaliseCountry, streetLine } from '@the-tool-pit/db/country'
 import { getDb } from '@/lib/db'
 import { practiceFields, fieldEditProposals, fieldPhotos, fieldEditProposalPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS } from '@the-tool-pit/db'
 import type { FieldEditProposalData } from '@the-tool-pit/db'
@@ -96,7 +96,7 @@ export async function createFieldEditProposal(
     program: pickEnum(input.program, FIELD_PROGRAMS, 'frc'),
     latitude: lat,
     longitude: lng,
-    address: input.address?.trim() || null,
+    address: streetLine(input.address, { city: input.city, region: input.region }),
     city: input.city?.trim() || null,
     region: input.region?.trim() || null,
     country: normaliseCountry(input.country),

@@ -37,6 +37,7 @@
  *     a contact email replaced while the old one is still on the page.
  */
 import { isHumanEdited, offseasonSeasonYear, type ExtractedEventListingFields } from '@the-tool-pit/db'
+import { streetLine } from '@the-tool-pit/db/country'
 import { normaliseForQuoteMatch, quoteSource, urlSource, type NamedText } from '../model/evidence.js'
 import {
   countryCode,
@@ -291,7 +292,10 @@ export function planEventRefresh(input: RefreshPlanInput): RefreshPlan {
       patch.hostTeamNumbers = [Number(next)]
     }
 
-    patch[key] = key === 'address' && typeof next === 'string' ? next.split(/[,\n]/)[0].trim() : next
+    patch[key] =
+      key === 'address' && typeof next === 'string'
+        ? streetLine(next, { city: (input.fields.city ?? input.current.city) as string | undefined, region: (input.fields.region ?? input.current.region) as string | undefined })
+        : next
     applied.push(change)
   }
 

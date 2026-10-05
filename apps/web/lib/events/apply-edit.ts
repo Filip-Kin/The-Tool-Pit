@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import { normaliseCountry } from '@the-tool-pit/db/country'
+import { normaliseCountry, streetLine } from '@the-tool-pit/db/country'
 import { getDb } from '@/lib/db'
 import { eventListings, eventEditProposals } from '@the-tool-pit/db'
 import type { EventEditProposalData } from '@the-tool-pit/db'
@@ -16,6 +16,9 @@ function patchFromProposal(p: EventEditProposalData): Record<string, unknown> {
   ]
   for (const k of keys) if (p[k] !== undefined) patch[k] = p[k]
   if (typeof patch.country === 'string') patch.country = normaliseCountry(patch.country)
+  if (typeof patch.address === 'string') {
+    patch.address = streetLine(patch.address, { city: p.city as string | undefined, region: p.region as string | undefined })
+  }
   return patch
 }
 

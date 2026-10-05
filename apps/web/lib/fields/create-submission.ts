@@ -1,5 +1,5 @@
 import { getDb } from '@/lib/db'
-import { normaliseCountry } from '@the-tool-pit/db/country'
+import { normaliseCountry, streetLine } from '@the-tool-pit/db/country'
 import { practiceFields, fieldPhotos, FIELD_COVERAGE, FIELD_PERIMETER, FIELD_ELEMENTS, FIELD_AVAILABILITY, FIELD_PROGRAMS, FIELD_SOURCES } from '@the-tool-pit/db'
 import type { FieldSource, NewPracticeField } from '@the-tool-pit/db'
 import { uniqueFieldSlug } from '@/lib/queries/fields'
@@ -158,7 +158,7 @@ export async function createFieldSubmission(
     program: pickEnum(input.program, FIELD_PROGRAMS, 'frc'),
     latitude: lat,
     longitude: lng,
-    address: input.address?.trim() || null,
+    address: streetLine(input.address, { city: input.city, region: input.region }),
     city: input.city?.trim() || null,
     region: input.region?.trim() || null,
     country: normaliseCountry(input.country),

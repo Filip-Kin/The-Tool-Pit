@@ -108,3 +108,53 @@ export function placeLine(parts: ReadonlyArray<string | null | undefined>, count
     .filter((p): p is string => Boolean(p))
     .join(', ')
 }
+
+const norm = (s: string) => s.toLowerCase().replace(/[.\s]+/g, ' ').trim()
+
+/**
+ * The street line of an address, without the city, state, postcode and
+ * country that have columns of their own.
+ *
+ * WHY. Readers and forms stored whole postal addresses in `address` ("501
+ * Minnesota Ave E, Big Lake, MN 55309"), and every page that shows the place
+ * appends city and region, so the page read "501 Minnesota Ave E, Big Lake,
+ * MN 55309, Big Lake, MN". 26 published events had it on 2026-10-04.
+ *
+ * Conservative: the address is cut only where a part repeats the stored city,
+ * or is a "ST 12345" / postcode / country part. With nothing repeated it comes
+ * back as it was. A building name in front of the street number ("Barker
+ * College, 9 The Avenue") is dropped too; the venue has its own column.
+ */
+export function streetLine(
+  address: string | null | undefined,
+  ctx: { city?: string | null; region?: string | null } = {},
+): string | null {
+  if (address == null) return null
+  const trimmed = address.trim()
+  if (!trimmed) return null
+  const parts = trimmed.split(/\s*(?:\n|,)\s*/).filter(Boolean)
+  if (parts.length < 2) return trimmed
+
+  const city = ctx.city ? norm(ctx.city) : ''
+  const region = ctx.region ? norm(ctx.region) : ''
+  const isPlacePart = (p: string): boolean => {
+    const n = norm(p)
+    if (city && (n === city || n.startsWith(`${city} `))) return true
+    if (region && (n === region || new RegExp(`^${region.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+[a-z0-9]`).test(n))) return true
+    if (/^[a-z]{2,3}\s+\d{4,5}(-\d{4})?$/.test(n)) return true // "MN 55309", "NSW 2077"
+    if (/^[a-z]\d[a-z]\s?\d[a-z]\d$/.test(n)) return true // Canadian postcode
+    if (/^\d{4,5}(-\d{4})?$/.test(n)) return true
+    // A spelled-out country ("USA", "Australia"). Not a bare two-letter part,
+    // which normaliseCountry passes through and which is usually a state.
+    const code = normaliseCountry(p)
+    return n.length > 2 && Boolean(code && /^[A-Z]{2}$/.test(code))
+  }
+
+  const cut = parts.findIndex((p, i) => i > 0 && isPlacePart(p))
+  if (cut <= 0) return trimmed
+  let kept = parts.slice(0, cut)
+  // Drop building or venue names in front of the street number.
+  const firstNumbered = kept.findIndex((p) => /\d/.test(p))
+  if (firstNumbered > 0) kept = kept.slice(firstNumbered)
+  return kept.join(', ')
+}
