@@ -91,7 +91,12 @@ Both services need `DISCORD_BOT_TOKEN`, `DISCORD_APPROVALS_CHANNEL_ID`,
 the worker holds the gateway connection and relays reactions to
 `/api/internal/moderate` on `NEXT_PUBLIC_URL` (or `WEB_INTERNAL_URL`).
 The bot needs Send Messages, Embed Links, Add Reactions, Read Message History
-and Manage Messages in the approvals channel. Migration `0041` adds the
+and Manage Messages in the approvals channel.
+
+The worker also relays reactions in The Orange Alliance's #api-key-requests
+to TOA-API when `TOA_KEY_REQUESTS_CHANNEL_ID`, `TOA_DEV_ROLE_ID` and
+`TOA_DECISION_SECRET` are set (worker only; the secret matches TOA-API's
+`DISCORD_DECISION_SECRET`). Migration `0041` adds the
 `discord_approval_messages` table; run `db:migrate` with the deploy.
 
 ### Rate limiting

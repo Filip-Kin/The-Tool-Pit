@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { getDb, discordApprovalMessages } from '@the-tool-pit/db'
 import { APPROVE_EMOJI, REJECT_EMOJI, DISCORD_BOT_TOKEN_ENV, DISCORD_APPROVALS_CHANNEL_ENV } from '@the-tool-pit/types'
 import { askSiteToDecide, moderateConfigured, moderateUrl } from '../site/moderate.js'
+import { askToaToDecide, toaKeysConfig, type ToaKeysConfig } from './toa-keys.js'
 
 /**
  * The FRC.Tools bot's ears. One gateway connection, one event: a reaction
@@ -24,37 +25,50 @@ import { askSiteToDecide, moderateConfigured, moderateUrl } from '../site/modera
  * nothing. "Already approved" is the normal race, two people on one post,
  * and it reads the same way.
  *
- * Off entirely when DISCORD_BOT_TOKEN, DISCORD_APPROVALS_CHANNEL_ID,
- * DISCORD_DEV_ROLE_ID or INTERNAL_API_SECRET is unset: one log line at boot,
- * the rest of the worker unaffected.
+ * A second channel rides on the same connection: The Orange Alliance's
+ * #api-key-requests, relayed to TOA-API instead of this site (toa-keys.ts).
+ *
+ * The approvals channel is off when DISCORD_APPROVALS_CHANNEL_ID,
+ * DISCORD_DEV_ROLE_ID or INTERNAL_API_SECRET is unset, the TOA channel when
+ * its own variables are; with neither, or no DISCORD_BOT_TOKEN, there is no
+ * connection. One log line at boot, the rest of the worker unaffected.
  */
 
 const DEV_ROLE_ENV = 'DISCORD_DEV_ROLE_ID'
 const SECRET_ENV = 'INTERNAL_API_SECRET'
 
-interface ListenerConfig {
-  token: string
+interface ApprovalsConfig {
   channelId: string
   devRoleId: string
 }
 
+interface ListenerConfig {
+  token: string
+  approvals: ApprovalsConfig | null
+  toa: ToaKeysConfig | null
+}
+
 function config(): ListenerConfig | null {
   const token = process.env[DISCORD_BOT_TOKEN_ENV]?.trim()
+  if (!token) {
+    console.warn(`[discord] reaction listener off: ${DISCORD_BOT_TOKEN_ENV} unset`)
+    return null
+  }
   const channelId = process.env[DISCORD_APPROVALS_CHANNEL_ENV]?.trim()
   const devRoleId = process.env[DEV_ROLE_ENV]?.trim()
   const missing = [
-    [DISCORD_BOT_TOKEN_ENV, token],
     [DISCORD_APPROVALS_CHANNEL_ENV, channelId],
     [DEV_ROLE_ENV, devRoleId],
     [SECRET_ENV, moderateConfigured() ? 'set' : ''],
   ]
     .filter(([, v]) => !v)
     .map(([k]) => k)
-  if (missing.length > 0) {
-    console.warn(`[discord] reaction listener off: ${missing.join(', ')} unset`)
-    return null
-  }
-  return { token: token!, channelId: channelId!, devRoleId: devRoleId! }
+  if (missing.length > 0) console.warn(`[discord] approvals channel off: ${missing.join(', ')} unset`)
+  const approvals = missing.length === 0 ? { channelId: channelId!, devRoleId: devRoleId! } : null
+  const toa = toaKeysConfig()
+  if (!toa) console.warn('[discord] TOA key requests off: TOA_KEY_REQUESTS_CHANNEL_ID, TOA_DEV_ROLE_ID or TOA_DECISION_SECRET unset')
+  if (!approvals && !toa) return null
+  return { token, approvals, toa }
 }
 
 async function onReaction(
@@ -76,12 +90,37 @@ async function onReaction(
   }
   const message = reaction.message.partial ? await reaction.message.fetch().catch(() => null) : reaction.message
   if (!message) return
-  if (message.channelId !== cfg.channelId) return
   if (message.author?.id !== client.user?.id) return
 
   const emoji = reaction.emoji.name
   const decision = emoji === APPROVE_EMOJI ? 'approve' : emoji === REJECT_EMOJI ? 'reject' : null
   if (!decision) return
+
+  if (cfg.toa && message.channelId === cfg.toa.channelId) {
+    const toa = cfg.toa
+    const member = await message.guild?.members.fetch(user.id).catch(() => null)
+    if (!member) return
+    if (!member.roles.cache.has(toa.devRoleId)) {
+      await reaction.users.remove(user.id).catch(() => undefined)
+      return
+    }
+    const outcome = await askToaToDecide(toa, message.id, decision, member.displayName)
+    if (outcome.ok) {
+      console.log(`[discord] ${member.displayName} ${decision}d TOA key request ${message.id}`)
+      return
+    }
+    // Not a request post (the bot's own reactions on something else): leave it.
+    if (outcome.notARequest) return
+    console.warn(`[discord] TOA ${decision} on ${message.id} by ${member.displayName} refused: ${outcome.error}`)
+    await reaction.users.remove(user.id).catch(() => undefined)
+    await message.reply({ content: `${emoji} ${member.displayName}: ${outcome.error}` }).catch((err: Error) => {
+      console.warn(`[discord] could not reply under ${message.id}: ${err.message}`)
+    })
+    return
+  }
+
+  const approvals = cfg.approvals
+  if (!approvals || message.channelId !== approvals.channelId) return
 
   // Is this post a decision at all? A summary is posted by the same bot and
   // gets no row. Cheap local check before any network.
@@ -97,7 +136,7 @@ async function onReaction(
   const member = await guild.members.fetch(user.id).catch(() => null)
   if (!member) return
   const actorName = member.displayName
-  if (!member.roles.cache.has(cfg.devRoleId)) {
+  if (!member.roles.cache.has(approvals.devRoleId)) {
     // Not theirs to decide. The reaction comes off so the post does not read
     // as approved by somebody who cannot approve it.
     await reaction.users.remove(user.id).catch(() => undefined)
@@ -141,7 +180,10 @@ export async function startDiscordListener(): Promise<Client | null> {
   })
   client.on(Events.Error, (err) => console.error(`[discord] gateway error: ${err.message}`))
   client.once(Events.ClientReady, (ready) => {
-    console.log(`[discord] listening as ${ready.user.tag} in channel ${cfg.channelId}, decisions go to ${moderateUrl()}`)
+    if (cfg.approvals)
+      console.log(`[discord] listening as ${ready.user.tag} in channel ${cfg.approvals.channelId}, decisions go to ${moderateUrl()}`)
+    if (cfg.toa)
+      console.log(`[discord] listening as ${ready.user.tag} in channel ${cfg.toa.channelId}, TOA key decisions go to ${cfg.toa.base}`)
   })
 
   try {
