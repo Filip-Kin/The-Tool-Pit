@@ -1,6 +1,6 @@
 'use server'
 
-import { normaliseCountry } from '@the-tool-pit/db/country'
+import { normaliseCountry, streetLine } from '@the-tool-pit/db/country'
 import { revalidatePath } from 'next/cache'
 import { eq } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
@@ -127,7 +127,7 @@ export async function acceptFieldCandidate(
 
   // A stable human slug for the public /fields/<slug> page, built once from the
   // team number and name. Unique within the table via the suffix loop.
-  const base = { ...row, country: normaliseCountry(row.country), slug: await uniqueFieldSlug([row.teamNumber, row.name].filter(Boolean).join(' ')) }
+  const base = { ...row, address: streetLine(row.address, row), country: normaliseCountry(row.country), slug: await uniqueFieldSlug([row.teamNumber, row.name].filter(Boolean).join(' ')) }
 
   const [created] = await db
     .insert(practiceFields)

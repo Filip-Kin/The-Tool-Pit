@@ -21,7 +21,7 @@
  *
  * NOTHING HERE PUBLISHES.
  */
-import { normaliseCountry } from '@the-tool-pit/db/country'
+import { normaliseCountry, streetLine } from '@the-tool-pit/db/country'
 import {
   FIELD_PROGRAMS,
   FIELD_COVERAGE,
@@ -181,6 +181,12 @@ export function validateFieldRead(
     }
 
     kept[key] = { quote: quoteText.slice(0, 300), source }
+  }
+
+  // The street line only: city, region and country have their own columns,
+  // and a whole postal address here prints the city twice on the page.
+  if (typeof fields.address === 'string') {
+    fields.address = streetLine(fields.address, { city: fields.city as string | undefined, region: fields.region as string | undefined })
   }
 
   return { fields: fields as ExtractedPracticeFieldFields, evidence: kept, rejected }
