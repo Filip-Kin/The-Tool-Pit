@@ -34,13 +34,18 @@ export interface TbaPushStats {
   failed: number
 }
 
-/** Hash of the team numbers alone (same idea as roster-refresh's hashTeams), so an unchanged roster is not re-sent every run. */
-function hashNumbers(teams: RosterTeam[]): string {
+/**
+ * Hash of the team numbers AND robot letters (same idea as roster-refresh's
+ * hashTeams), so an unchanged roster is not re-sent every run. The letter is
+ * in it because a B team changes what goes to TBA (a demo number plus a
+ * remap); hashing numbers alone used to read "8280, 8280B" as unchanged.
+ */
+function hashTeams(teams: RosterTeam[]): string {
   return createHash('sha256')
     .update(
       teams
-        .map((t) => t.number)
-        .sort((a, b) => a - b)
+        .map((t) => `${t.number}${t.robot ? t.robot.toUpperCase() : ''}`)
+        .sort()
         .join(','),
     )
     .digest('hex')
@@ -101,7 +106,7 @@ export async function processTbaPushJob(payload: TbaPushPayload = {}): Promise<T
       const roster = rosters.find((r) => r.day === unit.day)
       if (!roster || roster.teams.length === 0) continue
 
-      const hash = hashNumbers(roster.teams)
+      const hash = hashTeams(roster.teams)
       const lastHash = unit.day === 2 ? listing.tbaPushedHashDay2 : listing.tbaPushedHash
       if (hash === lastHash) {
         stats.unchanged++
@@ -110,14 +115,14 @@ export async function processTbaPushJob(payload: TbaPushPayload = {}): Promise<T
 
       const hashPatch = unit.day === 2 ? { tbaPushedHashDay2: hash } : { tbaPushedHash: hash }
       try {
-        const result = await pushTeamList(unit.tbaKey, creds, roster.teams.map((t) => t.number))
+        const result = await pushTeamList(unit.tbaKey, creds, roster.teams)
         if (result.ok) {
           stats.pushed++
           await db
             .update(eventListings)
             .set({ ...hashPatch, tbaPushedAt: new Date(), tbaPushStatus: 'ok', tbaPushError: null, updatedAt: new Date() })
             .where(eq(eventListings.id, listing.id))
-          console.log(`[tba-push] ${listing.name} (${tag}): pushed ${roster.teams.length} teams`)
+          console.log(`[tba-push] ${listing.name} (${tag}): pushed ${roster.teams.length - result.dropped.length} teams${result.dropped.length ? `, no demo number left for ${result.dropped.join(', ')}` : ''}`)
         } else {
           stats.failed++
           await db
