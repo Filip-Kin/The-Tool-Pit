@@ -46,8 +46,12 @@ declare global {
 
 function loadGtm(): void {
   window.dataLayer = window.dataLayer || []
-  function gtag(...args: unknown[]) {
-    window.dataLayer!.push(args)
+  // gtag.js only acts on an `arguments` object pushed to dataLayer. A rest
+  // array (`...args`) looks the same in the console but is ignored, so no hit
+  // was ever sent (GA4 showed "No data received", 2026-10-09).
+  function gtag(..._args: unknown[]) {
+    // eslint-disable-next-line prefer-rest-params
+    window.dataLayer!.push(arguments)
   }
   gtag('js', new Date())
   gtag('config', GA_MEASUREMENT_ID)
