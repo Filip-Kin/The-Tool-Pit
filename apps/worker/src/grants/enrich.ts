@@ -66,7 +66,7 @@ import { fetchWithRelayFallback, relayRenderedHtml, viaNote, type FetchVia } fro
 import { deterministicGrantPrefilter } from './prefilter.js'
 import { verifyListing } from './verify-listing.js'
 import { judgeFit } from './fit.js'
-import { detectInvitationOnly, invitationQuoteUrl } from './invitation.js'
+import { readInvitationForIntake } from './invitation.js'
 import { findInfoPage } from './info-page.js'
 import { isEntranceUrl, isThirdPartyGrantUrl } from '@the-tool-pit/db/grant-urls'
 import { inferRegions } from './infer-regions.js'
@@ -796,18 +796,25 @@ export async function processGrantExtractJob(payload: GrantExtractPayload): Prom
     extraction.notes.push(`fit check failed: ${err instanceof Error ? err.message : String(err)}`)
   }
 
-  // 5b. Invitation only? Read from the funder's own text, never the
-  //     aggregator blurb. Not a refusal: the grant publishes with the marker
-  //     set, and the matcher keeps it out of team emails.
-  {
-    const found = detectInvitationOnly(gathered.evidence.funderPage)
-    extraction.invitation = {
-      invitationOnly: found.invitationOnly,
-      quote: found.quote,
-      url: found.quote ? invitationQuoteUrl(gathered.evidence.funderPage, found.quote, gathered.urls[0] ?? url) : null,
-      checkedAt: new Date().toISOString(),
-    }
-    if (found.invitationOnly) extraction.notes.push(`invitation only: "${found.quote}"`)
+  // 5b. Invitation only? Candidate sentences from the funder's own text
+  //     (never the aggregator blurb), confirmed by the model against THIS
+  //     programme: a funder whose other focus areas are invite-only still has
+  //     an open grant here. Not a refusal: the grant publishes with the marker
+  //     set, and the matcher keeps it out of team emails. A failed model call
+  //     leaves the field unset, which publishes as open; the monitor re-reads it.
+  try {
+    extraction.invitation = await readInvitationForIntake({
+      grantName: String(extraction.fields.name.value ?? ''),
+      funderName: extraction.fields.funderName.value ?? null,
+      applicationUrl: extraction.fields.applicationUrl.value ?? null,
+      infoUrl: url,
+      funderPage: gathered.evidence.funderPage,
+      firstUrl: gathered.urls[0] ?? url,
+    })
+    if (extraction.invitation.invitationOnly) extraction.notes.push(`invitation only: "${extraction.invitation.quote}" (${extraction.invitation.reason})`)
+    else if (extraction.invitation.reason) extraction.notes.push(`invitation check: ${extraction.invitation.reason}`)
+  } catch (err) {
+    extraction.notes.push(`invitation check failed: ${err instanceof Error ? err.message : String(err)}`)
   }
 
   await db

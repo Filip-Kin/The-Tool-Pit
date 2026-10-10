@@ -60,7 +60,7 @@ describe('award notes keep the money and hand the rest on', () => {
 
 describe('invitationFromExtraction', () => {
   it('carries the worker quote and page onto the published grant', () => {
-    const extraction = { invitation: { invitationOnly: true, quote: 'Grants are by invitation only.', url: 'https://example.org/apply', checkedAt: '2026-10-10T00:00:00Z' } }
+    const extraction = { invitation: { invitationOnly: true, quote: 'Grants are by invitation only.', url: 'https://example.org/apply', reason: 'covers this programme', checkedAt: '2026-10-10T00:00:00Z' } }
     expect(invitationFromExtraction(extraction as never)).toEqual({
       invitationOnly: true,
       invitationProof: 'Grants are by invitation only.',
@@ -72,5 +72,7 @@ describe('invitationFromExtraction', () => {
     expect(invitationFromExtraction(null)).toEqual(none)
     expect(invitationFromExtraction({} as never)).toEqual(none)
     expect(invitationFromExtraction({ invitation: { invitationOnly: false, quote: null, url: null, checkedAt: 'x' } } as never)).toEqual(none)
+    // The bare detector's hit, from before the model confirmed it.
+    expect(invitationFromExtraction({ invitation: { invitationOnly: true, quote: 'q', url: 'u', checkedAt: 'x' } } as never)).toEqual(none)
   })
 })
