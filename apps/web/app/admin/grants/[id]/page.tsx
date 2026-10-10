@@ -198,6 +198,19 @@ export default async function AdminGrantEditorPage({
             status: grant.status,
           }}
         />
+        <input type="hidden" name="invitationFields" value="1" />
+        <div className="grid gap-4 md:grid-cols-[auto_1fr_1fr] md:items-end">
+          <label className="flex items-center gap-1.5 text-xs text-foreground md:pb-2.5">
+            <input type="checkbox" name="invitationOnly" defaultChecked={grant.invitationOnly} className="accent-primary" />
+            Invitation only
+          </label>
+          <Field label="Invitation proof">
+            <input name="invitationProof" defaultValue={grant.invitationProof ?? ''} className={inputClass} />
+          </Field>
+          <Field label="Invitation proof URL">
+            <input name="invitationProofUrl" defaultValue={grant.invitationProofUrl ?? ''} className={inputClass} />
+          </Field>
+        </div>
         <div className="flex items-center gap-3">
           <button
             type="submit"

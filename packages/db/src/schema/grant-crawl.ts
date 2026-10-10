@@ -586,6 +586,19 @@ export interface GrantExtraction {
     model: string
     checkedAt: string
   }
+  /**
+   * Invitation only (worker grants/invitation.ts): the funder's own sentence
+   * that it takes applications only from organisations it has invited, read
+   * deterministically from the funder's pages. Not a reason to refuse the
+   * grant: it publishes with grants.invitation_only set and is kept out of
+   * match emails.
+   */
+  invitation?: {
+    invitationOnly: boolean
+    quote: string | null
+    url: string | null
+    checkedAt: string
+  }
   /** The model's own sentence on what it could and could not read. */
   reasoning?: string
   extractedAt: string

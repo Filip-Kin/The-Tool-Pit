@@ -92,10 +92,27 @@ export async function saveGrantForm(grantId: string, form: FormData): Promise<vo
     }
   }
 
+  // Invitation only: set by hand here, or by the worker from the funder's
+  // page. Only read when the form carries the fields, so another form posting
+  // the grant fields never clears it.
+  const invitation = form.has('invitationFields')
+    ? (() => {
+        const on = form.get('invitationOnly') === 'on'
+        const proof = String(form.get('invitationProof') ?? '').trim()
+        const proofUrl = String(form.get('invitationProofUrl') ?? '').trim()
+        return {
+          invitationOnly: on,
+          invitationProof: on ? proof || null : null,
+          invitationProofUrl: on ? proofUrl || null : null,
+        }
+      })()
+    : {}
+
   await db
     .update(grants)
     .set({
       ...parsed.values,
+      ...invitation,
       slug,
       funderId,
       // publishedAt is the first time it went public and is never rewritten by

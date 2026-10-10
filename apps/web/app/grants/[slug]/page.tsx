@@ -101,6 +101,9 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
         <div className="flex min-w-0 flex-col gap-8">
           <header className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-1.5">
+              {grant.invitationOnly && (
+                <span className="rounded bg-official/15 px-1.5 py-0.5 text-xs font-medium text-official">Invitation only</span>
+              )}
               {grant.programs.map((p) => (
                 <span key={p} className="rounded bg-surface-3 px-1.5 py-0.5 text-xs font-medium text-muted">
                   {PROGRAM_LABEL[p]}
@@ -126,6 +129,18 @@ export default async function GrantDetailPage({ params }: { params: Promise<{ sl
               </p>
             )}
             {grant.summary && <p className="text-sm text-muted">{grant.summary}</p>}
+            {/* The funder's own sentence, quoted, with the page it is on: the
+                same shape as the deadline proof in the sidebar. */}
+            {grant.invitationOnly && grant.invitationProof && (
+              <p className="text-sm text-muted">
+                &ldquo;{grant.invitationProof}&rdquo;{' '}
+                {grant.invitationProofUrl && (
+                  <a href={grant.invitationProofUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                    source
+                  </a>
+                )}
+              </p>
+            )}
           </header>
 
           {grant.description && (

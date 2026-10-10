@@ -93,6 +93,9 @@ export function GrantCard({ grant, now }: { grant: PublicGrant; now: Date }) {
       </dl>
 
       <div className="flex flex-wrap items-center gap-1.5">
+        {grant.invitationOnly && (
+          <span className="rounded bg-official/15 px-1.5 py-0.5 text-xs font-medium text-official">Invitation only</span>
+        )}
         {grant.programs.map((p) => (
           <span key={p} className="rounded bg-surface-3 px-1.5 py-0.5 text-xs font-medium text-muted">
             {PROGRAM_LABEL[p]}

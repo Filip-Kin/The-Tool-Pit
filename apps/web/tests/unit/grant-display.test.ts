@@ -58,6 +58,9 @@ function grant(partial: Partial<PublicGrant> & { id: string }): PublicGrant {
     funder: null,
     cycles: [],
     requirements: [],
+    invitationOnly: false,
+    invitationProof: null,
+    invitationProofUrl: null,
     ...partial,
   }
 }
@@ -165,6 +168,18 @@ describe('matchesFilters', () => {
     const g = grant({ id: 'closed', cycles: [cycle({ cycleYear: 2026, deadlineAt: new Date('2026-04-10T00:00:00Z') })] })
     expect(matchesFilters(g, {}, now)).toBe(true)
     expect(matchesFilters(g, { hideClosed: true }, now)).toBe(false)
+  })
+
+  it('hides an invitation-only grant by default and shows it when included', () => {
+    const g = grant({ id: 'invite', deadlineType: 'rolling', invitationOnly: true, invitationProof: 'Grants are by invitation only.' })
+    expect(matchesFilters(g, {}, now)).toBe(false)
+    expect(matchesFilters(g, { invitationOnly: 'include' }, now)).toBe(true)
+  })
+
+  it('keeps an open grant whatever the invitation setting', () => {
+    const g = grant({ id: 'open', deadlineType: 'rolling' })
+    expect(matchesFilters(g, {}, now)).toBe(true)
+    expect(matchesFilters(g, { invitationOnly: 'include' }, now)).toBe(true)
   })
 })
 

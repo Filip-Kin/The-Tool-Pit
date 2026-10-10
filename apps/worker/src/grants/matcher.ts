@@ -504,6 +504,21 @@ export function matchProfileToGrant(
 
 // #endregion
 
+/**
+ * Why a published grant is never matched to a team, or null when it can be.
+ *
+ * Invitation only: the funder takes applications only from organisations it
+ * invited. The listing stays (a team with a contact at the company can ask for
+ * an invitation), but telling a team "you match" about a grant they cannot
+ * apply to is a false promise in an inbox. No match row means no new_match
+ * email, no digest line and no deadline reminder off a match; the stale sweep
+ * below removes any match made before the marker was set.
+ */
+export function excludedFromMatching(grant: Pick<Grant, 'invitationOnly'>): string | null {
+  if (grant.invitationOnly) return 'invitation only'
+  return null
+}
+
 // #region The job
 
 /** Cycle states a team can still act on. */
@@ -594,6 +609,7 @@ export async function processGrantMatchJob(payload: GrantMatchJobPayload): Promi
     withCycle: 0,
     rollingNoCycle: 0,
     skippedNoOpenCycle: 0,
+    skippedInvitationOnly: 0,
     eligible: 0,
     likely: 0,
     missingInfo: 0,
@@ -604,6 +620,10 @@ export async function processGrantMatchJob(payload: GrantMatchJobPayload): Promi
   const kept = new Set<string>()
 
   for (const grant of publishedGrants) {
+    if (excludedFromMatching(grant)) {
+      stats.skippedInvitationOnly++
+      continue
+    }
     const cycle = pickCycle(cyclesByGrant.get(grant.id) ?? [])
     if (!cycle && grant.deadlineType !== 'rolling') {
       stats.skippedNoOpenCycle++
@@ -699,7 +719,7 @@ export async function processGrantMatchJob(payload: GrantMatchJobPayload): Promi
   console.log(
     `[grant-match] profile=${profile.id} team=${profile.program}${profile.teamNumber} ` +
       `considered=${stats.considered} (cycle=${stats.withCycle} rolling=${stats.rollingNoCycle}) ` +
-      `skipped_no_open_cycle=${stats.skippedNoOpenCycle} ` +
+      `skipped_no_open_cycle=${stats.skippedNoOpenCycle} skipped_invitation_only=${stats.skippedInvitationOnly} ` +
       `eligible=${stats.eligible} likely=${stats.likely} missing_info=${stats.missingInfo} ` +
       `ineligible=${stats.ineligible} cleared=${staleIds.length}`,
   )

@@ -206,6 +206,19 @@ export const grants = pgTable(
     deadlineProofUrl: text('deadline_proof_url'),
     deadlineProofCheckedAt: timestamp('deadline_proof_checked_at', { withTimezone: true }),
 
+    /**
+     * True when the funder only takes applications it has invited ("you may
+     * only apply for a grant if you receive an invitation", "does not accept
+     * unsolicited proposals"). Such a grant stays listed, because a team with a
+     * contact at the company can ask for an invitation, but it is labelled,
+     * hidden from the public list by default, and never sent in match alerts.
+     * Set from the funder's page by the worker (grants/invitation.ts) or by an
+     * admin; invitationProof is the funder's sentence that says so.
+     */
+    invitationOnly: boolean('invitation_only').notNull().default(false),
+    invitationProof: text('invitation_proof'),
+    invitationProofUrl: text('invitation_proof_url'),
+
     publishedAt: timestamp('published_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

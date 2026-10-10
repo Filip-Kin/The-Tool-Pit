@@ -18,7 +18,9 @@ export default async function GrantsHomePage() {
   // One instant for the whole render, handed to the client explorer so its
   // first paint matches this HTML exactly. See GrantsExplorer.
   const now = new Date()
-  const grants = await listGrants({}, now)
+  // Every published grant goes to the explorer, invitation-only ones too: the
+  // explorer hides those by default and its filter brings them back.
+  const grants = await listGrants({ invitationOnly: 'include' }, now)
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-6">
