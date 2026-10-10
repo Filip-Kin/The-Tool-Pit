@@ -45,7 +45,7 @@ import type { ExtractedGrantFields, Grant, GrantCycle } from '@the-tool-pit/db'
 import { politeFetch } from '../connectors/base.js'
 import { hashContent, stripToMainContent } from './strip.js'
 import { verifyListing } from './verify-listing.js'
-import { invitationPatch } from './invitation.js'
+import { confirmInvitationOnly, invitationPatch } from './invitation.js'
 import { refusalReason, relayFetch } from './relay-fetch.js'
 import { extractGrantFields, type GrantExtractionResult } from './extract.js'
 import { deriveCycleStatus } from './cadence.js'
@@ -943,13 +943,23 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
 
   // Invitation only, from the page as it reads now, on every good read (the
   // hash being unchanged says nothing about a marker set or cleared since).
-  // A failed read returned above, so a clear here means the page loaded and
-  // no longer says it.
-  const invitation = invitationPatch(grant, grant.infoUrl, text)
-  if (invitation) {
-    await db.update(grants).set({ ...invitation, updatedAt: now }).where(eq(grants.id, grant.id))
-    notes.push(invitation.invitationOnly ? `invitation only: "${invitation.invitationProof}"` : 'invitation only cleared: the page no longer says it')
-    console.log(`[grant-monitor] ${grant.slug}: invitation only ${invitation.invitationOnly ? 'set' : 'cleared'}`)
+  // A failed read returned above, so a clear here means the page loaded. The
+  // model is asked only when the page has a candidate sentence; a failed call
+  // leaves the marker as it was.
+  try {
+    const invitation = await invitationPatch(grant, grant.infoUrl, text, async (candidates) => {
+      const funderName = grant.funderId
+        ? ((await db.select({ name: grantFunders.name }).from(grantFunders).where(eq(grantFunders.id, grant.funderId)))[0]?.name ?? null)
+        : null
+      return confirmInvitationOnly({ grantName: grant.name, funderName, applicationUrl: grant.applicationUrl, infoUrl: grant.infoUrl, candidates })
+    })
+    if (invitation) {
+      await db.update(grants).set({ ...invitation, updatedAt: now }).where(eq(grants.id, grant.id))
+      notes.push(invitation.invitationOnly ? `invitation only: "${invitation.invitationProof}"` : 'invitation only cleared: the page no longer says it of this programme')
+      console.log(`[grant-monitor] ${grant.slug}: invitation only ${invitation.invitationOnly ? 'set' : 'cleared'}`)
+    }
+  } catch (err) {
+    notes.push(`invitation check failed: ${err instanceof Error ? err.message : String(err)}`)
   }
 
   const [snapshot] = await db

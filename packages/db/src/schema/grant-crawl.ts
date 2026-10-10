@@ -597,6 +597,8 @@ export interface GrantExtraction {
     invitationOnly: boolean
     quote: string | null
     url: string | null
+    /** The model's one sentence on whether the statement covers this programme. */
+    reason?: string
     checkedAt: string
   }
   /** The model's own sentence on what it could and could not read. */

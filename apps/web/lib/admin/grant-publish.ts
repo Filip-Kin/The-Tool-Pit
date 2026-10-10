@@ -231,14 +231,18 @@ export async function duplicateOfExisting(name: string, funderName: string | nul
 
 /**
  * The invitation-only columns a published grant gets from its candidate's
- * extraction. False with no proof when the worker found no such sentence or
- * never looked (an extraction from before the check existed).
+ * extraction. False with no proof when the worker found no such sentence,
+ * never looked, or looked before the model confirmed it.
  */
 export function invitationFromExtraction(
   extraction: GrantExtraction | null | undefined,
 ): { invitationOnly: boolean; invitationProof: string | null; invitationProofUrl: string | null } {
   const inv = extraction?.invitation
-  if (!inv?.invitationOnly) return { invitationOnly: false, invitationProof: null, invitationProofUrl: null }
+  // `reason` is written only by the model-confirmed read (worker
+  // confirmInvitationOnly). An extraction from before that check carries the
+  // bare detector's hit, which was wrong 9 times in 12, so it publishes open
+  // and the monitor decides.
+  if (!inv?.invitationOnly || inv.reason === undefined) return { invitationOnly: false, invitationProof: null, invitationProofUrl: null }
   return { invitationOnly: true, invitationProof: inv.quote ?? null, invitationProofUrl: inv.url ?? null }
 }
 
