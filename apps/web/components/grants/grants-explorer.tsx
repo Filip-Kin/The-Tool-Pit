@@ -77,6 +77,7 @@ function readUrlFilters(): StoredFilters | null {
   if (effort?.length) filters.effortLevels = effort as GrantEffortLevel[]
   if (sp.get('rolling') === '1') filters.rollingOnly = true
   if (sp.get('hideClosed') === '1') filters.hideClosed = true
+  if (sp.get('invite') === 'include') filters.invitationOnly = 'include'
   // The band and window keys carry their numeric bounds with them, the same
   // way a click on the chip would have set them.
   const awardBand = sp.get('award')
@@ -98,6 +99,7 @@ function writeUrlFilters(value: StoredFilters, q: string | undefined): void {
   }
   if (value.filters.rollingOnly) sp.set('rolling', '1')
   if (value.filters.hideClosed) sp.set('hideClosed', '1')
+  if (value.filters.invitationOnly) sp.set('invite', 'include')
   if (value.awardBand) sp.set('award', value.awardBand)
   if (value.deadlineWindow) sp.set('within', value.deadlineWindow)
   if (q?.trim()) sp.set('q', q.trim())
@@ -179,6 +181,7 @@ export function GrantsExplorer({ grants, now }: { grants: PublicGrant[]; now: Da
       regionsByCountry: Object.fromEntries([...regionsByCountry].map(([c, set]) => [c, [...set].sort(byName)])) as Record<string, string[]>,
       programs: GRANT_PROGRAMS.filter((p) => programs.has(p)),
       efforts: GRANT_EFFORT_LEVELS.filter((e) => efforts.has(e)),
+      invitationOnly: grants.filter((g) => g.invitationOnly).length,
     }
   }, [grants])
 
@@ -186,6 +189,18 @@ export function GrantsExplorer({ grants, now }: { grants: PublicGrant[]; now: Da
     () => sortByUrgency(grants.filter((g) => matchesFilters(g, filters, now)), now),
     [grants, filters, now],
   )
+
+  // Invitation-only grants the other filters would show but the default hides,
+  // so the count line says what is held back instead of a silent "of N".
+  const hiddenInvitationOnly = useMemo(
+    () =>
+      filters.invitationOnly === 'include'
+        ? 0
+        : grants.filter((g) => g.invitationOnly && matchesFilters(g, { ...filters, invitationOnly: 'include' }, now)).length,
+    [grants, filters, now],
+  )
+  // The total the "of N" compares against: every grant the invitation setting lets in.
+  const total = filters.invitationOnly === 'include' ? grants.length : grants.length - facets.invitationOnly
 
   // Counted separately so the list can say how many closed grants it is still
   // showing, and so the "hide closed" toggle is honest about what it removes.
@@ -236,7 +251,8 @@ export function GrantsExplorer({ grants, now }: { grants: PublicGrant[]; now: Da
     (awardBand ? 1 : 0) +
     (deadlineWindow ? 1 : 0) +
     (filters.rollingOnly ? 1 : 0) +
-    (filters.hideClosed ? 1 : 0)
+    (filters.hideClosed ? 1 : 0) +
+    (filters.invitationOnly ? 1 : 0)
 
   return (
     <div className="grid gap-6 lg:grid-cols-[280px_1fr] lg:items-start">
@@ -366,6 +382,23 @@ export function GrantsExplorer({ grants, now }: { grants: PublicGrant[]; now: Da
               </FilterGroup>
             )}
 
+            {facets.invitationOnly > 0 && (
+              <FilterGroup label="Invitation only">
+                <Chip
+                  active={filters.invitationOnly !== 'include'}
+                  onClick={() => setFilters((f) => ({ ...f, invitationOnly: undefined }))}
+                >
+                  Hide
+                </Chip>
+                <Chip
+                  active={filters.invitationOnly === 'include'}
+                  onClick={() => setFilters((f) => ({ ...f, invitationOnly: 'include' }))}
+                >
+                  Include
+                </Chip>
+              </FilterGroup>
+            )}
+
             {activeCount > 0 && (
               <button type="button" onClick={clearAll} className="self-start text-xs text-muted-2 hover:text-foreground">
                 Clear filters
@@ -378,8 +411,9 @@ export function GrantsExplorer({ grants, now }: { grants: PublicGrant[]; now: Da
       <div className="flex min-w-0 flex-col gap-3">
         <p className="text-xs text-muted-2">
           {visible.length} {visible.length === 1 ? 'grant' : 'grants'}
-          {visible.length !== grants.length && ` of ${grants.length}`}
+          {visible.length !== total && ` of ${total}`}
           {' · soonest deadline first'}
+          {hiddenInvitationOnly > 0 && ` · ${hiddenInvitationOnly} invitation only, hidden`}
           {closedCount > 0 && ` · ${closedCount} closed, kept so you can see when they reopen`}
         </p>
 

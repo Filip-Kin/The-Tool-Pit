@@ -91,6 +91,11 @@ export interface PublicGrant {
   deadlineProof: string | null
   deadlineProofUrl: string | null
   deadlineProofCheckedAt: Date | null
+  /** Applications only from organisations the funder invited (worker grants/invitation.ts, or an admin). */
+  invitationOnly: boolean
+  /** The funder's own sentence that says so, and the page it is on. */
+  invitationProof: string | null
+  invitationProofUrl: string | null
 }
 
 // #endregion
@@ -482,6 +487,12 @@ export interface GrantFilters {
   rollingOnly?: boolean
   /** Hide closed grants. Off by default: a closed grant still tells you when to come back. */
   hideClosed?: boolean
+  /**
+   * Invitation-only grants. Hidden unless this is 'include': the public list
+   * is the grants a team can apply to, and an invitation-only grant is one a
+   * team with a contact at the funder asks about, so it is opt-in.
+   */
+  invitationOnly?: 'include'
 }
 
 export const EMPTY_GRANT_FILTERS: GrantFilters = {}
@@ -510,6 +521,8 @@ function overlaps(a: readonly string[], b: readonly string[]): boolean {
  * explorer cannot disagree about what is visible.
  */
 export function matchesFilters(grant: PublicGrant, filters: GrantFilters, now: Date = new Date()): boolean {
+  if (grant.invitationOnly && filters.invitationOnly !== 'include') return false
+
   const q = filters.q?.trim().toLowerCase()
   if (q) {
     const hay = [grant.name, grant.funder?.name, grant.summary, grant.localityNote]

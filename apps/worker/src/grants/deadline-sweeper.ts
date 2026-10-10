@@ -46,6 +46,7 @@ import {
 } from '@the-tool-pit/db'
 import { enqueueGrantAlert, grantUrl, type DeadlineAlertPayload, type NewMatchAlertPayload } from './alerts.js'
 import { pickNextCycle } from './cadence.js'
+import { excludedFromMatching } from './matcher.js'
 
 // #region offsets
 
@@ -179,6 +180,8 @@ export interface GrantDeadlineSweepStats {
     tooEarly: number
     /** The grant is no longer published, so it has no public page to link to. */
     notPublished: number
+    /** A match on a grant marked invitation only: never emailed (matcher.ts excludedFromMatching). */
+    invitationOnly: number
   }
   /** Matches whose team profile has no members, so there is nobody to tell. */
   matchesWithNoMembers: number
@@ -190,7 +193,7 @@ function emptyStats(): GrantDeadlineSweepStats {
     matches: 0,
     deadlineQueued: 0,
     newMatchQueued: 0,
-    skipped: { noCycle: 0, noDeadline: 0, estimatedCycle: 0, unverifiedCycle: 0, passed: 0, tooEarly: 0, notPublished: 0 },
+    skipped: { noCycle: 0, noDeadline: 0, estimatedCycle: 0, unverifiedCycle: 0, passed: 0, tooEarly: 0, notPublished: 0, invitationOnly: 0 },
     matchesWithNoMembers: 0,
   }
 }
@@ -345,6 +348,13 @@ export async function processGrantDeadlineSweepJob(
       stats.skipped.notPublished++
       continue
     }
+    // Marked invitation only after the matcher made this row: no match email
+    // and no reminder off it. The matcher's next pass deletes the row. A
+    // person who WATCHES the grant still gets its reminders (the loop above).
+    if (excludedFromMatching(found.grant)) {
+      stats.skipped.invitationOnly++
+      continue
+    }
 
     const members = membersByProfile.get(match.profileId) ?? []
     if (members.length === 0) {
@@ -452,7 +462,7 @@ function logSweep(stats: GrantDeadlineSweepStats): void {
       `queued deadline=${stats.deadlineQueued} new_match=${stats.newMatchQueued} | ` +
       `skipped estimated=${s.estimatedCycle} unverified=${s.unverifiedCycle} ` +
       `noDeadline=${s.noDeadline} noCycle=${s.noCycle} ` +
-      `passed=${s.passed} tooEarly=${s.tooEarly} notPublished=${s.notPublished} ` +
+      `passed=${s.passed} tooEarly=${s.tooEarly} notPublished=${s.notPublished} invitationOnly=${s.invitationOnly} ` +
       `noMembers=${stats.matchesWithNoMembers}`,
   )
 }

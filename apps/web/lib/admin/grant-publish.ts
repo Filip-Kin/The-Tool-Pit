@@ -229,6 +229,19 @@ export async function duplicateOfExisting(name: string, funderName: string | nul
   return null
 }
 
+/**
+ * The invitation-only columns a published grant gets from its candidate's
+ * extraction. False with no proof when the worker found no such sentence or
+ * never looked (an extraction from before the check existed).
+ */
+export function invitationFromExtraction(
+  extraction: GrantExtraction | null | undefined,
+): { invitationOnly: boolean; invitationProof: string | null; invitationProofUrl: string | null } {
+  const inv = extraction?.invitation
+  if (!inv?.invitationOnly) return { invitationOnly: false, invitationProof: null, invitationProofUrl: null }
+  return { invitationOnly: true, invitationProof: inv.quote ?? null, invitationProofUrl: inv.url ?? null }
+}
+
 export interface PublishOutcome {
   error?: string
   slug?: string
@@ -279,6 +292,9 @@ export async function publishCandidateFromForm(
   const slug = await uniqueGrantSlug(parsed.values.name!)
   const funderId = parsed.funderName ? await resolveFunderByName(parsed.funderName) : null
   const status = parsed.values.status ?? 'pending'
+  // Invitation only is a marker, not a blocker: the worker read the funder's
+  // own sentence (grants/invitation.ts) and the listing carries it.
+  const invitation = invitationFromExtraction(candidate.extraction)
   const [created] = await db
     .insert(grants)
     .values({
@@ -288,6 +304,7 @@ export async function publishCandidateFromForm(
       slug,
       funderId,
       source: discoverySourceKind(candidate.rawMetadata?.discoveredVia),
+      ...invitation,
       verifiedAt: now,
       verifiedBy: who,
       publishedAt: status === 'published' ? now : null,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeGrantName, seasonYear, staleSeasonInName } from '@/lib/admin/grant-publish'
+import { invitationFromExtraction, normalizeGrantName, seasonYear, staleSeasonInName } from '@/lib/admin/grant-publish'
 
 const sept2026 = new Date('2026-09-08T12:00:00Z')
 const march2026 = new Date('2026-03-08T12:00:00Z')
@@ -55,5 +55,22 @@ describe('award notes keep the money and hand the rest on', () => {
   })
   it('leaves a plain money note alone', () => {
     expect(cleanAwardNotes('Typically up to $10,000; larger gifts by prior arrangement.', '', null, 10000)).toBe('Typically up to $10,000; larger gifts by prior arrangement')
+  })
+})
+
+describe('invitationFromExtraction', () => {
+  it('carries the worker quote and page onto the published grant', () => {
+    const extraction = { invitation: { invitationOnly: true, quote: 'Grants are by invitation only.', url: 'https://example.org/apply', checkedAt: '2026-10-10T00:00:00Z' } }
+    expect(invitationFromExtraction(extraction as never)).toEqual({
+      invitationOnly: true,
+      invitationProof: 'Grants are by invitation only.',
+      invitationProofUrl: 'https://example.org/apply',
+    })
+  })
+  it('is open with no proof when the worker found nothing or never looked', () => {
+    const none = { invitationOnly: false, invitationProof: null, invitationProofUrl: null }
+    expect(invitationFromExtraction(null)).toEqual(none)
+    expect(invitationFromExtraction({} as never)).toEqual(none)
+    expect(invitationFromExtraction({ invitation: { invitationOnly: false, quote: null, url: null, checkedAt: 'x' } } as never)).toEqual(none)
   })
 })

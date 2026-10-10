@@ -309,6 +309,13 @@
       "when": 1790867606236,
       "tag": "0043_listing_changes",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1791610761741,
+      "tag": "0044_invitation_only",
+      "breakpoints": true
     }
   ]
 }
