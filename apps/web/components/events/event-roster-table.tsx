@@ -140,6 +140,17 @@ function TeamRow({ team, eventKey }: { team: RosterTeamRow; eventKey?: string | 
   // a tap, so the open is dropped. Mouse still opens on click (no movement).
   const start = useRef<{ x: number; y: number } | null>(null)
   const scrolled = useRef(false)
+  // The menu is portaled and anchored to the row, so when the roster or the
+  // dialog scrolls, the row slides out of the clipped list while the menu stays
+  // floating over whatever is below it. Close on any scroll instead. Scroll
+  // events do not bubble, so listen in the capture phase to catch every
+  // scrolling ancestor.
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    document.addEventListener('scroll', close, { capture: true, passive: true })
+    return () => document.removeEventListener('scroll', close, { capture: true })
+  }, [open])
   return (
     <DropdownMenu.Root
       modal={false}
