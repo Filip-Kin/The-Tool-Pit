@@ -121,6 +121,11 @@ export function chooseRosterSource(
   return started ? 'tba' : 'site'
 }
 
+/** The stored parser could not run because the page never loaded in the browser. */
+export function pageDidNotLoad(run: ParserRunResult | null | undefined): boolean {
+  return Boolean(run && !run.ok && /did not load|timeout/i.test(run.error ?? ''))
+}
+
 /**
  * The event's own team-list page cannot be loaded at all: the name does not
  * resolve, nothing answers, or the server says the page is gone or broken.
@@ -456,7 +461,10 @@ export async function processRosterRefreshJob(
   // event with its own key); one read per listing otherwise. Snapshots carry the
   // day, the previous-hash check is per day, and the count lands in the day's
   // own column so the card can draw a fill bar per day.
-  for (const listing of withKey) {
+  // One TBA read for a listing, its day(s). Also the fallback when the
+  // event's own page does not load at all (WMRI 2026-10-13: a 20s render
+  // timeout posted "Team list unreadable" while TBA had the same 32 teams).
+  const readTba = async (listing: (typeof withKey)[number]): Promise<void> => {
     // A manual 2x1-day listing reads TBA only for a day that has already
     // started (day 1 = startDate, day 2 = endDate); the unstarted day keeps
     // the owner's snapshot. A non-manual listing reads every day it has a key
@@ -517,6 +525,7 @@ export async function processRosterRefreshJob(
       await delay(250)
     }
   }
+  for (const listing of withKey) await readTba(listing)
 
   // #region the event's own team list
   //
@@ -646,6 +655,11 @@ export async function processRosterRefreshJob(
           teams = run.teams
           via = 'stored parser (re-proof failed)'
         } else {
+          if (pageDidNotLoad(run) && listing.tbaKey) {
+            console.warn(`[roster-refresh] ${listing.name}: team list page did not load; reading TBA ${listing.tbaKey}`)
+            await readTba(listing)
+            continue
+          }
           stats.failed++
           console.warn(`[roster-refresh] ${listing.name}: stored parser suspect and re-proof failed`)
           if (outcome.alert) notifyTeamListUnreadable({ eventName: listing.name, url })
@@ -698,6 +712,11 @@ export async function processRosterRefreshJob(
             console.warn(
               `[roster-refresh] ${listing.name}: kept last good count; a fresh parser was still suspect (${freshSuspect.reason ?? suspect.reason})`,
             )
+            if (pageDidNotLoad(run) && listing.tbaKey) {
+              console.warn(`[roster-refresh] ${listing.name}: team list page did not load; reading TBA ${listing.tbaKey}`)
+              await readTba(listing)
+              continue
+            }
             if (reproofOutcome(previousTeams, gen ? fresh : null, run).alert) {
               notifyTeamListUnreadable({ eventName: listing.name, url })
             }

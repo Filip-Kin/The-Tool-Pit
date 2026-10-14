@@ -296,3 +296,42 @@ describe('second dry run', () => {
     ).toBeNull()
   })
 })
+
+// The 2026-10-14 weekly event refresh: every wrong edit is refused now.
+import { eventFieldRefusal, dollarAmounts } from '../src/listings/event-refresh-plan.js'
+import { pageDidNotLoad } from '../src/listings/roster-refresh.js'
+describe('event refresh, 2026-10-14 run', () => {
+  const cur = { startDate: '2026-10-23', endDate: '2026-10-24' }
+  it('refuses a cost note longer than one line', () => {
+    expect(eventFieldRefusal('costNote', 'x', 'Price varies by payment method and team category: $625 by credit card, Procrastinator Registration (after Aug 1) is $700', { quote: '' }, cur)).not.toBeNull()
+  })
+  it('refuses a reworded cost note with the same amounts', () => {
+    expect(eventFieldRefusal('costNote', 'Plus a $10.00 processing fee', 'Plus $10 fee on top of $425', { quote: '' }, { ...cur, costUsd: 425 })).not.toBeNull()
+    expect(dollarAmounts('$700 check/$725 card')).toEqual([700, 725])
+  })
+  it('keeps a cost note whose amount changed (C3 second robot $400 -> $200)', () => {
+    expect(eventFieldRefusal('costNote', '2nd robot $400', '2nd robot $200 ($100 to charity)', { quote: '' }, cur)).toBeNull()
+  })
+  it('refuses free spectator admission as the team fee (GRITS)', () => {
+    expect(eventFieldRefusal('costUsd', 400, 0, { quote: 'This event is free and open to the public.' }, cur)).not.toBeNull()
+  })
+  it('refuses days that disagree with the dates (ARL)', () => {
+    expect(eventFieldRefusal('days', 2, 1, { quote: 'Saturday' }, cur)).not.toBeNull()
+    expect(eventFieldRefusal('days', 1, 2, { quote: 'Fri-Sat' }, cur)).toBeNull()
+  })
+  it('refuses a volunteer coordinator as the event contact (ARL)', () => {
+    expect(eventFieldRefusal('contactEmail', null, 'k@x.org', { quote: 'contact the ARL Volunteer Coordinator', source: 'https://tinyurl.com/arl-volunteer-26' }, cur)).not.toBeNull()
+  })
+  it('refuses registration open from a form title (Roboteer Rumble)', () => {
+    expect(eventFieldRefusal('registrationStatus', 'waitlist', 'open', { quote: 'Roboteer Rumble 2026 Team Registration' }, cur)).not.toBeNull()
+    expect(eventFieldRefusal('registrationStatus', 'unknown', 'open', { quote: 'Registration is Open !' }, cur)).toBeNull()
+  })
+})
+describe('pageDidNotLoad (WMRI 2026-10-13)', () => {
+  it('is true for a render timeout', () => {
+    expect(pageDidNotLoad({ ok: false, error: 'no browser, or the page did not load' } as never)).toBe(true)
+  })
+  it('is false for a parser that ran', () => {
+    expect(pageDidNotLoad({ ok: true, teams: [] } as never)).toBe(false)
+  })
+})
