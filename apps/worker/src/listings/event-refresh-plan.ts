@@ -122,7 +122,10 @@ function isEmpty(value: unknown): boolean {
 }
 
 /** Event notes are written by the owner or a reviewer, never re-read from a page. */
-export const NEVER_REFRESHED: ReadonlySet<string> = new Set(['notes'])
+// 'name': an event's name is what a person typed or approved. The refresh
+// read "ARL Championship" off a dates line and would have replaced "Arizona
+// Robotics League Championship" (2026-10-14); a rename is a human edit.
+export const NEVER_REFRESHED: ReadonlySet<string> = new Set(['notes', 'name'])
 
 /** A price quote about a second robot, not the first-robot price this column holds. */
 export function priceQuoteIsSecondRobot(quote: string | undefined): boolean {
@@ -216,6 +219,63 @@ export interface RefreshPlanInput {
   today: string
 }
 
+/** Longest cost note a card shows on one line. */
+export const COST_NOTE_MAX = 80
+
+/** The dollar amounts in a text, as a sorted list: "$700 check/$725 card" -> [700, 725]. */
+export function dollarAmounts(text: string): number[] {
+  return [...new Set([...String(text).matchAll(/\$\s?(\d[\d,]*(?:\.\d+)?)/g)].map((m) => Number(m[1].replace(/,/g, ''))))].sort((a, b) => a - b)
+}
+
+/** Explicit words that registration is open, not just a form that exists. */
+const REGISTRATION_OPEN = /\bregistration\s+(?:is\s+)?(?:now\s+)?open\b|\bnow\s+open\b|\bopen\s+(?:for|to)\s+registration\b|\bregister\s+(?:now|today)\b|\bregistration\s+(?:has\s+)?opened\b|\bspots?\s+(?:are\s+)?(?:still\s+)?available\b/i
+
+/**
+ * Event-only rules on top of refresh-rules.ts, each from a wrong edit the
+ * 2026-10-14 run made:
+ *   - costNote: never longer than one card line (THOR's ran 200 characters and
+ *     was cut mid-word), and a reworded note with the same dollar amounts is
+ *     not a change (Beach Blitz, Doyenne, WA Girls Generation).
+ *   - costUsd 0: "free and open to the public" is spectator admission, not
+ *     the team fee (GRITS).
+ *   - days: must agree with the dates (ARL is Oct 23-24; a volunteer
+ *     schedule read it as 1 day).
+ *   - contactEmail: a volunteer coordinator is not the event contact (ARL).
+ *   - registrationStatus 'open': the page has to say registration is open; a
+ *     registration form's title does not (Roboteer Rumble).
+ */
+export function eventFieldRefusal(
+  key: RefreshKey,
+  before: unknown,
+  next: unknown,
+  evidence: { quote: string; source?: string } | undefined,
+  current: Record<string, unknown>,
+): string | null {
+  const quote = evidence?.quote ?? ''
+  const source = evidence?.source ?? ''
+  if (key === 'costNote' && typeof next === 'string') {
+    if (next.length > COST_NOTE_MAX) return `cost note longer than ${COST_NOTE_MAX} characters`
+    if (typeof before === 'string' && before.trim()) {
+      // The base fee restated ("on top of the $425 registration") is not new.
+      const base = Number(current.costUsd)
+      const a = dollarAmounts(before).filter((n) => n !== base)
+      const b = dollarAmounts(next).filter((n) => n !== base)
+      if (a.join(',') === b.join(',')) return 'same amounts, reworded'
+    }
+  }
+  if (key === 'costUsd' && Number(next) === 0) {
+    if (/\b(?:public|spectators?|admission|attend(?:ees|ing)?|audience|visitors?)\b/i.test(quote)) return 'free admission, not the team fee'
+    if (!/\b(?:registration|register|team|entry|fee)\b/i.test(quote)) return 'no team fee wording'
+  }
+  if (key === 'days' && typeof current.startDate === 'string' && typeof current.endDate === 'string') {
+    const span = Math.round((Date.parse(current.endDate) - Date.parse(current.startDate)) / 86_400_000) + 1
+    if (span >= 1 && Number(next) !== span) return `dates span ${span} day${span === 1 ? '' : 's'}`
+  }
+  if (key === 'contactEmail' && (/volunteer/i.test(quote) || /volunteer/i.test(source))) return 'volunteer contact, not the event contact'
+  if (key === 'registrationStatus' && next === 'open' && !REGISTRATION_OPEN.test(quote)) return 'no "registration is open" wording'
+  return null
+}
+
 /** True when the value is written in what was fetched this run. */
 export function changeIsProven(
   key: RefreshKey,
@@ -282,6 +342,8 @@ export function planEventRefresh(input: RefreshPlanInput): RefreshPlan {
     const guard = GUARDS[key]
     const why = guard ? guardRefusal(guard, { from: before, to: next, quote: evidence[key]?.quote ?? '', source: evidence[key]?.source, sources }) : null
     if (why) { held.push({ ...change, reason: 'refresh_rule', detail: why }); continue }
+    const eventWhy = eventFieldRefusal(key, before, next, evidence[key], current)
+    if (eventWhy) { held.push({ ...change, reason: 'refresh_rule', detail: eventWhy }); continue }
     if (key === 'hostTeamNumber') {
       const hosts = Array.isArray(current.hostTeamNumbers) ? (current.hostTeamNumbers as unknown[]).map(Number) : []
       if (hosts.includes(Number(next))) continue

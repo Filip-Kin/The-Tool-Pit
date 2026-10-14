@@ -116,7 +116,9 @@ Fields:
                     cheaper combined price for both days of a two-day event, a different rate for
                     FTC than FRC, an early-bird deadline, or a fee charged on top. Do NOT restate
                     costUsd here: "$300 registration fee" next to costUsd 300 is noise. If the
-                    price is a single figure, return null.
+                    price is a single figure, return null. At most 80 characters: amounts and
+                    conditions as short labels joined by " · ", no sentences, for example
+                    "$250 by July 1 · extra robot $125".
   eventStatus       one of ${EVENT_STATUSES.map((s) => `"${s}"`).join(', ')}, what the site says about
                     whether the event is happening:
                       "cancelled"  called off. "This event is cancelled", "will not run this year".
@@ -308,6 +310,13 @@ export function validateEventRead(
     } else {
       if (typeof value !== 'string') {
         rejected.push(`${key}: expected text`)
+        continue
+      }
+      // A cost note is one card line. Cutting a long one at a character
+      // count leaves "... $300 check/$325 credit ca" (THOR, 2026-10-14), so a
+      // long one is dropped, not cut.
+      if (key === 'costNote' && value.trim().length > 80) {
+        rejected.push('costNote: longer than 80 characters, dropped')
         continue
       }
       // Countries are stored as ISO 3166-1 alpha-2 codes everywhere.
