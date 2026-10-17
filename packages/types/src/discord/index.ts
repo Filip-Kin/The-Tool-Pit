@@ -280,12 +280,14 @@ interface HttpResponse {
   status: number
   statusText: string
   text(): Promise<string>
+  headers?: { get(name: string): string | null }
 }
 
 const g = globalThis as {
   process?: { env?: Record<string, string | undefined> }
   console?: { warn(...a: unknown[]): void; error(...a: unknown[]): void }
   fetch?: (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<HttpResponse>
+  setTimeout?: (fn: () => void, ms: number) => unknown
 }
 
 function warn(message: string): void {
@@ -369,16 +371,32 @@ export async function discordRequest(
     return null
   }
   try {
-    const res = await g.fetch(`${DISCORD_API}${path}`, {
-      method,
-      headers: {
-        Authorization: `Bot ${token}`,
-        'Content-Type': 'application/json',
-        'User-Agent': 'DiscordBot (https://frc.tools, 1.0)',
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    })
-    const text = await res.text().catch(() => '')
+    // Discord rate-limits reactions hard: the ❌ seeded right after the ✅
+    // came back 429 "retry_after 0.3" and was never added (2026-10-16, a
+    // spam tool post with no reject button). A 429 waits the time Discord
+    // gives and tries again, up to three times.
+    let res: HttpResponse
+    let text = ''
+    for (let attempt = 1; ; attempt++) {
+      res = await g.fetch(`${DISCORD_API}${path}`, {
+        method,
+        headers: {
+          Authorization: `Bot ${token}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'DiscordBot (https://frc.tools, 1.0)',
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      })
+      text = await res.text().catch(() => '')
+      if (res.status !== 429 || attempt >= 4) break
+      let wait = 1
+      try {
+        wait = Number((JSON.parse(text) as { retry_after?: number }).retry_after) || Number(res.headers?.get('retry-after')) || 1
+      } catch {
+        wait = Number(res.headers?.get('retry-after')) || 1
+      }
+      await new Promise<void>((r) => g.setTimeout?.(() => r(), Math.min(wait, 10) * 1000 + 100) ?? r())
+    }
     if (!res.ok) {
       fail(`[discord] ${method} ${path} REJECTED: HTTP ${res.status} ${res.statusText} ${text.slice(0, 500)}`)
       return null
