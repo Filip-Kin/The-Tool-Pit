@@ -47,6 +47,7 @@ import {
   notifyTeamListUnreadable,
   runTeamListParser,
   slotIndicesLeaked,
+  appendedRobot,
   type ParserRunResult,
 } from './team-list-parser.js'
 import { processEventStatusWatch } from './event-status-watch.js'
@@ -324,7 +325,24 @@ async function filterToKnownTeams(teams: RosterTeam[]): Promise<RosterTeam[]> {
   const numbers = [...new Set(teams.map((t) => t.number))]
   const known = await getTeamNames(numbers)
   if (known.size === 0) return teams
-  return teams.filter((t) => known.has(t.number) || t.number >= 9000)
+  return foldAppendedRobots(teams, (n) => known.has(n)).filter((t) => known.has(t.number) || t.number >= 9000)
+}
+
+/**
+ * The 10,000-20,000 half of appendedRobot: a number in that band can be a real
+ * new team, so it is only read as "first robot + ordinal" (10382 as 1038C)
+ * when TBA does not know it, the first robot is on the list, and it is not a
+ * 9970-9999 placeholder. Above 20,000 normaliseTeams already folded it.
+ */
+export function foldAppendedRobots(teams: RosterTeam[], isKnown: (n: number) => boolean): RosterTeam[] {
+  const firstRobots = new Set(teams.filter((t) => !t.robot).map((t) => t.number))
+  const taken = new Set(teams.map((t) => `${t.number}:${t.robot ?? ''}`))
+  return teams.map((t) => {
+    if (t.robot || t.number < 10_000 || isKnown(t.number)) return t
+    const glued = appendedRobot(t.number, firstRobots)
+    if (!glued || taken.has(`${glued.number}:${glued.robot}`)) return t
+    return { ...t, number: glued.number, robot: glued.robot }
+  })
 }
 
 export function decideScrapedRoster(previous: RosterTeam[], next: RosterTeam[]): ScrapedRosterDecision {

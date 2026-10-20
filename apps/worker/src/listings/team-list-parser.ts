@@ -112,6 +112,7 @@ What it returns:
 - One entry per team ROBOT, not per organisation. A team may enter a SECOND robot (a B team), which the page marks as "4611 B", "4611 (B)", or "4611 #2": that is a second entry, { number: 4611, robot: "B" }. Map a numeric marker onto a letter, so "#2" / "(2)" is robot "B" and "#3" is robot "C". One robot means robot: null.
 - WHEN THE SAME NUMBER APPEARS TWICE, YOU DECIDE whether it is a deliberate second robot or an accidental duplicate: the data carries no flag for it, so only the page settles it. Signs it is a real B team, which you KEEP as a second entry { number, robot: "B" } (then "C" for a third): a "#2" or "B" marker, or a list that repeats the WHOLE ROW for the team — the same name and city on two rows, as MARC lists 503 twice and 1502 twice for their B teams — especially when the repeated rows sit together. Signs it is one team listed twice by mistake, which you return ONCE: a lone stray repeat far from its first mention with nothing else echoing it. When you judge it a second robot, letter it and never drop it; when you judge it a duplicate, collapse it.
 - Several DIFFERENT numbers sharing one cell are separate teams, not robots of one team (see below): the opposite case.
+- A TEAM'S NUMBER WITH ONE DIGIT APPENDED IS THAT TEAM'S NEXT ROBOT. Some lists write a second robot by gluing its ordinal onto the team number: "51442 LISD TECHRookienicians" listed beside "5144 LISD TECHnicians" (same school, same city) is { number: 5144, robot: "B" }, and "51443" would be robot "C". A second robot only exists when its first robot is in the same list, so this reading applies exactly when the number minus its last digit is another team on the list. It is NOT a placeholder: never turn it into a 9970-9999 number.
 - INCLUDE THE NAME the page shows for each team, as \`name\`, when there is one (leave it off when the row is just a number). We usually replace it with the canonical name from The Blue Alliance, but a placeholder team (see below) or a brand-new team TBA has never indexed has only the name on this page, so it must be carried.
 - A PLACEHOLDER NUMBER IS NOT A NUMBER. A team shown as "10xxx", "TBD", "TBA", "pending", "10###" or similar has no real number yet (a pre-rookie or a late add). Do NOT read the leading digits as its number ("10xxx" is not team 10). Treat it exactly like a name-only team: give it a 9970-9999 placeholder number and carry its \`name\`.
 - MULTIPLE TEAMS IN ONE ROW OR CELL. A single row or cell can list several team numbers together (several teams sharing a row, often from one school), e.g. "1306 10553 10909 11258" or "2202 / 6223". Return EVERY number as its own entry { number, robot: null }, not just the first in the cell. This is different from a second robot of ONE team ("4611 B" → robot: "B"): separate whole numbers are separate teams, each robot: null.
@@ -408,6 +409,20 @@ function coerceRobot(raw: unknown): string | null {
   return null
 }
 
+/**
+ * A listed team's number with its robot ordinal glued on: "51442" beside 5144
+ * is 5144's second robot (C3 2026 lists LISD's rookie robot that way). A second
+ * robot cannot exist without its first, so this only applies when the number
+ * minus its last digit is a first robot on the same list. The digit is the
+ * ordinal, 2 -> "B", 3 -> "C". Returns null when the number is not one of these.
+ */
+export function appendedRobot(number: number, firstRobots: ReadonlySet<number>): { number: number; robot: string } | null {
+  const parent = Math.floor(number / 10)
+  const ordinal = number % 10
+  if (number < 1000 || ordinal < 2 || !firstRobots.has(parent)) return null
+  return { number: parent, robot: String.fromCharCode(64 + ordinal) }
+}
+
 /** Coerce and validate the parser's output. Anything implausible is dropped. */
 export function normaliseTeams(raw: unknown[]): RosterTeam[] {
   const teams: RosterTeam[] = []
@@ -419,20 +434,30 @@ export function normaliseTeams(raw: unknown[]): RosterTeam[] {
   // a "#2"/"#3" marker onto its letter so it survives as its own entry, and an exact
   // (number, robot) pair the model still returned twice is a double-read, collapsed.
   const seen = new Set<string>()
-  for (const item of raw) {
+  const entries = raw.map((item) =>
+    typeof item === 'string'
+      ? parseTeamString(item)
+      : item && typeof item === 'object'
+        ? (item as Record<string, unknown>)
+        : null,
+  )
+  // No real team is numbered above 20,000, so a number up there is either junk
+  // or a first robot's number with an ordinal glued on ("51442" for 5144B).
+  const firstRobots = new Set(
+    entries
+      .filter((e) => e && typeof e.number === 'number' && e.number <= 20_000 && coerceRobot(e.robot) === null)
+      .map((e) => e!.number as number),
+  )
+  for (const item of entries) {
     // The model may return an object {number, robot, waitlisted} or, for the
     // common case, a bare string like "4145" or "4145 B". Both are read; a
     // string cannot carry a waitlist flag, which is fine, because a page with
     // a waitlist needs the structured form and the prompt asks for it there.
-    const entry =
-      typeof item === 'string'
-        ? parseTeamString(item)
-        : item && typeof item === 'object'
-          ? (item as Record<string, unknown>)
-          : null
+    const entry = item
     if (!entry) continue
-    const number = entry.number
-    const robot = entry.robot
+    const glued = typeof entry.number === 'number' && entry.number > 20_000 ? appendedRobot(entry.number, firstRobots) : null
+    const number = glued ? glued.number : entry.number
+    const robot = glued ? glued.robot : entry.robot
     if (typeof number !== 'number' || !Number.isInteger(number) || number < 1 || number > 20_000) continue
     const robotLabel = coerceRobot(robot)
     const key = `${number}:${robotLabel ?? ''}`
@@ -496,6 +521,7 @@ const READING_PROMPT = `You are given the cleaned HTML of a FIRST Robotics event
 - One entry per team ROBOT. A second robot (a B team) is written "4611 B", "4611 (B)", "4611 #2", or by repeating the number/row; return it as its own entry with robot "B" ("C" for a third). Map "#2" -> "B", "#3" -> "C". A single robot is robot: null.
 - When the same number appears twice, decide from the page: a real second robot (a "#2"/"B" marker, or the WHOLE ROW repeated with the same name/city, often adjacent) is kept as a B team; a lone stray duplicate is returned once.
 - Several DIFFERENT numbers in one cell are separate teams, each robot null.
+- A team's number with one digit appended ("51442" listed beside "5144", same school/city) is that team's next robot: { number: 5144, robot: "B" } ("51443" is "C"). Never a 9970-9999 placeholder.
 - UNION every registered / host / attending / competing section; do not stop at the first.
 - Slot indices (1, 2, 3 ... down a column) and past-season YEAR lists are not teams. A count, date, price or zip is not a team.
 - A name-only team, or a "10xxx" / "TBD" placeholder, gets a 9970-9999 number and carries its name. An invitation ("Team ????", "Your Team Here") is not a team.

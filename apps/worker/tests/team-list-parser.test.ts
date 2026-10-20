@@ -9,7 +9,7 @@
  */
 import { describe, it, expect } from 'bun:test'
 import { slotIndicesLeaked, normaliseTeams, isTeamListRevealControl } from '../src/listings/team-list-parser.js'
-import { suspectRosterChange } from '../src/listings/roster-refresh.js'
+import { suspectRosterChange, foldAppendedRobots } from '../src/listings/roster-refresh.js'
 import type { RosterTeam } from '@the-tool-pit/db'
 
 const teams = (...nums: number[]): RosterTeam[] => nums.map((number) => ({ number }))
@@ -61,6 +61,22 @@ describe('normaliseTeams', () => {
   it('drops garbage entries', () => {
     const out = normaliseTeams(['not a team', { number: 0 }, { number: 999_999 }, null, {}, { number: 254 }])
     expect(out).toEqual([{ number: 254, robot: null }])
+  })
+
+  it('reads a glued ordinal as the first robot\'s next robot', () => {
+    // C3 2026 lists "51442 LISD TECHRookienicians" below "5144 LISD TECHnicians".
+    const out = normaliseTeams([
+      { number: 5144, robot: null, name: 'LISD TECHnicians' },
+      { number: 51442, robot: null, name: 'LISD TECHRookienicians' },
+    ])
+    expect(out).toEqual([
+      { number: 5144, robot: null, name: 'LISD TECHnicians' },
+      { number: 5144, robot: 'B', name: 'LISD TECHRookienicians' },
+    ])
+  })
+
+  it('drops a glued ordinal whose first robot is not at the event', () => {
+    expect(normaliseTeams([{ number: 51442 }, { number: 254 }])).toEqual([{ number: 254, robot: null }])
   })
 
   it('sorts registered teams before the waitlist, in order', () => {
@@ -161,5 +177,22 @@ describe('slotIndicesLeaked catches non-step-1 leaks', () => {
   it('does not flag a handful of real low-numbered teams', () => {
     // 16, 27, 33, 45 are all real active teams; they are not an even run.
     expect(slotIndicesLeaked(t([16, 27, 33, 45, 254, 1114]))).toBeNull()
+  })
+})
+
+describe('foldAppendedRobots', () => {
+  it('folds an unknown 10xxx number onto a listed first robot', () => {
+    const out = foldAppendedRobots([{ number: 1038 }, { number: 10382 }], () => false)
+    expect(out).toEqual([{ number: 1038 }, { number: 1038, robot: 'B' }])
+  })
+
+  it('leaves a real team TBA knows alone', () => {
+    const out = foldAppendedRobots([{ number: 1038 }, { number: 10382 }], (n) => n === 10382)
+    expect(out).toEqual([{ number: 1038 }, { number: 10382 }])
+  })
+
+  it('leaves a 9970-9999 placeholder alone', () => {
+    const out = foldAppendedRobots([{ number: 997 }, { number: 9972 }], () => false)
+    expect(out).toEqual([{ number: 997 }, { number: 9972 }])
   })
 })
