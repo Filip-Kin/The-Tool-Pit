@@ -335,3 +335,18 @@ describe('pageDidNotLoad (WMRI 2026-10-13)', () => {
     expect(pageDidNotLoad({ ok: true, teams: [] } as never)).toBe(false)
   })
 })
+
+describe('event refresh, 2026-10-28 run: team list links', () => {
+  it('refuses an FTC list for an FRC event (Beach Blitz)', () => {
+    expect(eventFieldRefusal('teamListUrl', null, 'https://beachblitz.org/event/2026/FTC%20Teams%202026.pdf', { quote: '' }, { program: 'frc' })).not.toBeNull()
+  })
+  it('refuses the parent of the current list page (STEMley)', () => {
+    expect(eventFieldRefusal('teamListUrl', 'https://stemleycup.ca/registered-teams/rebuilt', 'https://stemleycup.ca/registered-teams/', { quote: '' }, { program: 'frc' })).not.toBeNull()
+  })
+  it('refuses any link on a hand-set list (Battle of the Bay)', () => {
+    expect(eventFieldRefusal('teamListUrl', null, 'https://www.frc319.com/register', { quote: '' }, { program: 'frc', teamListMode: 'manual' })).not.toBeNull()
+  })
+  it('keeps a newer list file (Capital City Classic)', () => {
+    expect(eventFieldRefusal('teamListUrl', 'https://x.org/ccc-team-list-2026-10-04.pdf', 'https://x.org/ccc-team-list-2026-10-11.pdf', { quote: 'Team List' }, { program: 'frc' })).toBeNull()
+  })
+})

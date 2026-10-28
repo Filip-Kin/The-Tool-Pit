@@ -273,6 +273,22 @@ export function eventFieldRefusal(
   }
   if (key === 'contactEmail' && (/volunteer/i.test(quote) || /volunteer/i.test(source))) return 'volunteer contact, not the event contact'
   if (key === 'registrationStatus' && next === 'open' && !REGISTRATION_OPEN.test(quote)) return 'no "registration is open" wording'
+  if (key === 'teamListUrl' && typeof next === 'string') {
+    // A hand-set list is not read from a page, so a link there changes nothing
+    // but the link (Battle of the Bay got its registration page, 2026-10-28).
+    if (current.teamListMode === 'manual') return 'team list is set by hand'
+    // Beach Blitz (FRC) was pointed at "FTC Teams 2026.pdf".
+    const program = String(current.program ?? 'frc').toLowerCase()
+    const other = (['frc', 'ftc', 'fll'] as const).filter((p) => p !== program)
+    const text = `${decodeURIComponent(next)} ${quote}`
+    if (other.some((p) => new RegExp(`\\b${p}\\b`, 'i').test(text))) return 'team list for another program'
+    // STEMley went from /registered-teams/rebuilt back to /registered-teams/,
+    // a page with two lists on it: never trade a page for its parent.
+    if (typeof before === 'string' && before) {
+      const bare = (u: string) => u.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[#?].*$/, '').replace(/\/+$/, '')
+      if (bare(before).startsWith(`${bare(next)}/`)) return 'less specific than the current team list page'
+    }
+  }
   return null
 }
 
