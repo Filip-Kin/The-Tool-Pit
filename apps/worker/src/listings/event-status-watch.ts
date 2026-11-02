@@ -36,7 +36,7 @@
  */
 import { createHash } from 'node:crypto'
 import { and, eq, inArray } from 'drizzle-orm'
-import { getDb, eventListings, isHumanEdited } from '@the-tool-pit/db'
+import { getDb, eventListings, isHumanEdited, listingOwners } from '@the-tool-pit/db'
 import { sendApprovalNotice, siteUrl } from '@the-tool-pit/types'
 import { anthropic, hasAnthropicCredentials } from '../anthropic.js'
 import { delay, politeFetch } from '../connectors/base.js'
@@ -380,7 +380,13 @@ async function actOnVerdict(
   const reviewUrl = `${siteUrl()}/admin/event-listings?status=published#event-${listing.id}`
 
   if (verdict.status === 'cancelled') {
-    const claimedByHuman = isHumanEdited(row.humanEditedFields, 'eventStatus')
+    // An owned listing is its owner's: alert only, never write.
+    const [owner] = await db
+      .select({ id: listingOwners.id })
+      .from(listingOwners)
+      .where(and(eq(listingOwners.entityType, 'event'), eq(listingOwners.entityId, listing.id)))
+      .limit(1)
+    const claimedByHuman = isHumanEdited(row.humanEditedFields, 'eventStatus') || Boolean(owner)
     if (!claimedByHuman) {
       try {
         await db

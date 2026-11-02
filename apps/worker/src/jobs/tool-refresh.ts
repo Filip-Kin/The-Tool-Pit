@@ -258,6 +258,9 @@ async function eligibleTools(toolId?: string): Promise<EligibleTool[]> {
         eq(tools.status, 'published'),
         toolId ? eq(tools.id, toolId) : undefined,
         sql`not exists (select 1 from tool_links g where g.tool_id = ${tools.id} and g.link_type = 'github')`,
+        // An owned listing is its owner's to keep current (CADProps, claimed
+        // 2026-10-26, had its summary rewritten by the 2026-11-01 run).
+        sql`not exists (select 1 from listing_owners o where o.entity_type = 'tool' and o.entity_id = ${tools.id})`,
       ),
     )
     .orderBy(tools.id, toolLinks.createdAt)

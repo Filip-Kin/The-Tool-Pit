@@ -29,7 +29,7 @@
 import { createHash } from 'node:crypto'
 import { Queue } from 'bullmq'
 import { and, eq, inArray } from 'drizzle-orm'
-import { getDb, eventListings } from '@the-tool-pit/db'
+import { getDb, eventListings, listingOwners } from '@the-tool-pit/db'
 import { sendApprovalNotice, siteUrl } from '@the-tool-pit/types'
 import { fetchChiefDelphiTopic, parseChiefDelphiTopicId } from '../connectors/discourse.js'
 import { normaliseForQuoteMatch, type NamedText } from '../model/evidence.js'
@@ -147,6 +147,16 @@ export async function refreshPublishedEvent(
   const db = getDb()
   const [row] = await db.select().from(eventListings).where(eq(eventListings.id, listing.id)).limit(1)
   if (!row || row.status !== 'published' || (row.eventStatus !== 'tentative' && row.eventStatus !== 'confirmed')) {
+    return { outcome: 'unchanged', applied: 0, held: 0 }
+  }
+  // An owned listing is its owner's to keep current: no automatic edits.
+  const [owner] = await db
+    .select({ id: listingOwners.id })
+    .from(listingOwners)
+    .where(and(eq(listingOwners.entityType, 'event'), eq(listingOwners.entityId, row.id)))
+    .limit(1)
+  if (owner) {
+    console.log(`[event-refresh] ${row.name}: owned, not refreshed`)
     return { outcome: 'unchanged', applied: 0, held: 0 }
   }
 
