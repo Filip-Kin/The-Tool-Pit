@@ -6,7 +6,6 @@
 import { describe, it, expect } from 'bun:test'
 import { planFieldRefresh } from '../src/listings/field-refresh.js'
 import { planEventRefresh } from '../src/listings/event-refresh-plan.js'
-import { planToolUpdate } from '../src/jobs/tool-refresh-rules.js'
 import {
   sameMeaningText,
   sameStreet,
@@ -261,13 +260,6 @@ describe('events reuse rule 1', () => {
   })
 })
 
-describe('tools reuse rule 1', () => {
-  it('a name that only changed case or punctuation is not applied', () => {
-    const row = { name: 'Choreo', summary: 'Path planner.', description: null, humanEditedFields: [] }
-    const plan = planToolUpdate(row, { name: 'Choreo', description: 'Path planner.' }, { name: 'CHOREO', description: 'Path planner' })
-    expect(plan.changes).toEqual([])
-  })
-})
 
 // The dry run of these rules against production (2026-10-01) still let four
 // wrong edits through. Each one is a case here.
@@ -349,4 +341,20 @@ describe('event refresh, 2026-10-28 run: team list links', () => {
   it('keeps a newer list file (Capital City Classic)', () => {
     expect(eventFieldRefusal('teamListUrl', 'https://x.org/ccc-team-list-2026-10-04.pdf', 'https://x.org/ccc-team-list-2026-10-11.pdf', { quote: 'Team List' }, { program: 'frc' })).toBeNull()
   })
+})
+
+// Directory spam, 2026-10-25 onward: generic sites with no FIRST connection.
+import { mentionsFirstRobotics } from '../src/jobs/enrich.js'
+describe('mentionsFirstRobotics', () => {
+  it.each([
+    'https://qrstatic.app/?utm_source=frc.tools&utm_medium=directory Free static QR generator, no signup',
+    'https://billmates.me/rent-splitter/?src=frctools Free roommate calculator',
+    'Free HEIC to JPG converter. robots.txt sitemap',
+    'Spreadsheet training, not an FRC/FTC-specific app',
+    'Inspect meta tags, robots rules and structured data',
+  ])('no mention: %s', (t) => expect(mentionsFirstRobotics(t)).toBe(false))
+  it.each(['FTC scouting app', 'github.com/FRC5113/2024-Perry', 'Team10219 REBUILT', 'WPILib swerve library', 'FIRST Robotics Competition strategy', 'robot CAD library', 'VEX parts'])(
+    'mention: %s',
+    (t) => expect(mentionsFirstRobotics(t)).toBe(true),
+  )
 })

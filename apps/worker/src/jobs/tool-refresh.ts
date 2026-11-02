@@ -7,9 +7,8 @@
  * site that died stayed listed. This pass re-reads each of those homepages
  * once a month, with the crawler's own extractor, and:
  *
- * - applies a changed name or description (rules in tool-refresh-rules.ts:
- *   only what changed on the page since last month, never a claimed field,
- *   never to empty, never a generic or parking-page name);
+ * - never rewrites the name, summary or description: a homepage's title and
+ *   meta description are its marketing, not a listing for FIRST teams;
  * - suppresses a listing whose homepage was gone (404/410, DNS failure, a
  *   parking or suspended page) on two consecutive monthly runs. One run only
  *   records a strike. A wall (401/403/429/503 still refused through the NAS
@@ -38,7 +37,6 @@ import {
   fetchVerdict,
   monthKey,
   pageHash,
-  planToolUpdate,
   runFacts,
   strikeDecision,
   type FetchVerdict,
@@ -202,41 +200,12 @@ async function refreshTool(tool: EligibleTool, month: string): Promise<ToolRunRe
     return null
   }
 
-  // Alive: any open strike is over.
-  await redis.del(KEY.strike(tool.id))
-
-  const lastHash = await redis.get(KEY.hash(tool.id))
-  if (lastHash === read.hash) return null
-
-  const rawSnap = await redis.get(KEY.snapshot(tool.id))
-  const prev = rawSnap ? (JSON.parse(rawSnap) as PageSnapshot) : null
-  const plan = planToolUpdate(tool, prev, read.snapshot)
-
-  let applied = plan.changes
-  if (plan.changes.length > 0) {
-    const keys = Object.keys(plan.set)
-    // Old values to listing_changes and the write, in one transaction.
-    const done = await applyLoggedPatch({
-      entityType: 'tool',
-      table: tools,
-      id: tool.id,
-      actor: 'tool-refresh',
-      patch: plan.set,
-      proof: Object.fromEntries(keys.map((k) => [k, { quote: null, source: tool.url }])),
-      where: and(eq(tools.status, 'published'), notClaimed(keys)),
-    })
-    if (done.length === 0) applied = []
-  }
-
-  await redis.set(KEY.snapshot(tool.id), JSON.stringify(read.snapshot), 'EX', SNAPSHOT_TTL_S)
-  await redis.set(KEY.hash(tool.id), read.hash, 'EX', SNAPSHOT_TTL_S)
-
-  if (applied.length === 0) {
-    if (!prev) console.log(`[tool-refresh] ${tool.slug}: baseline recorded`)
-    return null
-  }
-  console.log(`[tool-refresh] ${tool.slug}: updated ${applied.map((c) => c.field).join(', ')}`)
-  return { name: tool.name, changes: applied }
+  // Alive: any open strike is over. The page's own title and meta
+  // description are never copied in: they are the site's marketing, not a
+  // listing written for FIRST teams (2026-11-01: "PolarForecast | Scout.
+  // Strategize. Select." as a name, Onshape's sales line as its summary).
+  await redis.del(KEY.strike(tool.id), KEY.snapshot(tool.id), KEY.hash(tool.id))
+  return null
 }
 
 async function eligibleTools(toolId?: string): Promise<EligibleTool[]> {

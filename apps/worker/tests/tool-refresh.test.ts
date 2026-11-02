@@ -4,7 +4,6 @@ import {
   parkingReason,
   fetchVerdict,
   strikeDecision,
-  planToolUpdate,
   runFacts,
   pageHash,
   monthKey,
@@ -87,45 +86,6 @@ describe('strikeDecision (two consecutive monthly runs)', () => {
   })
 })
 
-describe('planToolUpdate', () => {
-  const row: ToolRow = { name: 'Old Name', summary: 'A classifier summary.', description: null, humanEditedFields: [] }
-  const prev = { name: 'Old Name', description: 'Old meta description' }
-
-  it('first run records a baseline and changes nothing', () => {
-    expect(planToolUpdate(row, null, { name: 'New Name', description: 'New text' })).toEqual({ set: {}, changes: [] })
-  })
-  it('applies a name and description that changed on the page', () => {
-    const { set, changes } = planToolUpdate(row, prev, { name: 'New Name', description: 'New meta description' })
-    expect(set).toEqual({ name: 'New Name', summary: 'New meta description' })
-    expect(changes.map((c) => c.field)).toEqual(['name', 'summary'])
-  })
-  it('leaves the row alone when the page did not change, even if the row differs from it', () => {
-    expect(planToolUpdate(row, prev, { ...prev }).changes).toEqual([])
-  })
-  it('never touches a person-claimed field', () => {
-    const claimed = { ...row, humanEditedFields: ['name', 'summary'] }
-    const { set } = planToolUpdate(claimed, prev, { name: 'New Name', description: 'New meta description' })
-    expect(set.name).toBeUndefined()
-    expect(set.summary).toBeUndefined()
-  })
-  it('never clears to empty', () => {
-    expect(planToolUpdate(row, prev, { name: '', description: '' }).changes).toEqual([])
-  })
-  it('never applies a generic or parking name', () => {
-    for (const name of ['Home', 'Login', 'Domain for sale', 'Site not found']) {
-      expect(planToolUpdate(row, prev, { name, description: prev.description }).set.name, name).toBeUndefined()
-    }
-  })
-  it('a long page description fills description; a short one clears only the crawler copy of the old text', () => {
-    const long = 'x'.repeat(400)
-    expect(planToolUpdate(row, prev, { name: prev.name, description: long }).set).toEqual({ summary: 'x'.repeat(300), description: long })
-    const oldLong = 'y'.repeat(400)
-    const copied = { ...row, description: oldLong }
-    expect(planToolUpdate(copied, { ...prev, description: oldLong }, { name: prev.name, description: 'Short new text' }).set).toEqual({ summary: 'Short new text', description: null })
-    const written = { ...row, description: 'An owner wrote this long text.' }
-    expect(planToolUpdate(written, { ...prev, description: oldLong }, { name: prev.name, description: 'Short new text' }).set.description).toBeUndefined()
-  })
-})
 
 describe('pageHash', () => {
   it('ignores whitespace, sees content', () => {

@@ -607,15 +607,50 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
 
   const confidence = classification.confidence ?? 0.3
 
+  // DIRECTORY SPAM GATE. From 2026-10-25 link-building services submitted
+  // generic "free, no signup" sites (QR makers, word games, HEIC converters,
+  // rent splitters), often tagged utm_source=frc.tools&utm_medium=directory.
+  // The classifier scored most 0, but two fooled it and published. A public
+  // submission whose page, title and note never mention FIRST or robotics is
+  // spam when the classifier also says 0: rejected with no Discord post. With
+  // a higher score it is never auto-published, only held for a person.
+  let spamHold = false
+  if (submissionId) {
+    const [sub] = await db
+      .select({ note: submissions.submitterNote })
+      .from(submissions)
+      .where(eq(submissions.id, submissionId))
+      .limit(1)
+    const haystack = `${url} ${JSON.stringify(enrichedMetadata).slice(0, 60_000)} ${sub?.note ?? ''}`
+    if (!mentionsFirstRobotics(haystack)) {
+      if (confidence <= 0) {
+        const reason = 'Not a FIRST robotics tool (no FIRST or robotics mention, classifier 0)'
+        await db
+          .update(crawlCandidates)
+          .set({ classification, confidenceScore: 0, status: 'suppressed', rejectionReason: reason, updatedAt: new Date() })
+          .where(eq(crawlCandidates.id, candidateId))
+        await db
+          .update(submissions)
+          .set({ status: 'rejected', rejectionReason: reason, updatedAt: new Date() })
+          .where(eq(submissions.id, submissionId))
+        console.log(`[enrich] candidate ${candidateId}: rejected as directory spam (${url})`)
+        return
+      }
+      spamHold = true
+    }
+  }
+
   // A forum-discovered page must clear a higher bar to become a NEW standalone listing: a
   // Chief Delphi thread should only spawn a tool when the linked thing is clearly a tool.
   // Otherwise it merely attaches as a forum link on an existing tool (handled at crawl dedup).
   const isForumSourced = sourceType === 'chief_delphi'
   const publishThreshold = isForumSourced && !candidate.matchedToolId ? 0.85 : 0.7
-  const meetsBar = confidence >= publishThreshold
+  const meetsBar = confidence >= publishThreshold && !spamHold
 
   // 3. Update candidate record
-  const lowConfReason = !meetsBar
+  const lowConfReason = spamHold
+    ? 'No FIRST or robotics mention, held for review'
+    : !meetsBar
     ? `AI confidence too low (${Math.round(confidence * 100)}%${isForumSourced ? ', forum-sourced' : ''}) — requires manual review`
     : undefined
   await db
@@ -682,4 +717,21 @@ export async function processEnrichJob(payload: EnrichJobPayload): Promise<void>
     if (candidate.matchedToolId) await suppressMatchedTool(candidate.matchedToolId, lowConfReason ?? 'confidence too low')
     if (submissionId) await resolveSubmission(submissionId, 'needs_review', undefined, lowConfReason)
   }
+}
+
+/**
+ * The page, title or note mentions FIRST or robotics at all.
+ *
+ * Checked against 60 real submissions (2026-09 to 11): every spam site came
+ * back clean and every FIRST tool and team repo matched. Three traps it
+ * handles: our own name in a tracking tag (utm_source=frc.tools); spammers'
+ * own disclaimers ("not an FRC/FTC-specific app", "Not a robotics tool");
+ * and "robots rules" / "robots.txt" on SEO pages. Team repos name the team
+ * as one word (FRC5113, Team10219), so a number may follow.
+ */
+export function mentionsFirstRobotics(text: string): boolean {
+  const own = text
+    .replace(/frc\.tools|frctools|frc-tools/gi, ' ')
+    .replace(/\bnot\b[^.!?\n]{0,60}?\b(?:frc|ftc|fll|first|robot\w*)(?:\s*[/,&]\s*(?:frc|ftc|fll|first|robot\w*))*/gi, ' ')
+  return /\b(?:(?:frc|ftc|fll)\d{0,5}|first\s+(?:robotics|tech\s+challenge|lego\s+league)|wpilib|vex(?:pro)?|robotics|robot|team\s?\d{2,5})\b/i.test(own)
 }

@@ -252,66 +252,6 @@ export interface FieldChange {
 /** Same split publish.ts makes on intake: summary up to 300 chars, description the full text when longer. */
 const SUMMARY_MAX = 300
 
-/**
- * What to write to the row, given last month's read of the page and this one.
- *
- * Rules, each tested:
- * - No baseline (first run for this tool): nothing. The read becomes the baseline.
- * - Only a field that CHANGED ON THE PAGE since last month is touched.
- * - A field a person claimed is never written.
- * - Never cleared to empty: an empty read is ignored.
- * - A generic or parking-page name is never applied.
- * - A rewrite that only changes case, spacing, punctuation or filler words is
- *   not a change, on the page or against the row (refresh-rules.ts).
- * - The long description is cleared only when it was the crawler's copy of
- *   the old page text, now superseded by a shorter one in the summary.
- */
-export function planToolUpdate(row: ToolRow, prev: PageSnapshot | null, fresh: PageSnapshot): {
-  set: Partial<Pick<ToolRow, 'name' | 'summary' | 'description'>>
-  changes: FieldChange[]
-} {
-  const set: Partial<Pick<ToolRow, 'name' | 'summary' | 'description'>> = {}
-  const changes: FieldChange[] = []
-  if (!prev) return { set, changes }
-  const claimed = (k: string) => isHumanEdited(row.humanEditedFields, k)
-
-  const name = fresh.name.replace(/\s+/g, ' ').trim()
-  if (
-    name &&
-    !sameMeaningText(name, prev.name) &&
-    !sameMeaningText(name, row.name) &&
-    !isGenericName(name) &&
-    !claimed('name')
-  ) {
-    set.name = name
-    changes.push({ field: 'name', from: row.name, to: name })
-  }
-
-  const desc = fresh.description.trim()
-  if (desc && !sameMeaningText(desc, prev.description)) {
-    const summary = desc.slice(0, SUMMARY_MAX)
-    if (!claimed('summary') && !sameMeaningText(summary, row.summary)) {
-      set.summary = summary
-      changes.push({ field: 'summary', from: row.summary ?? '', to: summary })
-    }
-    if (!claimed('description')) {
-      if (desc.length > SUMMARY_MAX) {
-        if (!sameMeaningText(desc, row.description)) {
-          set.description = desc
-          changes.push({ field: 'description', from: row.description ?? '', to: desc })
-        }
-      } else if (row.description && row.description.trim() === prev.description.trim()) {
-        // The long text was the old page's description, copied in on intake.
-        // The new page text is short and now lives in the summary.
-        set.description = null
-        changes.push({ field: 'description', from: row.description, to: '' })
-      }
-    }
-  }
-
-  return { set, changes }
-}
-
 /** Hash of what a month-to-month comparison cares about. Whitespace-insensitive. */
 export function pageHash(parts: { title?: string | null; description?: string | null; text?: string | null }): string {
   const norm = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, ' ').trim()
