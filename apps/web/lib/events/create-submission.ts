@@ -198,7 +198,7 @@ export async function createEventSubmission(
   const seasonYear = offseasonSeasonYear(startDate ?? endDate) ?? currentOffseasonSeason()
 
   // A stable human slug, built from the name once. A later rename keeps it.
-  const slug = await uniqueEventSlug(name)
+  const slug = await uniqueEventSlug(name, seasonYear)
 
   const values: NewEventListing = {
     name,

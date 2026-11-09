@@ -173,20 +173,31 @@ export async function getPublishedEventBySlug(slug: string): Promise<PublicEvent
 /**
  * A slug nobody else in event_listings is using, built from the name. Mirrors
  * uniqueGrantSlug: `ignoreId` lets a row keep its own slug across a rename so
- * the slug is stable once set. The suffix loop makes it globally unique.
+ * the slug is stable once set.
+ *
+ * A CLASH TAKES THE SEASON YEAR. The usual clash is the same event in another
+ * year (Regal Eagles Rampage 2026 and 2027), and `regal-eagles-rampage-2027`
+ * says which one a link points at where `-1` says nothing. A counter is only
+ * the fallback for two same-named events in one season.
  */
-export async function uniqueEventSlug(base: string, ignoreId?: string): Promise<string> {
+export async function uniqueEventSlug(base: string, seasonYear?: number | null, ignoreId?: string): Promise<string> {
   const db = getDb()
   const root = (slugify(base) || 'event').slice(0, 80)
-  let slug = root
-  for (let attempt = 1; ; attempt++) {
+  const taken = async (slug: string) => {
     const [clash] = await db
       .select({ id: eventListings.id })
       .from(eventListings)
       .where(ignoreId ? and(eq(eventListings.slug, slug), ne(eventListings.id, ignoreId)) : eq(eventListings.slug, slug))
       .limit(1)
-    if (!clash) return slug
-    slug = `${root}-${attempt}`
+    return Boolean(clash)
+  }
+  if (!(await taken(root))) return root
+  // A name that already ends in the year ("Beach Blitz 2026") gets no second one.
+  const dated = seasonYear && !root.endsWith(`-${seasonYear}`) ? `${root}-${seasonYear}` : root
+  if (dated !== root && !(await taken(dated))) return dated
+  for (let attempt = 2; ; attempt++) {
+    const slug = `${dated}-${attempt}`
+    if (!(await taken(slug))) return slug
   }
 }
 

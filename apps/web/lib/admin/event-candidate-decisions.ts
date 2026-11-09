@@ -266,7 +266,7 @@ export async function acceptEventCandidateBody(
 
   // A stable human slug for the public /events/<slug> page, built once from the
   // name. Unique within the table via the suffix loop.
-  const base = { ...row, address: streetLine(row.address, row), country: normaliseCountry(row.country), slug: await uniqueEventSlug(row.name ?? 'event') }
+  const base = { ...row, address: streetLine(row.address, row), country: normaliseCountry(row.country), slug: await uniqueEventSlug(row.name ?? 'event', row.seasonYear) }
 
   const [created] = await db
     .insert(eventListings)
