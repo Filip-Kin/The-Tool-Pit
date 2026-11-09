@@ -21,7 +21,7 @@
  * `limits` and written onto the crawl job, so a partial sweep is visible in
  * the admin rather than reading as a complete one.
  */
-import { eq, inArray, isNotNull } from 'drizzle-orm'
+import { eq, inArray, isNotNull, or, sql } from 'drizzle-orm'
 import {
   getDb,
   grantCandidates,
@@ -117,11 +117,35 @@ async function loadKnownUrls(runUrls: string[]): Promise<Set<string>> {
     // Chunked because Postgres parameter limits bite well before a crawl does.
     for (let i = 0; i < runUrls.length; i += 500) {
       const chunk = runUrls.slice(i, i + 500)
+      // The URL a row was FOUND at counts as well as the one it holds now. The
+      // deep read swaps an entrance URL (a Jotform, a Submittable form) for
+      // the funder's programme page, so matching on canonical_url alone let
+      // the sheet file Wolfspeed and Optimum again every fortnight, three
+      // pending copies each by 2026-11. discoveredUrl is written at insert;
+      // applicationUrl is where the read kept the entrance URL on rows filed
+      // before that field existed.
       const rows = await db
-        .select({ canonicalUrl: grantCandidates.canonicalUrl })
+        .select({
+          canonicalUrl: grantCandidates.canonicalUrl,
+          discoveredUrl: sql<string | null>`${grantCandidates.rawMetadata}->>'discoveredUrl'`,
+          applicationUrl: sql<string | null>`${grantCandidates.rawMetadata}->>'applicationUrl'`,
+        })
         .from(grantCandidates)
-        .where(inArray(grantCandidates.canonicalUrl, chunk))
-      for (const row of rows) if (row.canonicalUrl) known.add(row.canonicalUrl)
+        .where(
+          or(
+            inArray(grantCandidates.canonicalUrl, chunk),
+            inArray(sql`${grantCandidates.rawMetadata}->>'discoveredUrl'`, chunk),
+            inArray(sql`${grantCandidates.rawMetadata}->>'applicationUrl'`, chunk),
+          ),
+        )
+      for (const row of rows) {
+        for (const raw of [row.canonicalUrl, row.discoveredUrl, row.applicationUrl]) {
+          if (!raw) continue
+          known.add(raw)
+          const canonical = canonicalGrantUrl(raw)
+          if (canonical) known.add(canonical)
+        }
+      }
     }
   }
 
@@ -213,6 +237,7 @@ export async function processGrantDiscoverJob(
         funderName: candidate.funderName,
         applicationUrl: candidate.applicationUrl,
         discoveredVia: candidate.discoveredVia,
+        discoveredUrl: canonical,
       }
 
       try {

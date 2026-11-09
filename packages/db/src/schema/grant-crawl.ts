@@ -325,6 +325,12 @@ export interface RawGrantMetadata {
   applicationUrl?: string
   /** The search query or thread that surfaced this, for the audit trail. */
   discoveredVia?: string
+  /**
+   * The canonical URL the crawl found this at, before the deep read swapped an
+   * entrance URL for the programme page. Discovery dedupes on it, so the same
+   * source row is not filed again once canonical_url has moved.
+   */
+  discoveredUrl?: string
   /** Truncated stripped page text handed to the classifier. */
   contentText?: string
   /**
