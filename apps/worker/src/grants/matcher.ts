@@ -307,9 +307,14 @@ function evaluateScope(grant: Grant, profile: TeamProfile): Evaluation[] {
     })
   }
 
-  // --- Region, for anything narrower than national ---
-  if (grant.geoScope === 'state' || grant.geoScope === 'region' || grant.geoScope === 'local') {
-    const regions = (grant.regions ?? []).map((r) => r.trim().toUpperCase()).filter(Boolean)
+  // --- Region: anything narrower than national, and any grant that names regions ---
+  // A national grant that lists states is limited to them ("communities where
+  // we operate": Toyota, Rockwell, SC Johnson). Checking regions only by scope
+  // sent those grants to every US team (2026-11-11 audit: 23 alerts outside
+  // the listed states).
+  const listedRegions = (grant.regions ?? []).map((r) => r.trim().toUpperCase()).filter(Boolean)
+  if (grant.geoScope === 'state' || grant.geoScope === 'region' || grant.geoScope === 'local' || listedRegions.length > 0) {
+    const regions = listedRegions
     const teamRegion = profile.region?.trim().toUpperCase() || null
 
     if (regions.length === 0) {
