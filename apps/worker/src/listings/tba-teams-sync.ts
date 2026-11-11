@@ -16,7 +16,7 @@
  * and the TBA_API_KEY env var, read exactly as listings/roster-refresh.ts reads
  * them. No key is hardcoded; with no key set the job logs and does nothing.
  */
-import { and, inArray, isNotNull, notInArray, sql } from 'drizzle-orm'
+import { inArray, notInArray, sql } from 'drizzle-orm'
 import { getDb, teams as teamsTable } from '@the-tool-pit/db'
 import { delay } from '../connectors/base.js'
 
@@ -170,7 +170,7 @@ async function tbaJson<T>(path: string, apiKey: string): Promise<T | null> {
  * The latest season with district rosters published: TBA lists next season's
  * districts months before it lists their teams, so a year whose districts
  * hold no teams yet is skipped for the one before. A team in no district has
- * its district cleared, so one that left a district stops matching its grants.
+ * its district cleared and the season set, so it counts as in no district.
  * A failed read changes nothing.
  */
 async function syncDistricts(apiKey: string, stats: TbaTeamsSyncStats): Promise<void> {
@@ -211,10 +211,13 @@ async function syncDistricts(apiKey: string, stats: TbaTeamsSyncStats): Promise<
     for (const [abbr, numbers] of groups) {
       await db.update(teamsTable).set({ district: abbr, districtYear: year }).where(inArray(teamsTable.number, numbers))
     }
+    // Every other team in TBA's directory is in no district that season, which
+    // is a fact (a team in western Pennsylvania is not FIRST Mid-Atlantic), not
+    // an unknown. Only a number TBA has never listed stays unknown.
     await db
       .update(teamsTable)
       .set({ district: null, districtYear: year })
-      .where(and(isNotNull(teamsTable.district), notInArray(teamsTable.number, [...byTeam.keys()])))
+      .where(notInArray(teamsTable.number, [...byTeam.keys()]))
     stats.districtTeams = byTeam.size
     stats.districtYear = year
     return
