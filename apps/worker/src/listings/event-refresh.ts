@@ -26,6 +26,7 @@
  * and need no revalidation; the roster refresh's own count writes rely on the
  * same thing.
  */
+import { verifyChanges } from './verify-changes.js'
 import { createHash } from 'node:crypto'
 import { Queue } from 'bullmq'
 import { and, eq, inArray } from 'drizzle-orm'
@@ -36,7 +37,7 @@ import { normaliseForQuoteMatch, type NamedText } from '../model/evidence.js'
 import { getRedis } from '../redis.js'
 import { geocodeVenue } from './locate.js'
 import { readEventCandidate } from './read-event.js'
-import { planEventRefresh, sameRefreshValue, REFRESH_KEYS, type RefreshKey } from './event-refresh-plan.js'
+import { planEventRefresh, withoutChanges, sameRefreshValue, REFRESH_KEYS, type RefreshKey } from './event-refresh-plan.js'
 import { applyLoggedPatch } from './change-log.js'
 
 /** Pages hashed per listing, at most. The reader opens up to 8. */
@@ -168,7 +169,7 @@ export async function refreshPublishedEvent(
     ...(threadText ? [{ source: 'thread', text: threadText }] : []),
     ...read.pages.map((p) => ({ source: p.url, text: p.text })),
   ]
-  const plan = planEventRefresh({
+  const planned = planEventRefresh({
     current: row as unknown as Record<string, unknown> & { humanEditedFields: string[] | null },
     fields: read.fields as Partial<Record<RefreshKey, unknown>>,
     evidence: read.evidence as Record<string, { quote: string; source?: string } | undefined>,
@@ -176,6 +177,51 @@ export async function refreshPublishedEvent(
     today,
     goneLinks: read.forms.filter((f) => f.state === 'gone').map((f) => ({ url: f.url, evidence: f.evidence })),
   })
+
+  // THE SECOND READING. Every change the rules let through is checked against
+  // the pages and this listing by a second model before it is written; only
+  // "right" goes on (verify-changes.ts). No answer at all writes nothing.
+  let plan = planned
+  if (planned.applied.length > 0) {
+    const rowRec = row as unknown as Record<string, unknown>
+    const evidence = read.evidence as Record<string, { quote?: string; source?: string } | undefined>
+    const verdicts = await verifyChanges({
+      today,
+      listing: {
+        name: row.name,
+        program: row.program,
+        edition_start: row.startDate,
+        edition_end: row.endDate,
+        season: row.seasonYear,
+        city: row.city,
+        region: row.region,
+        country: row.country,
+        cost: row.costUsd == null ? null : `${row.costUsd} ${row.costCurrency}`,
+        cost_note: row.costNote,
+        registration: row.registrationStatus,
+        registration_link: row.registrationUrl,
+        website: row.website,
+        ...Object.fromEntries(planned.applied.map((c) => [c.key, rowRec[c.key] ?? '-'])),
+      },
+      changes: planned.applied.map((c) => ({ ...c, quote: evidence[c.key]?.quote ?? null, source: evidence[c.key]?.source ?? null })),
+      pages: [...(threadText ? [{ url: 'thread', text: threadText }] : []), ...read.pages],
+    })
+    const drop = new Set<string>()
+    const why = new Map<string, string>()
+    for (const c of planned.applied) {
+      const v = verdicts?.find((x) => x.key === c.key)
+      if (!v || v.verdict !== 'right') {
+        drop.add(c.key)
+        why.set(c.key, verdicts ? `second reading: ${v?.verdict ?? 'unsure'}: ${v?.reason ?? ''}` : 'second reading unavailable')
+      }
+    }
+    // A currency is only written with the amount it was read with.
+    if (drop.has('costUsd') && planned.applied.some((c) => c.key === 'costCurrency')) {
+      drop.add('costCurrency')
+      why.set('costCurrency', why.get('costCurrency') ?? 'fee held by the second reading')
+    }
+    plan = withoutChanges(planned, drop, (k) => why.get(k) ?? 'second reading')
+  }
 
   for (const h of plan.held) {
     console.log(`[event-refresh] ${row.name}: held ${h.key} (${h.reason}${h.detail ? `: ${h.detail}` : ''}): ${h.from} -> ${h.to}`)

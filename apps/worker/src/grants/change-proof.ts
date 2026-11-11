@@ -5,8 +5,9 @@
  * read the funder's page. Most pending rows are not guesses, though: the page
  * says "Applications are due March 1, 2027" and the row says 2027-03-01. A
  * person applying that row adds nothing but a click. This file is the test for
- * "the page already says it", run twice: once by the monitor when it files the
- * row, once by scripts/apply-proven-grant-changes.ts over the backlog.
+ * "the page already says it", run by the monitor when it files the row. A
+ * proven row is then read a second time (listings/verify-changes.ts) before it
+ * is applied.
  *
  * PROVEN means all of:
  *

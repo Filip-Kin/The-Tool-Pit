@@ -53,6 +53,7 @@ import { DATE_ONLY_NOTE, endOfDayIn, funderTimeZone } from '@the-tool-pit/db/gra
 import { enqueueGrantAlert, grantUrl } from './alerts.js'
 import { MAX_AWARD_FACTOR, proveChange, reasoningWithProof } from './change-proof.js'
 import { askSiteToDecideGrantChanges } from '../site/queue-decisions.js'
+import { verifyChanges } from '../listings/verify-changes.js'
 
 /**
  * Payload for the grant-monitor queue. Kept here rather than in
@@ -415,6 +416,8 @@ interface PendingChange {
   alreadyApplied?: boolean
   /** A status derived from the page's dates, not stated by the page. */
   derivedFromDates?: boolean
+  /** The second reading judged it wrong: filed dismissed, not queued. */
+  secondReadingWrong?: boolean
 }
 
 /**
@@ -1235,8 +1238,7 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
   if (duplicates > 0) notes.push(`${duplicates} change(s) already pending review, not re-filed`)
 
   // Proven or not, decided against the text the snapshot keeps, so the
-  // backlog script (scripts/apply-proven-grant-changes.ts) reaches the same
-  // verdict from the stored row.
+  // verdict can be checked later from the stored row.
   const snapshotText = text.slice(0, SNAPSHOT_TEXT_LIMIT)
   for (const c of toInsert) {
     c.autoApplicable = false
@@ -1245,6 +1247,43 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
     if (verdict.proven) {
       c.autoApplicable = true
       c.reasoning = reasoningWithProof(c.reasoning, verdict.quote)
+    }
+  }
+
+  // THE SECOND READING (../listings/verify-changes.ts). A proven change is one
+  // whose quote is on the page; that is not the same as right. Of 19 monitor
+  // proposals reviewed on 2026-11-09, 15 were wrong with real quotes behind
+  // them: another programme's deadline, a page fragment as a note, an
+  // inferred 2027 date. Only "right" is applied; "wrong" is filed dismissed
+  // with the reason, "unsure" waits for a person. No answer applies nothing.
+  const toCheck = toInsert.filter((c) => c.autoApplicable && !c.alreadyApplied)
+  if (toCheck.length > 0) {
+    const fmt = (v: unknown) => (v === null || v === undefined || v === '' ? '-' : typeof v === 'string' ? v : JSON.stringify(v))
+    const verdicts = await verifyChanges({
+      vertical: 'grant',
+      today: now.toISOString().slice(0, 10),
+      listing: {
+        name: grant.name,
+        summary: grant.summary,
+        programs: grant.programs,
+        scope: grant.geoScope,
+        regions: grant.regions,
+        award_min: grant.awardMin,
+        award_max: grant.awardMax,
+        award_notes: grant.awardNotes,
+        deadline_type: grant.deadlineType,
+        info_link: grant.infoUrl,
+        application_link: grant.applicationUrl,
+      },
+      changes: toCheck.map((c) => ({ key: c.field, label: c.field, from: fmt(c.oldValue), to: fmt(c.newValue), quote: c.reasoning, source: fetched.redirectedTo ?? grant.infoUrl })),
+      pages: [{ url: fetched.redirectedTo ?? grant.infoUrl, text: snapshotText }],
+    })
+    for (const c of toCheck) {
+      const v = verdicts?.find((x) => x.key === c.field)
+      if (v?.verdict === 'right') continue
+      c.autoApplicable = false
+      c.reasoning = `${c.reasoning}\nSecond reading: ${verdicts ? `${v?.verdict ?? 'unsure'}: ${v?.reason ?? ''}` : 'unavailable'}`
+      if (v?.verdict === 'wrong') c.secondReadingWrong = true
     }
   }
 
@@ -1265,9 +1304,9 @@ export async function processGrantMonitorJob(payload: GrantMonitorPayload): Prom
           // 'applied' keeps it out of the reviewer's action queue while leaving
           // the trail intact, and the cycle it created still carries a null
           // verifiedAt so nothing is presented as human-confirmed.
-          status: c.alreadyApplied ? 'applied' : 'pending',
-          reviewedBy: c.alreadyApplied ? 'system:grant-monitor' : null,
-          reviewedAt: c.alreadyApplied ? now : null,
+          status: c.alreadyApplied ? 'applied' : c.secondReadingWrong ? 'dismissed' : 'pending',
+          reviewedBy: c.alreadyApplied ? 'system:grant-monitor' : c.secondReadingWrong ? 'system:second-reading' : null,
+          reviewedAt: c.alreadyApplied || c.secondReadingWrong ? now : null,
         })),
       )
       .returning({ id: grantChanges.id, field: grantChanges.field })

@@ -509,3 +509,27 @@ export function isRefreshable(
 }
 
 // #endregion
+
+/**
+ * The plan with some applied changes taken back out, for the second reading
+ * (verify-changes.ts). A column derived from a dropped change goes with it:
+ * the season with the start date, the host list with the host number, the pin
+ * and the roster read with the fields that asked for them.
+ */
+export function withoutChanges(plan: RefreshPlan, drop: ReadonlySet<string>, reasonFor: (key: string) => string): RefreshPlan {
+  if (drop.size === 0) return plan
+  const applied = plan.applied.filter((c) => !drop.has(c.key))
+  const held = [...plan.held, ...plan.applied.filter((c) => drop.has(c.key)).map((c) => ({ ...c, reason: 'refresh_rule' as const, detail: reasonFor(c.key) }))]
+  const patch = { ...plan.patch }
+  for (const key of drop) delete patch[key]
+  if (drop.has('startDate')) delete patch.seasonYear
+  if (drop.has('hostTeamNumber')) delete patch.hostTeamNumbers
+  const kept = new Set(applied.map((c) => c.key))
+  return {
+    patch,
+    applied,
+    held,
+    needsGeocode: plan.needsGeocode && [...PLACE_KEYS].some((k) => kept.has(k)),
+    needsRosterRefresh: plan.needsRosterRefresh && [...ROSTER_KEYS].some((k) => kept.has(k)),
+  }
+}
