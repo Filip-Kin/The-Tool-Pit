@@ -25,6 +25,8 @@
  * NOTHING HERE PUBLISHES. It fills in a candidate a person still has to accept
  * and then approve.
  */
+import { currencyOf } from './currency.js'
+import { readFormLink, type FormLinkRead } from './form-link.js'
 import { normaliseCountry, streetLine } from '@the-tool-pit/db/country'
 import {
   EVENT_PROGRAMS,
@@ -80,8 +82,15 @@ Fields:
   city              town or city
   region            state or province, the two-letter code where there is one
   country           two-letter code, "US" or "CA"
-  startDate         "YYYY-MM-DD", the FIRST day. "October 30 - November 1" starts on 30 October
-  endDate           "YYYY-MM-DD", the LAST day. Null for a one-day event
+  startDate         "YYYY-MM-DD", the FIRST COMPETITION DAY, defined exactly as for days below: the
+                    first day with qualification or playoff matches. A load-in, setup, pit-hours,
+                    inspection or practice-only day before it is NOT the start, even when the site's
+                    own date range begins on it. "Friday Oct 23 load-in and practice, Saturday Oct
+                    24 competition" starts on 24 October. With no schedule, the dates the site gives
+                    for the event.
+  endDate           "YYYY-MM-DD", the LAST COMPETITION DAY. A teardown or load-out day after it does
+                    not count. Null when there is one competition day, even if load-in is the day
+                    before.
   days              1 or 2: the number of COMPETITION DAYS, read off the event's SCHEDULE, not
                     worked out from the date span. FIND WHERE THE SITE STATES THE SCHEDULE. It is
                     a page or a section called "Schedule", "Agenda", "Event Schedule", "Day 1 /
@@ -111,7 +120,12 @@ Fields:
                     the quote for this field is the SCHEDULE TEXT you counted from. If neither a
                     schedule nor the dates say, return null rather than guessing from the span.
   capacity          integer, how many teams can enter
-  costUsd           integer US dollars per team to enter, so 250 for "$250 per team"
+  costUsd           integer per team to enter, IN THE CURRENCY THE PAGE CHARGES IN, never converted:
+                    250 for "$250 per team", 2000 for "2,000 ש\"ח". The quote is the price text
+                    with its currency mark in it.
+  costCurrency      ISO 4217 code of that price: "USD", "CAD", "ILS", "AUD", "EUR". A bare "$" is
+                    the local dollar (CAD in Canada, AUD in Australia). Null when the page does not
+                    say which currency; the quote is the same price text as costUsd.
   costNote          ONLY when the price is not one flat number: a discount for a second robot, a
                     cheaper combined price for both days of a two-day event, a different rate for
                     FTC than FRC, an early-bird deadline, or a fee charged on top. Do NOT restate
@@ -156,6 +170,12 @@ Fields:
                     this field. The Blue Alliance and other results/schedule databases do not carry
                     the registration state at all: read it from the event's OWN site, and if no page
                     states it, answer "unknown", never "closed".
+                    A FORM ON THE LISTING is given to you, read just now, with whether it is taking
+                    responses. A form that is not taking responses is the strongest evidence that
+                    sign-ups have ended, and one that is taking them that they are open, PROVIDED
+                    the form is for this edition: a form titled for last year's event says nothing
+                    about this year's. Read its description too; it often states the fee, the
+                    deadline or the team cap, and those are quotes like any other.
   registrationOpensAt  "YYYY-MM-DD", the date team sign-ups OPEN, when the source states one.
                     Sites often say "Registration opens 1 September" or "applications open in
                     a couple of weeks on 8/1"; read that date. Null when no open date is stated,
@@ -239,6 +259,8 @@ export interface EventRead {
   pages: Array<{ url: string; text: string }>
   /** Everything dropped, and why. Shown to the reviewer, never hidden. */
   rejected: string[]
+  /** Every registration or volunteer link opened for this read, and what was there. */
+  forms: FormLinkRead[]
 }
 
 /**
@@ -251,6 +273,8 @@ export interface EventRead {
 export function validateEventRead(
   raw: Record<string, unknown>,
   sources: ReadonlyArray<NamedText<string>>,
+  /** What the listing already knows: a bare "$" is read by its country. */
+  context: { country?: string | null } = {},
 ): { fields: ExtractedEventListingFields; evidence: EventFieldEvidence; rejected: string[] } {
   const fields: Record<string, unknown> = {}
   const kept: EventFieldEvidence = {}
@@ -324,6 +348,27 @@ export function validateEventRead(
     }
 
     kept[key] = { quote: quoteText.slice(0, 300), source }
+  }
+
+  // The fee and its currency come from one price. The currency the quote is
+  // written in wins over the model's answer; a quote that names none, outside a
+  // country whose "$" is known, leaves the fee unknown rather than guessed
+  // (FIRST Israel's 2,000 shekels went up as $2,000, 2026-11-11).
+  delete fields.costCurrency
+  delete kept.costCurrency
+  if (typeof fields.costUsd === 'number') {
+    const country = (fields.country as string | undefined) ?? context.country ?? null
+    const quote = kept.costUsd?.quote ?? ''
+    // A free event has no currency to get wrong.
+    const cur = currencyOf(quote, country) ?? (fields.costUsd === 0 ? 'USD' : null)
+    if (!cur) {
+      rejected.push(`costUsd: no currency in "${quote.slice(0, 80)}", dropped`)
+      delete fields.costUsd
+      delete kept.costUsd
+    } else {
+      fields.costCurrency = cur
+      kept.costCurrency = kept.costUsd
+    }
   }
 
   // The street line only: city, region and country have their own columns,
@@ -407,7 +452,21 @@ export async function readEventCandidate(input: {
   title: string
   threadText: string
   website?: string
+  /** The listing's country, so a bare "$" on its page is read as the local dollar. */
+  country?: string | null
+  /** The registration and volunteer links the listing holds now, read before the model is asked. */
+  formLinks?: Array<string | null | undefined>
 }): Promise<EventRead | null> {
+  // THE FORMS FIRST. A form's description often holds the fee, the deadline,
+  // the cap or a waitlist note the site does not, and whether it is still
+  // taking responses is the best evidence of registration state there is.
+  const forms: FormLinkRead[] = []
+  for (const url of new Set((input.formLinks ?? []).filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u)))) {
+    forms.push(await readFormLink(url))
+  }
+  const formBlock = forms
+    .filter((f) => f.text)
+    .map((f) => `Form on the listing, read just now (${f.url}, ${f.state === 'closed' ? `NOT TAKING RESPONSES: "${f.evidence}"` : 'taking responses'}):\n${f.text.slice(0, 6000)}`)
   const answer = await askWithPages({
     model: 'claude-sonnet-5',
     system: SYSTEM_PROMPT,
@@ -418,6 +477,7 @@ export async function readEventCandidate(input: {
       '',
       'Opening post:',
       input.threadText.slice(0, 20_000),
+      ...(formBlock.length ? ['', ...formBlock] : []),
     ]
       .filter(Boolean)
       .join('\n'),
@@ -443,14 +503,34 @@ export async function readEventCandidate(input: {
     // The links are part of what was read, so a URL the reader took off a
     // button verifies against the page that carried it.
     ...answer.pages.map((p) => ({ source: p.url, text: `${p.text}\n${p.links.join('\n')}` })),
+    ...forms.filter((f) => f.text).map((f) => ({ source: f.url, text: f.text })),
   ]
 
-  const checked = validateEventRead(raw, sources)
+  const checked = validateEventRead(raw, sources, { country: input.country })
+
+  // A link the reader found must open. One that answers 404 or Google's "Page
+  // Not Found" is dropped, never written (MadTown's 2022 volunteer form,
+  // 2026-10-07). A host that refuses automated reads is not proof either way.
+  for (const key of ['registrationUrl', 'volunteerUrl'] as const) {
+    const url = checked.fields[key]
+    if (typeof url !== 'string') continue
+    const known = forms.find((f) => f.url === url) ?? (await readFormLink(url))
+    if (!forms.includes(known)) forms.push(known)
+    if (known.state === 'gone') {
+      checked.rejected.push(`${key}: ${url} is gone (${known.evidence}), dropped`)
+      delete checked.fields[key]
+      delete checked.evidence[key]
+    }
+  }
   return {
     fields: checked.fields,
     evidence: checked.evidence,
     pagesRead: answer.pages.map((p) => p.url),
-    pages: answer.pages.map((p) => ({ url: p.url, text: `${p.text}\n${p.links.join('\n')}` })),
+    pages: [
+      ...answer.pages.map((p) => ({ url: p.url, text: `${p.text}\n${p.links.join('\n')}` })),
+      ...forms.filter((f) => f.text).map((f) => ({ url: f.url, text: f.text })),
+    ],
     rejected: [...checked.rejected, ...answer.failed.map((u) => `could not open ${u}`)],
+    forms,
   }
 }

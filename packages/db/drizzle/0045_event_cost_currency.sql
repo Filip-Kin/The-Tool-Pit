@@ -1,0 +1,1 @@
+ALTER TABLE "event_listings" ADD COLUMN "cost_currency" text DEFAULT 'USD' NOT NULL;

@@ -159,8 +159,15 @@ export const eventListings = pgTable(
     // Capacity + cost
     /** Team slots (sheet "Slots"). The denominator for the fullness signal. */
     capacity: integer('capacity'),
-    /** Registration fee per team in whole US dollars. Null when unknown. */
+    /**
+     * Registration fee per team, whole units of costCurrency. Null when
+     * unknown. The column is named for dollars because every listing was in
+     * dollars until 2026-11-11; FIRST Israel's fee is shekels and Canadian
+     * events charge CAD, so the amount is in whatever costCurrency says.
+     */
     costUsd: integer('cost_usd'),
+    /** ISO 4217 code of costUsd: 'USD', 'CAD', 'ILS'. */
+    costCurrency: text('cost_currency').notNull().default('USD'),
     /** Extra cost detail free text, e.g. "$450 for both days", "$200 2nd robot". */
     costNote: text('cost_note'),
 
@@ -521,6 +528,7 @@ export interface EventEditProposalData {
   parallelDivisions?: boolean
   capacity?: number | null
   costUsd?: number | null
+  costCurrency?: string
   costNote?: string | null
   registrationStatus?: string
   registrationOpensAt?: string | null

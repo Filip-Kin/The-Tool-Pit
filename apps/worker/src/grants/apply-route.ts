@@ -92,7 +92,7 @@ function portalName(url: URL): string | null {
 }
 
 /** Phrases that mean the form exists but is not taking submissions. */
-const CLOSED_RE =
+export const CLOSED_RE =
   /(no longer accepting responses|is no longer accepting|this form is closed|form is now closed|not currently accepting|presently no open calls|no open calls for submissions|survey has (already )?expired|has expired|applications? (are|is) (now )?closed|closed for 20\d\d|not accepting (new )?(applications|submissions)|(is|are) currently closed|(have|has) closed|cycle is (currently |now )?closed|application window (is|has) (now )?closed|coming soon|no open (rfps?|requests|opportunities|grant cycles?)|will reopen)/i
 
 /**
@@ -177,7 +177,7 @@ const NOT_FORM_PDF_RE = /(form 990|990-PF|return of (organization|private founda
 
 type ReadHow = 'fetch' | 'relay' | 'relay-render' | 'browser' | 'walled' | 'gone' | 'pdf'
 
-async function readHtml(url: string): Promise<{ html: string; status: number; how: ReadHow; finalUrl: string; via: FetchVia }> {
+export async function readHtml(url: string): Promise<{ html: string; status: number; how: ReadHow; finalUrl: string; via: FetchVia }> {
   let finalUrl = url
   // Direct unless the worker's IP was refused and the NAS relay read it instead.
   let via: FetchVia = 'direct'

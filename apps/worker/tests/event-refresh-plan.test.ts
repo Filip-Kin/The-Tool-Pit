@@ -263,24 +263,47 @@ describe('wrong edits from the 2026-11-11 run', () => {
     expect(plan.held[0]).toMatchObject({ key: 'registrationStatus', reason: 'refresh_rule' })
   })
 
-  it('keeps a fee in shekels out of costUsd', () => {
+  const shekels = 'עלות ההשתתפות בתחרות לקבוצה: 2,000 ש"ח.'
+  it('holds a fee read with no currency', () => {
     const plan = planEventRefresh({
-      current: { ...listing, country: 'IL', costUsd: null },
+      current: { ...listing, country: 'IL', costUsd: null, costCurrency: 'USD' },
       fields: { costUsd: 2000 },
-      evidence: { costUsd: { quote: 'עלות ההשתתפות בתחרות לקבוצה: 2,000 ש"ח.' } },
-      sources: page('עלות ההשתתפות בתחרות לקבוצה: 2,000 ש"ח.'),
+      evidence: { costUsd: { quote: shekels } },
+      sources: page(shekels),
       today: TODAY,
     })
     expect(plan.patch).toEqual({})
-    expect(plan.held[0]).toMatchObject({ key: 'costUsd', detail: 'fee not in US dollars' })
+    expect(plan.held[0]).toMatchObject({ key: 'costUsd', detail: 'no currency for the fee' })
   })
 
-  it('keeps a Canadian dollar fee out of costUsd', () => {
+  it('writes a fee in shekels with its currency', () => {
     const plan = planEventRefresh({
-      current: { ...listing, country: 'CA', costUsd: null },
-      fields: { costUsd: 300 },
-      evidence: { costUsd: { quote: 'Registration fee is $300 per team.' } },
-      sources: page('Registration fee is $300 per team.'),
+      current: { ...listing, country: 'IL', costUsd: null, costCurrency: 'USD' },
+      fields: { costUsd: 2000, costCurrency: 'ILS' },
+      evidence: { costUsd: { quote: shekels }, costCurrency: { quote: shekels } },
+      sources: page(shekels),
+      today: TODAY,
+    })
+    expect(plan.patch).toEqual({ costUsd: 2000, costCurrency: 'ILS' })
+  })
+
+  it('corrects the currency of a fee already on the listing', () => {
+    const plan = planEventRefresh({
+      current: { ...listing, country: 'CA', costUsd: 450, costCurrency: 'USD' },
+      fields: { costUsd: 450, costCurrency: 'CAD' },
+      evidence: { costUsd: { quote: 'CAD$450 per team' }, costCurrency: { quote: 'CAD$450 per team' } },
+      sources: page('Registration: CAD$450 per team, per day'),
+      today: TODAY,
+    })
+    expect(plan.patch).toEqual({ costCurrency: 'CAD' })
+  })
+
+  it('does not put a new currency on an amount it did not read', () => {
+    const plan = planEventRefresh({
+      current: { ...listing, country: 'CA', costUsd: 450, costCurrency: 'USD' },
+      fields: { costCurrency: 'CAD' },
+      evidence: { costCurrency: { quote: 'CAD$450 per team' } },
+      sources: page('Registration: CAD$450 per team, per day'),
       today: TODAY,
     })
     expect(plan.patch).toEqual({})

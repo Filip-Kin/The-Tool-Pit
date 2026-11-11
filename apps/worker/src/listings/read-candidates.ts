@@ -44,7 +44,7 @@ import { geocodeVenue, matchTbaEvent } from './locate.js'
 const READER_FIELDS: Record<'event' | 'field', string[]> = {
   event: [
     'name', 'program', 'hostTeamNumber', 'venueName', 'address', 'city', 'region', 'country',
-    'startDate', 'endDate', 'days', 'capacity', 'costUsd', 'costNote', 'registrationStatus',
+    'startDate', 'endDate', 'days', 'capacity', 'costUsd', 'costCurrency', 'costNote', 'registrationStatus',
     'volunteerStatus', 'registrationUrl', 'volunteerUrl', 'website', 'teamListUrl', 'contactEmail', 'notes',
   ],
   field: [
@@ -137,6 +137,8 @@ export async function processReadCandidatesJob(
                 title: title || String(existing.name ?? ''),
                 threadText: text,
                 website: typeof existing.website === 'string' ? existing.website : links[0],
+                country: typeof existing.country === 'string' ? existing.country : null,
+                formLinks: [existing.registrationUrl as string | undefined, existing.volunteerUrl as string | undefined],
               })
             : await readFieldCandidate({
                 threadUrl: row.sourceUrl,
@@ -177,6 +179,7 @@ export async function processReadCandidatesJob(
         const merged: Record<string, unknown> = rereading
           ? { ...base, ...read.fields }
           : { ...read.fields, ...base }
+        if (vertical === 'event' && !rereading) Object.assign(merged, competitionDaysInside(base, read.fields as Record<string, unknown>))
         const added = Object.keys(read.fields).filter((k) => !(k in stripEmpty(existing))).length
 
         // A PIN AND A TBA CODE, both lookups rather than readings.
@@ -292,4 +295,25 @@ function stripEmpty(input: Record<string, unknown>): Record<string, unknown> {
     out[k] = v
   }
   return out
+}
+
+/**
+ * TBA's dates are the span it was given, and it often starts an event on the
+ * load-in day. Dates count competition days only (Filip, 2026-11-11), so a
+ * reader's dates that sit INSIDE TBA's span are the same event trimmed to its
+ * competition days and replace them. Dates outside the span are a different
+ * reading (last year's page, another event) and TBA's stand.
+ */
+export function competitionDaysInside(
+  existing: Record<string, unknown>,
+  read: Record<string, unknown>,
+): Record<string, unknown> {
+  const s0 = existing.startDate
+  const e0 = existing.endDate ?? existing.startDate
+  const s1 = read.startDate
+  const e1 = read.endDate ?? read.startDate
+  if (typeof s0 !== 'string' || typeof e0 !== 'string' || typeof s1 !== 'string' || typeof e1 !== 'string') return {}
+  if (s1 < s0 || e1 > e0 || e1 < s1) return {}
+  if (s1 === s0 && e1 === e0) return {}
+  return { startDate: s1, endDate: s1 === e1 ? null : e1 }
 }

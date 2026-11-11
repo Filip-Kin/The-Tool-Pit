@@ -298,6 +298,8 @@ export interface ExtractedEventListingFields {
   longitude?: number
   capacity?: number
   costUsd?: number
+  /** ISO 4217 code of costUsd. Absent means USD. */
+  costCurrency?: string
   costNote?: string
   /** REGISTRATION_STATUSES. */
   registrationStatus?: string

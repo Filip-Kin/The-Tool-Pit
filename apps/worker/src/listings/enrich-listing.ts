@@ -62,6 +62,8 @@ export async function enrichPublishedEvent(listingId: string): Promise<string[]>
     title: listing.name,
     threadText,
     website: listing.website ?? undefined,
+    country: listing.country,
+    formLinks: [listing.registrationUrl, listing.volunteerUrl],
   })
   if (!read) return []
 
@@ -70,12 +72,16 @@ export async function enrichPublishedEvent(listingId: string): Promise<string[]>
   const filled: string[] = []
 
   for (const key of FILLABLE) {
+    // The currency column is never blank (it defaults to USD); it goes with the fee below.
+    if (key === 'costCurrency') continue
     if (!isBlank(row[key], key)) continue
     const value = (read.fields as Record<string, unknown>)[key]
     if (value === undefined || value === null || value === '') continue
     patch[key] = value
     filled.push(key)
   }
+  // A fee filled in is the amount in the currency it was read in.
+  if ('costUsd' in patch && read.fields.costCurrency) patch.costCurrency = read.fields.costCurrency
 
   // A pin, when the event has none. Same strictness as the reader: a real
   // address or a venue with a town, landing in the region the row claims.

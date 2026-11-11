@@ -269,6 +269,9 @@ export async function processEventStatusWatch(): Promise<EventStatusWatchStats> 
       website: eventListings.website,
       teamListUrl: eventListings.teamListUrl,
       chiefDelphiUrl: eventListings.chiefDelphiUrl,
+      country: eventListings.country,
+      registrationUrl: eventListings.registrationUrl,
+      volunteerUrl: eventListings.volunteerUrl,
     })
     .from(eventListings)
     .where(and(eq(eventListings.status, 'published'), inArray(eventListings.eventStatus, ['tentative', 'confirmed'])))

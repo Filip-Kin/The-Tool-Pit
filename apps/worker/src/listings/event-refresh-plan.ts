@@ -54,6 +54,7 @@ import {
   streetKey,
   type GuardKind,
 } from './refresh-rules.js'
+import { currencyCode } from './currency.js'
 
 // Kept as exports here too: tests and callers have imported them from this module.
 export { countryCode, streetKey }
@@ -63,7 +64,7 @@ export { countryCode, streetKey }
 /** Which extracted fields may fill a blank listing column, or refresh a set one. The pin and tbaKey are handled apart. */
 export const FILLABLE = [
   'venueName', 'address', 'city', 'region', 'country', 'hostTeamNumber',
-  'startDate', 'endDate', 'days', 'capacity', 'costUsd', 'costNote',
+  'startDate', 'endDate', 'days', 'capacity', 'costUsd', 'costCurrency', 'costNote',
   'eventStatus', 'registrationStatus', 'registrationOpensAt', 'registrationClosesAt', 'volunteerStatus', 'registrationUrl', 'volunteerUrl',
   'website', 'teamListUrl', 'contactEmail', 'notes',
 ] as const satisfies readonly (keyof ExtractedEventListingFields)[]
@@ -89,7 +90,8 @@ export const REFRESH_FIELD_LABELS: Record<RefreshKey, string> = {
   endDate: 'Last day',
   days: 'Competition days',
   capacity: 'Capacity',
-  costUsd: 'Cost (USD)',
+  costUsd: 'Cost',
+  costCurrency: 'Currency',
   costNote: 'Cost note',
   eventStatus: 'Event status',
   registrationStatus: 'Registration',
@@ -224,6 +226,12 @@ export interface RefreshPlanInput {
   sources: ReadonlyArray<NamedText<string>>
   /** YYYY-MM-DD. */
   today: string
+  /**
+   * Links on the listing that were opened this run and are gone (404, Google's
+   * "Page Not Found"). The one clear the refresh makes: a dead link is proven
+   * dead, which "the page does not mention it" never is.
+   */
+  goneLinks?: Array<{ url: string; evidence: string }>
 }
 
 /** Longest cost note a card shows on one line. */
@@ -240,13 +248,6 @@ export function dollarAmounts(text: string): number[] {
  * November (Blue Twilight, 2026-11-11).
  */
 const REGISTRATION_CLOSED = /\bregistration\s+(?:is\s+|has\s+)?(?:now\s+)?closed\b|\b(?:is|are)\s+now\s+closed\b|\bclosed\s+(?:for|to)\s+(?:new\s+)?(?:registration|teams)\b|\bno\s+longer\s+(?:accepting|taking|open)\b|\b(?:event|registration)\s+is\s+(?:now\s+)?full\b|\bsold\s+out\b|\bat\s+capacity\b|\bregistration\s+(?:has\s+)?ended\b/i
-
-/**
- * Money that is not US dollars. costUsd holds dollars only; a fee in another
- * currency stays in the cost note (FIRST Israel's 2,000 shekels became
- * $2,000, 2026-11-11).
- */
-const OTHER_CURRENCY = /₪|ש"ח|\bshekels?\b|\b(?:ILS|NIS|CAD|AUD|NZD|EUR|GBP|MXN|BRL|TRY|CNY|JPY|INR|TWD|KRW)\b|[€£¥₺₹₩]|\b(?:C|CA|A|AU|NZ|MX|R)\$/i
 
 /** Words that teams are going on a waitlist now, not a rule for when the field fills. */
 const WAITLIST_NOW = /\b(?:is|are)\s+(?:now\s+|currently\s+)?(?:full|waitlisted|on\s+(?:a|the)\s+wait\s*list)\b|\bwait\s*list(?:ed)?\s+(?:only|since)\b|\b(?:currently|now)\s+(?:full|accepting\s+wait\s*list|wait\s*list(?:ing|ed)?)\b|\bjoin\s+the\s+wait\s*list\b|\bwait\s*list\s+(?:is\s+)?(?:now\s+)?open\b/i
@@ -306,12 +307,6 @@ export function eventFieldRefusal(
   if (key === 'name' && typeof next === 'string' && typeof before === 'string' && before.trim().includes(' ')) {
     const initials = next.replace(/\b(?:championship|invitational|classic|\d{4})\b/gi, '').trim()
     if (/^[A-Z0-9&]{2,8}$/.test(initials) && initials.length < before.replace(/\s+/g, '').length) return 'name cut to initials'
-  }
-  if (key === 'costUsd' && Number(next) > 0) {
-    if (OTHER_CURRENCY.test(quote)) return 'fee not in US dollars'
-    // "$300" on a page in Canada or Australia is that country's dollar.
-    const country = String(current.country ?? 'US').toUpperCase()
-    if (country !== 'US' && !/\b(?:USD|US\$|U\.S\.\s*dollars?)/i.test(quote)) return 'fee outside the US with no USD wording'
   }
   if (key === 'teamListUrl' && typeof next === 'string') {
     // A hand-set list is not read from a page, so a link there changes nothing
@@ -433,6 +428,36 @@ export function planEventRefresh(input: RefreshPlanInput): RefreshPlan {
         ? streetLine(next, { city: (input.fields.city ?? input.current.city) as string | undefined, region: (input.fields.region ?? input.current.region) as string | undefined })
         : next
     applied.push(change)
+  }
+
+  // A link on the listing that no longer opens is taken off it.
+  for (const gone of input.goneLinks ?? []) {
+    for (const key of ['registrationUrl', 'volunteerUrl'] as const) {
+      if (current[key] !== gone.url || key in patch) continue
+      if (isHumanEdited(claimed, key)) { held.push({ key, label: REFRESH_FIELD_LABELS[key], from: gone.url, to: '-', reason: 'human_claimed' }); continue }
+      patch[key] = null
+      applied.push({ key, label: REFRESH_FIELD_LABELS[key], from: gone.url, to: `- (${gone.evidence})` })
+    }
+  }
+
+  // A fee and its currency are one fact. The reader sets the currency from the
+  // price quote, so a fee read without one is a number in an unknown currency
+  // (FIRST Israel's 2,000 shekels went up as $2,000, 2026-11-11), and a
+  // currency is only written for the amount it was read with: a held fee must
+  // not keep its old number under a new currency.
+  const readCurrency = currencyCode(fields.costCurrency)
+  if ('costUsd' in patch && Number(patch.costUsd) > 0 && !readCurrency) {
+    const i = applied.findIndex((c) => c.key === 'costUsd')
+    if (i >= 0) held.push({ ...applied.splice(i, 1)[0], reason: 'refresh_rule', detail: 'no currency for the fee' })
+    delete patch.costUsd
+  }
+  if ('costCurrency' in patch) {
+    const amount = 'costUsd' in patch ? patch.costUsd : current.costUsd
+    if (fields.costUsd == null || Number(fields.costUsd) !== Number(amount)) {
+      const i = applied.findIndex((c) => c.key === 'costCurrency')
+      if (i >= 0) held.push({ ...applied.splice(i, 1)[0], reason: 'refresh_rule', detail: 'currency read for another amount' })
+      delete patch.costCurrency
+    }
   }
 
   // The dates together must still make an event that ends on or after it starts.

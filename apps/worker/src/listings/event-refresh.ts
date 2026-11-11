@@ -94,7 +94,7 @@ async function enqueueRosterRefresh(listingId: string): Promise<void> {
  * cancellation check already rendered is not rendered twice.
  */
 export async function refreshPublishedEvent(
-  listing: { id: string; name: string; website: string | null; teamListUrl: string | null; chiefDelphiUrl: string | null },
+  listing: { id: string; name: string; website: string | null; teamListUrl: string | null; chiefDelphiUrl: string | null; country?: string | null; registrationUrl?: string | null; volunteerUrl?: string | null },
   readText: (url: string) => Promise<string | null>,
   today: string,
 ): Promise<RefreshResult> {
@@ -124,7 +124,9 @@ export async function refreshPublishedEvent(
     for (const url of unique) out.push({ url, text: await readText(url) })
     return out
   }
-  const ownPages = [listing.website, listing.teamListUrl].filter((u): u is string => Boolean(u))
+  // The forms count as pages: a form that stops taking responses is a change
+  // on a site that is otherwise the same.
+  const ownPages = [listing.website, listing.teamListUrl, listing.registrationUrl, listing.volunteerUrl].filter((u): u is string => Boolean(u))
 
   if (stored) {
     const pages = await hashPages([...ownPages, ...stored.pages])
@@ -139,6 +141,8 @@ export async function refreshPublishedEvent(
     title: listing.name,
     threadText,
     website: listing.website ?? undefined,
+    country: listing.country,
+    formLinks: [listing.registrationUrl, listing.volunteerUrl],
   })
   if (!read) return { outcome: 'unread', applied: 0, held: 0 }
 
@@ -170,6 +174,7 @@ export async function refreshPublishedEvent(
     evidence: read.evidence as Record<string, { quote: string; source?: string } | undefined>,
     sources,
     today,
+    goneLinks: read.forms.filter((f) => f.state === 'gone').map((f) => ({ url: f.url, evidence: f.evidence })),
   })
 
   for (const h of plan.held) {
