@@ -28,6 +28,7 @@ const publicColumns = {
   parallelDivisions: eventListings.parallelDivisions,
   capacity: eventListings.capacity,
   costUsd: eventListings.costUsd,
+  costCurrency: eventListings.costCurrency,
   costNote: eventListings.costNote,
   registrationStatus: eventListings.registrationStatus,
   registrationOpensAt: eventListings.registrationOpensAt,

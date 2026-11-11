@@ -13,6 +13,7 @@
  */
 import { HUMAN_EDITABLE_EVENT_KEYS } from '@the-tool-pit/db'
 import type { ExtractedEventListingFields } from '@the-tool-pit/db'
+import { formatCost, parseCostCurrency } from '@/lib/events/event-display'
 
 export interface EventMergeField {
   key: string
@@ -34,7 +35,7 @@ const FIELD_LABELS: Record<string, string> = {
   endDate: 'Last day',
   days: 'Competition days',
   capacity: 'Capacity',
-  costUsd: 'Cost (USD)',
+  costUsd: 'Cost',
   costNote: 'Cost note',
   registrationStatus: 'Registration',
   volunteerStatus: 'Volunteers',
@@ -53,6 +54,27 @@ const FIELD_LABELS: Record<string, string> = {
 const COMPARABLE_KEYS = Object.keys(FIELD_LABELS).filter((k) =>
   (HUMAN_EDITABLE_EVENT_KEYS as readonly string[]).includes(k),
 )
+
+/**
+ * The currency a candidate's fee was read in. The reader leaves it off for a
+ * dollar fee, so absent is USD, the same reading the worker applies.
+ */
+export function extractedCostCurrency(extracted: ExtractedEventListingFields): string {
+  return parseCostCurrency((extracted as { costCurrency?: unknown }).costCurrency) ?? 'USD'
+}
+
+/**
+ * A fee and its currency are one fact, so they are one row: "CA$450" against
+ * "₪2,000", never 450 against 2000 with the currency on a row of its own that a
+ * reviewer could take without the amount. applyEventCandidateMerge carries the
+ * currency along with a chosen fee.
+ */
+function costFact(amount: unknown, currency: unknown): string | null {
+  if (amount === undefined || amount === null || amount === '') return null
+  const n = Number(amount)
+  if (!Number.isFinite(n)) return null
+  return n === 0 ? 'Free' : formatCost(n, parseCostCurrency(currency) ?? 'USD')
+}
 
 function normalise(v: unknown): string | number | boolean | null {
   if (v === undefined || v === null || v === '') return null
@@ -84,6 +106,13 @@ export function diffEventFields(
 ): EventMergeField[] {
   const rows: EventMergeField[] = []
   for (const key of COMPARABLE_KEYS) {
+    if (key === 'costUsd') {
+      const existing = costFact(listing.costUsd, listing.costCurrency)
+      const detected = costFact(extracted.costUsd, extractedCostCurrency(extracted))
+      if (detected === null) continue
+      rows.push({ key, label: FIELD_LABELS[key], existing, detected, differs: existing !== detected })
+      continue
+    }
     const existing = normalise(listing[key])
     const detected = normalise((extracted as Record<string, unknown>)[key])
     if (detected === null) continue // nothing to offer for this field

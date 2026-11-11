@@ -26,6 +26,7 @@ import {
 import { signOutreachRemove, signOutreachClaim } from '@/lib/listings/outreach-token'
 import { notifyEventRejected } from '@/lib/notify/approvals'
 import { publishEventListing } from '@/lib/events/publish'
+import { formatCost, parseCostCurrency } from '@/lib/events/event-display'
 import { suppressEventListing } from '@/lib/events/suppress'
 import { recordDiscordDecision } from '@/lib/discord/decisions'
 import { addHumanEdits, changedKeys, HUMAN_EDITABLE_EVENT_KEYS } from '@the-tool-pit/db/human-edited'
@@ -177,6 +178,7 @@ export async function sendEventOutreach(id: string): Promise<{ error?: string }>
       endDate: eventListings.endDate,
       capacity: eventListings.capacity,
       costUsd: eventListings.costUsd,
+      costCurrency: eventListings.costCurrency,
       costNote: eventListings.costNote,
       registrationUrl: eventListings.registrationUrl,
       volunteerUrl: eventListings.volunteerUrl,
@@ -205,7 +207,7 @@ export async function sendEventOutreach(id: string): Promise<{ error?: string }>
   // is a muted "Not listed" prompt, not a hidden row.
   const cost =
     row.costUsd != null
-      ? (row.costUsd === 0 ? 'Free' : `$${row.costUsd}`) + (row.costNote?.trim() ? ` (${row.costNote.trim()})` : '')
+      ? (row.costUsd === 0 ? 'Free' : formatCost(row.costUsd, row.costCurrency)) + (row.costNote?.trim() ? ` (${row.costNote.trim()})` : '')
       : row.costNote?.trim() || null
   const where = [row.venueName, row.city, row.region, row.country].filter((p) => p && p.trim()).join(', ')
   const facts: EmailFact[] = [
@@ -287,6 +289,8 @@ export interface EventEditInput {
   parallelDivisions?: boolean
   capacity?: number | null
   costUsd?: number | null
+  /** ISO 4217 code of costUsd. Anything but three letters is ignored. */
+  costCurrency?: string
   costNote?: string | null
   registrationStatus?: string
   registrationOpensAt?: string | null
@@ -341,6 +345,10 @@ export async function updateEvent(id: string, input: EventEditInput): Promise<{ 
   if (input.parallelDivisions !== undefined) patch.parallelDivisions = input.parallelDivisions
   if (input.capacity !== undefined) patch.capacity = input.capacity
   if (input.costUsd !== undefined) patch.costUsd = input.costUsd
+  if (input.costCurrency !== undefined) {
+    const cur = parseCostCurrency(input.costCurrency)
+    if (cur) patch.costCurrency = cur
+  }
   if (input.costNote !== undefined) patch.costNote = input.costNote?.trim() || null
   if (input.registrationStatus !== undefined) patch.registrationStatus = inEnum(input.registrationStatus, REGISTRATION_STATUSES) ?? 'unknown'
   if (input.registrationOpensAt !== undefined) patch.registrationOpensAt = cleanDate(input.registrationOpensAt)

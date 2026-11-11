@@ -45,6 +45,7 @@ export const EVENT_CANDIDATE_VALUE_KEYS = [
   'days',
   'capacity',
   'costUsd',
+  'costCurrency',
   'costNote',
   'eventStatus',
   'registrationStatus',

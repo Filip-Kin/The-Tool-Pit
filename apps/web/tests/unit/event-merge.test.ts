@@ -104,3 +104,19 @@ describe('diffEventFields', () => {
     expect(lastDisagreement).toBeLessThan(firstAgreement === -1 ? Infinity : firstAgreement)
   })
 })
+
+describe('diffEventFields: fee and currency', () => {
+  it('compares the fee with its currency as one row', () => {
+    const rows = diffEventFields({ ...listing, costCurrency: 'USD' }, { costUsd: 250, costCurrency: 'CAD' } as never)
+    const cost = rows.find((r) => r.key === 'costUsd')!
+    expect(cost.existing).toBe('$250')
+    expect(cost.detected).toBe('CA$250')
+    expect(cost.differs).toBe(true)
+    expect(rows.find((r) => r.key === 'costCurrency')).toBeUndefined()
+  })
+
+  it('reads a fee with no currency as dollars', () => {
+    const rows = diffEventFields({ ...listing, costCurrency: 'USD' }, { costUsd: 250 } as never)
+    expect(rows.find((r) => r.key === 'costUsd')!.differs).toBe(false)
+  })
+})

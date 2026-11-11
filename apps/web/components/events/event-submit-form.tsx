@@ -22,6 +22,7 @@ import {
   REGISTRATION_STATUS_LABEL,
   VOLUNTEER_STATUS_LABEL,
   eventHostTeams,
+  costCurrencyOptions,
 } from '@/lib/events/event-display'
 import type { PublicEvent } from '@/lib/events/event-display'
 import { useSession } from '@/components/auth/session-provider'
@@ -45,6 +46,7 @@ interface FormState {
   parallelDivisions: boolean
   capacity: string
   costUsd: string
+  costCurrency: string
   costNote: string
   registrationStatus: string
   registrationOpensAt: string
@@ -89,6 +91,7 @@ export interface RenewalPrefill {
   parallelDivisions: boolean
   capacity: number | null
   costUsd: number | null
+  costCurrency: string
   costNote: string | null
   website: string | null
   registrationUrl: string | null
@@ -113,6 +116,7 @@ const INITIAL: FormState = {
   parallelDivisions: false,
   capacity: '',
   costUsd: '',
+  costCurrency: 'USD',
   costNote: '',
   registrationStatus: 'unknown',
   registrationOpensAt: '',
@@ -148,6 +152,7 @@ function fromRenewal(r: RenewalPrefill): FormState {
     parallelDivisions: r.parallelDivisions,
     capacity: n(r.capacity),
     costUsd: n(r.costUsd),
+    costCurrency: r.costCurrency || 'USD',
     costNote: s(r.costNote),
     website: s(r.website),
     registrationUrl: s(r.registrationUrl),
@@ -185,6 +190,7 @@ function fromEvent(ev: PublicEvent): FormState {
     parallelDivisions: ev.parallelDivisions,
     capacity: n(ev.capacity),
     costUsd: n(ev.costUsd),
+    costCurrency: ev.costCurrency || 'USD',
     costNote: s(ev.costNote),
     registrationStatus: ev.registrationStatus,
     registrationOpensAt: s(ev.registrationOpensAt),
@@ -505,10 +511,24 @@ export function EventSubmitForm({
               <input type="number" inputMode="numeric" min={1} value={form.capacity} onChange={(e) => set('capacity', e.target.value)} placeholder="32" className="input" />
             </Field>
           </div>
-          <div className="w-32">
-            <Field label="Cost (USD)">
-              <input type="number" inputMode="numeric" min={0} value={form.costUsd} onChange={(e) => set('costUsd', e.target.value)} placeholder="300" className="input" />
-            </Field>
+          {/* Amount and currency stay side by side, phone width included. */}
+          <div className="flex gap-2 sm:w-56">
+            <div className="min-w-0 flex-1">
+              <Field label="Cost">
+                <input type="number" inputMode="numeric" min={0} value={form.costUsd} onChange={(e) => set('costUsd', e.target.value)} placeholder="300" className="input" />
+              </Field>
+            </div>
+            <div className="w-24 shrink-0">
+              <Field label="Currency">
+                <select value={form.costCurrency} onChange={(e) => set('costCurrency', e.target.value)} className="input">
+                  {costCurrencyOptions(form.costCurrency).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
           </div>
           <div className="flex-1">
             <Field label="Cost note" hint="e.g. $450 for both days.">

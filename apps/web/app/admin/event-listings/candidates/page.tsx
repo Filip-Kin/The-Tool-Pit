@@ -4,6 +4,7 @@ import { desc, eq, sql } from 'drizzle-orm'
 import { assertAdmin } from '@/lib/admin/auth'
 import { getDb } from '@/lib/db'
 import { formatDate } from '@/lib/format/date'
+import { costCurrencyOptions, formatCost } from '@/lib/events/event-display'
 import {
   EVENT_LISTING_CANDIDATE_STATUSES,
   EVENT_PROGRAMS,
@@ -167,7 +168,7 @@ export default async function EventCandidatesPage({
             const ev = meta.readEvidence ?? {}
             const cost =
               ex.costUsd !== undefined && ex.costUsd !== null
-                ? `$${ex.costUsd}${ex.costNote ? ` (${ex.costNote})` : ''}`
+                ? `${ex.costUsd === 0 ? 'Free' : formatCost(ex.costUsd, ex.costCurrency)}${ex.costNote ? ` (${ex.costNote})` : ''}`
                 : (ex.costNote ?? null)
 
             return (
@@ -219,7 +220,9 @@ export default async function EventCandidatesPage({
                           { name: 'endDate', label: 'End date', type: 'date', value: ex.endDate, evidence: ev.endDate },
                           { name: 'days', label: 'Days', type: 'number', value: ex.days, evidence: ev.days },
                           { name: 'capacity', label: 'Capacity', type: 'number', value: ex.capacity, evidence: ev.capacity },
-                          { name: 'costUsd', label: 'Cost (USD)', type: 'number', value: ex.costUsd, evidence: ev.costUsd },
+                          { name: 'costUsd', label: 'Cost', type: 'number', value: ex.costUsd, evidence: ev.costUsd },
+                          // The reader leaves the currency off a dollar fee, so absent is USD.
+                          { name: 'costCurrency', label: 'Currency', type: 'select', options: costCurrencyOptions(ex.costCurrency), value: ex.costCurrency ?? 'USD' },
                           { name: 'costNote', label: 'Cost note', value: ex.costNote, evidence: ev.costNote },
                           { name: 'eventStatus', label: 'Event status', type: 'select', options: EVENT_STATUSES },
                           { name: 'registrationStatus', label: 'Registration', type: 'select', options: REGISTRATION_STATUSES, value: ex.registrationStatus, evidence: ev.registrationStatus },

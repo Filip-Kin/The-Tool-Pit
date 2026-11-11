@@ -49,6 +49,7 @@ async function buildRenewal(id: string | undefined): Promise<RenewalPrefill | nu
     parallelDivisions: prev.parallelDivisions,
     capacity: prev.capacity,
     costUsd: prev.costUsd,
+    costCurrency: prev.costCurrency,
     costNote: prev.costNote,
     website: prev.website,
     registrationUrl: prev.registrationUrl,

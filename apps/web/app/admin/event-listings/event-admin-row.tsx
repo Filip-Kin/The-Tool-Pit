@@ -18,6 +18,7 @@ import {
   eventDateRange,
   eventLocation,
   costLabel,
+  costCurrencyOptions,
 } from '@/lib/events/event-display'
 import type { PublicEvent } from '@/lib/events/event-display'
 import { AddressField } from '@/components/fields/address-field'
@@ -273,6 +274,7 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
     parallelDivisions: listing.parallelDivisions,
     capacity: listing.capacity,
     costUsd: listing.costUsd,
+    costCurrency: listing.costCurrency,
     costNote: listing.costNote,
     registrationStatus: listing.registrationStatus,
     registrationOpensAt: listing.registrationOpensAt,
@@ -345,9 +347,15 @@ function Editor({ listing, onDone, onError }: { listing: EventListing; onDone: (
           <L label="Capacity"><input type="number" className="input" value={form.capacity ?? ''} onChange={(e) => set('capacity', e.target.value ? Number(e.target.value) : null)} /></L>
         </div>
         <div className="flex gap-2">
-          <L label="Cost (USD)"><input type="number" className="input" value={form.costUsd ?? ''} onChange={(e) => set('costUsd', e.target.value ? Number(e.target.value) : null)} /></L>
-          <L label="Cost note"><input className="input" value={form.costNote ?? ''} onChange={(e) => set('costNote', e.target.value)} /></L>
+          <L label="Cost"><input type="number" className="input" value={form.costUsd ?? ''} onChange={(e) => set('costUsd', e.target.value ? Number(e.target.value) : null)} /></L>
+          <label className="flex w-24 shrink-0 flex-col gap-1">
+            <span className="text-xs text-muted-2">Currency</span>
+            <select className="input" value={form.costCurrency ?? 'USD'} onChange={(e) => set('costCurrency', e.target.value)}>
+              {costCurrencyOptions(listing.costCurrency).map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
         </div>
+        <L label="Cost note"><input className="input" value={form.costNote ?? ''} onChange={(e) => set('costNote', e.target.value)} /></L>
         <L label="Event status"><select className="input" value={form.eventStatus} onChange={(e) => set('eventStatus', e.target.value)}>{EVENT_STATUSES.map((s) => <option key={s} value={s}>{EVENT_STATUS_LABEL[s]}</option>)}</select></L>
         <L label="Registration"><select className="input" value={form.registrationStatus} onChange={(e) => set('registrationStatus', e.target.value)}>{REGISTRATION_STATUSES.map((s) => <option key={s} value={s}>{REGISTRATION_STATUS_LABEL[s]}</option>)}</select></L>
         <L label="Registration opens"><DateField value={form.registrationOpensAt ?? ''} onChange={(v) => set('registrationOpensAt', v || null)} /></L>
@@ -514,7 +522,7 @@ function TbaPushSection({
 
 function L({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="flex flex-1 flex-col gap-1">
+    <label className="flex min-w-0 flex-1 flex-col gap-1">
       <span className="text-xs text-muted-2">{label}</span>
       {children}
     </label>

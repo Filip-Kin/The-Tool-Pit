@@ -17,6 +17,7 @@ import {
   EVENT_STATUS_LABEL,
   REGISTRATION_STATUS_LABEL,
   VOLUNTEER_STATUS_LABEL,
+  parseCostCurrency,
 } from '@/lib/events/event-display'
 import {
   AVAILABILITY_LABEL,
@@ -63,6 +64,12 @@ export type ListingFieldKind =
   | 'number'
   | 'date'
   | 'select'
+  /**
+   * An ISO 4217 code, rendered as a short select (COST_CURRENCIES plus the code
+   * the row already holds) and parsed as any three letters, so a listing the
+   * worker filed in NZD keeps NZD through an autosave instead of failing it.
+   */
+  | 'currency'
   | 'checkbox'
   /**
    * A set of taxonomy slugs, posted as one FormData key repeated. Backed by a
@@ -723,7 +730,7 @@ const EVENT_FORM: ListingFormSpec = {
       group: 'when',
       hint: 'One event over two days where each day is a separate tournament with its own team list, its own TBA code, and sometimes its own sign-up form. Team slots then count per day.',
     },
-    { key: 'capacity', label: 'Team slots', kind: 'int', group: 'entry', min: 1, max: 999 },
+    // Amount and currency first, so the two share a row on the two-column grid.
     {
       key: 'costUsd',
       label: 'Cost per team',
@@ -731,8 +738,8 @@ const EVENT_FORM: ListingFormSpec = {
       group: 'entry',
       min: 0,
       max: 99_999,
-      hint: 'Whole US dollars. Zero reads as Free.',
     },
+    { key: 'costCurrency', label: 'Currency', kind: 'currency', group: 'entry' },
     {
       key: 'costNote',
       label: 'Cost detail',
@@ -742,6 +749,7 @@ const EVENT_FORM: ListingFormSpec = {
       wide: true,
       hint: 'For example $450 for both days, or $200 for a second robot.',
     },
+    { key: 'capacity', label: 'Team slots', kind: 'int', group: 'entry', min: 1, max: 999 },
     {
       key: 'registrationStatus',
       label: 'Registration',
@@ -1025,7 +1033,7 @@ export function parseListingValues(
 
     if (text === '') {
       if (field.required) return { error: `${field.label} cannot be empty.` }
-      values[field.key] = field.kind === 'select' ? undefined : null
+      values[field.key] = field.kind === 'select' || field.kind === 'currency' ? undefined : null
       continue
     }
 
@@ -1034,6 +1042,12 @@ export function parseListingValues(
         const allowed = field.options ?? dynamicOptions[field.key] ?? []
         if (!allowed.includes(text)) return { error: `${field.label} is not one of the choices.` }
         values[field.key] = text
+        break
+      }
+      case 'currency': {
+        const code = parseCostCurrency(text)
+        if (!code) return { error: `${field.label} has to be a three-letter currency code.` }
+        values[field.key] = code
         break
       }
       case 'int': {

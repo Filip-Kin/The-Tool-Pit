@@ -119,14 +119,15 @@ export function eventJsonLd(ev: PublicEvent): Record<string, unknown> {
       : undefined
 
   // Registration offer, only when there is somewhere to register. Price is the
-  // whole-dollar per-team fee when the listing states it; free is a real 0.
+  // whole-unit per-team fee in the listing's own currency when it states one;
+  // free is a real 0.
   let offers: Record<string, unknown> | undefined
   if (ev.registrationUrl) {
     offers = prune({
       '@type': 'Offer',
       url: ev.registrationUrl,
       price: ev.costUsd != null ? String(ev.costUsd) : undefined,
-      priceCurrency: ev.costUsd != null ? 'USD' : undefined,
+      priceCurrency: ev.costUsd != null ? (ev.costCurrency || 'USD') : undefined,
       availability:
         regStatus === 'open'
           ? 'https://schema.org/InStock'

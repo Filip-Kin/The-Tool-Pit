@@ -374,6 +374,18 @@ describe('parseListingValues', () => {
     expect(parseListingValues(listingFormSpec('event'), fd)).toMatchObject({ values: { costUsd: 0 } })
   })
 
+  it('reads the fee currency as an upper-case ISO code, and refuses anything else', () => {
+    const fd = minimal('event')
+    fd.set('costUsd', '2000')
+    fd.set('costCurrency', 'ils')
+    expect(parseListingValues(listingFormSpec('event'), fd)).toMatchObject({ values: { costUsd: 2000, costCurrency: 'ILS' } })
+    // A code outside the offered list is kept: the worker files NZD too.
+    fd.set('costCurrency', 'NZD')
+    expect(parseListingValues(listingFormSpec('event'), fd)).toMatchObject({ values: { costCurrency: 'NZD' } })
+    fd.set('costCurrency', 'dollars')
+    expect(parseListingValues(listingFormSpec('event'), fd)).toEqual({ error: 'Currency has to be a three-letter currency code.' })
+  })
+
   it('refuses a link that is not http or https', () => {
     // These end up as the href of a link somebody clicks.
     const fd = minimal('tool')

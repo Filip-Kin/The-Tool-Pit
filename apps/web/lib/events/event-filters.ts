@@ -5,7 +5,8 @@
  *
  * THE RULE FOR MISSING DATA IS THE SAME EVERYWHERE HERE: a filter that names a
  * limit only keeps events we can check against it. An event with no price is
- * not kept by "up to $300", because nobody has said it costs less; an event
+ * not kept by "up to $300", because nobody has said it costs less, and nor is
+ * an event priced in another currency, because the limit is in US dollars; an event
  * with no published roster is not kept by "team 4145"; an event with no dates
  * is not kept by a date range. Filtering is a promise about what is on screen,
  * and letting unchecked rows through breaks it.
@@ -99,6 +100,17 @@ export function matchesDateRange(
   return true
 }
 
+/**
+ * The fee in US dollars, or null when the filter cannot judge it. A fee in
+ * another currency is treated like a missing one: converting at today's rate
+ * would make the same event pass on Monday and fail on Friday, so a CAD or ILS
+ * listing is hidden while a cost limit is set and counted in noCost.
+ */
+function usdCost(ev: Pick<PublicEvent, 'costUsd' | 'costCurrency'>): number | null {
+  if (ev.costUsd == null) return null
+  return (ev.costCurrency ?? 'USD').toUpperCase() === 'USD' ? ev.costUsd : null
+}
+
 /** Whether one event survives the whole filter set. */
 export function matchesEventFilters(
   ev: PublicEvent,
@@ -106,7 +118,10 @@ export function matchesEventFilters(
   ctx: FilterContext,
 ): boolean {
   if (f.maxDistanceKm != null && (ctx.km == null || ctx.km > f.maxDistanceKm)) return false
-  if (f.maxCostUsd != null && (ev.costUsd == null || ev.costUsd > f.maxCostUsd)) return false
+  if (f.maxCostUsd != null) {
+    const usd = usdCost(ev)
+    if (usd == null || usd > f.maxCostUsd) return false
+  }
   if (f.teamNumber != null && !(ctx.rosterTeams ?? []).includes(f.teamNumber)) return false
   if (!matchesDateRange(ev, f.from, f.to)) return false
   if (f.region != null && ev.region !== f.region) return false
@@ -128,7 +143,7 @@ export function unjudgeableCounts(
   let noDates = 0
   let noRegion = 0
   for (const ev of events) {
-    if (ev.costUsd == null) noCost++
+    if (usdCost(ev) == null) noCost++
     if (!rosterTeams[ev.id]?.length) noRoster++
     if (!ev.startDate) noDates++
     if (!ev.region) noRegion++

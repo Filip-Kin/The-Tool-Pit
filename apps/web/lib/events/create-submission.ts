@@ -20,6 +20,7 @@ import {
   eventDateRange,
   eventLocation,
   costLabel,
+  parseCostCurrency,
   EVENT_STATUS_LABEL,
   REGISTRATION_STATUS_LABEL,
   cleanTeamNumbers,
@@ -49,6 +50,8 @@ export interface CreateEventSubmissionInput {
   parallelDivisions?: boolean
   capacity?: number
   costUsd?: number
+  /** ISO 4217 code of costUsd. Anything but three letters falls back to USD. */
+  costCurrency?: string
   costNote?: string
   registrationStatus?: string
   registrationOpensAt?: string
@@ -179,6 +182,7 @@ export async function createEventSubmission(
     typeof input.costUsd === 'number' && Number.isFinite(input.costUsd) && input.costUsd >= 0 && input.costUsd < 100000
       ? Math.round(input.costUsd)
       : null
+  const costCurrency = parseCostCurrency(input.costCurrency) ?? 'USD'
 
   const registrationStatus = pickEnum(input.registrationStatus, REGISTRATION_STATUSES, 'unknown')
   const eventStatus = pickEnum(input.eventStatus, EVENT_STATUSES, 'confirmed')
@@ -221,6 +225,7 @@ export async function createEventSubmission(
     parallelDivisions: Boolean(input.parallelDivisions),
     capacity,
     costUsd,
+    costCurrency,
     costNote: input.costNote?.trim() || null,
     registrationStatus,
     // An open date only makes sense while registration is not open yet.
@@ -282,6 +287,7 @@ export async function createEventSubmission(
     country: normaliseCountry(values.country),
     capacity: values.capacity ?? null,
     costUsd: values.costUsd ?? null,
+    costCurrency,
     costNote: values.costNote ?? null,
     registrationStatus,
     eventStatus,

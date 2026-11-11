@@ -7,7 +7,7 @@ import { getDb } from '@/lib/db'
 import { eventListingCandidates, eventListings } from '@the-tool-pit/db'
 import { bumpListingSourceCounter } from '@/lib/admin/listing-discovery'
 import { addHumanEdits, changedKeys, HUMAN_EDITABLE_EVENT_KEYS } from '@the-tool-pit/db/human-edited'
-import { diffEventFields, type EventMergeField } from '@/lib/admin/event-merge'
+import { diffEventFields, extractedCostCurrency, type EventMergeField } from '@/lib/admin/event-merge'
 import type { ExtractedEventListingFields } from '@the-tool-pit/db'
 import {
   acceptEventCandidateBody,
@@ -117,6 +117,9 @@ export async function applyEventCandidateMerge(
     // text. Passing a number through unchanged and everything else as-is
     // matches how extracted stores them.
     patch[key] = (extracted as Record<string, unknown>)[key]
+    // The fee came with the currency it was read in; taking one without the
+    // other would put the candidate's 2,000 under the listing's USD.
+    if (key === 'costUsd') patch.costCurrency = extractedCostCurrency(extracted)
   }
 
   if (Object.keys(patch).length > 0) {

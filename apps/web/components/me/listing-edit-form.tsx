@@ -15,6 +15,7 @@ import { DateField } from '@/components/ui/date-field'
 import { cn } from '@/lib/utils/cn'
 import type { EditableListing, ListingFormValues } from '@/lib/queries/listing-ownership'
 import type { TagOption } from '@/lib/listings/tool-taxonomy'
+import { costCurrencyOptions } from '@/lib/events/event-display'
 
 /**
  * The owner edit form for a listing.
@@ -356,6 +357,18 @@ function Input({
     // FormData reads, the viewer's locale on screen. `value`/`onChange` keep it
     // in the form's controlled state so the dirty check and showWhen still work.
     return <DateField name={field.key} value={text} onChange={onChange} />
+  }
+
+  if (field.kind === 'currency') {
+    return (
+      <select name={field.key} value={text || 'USD'} onChange={(e) => onChange(e.target.value)} className="input">
+        {costCurrencyOptions(text).map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+      </select>
+    )
   }
 
   if (field.kind === 'select') {

@@ -13,6 +13,7 @@ import {
   NO_FILTERS,
   activeFilterCount,
   matchesEventFilters,
+  unjudgeableCounts,
   type EventFilters,
 } from '@/lib/events/event-filters'
 import type { PublicEvent } from '@/lib/events/event-display'
@@ -39,6 +40,7 @@ function ev(over: Partial<PublicEvent> = {}): PublicEvent {
     parallelDivisions: false,
     capacity: 40,
     costUsd: 300,
+    costCurrency: 'USD',
     costNote: null,
     registrationStatus: 'open',
     registrationOpensAt: null,
@@ -82,6 +84,23 @@ describe('matchesEventFilters', () => {
     expect(matchesEventFilters(ev({ costUsd: 300 }), f, NO_CONTEXT)).toBe(true)
     expect(matchesEventFilters(ev({ costUsd: 400 }), f, NO_CONTEXT)).toBe(false)
     expect(matchesEventFilters(ev({ costUsd: null }), f, NO_CONTEXT)).toBe(false)
+  })
+
+  it('drops an event priced in another currency once a cost cap is set', () => {
+    // The cap is in US dollars. 250 CAD and 2,000 ILS cannot be judged by it
+    // without a rate that moves, so they are treated like an unlisted price.
+    const f = withFilters({ maxCostUsd: 300 })
+    expect(matchesEventFilters(ev({ costUsd: 250, costCurrency: 'CAD' }), f, NO_CONTEXT)).toBe(false)
+    expect(matchesEventFilters(ev({ costUsd: 0, costCurrency: 'ILS' }), withFilters({ maxCostUsd: 0 }), NO_CONTEXT)).toBe(false)
+    expect(matchesEventFilters(ev({ costUsd: 250, costCurrency: 'CAD' }), NO_FILTERS, NO_CONTEXT)).toBe(true)
+  })
+
+  it('counts a non-USD price with the unpriced events', () => {
+    const counts = unjudgeableCounts(
+      [ev({ id: 'a', costUsd: 300 }), ev({ id: 'b', costUsd: null }), ev({ id: 'c', costUsd: 2000, costCurrency: 'ILS' })],
+      {},
+    )
+    expect(counts.noCost).toBe(2)
   })
 
   it('matches a team number against the roster, and drops an event with no roster', () => {

@@ -11,7 +11,7 @@ function patchFromProposal(p: EventEditProposalData): Record<string, unknown> {
   const keys: (keyof EventEditProposalData)[] = [
     'name', 'program', 'hostTeamNumber', 'hostTeamNumbers', 'latitude', 'longitude', 'venueName', 'address', 'city',
     'region', 'country', 'startDate', 'endDate', 'days', 'parallelDivisions', 'capacity', 'costUsd',
-    'costNote', 'registrationStatus', 'registrationOpensAt', 'registrationClosesAt', 'volunteerStatus', 'eventStatus',
+    'costCurrency', 'costNote', 'registrationStatus', 'registrationOpensAt', 'registrationClosesAt', 'volunteerStatus', 'eventStatus',
     'website', 'registrationUrl', 'volunteerUrl', 'chiefDelphiUrl', 'contactEmail', 'notes', 'teamListUrl',
   ]
   for (const k of keys) if (p[k] !== undefined) patch[k] = p[k]

@@ -14,6 +14,7 @@
  */
 import { EVENT_PROGRAMS, REGISTRATION_STATUSES, VOLUNTEER_STATUSES } from '@the-tool-pit/db/event-enums'
 import { cleanEventName } from '@the-tool-pit/db/event-name'
+import { parseCostCurrency } from '@/lib/events/event-display'
 import {
   FIELD_PROGRAMS,
   FIELD_COVERAGE,
@@ -162,6 +163,8 @@ export function eventListingFromCandidate(
     // which are exactly the fields a person would otherwise retype by hand.
     capacity: intOrNull(ex.capacity),
     costUsd: intOrNull(ex.costUsd),
+    // The reader leaves the currency off a dollar fee, so absent is USD.
+    costCurrency: parseCostCurrency((ex as { costCurrency?: unknown }).costCurrency) ?? 'USD',
     costNote: text(ex.costNote),
     registrationStatus: inEnum(ex.registrationStatus, REGISTRATION_STATUSES) ?? 'unknown',
     volunteerStatus: inEnum(ex.volunteerStatus, VOLUNTEER_STATUSES) ?? 'unknown',

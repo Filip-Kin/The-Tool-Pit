@@ -7,6 +7,7 @@ import { eventListingCandidates, eventListings } from '@the-tool-pit/db'
 import { bumpListingSourceCounter, eventListingFromCandidate } from '@/lib/admin/listing-discovery'
 import { uniqueEventSlug } from '@/lib/queries/event-listings'
 import { eventPublishBlockers } from '@/lib/events/publish-bar'
+import { parseCostCurrency } from '@/lib/events/event-display'
 import { geocodeVenue } from '@the-tool-pit/db/geocode'
 
 /**
@@ -164,6 +165,10 @@ function parseEventValues(values: Record<string, string>): Record<string, unknow
     }
     if (value === '') {
       out[key] = undefined
+      continue
+    }
+    if (key === 'costCurrency') {
+      out[key] = parseCostCurrency(value) ?? undefined
       continue
     }
     if (numbers.has(key)) {

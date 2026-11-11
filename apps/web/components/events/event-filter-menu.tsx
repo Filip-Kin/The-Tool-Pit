@@ -269,7 +269,7 @@ export function EventFilterMenu({
             value={filters.maxCostUsd == null ? 'Any' : costFilterLabel(filters.maxCostUsd)}
             hint={
               filters.maxCostUsd != null && counts.noCost > 0
-                ? `${counts.noCost} ${counts.noCost === 1 ? 'event does' : 'events do'} not list a price, so they are hidden while this is set.`
+                ? `${counts.noCost} hidden: no USD price`
                 : undefined
             }
           >

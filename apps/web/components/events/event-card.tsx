@@ -3,6 +3,7 @@ import {
   CalendarDays,
   Users,
   DollarSign,
+  Banknote,
   ExternalLink,
   Mail,
   HandHeart,
@@ -13,6 +14,14 @@ import { ButtonLink } from '@/components/ui/button'
 import { Card, cardClass } from '@/components/ui/card'
 import { cn } from '@/lib/utils/cn'
 import type { PublicEvent } from '@/lib/events/event-display'
+
+/**
+ * The dollar icon is a currency marker, so it only stands for a USD fee. Any
+ * other currency gets a plain banknote and keeps its own symbol ("CA$450").
+ */
+function isUsdCost(ev: Pick<PublicEvent, 'costCurrency'>): boolean {
+  return (ev.costCurrency ?? 'USD').toUpperCase() === 'USD'
+}
 import { formatDate } from '@/lib/format/date'
 import {
   eventMarkerStyle,
@@ -190,9 +199,9 @@ export function EventCard({
           )}
           {cost && (
             <span className="flex items-center gap-1 rounded bg-surface-3 px-1.5 py-0.5 text-xs font-medium text-muted">
-              <DollarSign className="h-3 w-3" />
-              {/* The icon is the currency marker, so the value drops its own. */}
-              {cost.replace(/^\$/, '')}
+              {isUsdCost(ev) ? <DollarSign className="h-3 w-3" /> : <Banknote className="h-3 w-3" />}
+              {/* A USD icon is the currency marker, so the value drops its own. */}
+              {isUsdCost(ev) ? cost.replace(/^\$/, '') : cost}
             </span>
           )}
         </div>
@@ -316,7 +325,13 @@ export function EventDetail({ event: ev, now }: { event: PublicEvent; now: Date 
         {ev.registrationClosesAt && effectiveRegistrationStatus(ev, now) === 'open' && (
           <Row icon={<Clock className="h-4 w-4" />} label="Registration closes" value={eventDateRange({ startDate: ev.registrationClosesAt, endDate: null })} />
         )}
-        {cost && <Row icon={<DollarSign className="h-4 w-4" />} label="Cost" value={cost} />}
+        {cost && (
+          <Row
+            icon={isUsdCost(ev) ? <DollarSign className="h-4 w-4" /> : <Banknote className="h-4 w-4" />}
+            label="Cost"
+            value={cost}
+          />
+        )}
         {/* Capacity answers "can I still get in", which a finished or
             cancelled event cannot be asked. */}
         {!full && ev.capacity != null && !cancelled && eventTiming(ev, now) !== 'past' && (

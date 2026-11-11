@@ -241,6 +241,7 @@ export const HUMAN_EDITABLE_EVENT_KEYS = [
   'parallelDivisions',
   'capacity',
   'costUsd',
+  'costCurrency',
   'costNote',
   'registrationStatus',
   'registrationOpensAt',

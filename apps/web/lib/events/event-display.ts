@@ -46,7 +46,10 @@ export interface PublicEvent {
   days: number | null
   parallelDivisions: boolean
   capacity: number | null
+  /** Team fee in whole units of costCurrency (the column name predates currencies). */
   costUsd: number | null
+  /** ISO 4217 code of costUsd: 'USD', 'CAD', 'ILS'. */
+  costCurrency: string
   costNote: string | null
   registrationStatus: RegistrationStatus
   registrationOpensAt: string | null
@@ -433,9 +436,47 @@ export function eventDateRange(ev: Pick<PublicEvent, 'startDate' | 'endDate'>): 
   return `${MONTHS[s.m]} ${s.d}, ${s.y} – ${MONTHS[e.m]} ${e.d}, ${e.y}`
 }
 
-/** "$300", "$300 · $450 for both days", "Free", or null when cost is unknown. */
-export function costLabel(ev: Pick<PublicEvent, 'costUsd' | 'costNote'>): string | null {
-  const base = ev.costUsd == null ? null : ev.costUsd === 0 ? 'Free' : `$${ev.costUsd}`
+/**
+ * Currencies offered next to a fee input, USD first. A row that already holds
+ * another code keeps it: see costCurrencyOptions().
+ */
+export const COST_CURRENCIES = ['USD', 'CAD', 'AUD', 'ILS', 'EUR', 'GBP', 'MXN', 'TRY', 'TWD', 'CNY'] as const
+
+/** The select's options for a row currently holding `current`. */
+export function costCurrencyOptions(current: string | null | undefined): string[] {
+  const cur = (current ?? '').trim().toUpperCase()
+  const list: string[] = [...COST_CURRENCIES]
+  if (/^[A-Z]{3}$/.test(cur) && !list.includes(cur)) list.push(cur)
+  return list
+}
+
+/** An ISO 4217 code from a form value, or null when it is not one. */
+export function parseCostCurrency(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const cur = raw.trim().toUpperCase()
+  return /^[A-Z]{3}$/.test(cur) ? cur : null
+}
+
+/**
+ * One fee amount in its own currency: "$300", "CA$450", "₪2,000". Locale is
+ * pinned so the server and the browser format identically, the same way
+ * grant awards do. An unknown code falls back to "2000 XYZ" rather than
+ * throwing out of a render.
+ */
+export function formatCost(amount: number, currency: string | null | undefined): string {
+  const cur = (currency || 'USD').toUpperCase()
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(amount)
+  } catch {
+    return `${amount} ${cur}`
+  }
+}
+
+/** "$300", "CA$450 · CA$600 for both days", "Free", or null when cost is unknown. */
+export function costLabel(
+  ev: Pick<PublicEvent, 'costUsd' | 'costNote'> & { costCurrency?: string | null },
+): string | null {
+  const base = ev.costUsd == null ? null : ev.costUsd === 0 ? 'Free' : formatCost(ev.costUsd, ev.costCurrency)
   if (base && ev.costNote) return `${base} · ${ev.costNote}`
   if (base) return base
   return ev.costNote ?? null

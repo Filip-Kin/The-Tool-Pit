@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
       parallelDivisions: bool(form, 'parallelDivisions'),
       capacity: num(form, 'capacity'),
       costUsd: num(form, 'costUsd'),
+      costCurrency: str(form, 'costCurrency'),
       costNote: str(form, 'costNote'),
       registrationStatus: str(form, 'registrationStatus'),
       registrationOpensAt: str(form, 'registrationOpensAt'),

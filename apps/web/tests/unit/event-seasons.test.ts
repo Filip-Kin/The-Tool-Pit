@@ -49,6 +49,7 @@ function ev(over: Partial<PublicEvent> & { id: string }): PublicEvent {
     parallelDivisions: false,
     capacity: null,
     costUsd: null,
+    costCurrency: 'USD',
     costNote: null,
     registrationStatus: 'unknown',
     registrationOpensAt: null,

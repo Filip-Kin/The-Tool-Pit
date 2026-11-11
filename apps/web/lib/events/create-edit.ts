@@ -11,7 +11,7 @@ import {
 } from '@the-tool-pit/db'
 import type { EventEditProposalData } from '@the-tool-pit/db'
 import { wrapLongitude } from '@/lib/geo/longitude'
-import { cleanTeamNumbers } from '@/lib/events/event-display'
+import { cleanTeamNumbers, parseCostCurrency } from '@/lib/events/event-display'
 import { eventEditChanges } from '@/lib/events/event-edit-diff'
 import { reviewEventEditUrl } from '@the-tool-pit/types'
 import { revalidatePath } from 'next/cache'
@@ -37,6 +37,8 @@ export interface CreateEventEditInput {
   parallelDivisions?: boolean
   capacity?: number
   costUsd?: number
+  /** ISO 4217 code of costUsd. Missing or malformed keeps the listing's own. */
+  costCurrency?: string
   costNote?: string
   registrationStatus?: string
   registrationOpensAt?: string
@@ -112,6 +114,7 @@ export async function createEventEditProposal(
     typeof input.costUsd === 'number' && Number.isFinite(input.costUsd) && input.costUsd >= 0 && input.costUsd < 100000
       ? Math.round(input.costUsd)
       : null
+  const costCurrency = parseCostCurrency(input.costCurrency) ?? listing.costCurrency ?? 'USD'
   const registrationStatus = pickEnum(input.registrationStatus, REGISTRATION_STATUSES, 'unknown')
 
   const proposed: EventEditProposalData = {
@@ -132,6 +135,7 @@ export async function createEventEditProposal(
     parallelDivisions: Boolean(input.parallelDivisions),
     capacity,
     costUsd,
+    costCurrency,
     costNote: input.costNote?.trim() || null,
     registrationStatus,
     // An open date only makes sense while registration is not open yet.
