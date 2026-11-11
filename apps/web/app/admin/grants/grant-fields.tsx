@@ -32,6 +32,7 @@ export interface GrantFieldDefaults {
   geoScope?: string | null
   countries?: string[] | null
   regions?: string[] | null
+  firstDistricts?: string[] | null
   localityNote?: string | null
   awardMin?: number | null
   awardMax?: number | null
@@ -144,6 +145,9 @@ export function GrantFields({ defaults = {} }: { defaults?: GrantFieldDefaults }
         </Field>
         <Field label="Regions" hint="State or province codes. Required for anything narrower than national.">
           <input name="regions" defaultValue={(d.regions ?? []).join(', ')} className={inputClass} />
+        </Field>
+        <Field label="FIRST districts">
+          <input name="firstDistricts" defaultValue={(d.firstDistricts ?? []).join(', ')} placeholder="fma" className={inputClass} />
         </Field>
       </div>
 

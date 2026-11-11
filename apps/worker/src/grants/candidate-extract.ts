@@ -410,7 +410,7 @@ type ValueCleaner = (raw: unknown) => unknown
  */
 const publicText = (raw: unknown, max: number): string | null => scrubReviewerNotes(cleanText(raw, max), 1)
 
-const VALUE_CLEANERS: Record<Exclude<keyof GrantExtractionFields, TriStateFieldKey>, ValueCleaner> = {
+const VALUE_CLEANERS: Record<Exclude<keyof GrantExtractionFields, TriStateFieldKey | 'firstDistricts'>, ValueCleaner> = {
   name: (raw) => publicText(raw, 200),
   funderName: (raw) => publicText(raw, 200),
   // Prose about the grant, never about the reading: "the page is an
@@ -515,7 +515,7 @@ export function validateGrantExtraction(
       continue
     }
 
-    const clean = VALUE_CLEANERS[key as Exclude<keyof GrantExtractionFields, TriStateFieldKey>]
+    const clean = VALUE_CLEANERS[key as Exclude<keyof GrantExtractionFields, TriStateFieldKey | 'firstDistricts'>]
     const value = clean(rawField.value)
     const exempt = QUOTE_EXEMPT.has(key)
 

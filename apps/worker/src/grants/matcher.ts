@@ -7,6 +7,7 @@ import {
   grantRequirements,
   grantMatches,
   teamProfiles,
+  teams,
   type Grant,
   type GrantCycle,
   type GrantRequirement,
@@ -266,7 +267,7 @@ const NEVER_BLOCKING_KINDS = new Set(['demographics'])
  * rows, so they are checked first. They are the cheapest and hardest gates:
  * a Michigan-only grant is not a maybe for an Ohio team.
  */
-function evaluateScope(grant: Grant, profile: TeamProfile): Evaluation[] {
+function evaluateScope(grant: Grant, profile: MatchProfile): Evaluation[] {
   const out: Evaluation[] = []
 
   // --- Programme ---
@@ -348,6 +349,28 @@ function evaluateScope(grant: Grant, profile: TeamProfile): Evaluation[] {
     }
   }
 
+  // --- FIRST district, for an FRC team ---
+  // A district is not a set of states (FIRST Mid-Atlantic is NJ, DE and only
+  // eastern PA), so an FRC team is matched on the district TBA puts it in.
+  // A team TBA has not placed yet (a rookie before its first season) is left
+  // to the region check: unknown, not a reason to rule it out.
+  const districts = (grant.firstDistricts ?? []).map((d) => d.trim().toLowerCase()).filter(Boolean)
+  if (districts.length > 0 && profile.program === 'frc') {
+    const known = profile.district !== undefined
+    const outcome: Outcome = !known ? 'unknown' : profile.district && districts.includes(profile.district) ? 'pass' : 'fail'
+    out.push({
+      reason: {
+        requirementId: 'scope:district',
+        kind: 'district',
+        label: `${districts.map((d) => d.toUpperCase()).join(', ')} district teams`,
+        outcome,
+        isBlocking: known,
+      },
+      missingField: null,
+      blocking: known,
+    })
+  }
+
   return out
 }
 
@@ -423,13 +446,20 @@ function sortMissingFields(fields: Iterable<string>): string[] {
 }
 
 /**
+ * A team profile plus the FIRST district TBA places the team in: a code
+ * ('fma'), null when TBA lists it in no district, undefined when TBA does not
+ * know the team.
+ */
+export type MatchProfile = TeamProfile & { district?: string | null }
+
+/**
  * Decide whether one team profile can apply for one grant.
  *
  * Pure and synchronous: no DB, no network, no clock beyond `now`, so it is
  * safe to call in a tight loop and trivial to test.
  */
 export function matchProfileToGrant(
-  profile: TeamProfile,
+  profile: MatchProfile,
   grant: Grant,
   requirements: GrantRequirement[],
   cycle: GrantCycle | null,
@@ -575,11 +605,17 @@ export async function processGrantMatchJob(payload: GrantMatchJobPayload): Promi
     return
   }
 
-  const [profile] = await db.select().from(teamProfiles).where(eq(teamProfiles.id, payload.profileId)).limit(1)
-  if (!profile) {
+  const [row] = await db.select().from(teamProfiles).where(eq(teamProfiles.id, payload.profileId)).limit(1)
+  if (!row) {
     console.warn(`[grant-match] profile ${payload.profileId} not found, nothing to do`)
     return
   }
+  const [team] =
+    row.program === 'frc'
+      ? await db.select({ district: teams.district, districtYear: teams.districtYear }).from(teams).where(eq(teams.number, row.teamNumber)).limit(1)
+      : []
+  // A row the district sync never reached is "not known", not "in no district".
+  const profile: MatchProfile = { ...row, district: team && team.districtYear != null ? team.district : undefined }
 
   const now = new Date()
 

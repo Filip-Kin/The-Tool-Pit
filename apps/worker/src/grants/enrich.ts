@@ -70,6 +70,7 @@ import { readInvitationForIntake } from './invitation.js'
 import { findInfoPage } from './info-page.js'
 import { isEntranceUrl, isThirdPartyGrantUrl } from '@the-tool-pit/db/grant-urls'
 import { inferRegions } from './infer-regions.js'
+import { districtStates, districtsOf, loadDistricts } from './districts.js'
 import { dedupeCandidateAtIntake } from './intake-dedupe.js'
 import { autoPublishCandidateById } from './auto-publish.js'
 import {
@@ -771,6 +772,50 @@ export async function processGrantExtractJob(payload: GrantExtractPayload): Prom
   // 4b. A state-scoped grant with no state cannot publish (the matcher cannot
   //     rule anyone out). When the funder name and page text keep naming one
   //     state, that is the state.
+  //     A grant with NO proven scope is the same gap one step earlier: the
+  //     publish form used to call it national, and FIRST Mid-Atlantic's grant
+  //     went to every US team (2026-11-11). Its own name and summary naming
+  //     one state is the scope; the funder page is not read for that, since a
+  //     national funder's page lists every state it works in.
+  {
+    const ownWords = [extraction.fields.funderName.value, extraction.fields.name.value, extraction.fields.summary.value, extraction.fields.geographyRestriction.value, extraction.fields.eligibilityText.value]
+    if (!extraction.fields.geoScope.value) {
+      const guess = inferRegions(ownWords, extraction.fields.countries.value?.[0] ?? null)
+      if (guess && guess.codes.length === 1) {
+        extraction.fields.geoScope = { value: 'state', quote: guess.quote, source: 'funder_page' }
+        extraction.fields.regions = { value: guess.codes, quote: guess.quote, source: 'funder_page' }
+        extraction.notes.push(`scope inferred: state ${guess.codes[0]} (${guess.quote})`)
+      }
+    }
+  }
+
+  // 4c. A FIRST district's grant is for its own teams. The district, and the
+  //     states its teams are in, come from TBA, not the model.
+  try {
+    const found = districtsOf(
+      {
+        funderName: extraction.fields.funderName.value,
+        texts: [extraction.fields.name.value, extraction.fields.summary.value, extraction.fields.geographyRestriction.value, extraction.fields.eligibilityText.value],
+      },
+      await loadDistricts(),
+    )
+    if (found) {
+      extraction.fields.firstDistricts = { value: found.codes, quote: found.quote, source: 'funder_page' }
+      extraction.notes.push(`FIRST district: ${found.codes.join(',')} (${found.quote})`)
+      const scope = extraction.fields.geoScope.value
+      if (!scope || scope === 'national' || scope === 'international') {
+        const states = await districtStates(found.codes)
+        if (states.length > 0) {
+          extraction.fields.geoScope = { value: 'region', quote: found.quote, source: 'funder_page' }
+          extraction.fields.regions = { value: states, quote: `${found.codes.join(',')} teams are in ${states.join(', ')} (TBA)`, source: 'funder_page' }
+          extraction.notes.push(`district states: ${states.join(',')}`)
+        }
+      }
+    }
+  } catch (err) {
+    extraction.notes.push(`district check failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
   {
     const scope = extraction.fields.geoScope.value
     const regions = extraction.fields.regions.value

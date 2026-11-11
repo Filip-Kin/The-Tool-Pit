@@ -85,6 +85,8 @@ export interface ReviewDefaults {
   geoScope: string
   countries: string[]
   regions: string[]
+  /** TBA district codes, set by the pipeline from TBA's district names. */
+  firstDistricts: string[]
   localityNote: string
   awardMin: number | null
   awardMax: number | null
@@ -189,6 +191,7 @@ export function reviewDefaults(input: {
     geoScope,
     countries: fields?.countries.value ?? cls.countries ?? ['US'],
     regions,
+    firstDistricts: input.extraction?.fields.firstDistricts?.value ?? [],
     // Geography is one fact on the card. The restriction wording joins it when
     // the extractor gave no locality note; it is never a second box below.
     localityNote: text(fields?.localityNote) || (isJunkRequirementLabel(text(fields?.geographyRestriction)) ? '' : text(fields?.geographyRestriction)),

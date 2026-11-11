@@ -30,6 +30,16 @@ export const teams = pgTable('teams', {
   city: text('city'),
   stateProv: text('state_prov'),
   country: text('country'),
+  /**
+   * TBA district abbreviation ('fma', 'fim', 'win'), from the latest season
+   * whose district team lists TBA has published. Null for a team in no
+   * district. A district grant is for the district's teams, and a district is
+   * not a set of states: FIRST Mid-Atlantic is New Jersey, Delaware and only
+   * eastern Pennsylvania.
+   */
+  district: text('district'),
+  /** The season `district` was read for. */
+  districtYear: integer('district_year'),
   /** When this row was last written by the TBA sync. */
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })

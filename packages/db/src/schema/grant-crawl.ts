@@ -504,6 +504,12 @@ export interface GrantExtractionFields {
   regions: ExtractedField<string[]>
   /** A county or metro with no code of its own. */
   localityNote: ExtractedField<string>
+  /**
+   * TBA district codes ('fma') when the funder is a FIRST district, whose
+   * grants are for its own teams. Set by the pipeline from TBA's district
+   * names, not by the model. Absent on extractions made before 2026-11-11.
+   */
+  firstDistricts?: ExtractedField<string[]>
 
   // --- Timing. Lands in grant_cycles, not on the grant. ---
   /** GRANT_DEADLINE_TYPES. */

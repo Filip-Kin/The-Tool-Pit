@@ -527,6 +527,9 @@ export function ReviewDeck(props: ReviewDeckProps) {
                 >
                   <input name="regions" defaultValue={d.regions.join(', ')} className={inputClass} />
                 </DeckField>
+                <DeckField label="FIRST districts" evidence={ev.firstDistricts}>
+                  <input name="firstDistricts" defaultValue={d.firstDistricts.join(', ')} placeholder="fma" className={inputClass} />
+                </DeckField>
               </div>
               <DeckField label="Locality note" evidence={ev.localityNote}>
                 <input name="localityNote" defaultValue={d.localityNote} className={inputClass} />

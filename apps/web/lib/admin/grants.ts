@@ -298,6 +298,9 @@ export function parseGrantFields(form: FormData): ParsedGrantFields {
     geoScope,
     countries: countries.length > 0 ? countries : ['US'],
     regions,
+    // Only when the form carries the field, so a form without it keeps the
+    // districts the pipeline set rather than clearing them.
+    ...(form.has('firstDistricts') ? { firstDistricts: csv(form.get('firstDistricts')).map((d) => d.toLowerCase()) } : {}),
     localityNote: String(form.get('localityNote') ?? '').trim() || null,
     awardMin: int(form.get('awardMin')),
     awardMax: int(form.get('awardMax')),
@@ -388,6 +391,7 @@ const GRANT_CHANGE_TARGETS: Record<string, ChangeTarget> = {
   geoScope: { table: 'grant', column: 'geoScope', type: 'text', label: 'Geographic scope', priority: 1 },
   countries: { table: 'grant', column: 'countries', type: 'string_array', label: 'Countries', priority: 1 },
   regions: { table: 'grant', column: 'regions', type: 'string_array', label: 'Regions', priority: 1 },
+  firstDistricts: { table: 'grant', column: 'firstDistricts', type: 'string_array', label: 'FIRST districts', priority: 1 },
   localityNote: { table: 'grant', column: 'localityNote', type: 'text', label: 'Locality note', priority: 2 },
   programs: { table: 'grant', column: 'programs', type: 'string_array', label: 'Programs', priority: 1 },
   eligibilityText: {

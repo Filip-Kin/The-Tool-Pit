@@ -16,7 +16,7 @@
  * and the TBA_API_KEY env var, read exactly as listings/roster-refresh.ts reads
  * them. No key is hardcoded; with no key set the job logs and does nothing.
  */
-import { sql } from 'drizzle-orm'
+import { and, inArray, isNotNull, notInArray, sql } from 'drizzle-orm'
 import { getDb, teams as teamsTable } from '@the-tool-pit/db'
 import { delay } from '../connectors/base.js'
 
@@ -52,6 +52,9 @@ export interface TbaTeamsSyncStats {
   fetched: number
   upserted: number
   failed: number
+  /** Teams given a district, and the season read. */
+  districtTeams: number
+  districtYear: number | null
 }
 
 /**
@@ -71,7 +74,7 @@ async function fetchTeamsPage(page: number, apiKey: string): Promise<TbaSimpleTe
 export async function processTbaTeamsSyncJob(
   payload: TbaTeamsSyncPayload = {},
 ): Promise<TbaTeamsSyncStats> {
-  const stats: TbaTeamsSyncStats = { pages: 0, fetched: 0, upserted: 0, failed: 0 }
+  const stats: TbaTeamsSyncStats = { pages: 0, fetched: 0, upserted: 0, failed: 0, districtTeams: 0, districtYear: null }
 
   const apiKey = process.env.TBA_API_KEY
   if (!apiKey) {
@@ -147,9 +150,73 @@ export async function processTbaTeamsSyncJob(
     await delay(250)
   }
 
+  await syncDistricts(apiKey, stats)
+
   console.log(
     `[tba-teams-sync] done — ${stats.pages} pages, ${stats.fetched} teams fetched, ` +
-      `${stats.upserted} upserted, ${stats.failed} failed`,
+      `${stats.upserted} upserted, ${stats.failed} failed, ${stats.districtTeams} in districts (${stats.districtYear ?? 'none'})`,
   )
   return stats
+}
+
+async function tbaJson<T>(path: string, apiKey: string): Promise<T | null> {
+  const res = await fetch(`${TBA_BASE}${path}`, { headers: { 'X-TBA-Auth-Key': apiKey } })
+  return res.ok ? ((await res.json()) as T) : null
+}
+
+/**
+ * Which FIRST district each team is in, for district-only grants.
+ *
+ * The latest season with district rosters published: TBA lists next season's
+ * districts months before it lists their teams, so a year whose districts
+ * hold no teams yet is skipped for the one before. A team in no district has
+ * its district cleared, so one that left a district stops matching its grants.
+ * A failed read changes nothing.
+ */
+async function syncDistricts(apiKey: string, stats: TbaTeamsSyncStats): Promise<void> {
+  const db = getDb()
+  const now = new Date().getUTCFullYear()
+  for (const year of [now + 1, now, now - 1]) {
+    let districts: Array<{ key: string; abbreviation: string }> | null
+    try {
+      districts = await tbaJson(`/districts/${year}`, apiKey)
+    } catch (err) {
+      console.error(`[tba-teams-sync] districts ${year}: ${String(err)}`)
+      return
+    }
+    if (!districts || districts.length === 0) continue
+
+    const byTeam = new Map<number, string>()
+    let failed = false
+    for (const d of districts) {
+      try {
+        const keys = await tbaJson<string[]>(`/district/${d.key}/teams/keys`, apiKey)
+        if (keys === null) { failed = true; break }
+        for (const k of keys) {
+          const n = Number(k.replace(/^frc/, ''))
+          if (Number.isInteger(n)) byTeam.set(n, d.abbreviation.toLowerCase())
+        }
+      } catch (err) {
+        console.error(`[tba-teams-sync] district ${d.key}: ${String(err)}`)
+        failed = true
+        break
+      }
+      await delay(250)
+    }
+    if (failed) return
+    if (byTeam.size === 0) continue
+
+    const groups = new Map<string, number[]>()
+    for (const [n, abbr] of byTeam) groups.set(abbr, [...(groups.get(abbr) ?? []), n])
+    for (const [abbr, numbers] of groups) {
+      await db.update(teamsTable).set({ district: abbr, districtYear: year }).where(inArray(teamsTable.number, numbers))
+    }
+    await db
+      .update(teamsTable)
+      .set({ district: null, districtYear: year })
+      .where(and(isNotNull(teamsTable.district), notInArray(teamsTable.number, [...byTeam.keys()])))
+    stats.districtTeams = byTeam.size
+    stats.districtYear = year
+    return
+  }
 }

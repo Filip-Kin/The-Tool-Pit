@@ -141,6 +141,14 @@ export const grants = pgTable(
     regions: text('regions').array().notNull().default([]),
     /** Free-text for a county or metro that has no code. */
     localityNote: text('locality_note'),
+    /**
+     * TBA district abbreviations ('fma') when the grant is only for the teams
+     * of a FIRST district. FRC teams are matched on the district TBA puts them
+     * in; other programmes fall back to regions. FIRST Mid-Atlantic's grant
+     * went to teams in Michigan and California while stored national
+     * (2026-11-11).
+     */
+    firstDistricts: text('first_districts').array().notNull().default([]),
 
     // --- Money ---
     awardMin: integer('award_min'),

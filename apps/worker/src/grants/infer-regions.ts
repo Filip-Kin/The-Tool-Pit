@@ -6,7 +6,7 @@
  * Education", "nonprofits serving Wyoming". Count mentions, take the clear
  * winner. Deterministic, and the quote records which words decided it.
  */
-const US_STATES: Record<string, string> = {
+export const US_STATES: Record<string, string> = {
   alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA', colorado: 'CO',
   connecticut: 'CT', delaware: 'DE', 'district of columbia': 'DC', florida: 'FL', georgia: 'GA',
   hawaii: 'HI', "hawai'i": 'HI', 'hawaiʻi': 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA', kansas: 'KS', kentucky: 'KY',
@@ -17,7 +17,7 @@ const US_STATES: Record<string, string> = {
   'south carolina': 'SC', 'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT',
   virginia: 'VA', washington: 'WA', 'west virginia': 'WV', wisconsin: 'WI', wyoming: 'WY',
 }
-const CA_PROVINCES: Record<string, string> = {
+export const CA_PROVINCES: Record<string, string> = {
   alberta: 'AB', 'british columbia': 'BC', manitoba: 'MB', 'new brunswick': 'NB', 'newfoundland and labrador': 'NL',
   'nova scotia': 'NS', ontario: 'ON', 'prince edward island': 'PE', quebec: 'QC', 'québec': 'QC', saskatchewan: 'SK',
 }

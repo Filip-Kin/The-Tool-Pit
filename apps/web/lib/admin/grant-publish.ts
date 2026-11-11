@@ -393,6 +393,7 @@ export function formFromReviewDefaults(d: ReviewDefaults, extra: Record<string, 
   set('geoScope', d.geoScope)
   set('countries', d.countries.join(', '))
   set('regions', d.regions.join(', '))
+  set('firstDistricts', d.firstDistricts.join(', '))
   set('localityNote', d.localityNote)
   set('awardMin', d.awardMin)
   set('awardMax', d.awardMax)

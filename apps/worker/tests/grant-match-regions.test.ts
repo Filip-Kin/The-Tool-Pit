@@ -24,3 +24,22 @@ describe('regions on the listing', () => {
     expect(matchProfileToGrant(profile('MI'), grant('region', ['NJ', 'PA', 'DE']), [], null).verdict).toBe('ineligible')
   })
 })
+
+describe('FIRST district grants', () => {
+  const fma = { geoScope: 'region', countries: ['US'], regions: ['NJ', 'PA', 'DE'], firstDistricts: ['fma'], programs: ['frc'], localityNote: null } as never
+  const team = (region: string, district: string | null | undefined) => ({ program: 'frc', country: 'US', region, district }) as never
+
+  it('matches a team in the district', () => {
+    expect(matchProfileToGrant(team('PA', 'fma'), fma, [], null).verdict).not.toBe('ineligible')
+  })
+  it('rules out a western Pennsylvania team in no district', () => {
+    expect(matchProfileToGrant(team('PA', null), fma, [], null).verdict).toBe('ineligible')
+  })
+  it('rules out a Michigan team', () => {
+    expect(matchProfileToGrant(team('MI', 'fim'), fma, [], null).verdict).toBe('ineligible')
+  })
+  it('leaves a team TBA has not placed to the region check', () => {
+    expect(matchProfileToGrant(team('NJ', undefined), fma, [], null).verdict).toBe('likely')
+    expect(matchProfileToGrant(team('MI', undefined), fma, [], null).verdict).toBe('ineligible')
+  })
+})
