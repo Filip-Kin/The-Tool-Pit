@@ -248,6 +248,9 @@ const REGISTRATION_CLOSED = /\bregistration\s+(?:is\s+|has\s+)?(?:now\s+)?closed
  */
 const OTHER_CURRENCY = /₪|ש"ח|\bshekels?\b|\b(?:ILS|NIS|CAD|AUD|NZD|EUR|GBP|MXN|BRL|TRY|CNY|JPY|INR|TWD|KRW)\b|[€£¥₺₹₩]|\b(?:C|CA|A|AU|NZ|MX|R)\$/i
 
+/** Words that teams are going on a waitlist now, not a rule for when the field fills. */
+const WAITLIST_NOW = /\b(?:is|are)\s+(?:now\s+|currently\s+)?(?:full|waitlisted|on\s+(?:a|the)\s+wait\s*list)\b|\bwait\s*list(?:ed)?\s+(?:only|since)\b|\b(?:currently|now)\s+(?:full|accepting\s+wait\s*list|wait\s*list(?:ing|ed)?)\b|\bjoin\s+the\s+wait\s*list\b|\bwait\s*list\s+(?:is\s+)?(?:now\s+)?open\b/i
+
 /** Explicit words that registration is open, not just a form that exists. */
 const REGISTRATION_OPEN = /\bregistration\s+(?:is\s+)?(?:now\s+)?open\b|\bnow\s+open\b|\bopen\s+(?:for|to)\s+registration\b|\bregister\s+(?:now|today)\b|\bregistration\s+(?:has\s+)?opened\b|\bspots?\s+(?:are\s+)?(?:still\s+)?available\b/i
 
@@ -295,6 +298,15 @@ export function eventFieldRefusal(
   if (key === 'contactEmail' && (/volunteer/i.test(quote) || /volunteer/i.test(source))) return 'volunteer contact, not the event contact'
   if (key === 'registrationStatus' && next === 'open' && !REGISTRATION_OPEN.test(quote)) return 'no "registration is open" wording'
   if (key === 'registrationStatus' && next === 'closed' && !REGISTRATION_CLOSED.test(quote)) return 'no "registration is closed" wording'
+  // "Robots beyond 36 will be added to a waitlist" is the rule for later, not
+  // a full field (Roboteer Rumble, 2026-10-07).
+  if (key === 'registrationStatus' && next === 'waitlist' && !WAITLIST_NOW.test(quote)) return 'no wording that the waitlist is in effect'
+  // A name cut to its initials loses the name the page uses (BGRC 2026-10-07,
+  // ARL Championship 2026-10-14).
+  if (key === 'name' && typeof next === 'string' && typeof before === 'string' && before.trim().includes(' ')) {
+    const initials = next.replace(/\b(?:championship|invitational|classic|\d{4})\b/gi, '').trim()
+    if (/^[A-Z0-9&]{2,8}$/.test(initials) && initials.length < before.replace(/\s+/g, '').length) return 'name cut to initials'
+  }
   if (key === 'costUsd' && Number(next) > 0) {
     if (OTHER_CURRENCY.test(quote)) return 'fee not in US dollars'
     // "$300" on a page in Canada or Australia is that country's dollar.

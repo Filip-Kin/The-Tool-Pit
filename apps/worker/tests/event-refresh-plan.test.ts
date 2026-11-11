@@ -286,3 +286,43 @@ describe('wrong edits from the 2026-11-11 run', () => {
     expect(plan.patch).toEqual({})
   })
 })
+
+describe('wrong edits from the 2026-10-07 and 10-14 runs', () => {
+  it('does not read a capacity rule as a waitlist', () => {
+    const plan = planEventRefresh({
+      current: { ...listing, registrationStatus: 'open' },
+      fields: { registrationStatus: 'waitlist' },
+      evidence: { registrationStatus: { quote: 'Capacity is 36 robots (hard cap). Robots beyond 36 will be added to a waitlist.' } },
+      sources: page('Capacity is 36 robots (hard cap). Robots beyond 36 will be added to a waitlist.'),
+      today: TODAY,
+    })
+    expect(plan.patch).toEqual({})
+  })
+
+  it('applies a waitlist the page says is in effect', () => {
+    const plan = planEventRefresh({
+      current: { ...listing, registrationStatus: 'open' },
+      fields: { registrationStatus: 'waitlist' },
+      evidence: { registrationStatus: { quote: 'Registration is full. Join the waitlist below.' } },
+      sources: page('Registration is full. Join the waitlist below.'),
+      today: TODAY,
+    })
+    expect(plan.patch).toEqual({ registrationStatus: 'waitlist' })
+  })
+
+  it('does not cut a name to its initials', () => {
+    for (const [before, next, quote] of [
+      ['Bloomfield All-Girls', 'BGRC', 'BGRC Bloomfield Girls Robotics Competition (BGRC)'],
+      ['Arizona Robotics League Championship', 'ARL Championship', 'ARL Championship'],
+    ]) {
+      const plan = planEventRefresh({
+        current: { ...listing, name: before },
+        fields: { name: next },
+        evidence: { name: { quote } },
+        sources: page(quote),
+        today: TODAY,
+      })
+      expect(plan.patch).toEqual({})
+    }
+  })
+})
