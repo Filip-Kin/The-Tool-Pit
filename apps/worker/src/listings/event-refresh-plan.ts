@@ -24,6 +24,12 @@
  *     registrationStatus / volunteerStatus going back to 'unknown' is a clear.
  *   - a date that is already past. On a site that keeps every year's pages up
  *     that is nearly always last year's edition read by mistake.
+ *   - anything else read off that same page while the listing is still to
+ *     come. The past date is the proof the page is another edition, so its fee,
+ *     form and deadline are that edition's too. Blue Twilight Week Zero 2027
+ *     got the 2026 page's fee, Google Form and "closed" (2026-11-11) while
+ *     only its dates were held; FIRST Israel's December event got the
+ *     September event's fee.
  *   - an event date order that would end before it starts.
  *   - eventStatus to cancelled or completed. Cancellation belongs to the
  *     status watch, which dedupes on its quote so a person's revert stands;
@@ -160,6 +166,7 @@ export type HoldReason =
   | 'clears'
   | 'unproven'
   | 'past_date'
+  | 'other_edition'
   | 'date_order'
   | 'reworded'
   | 'status_not_refreshable'
@@ -227,6 +234,20 @@ export function dollarAmounts(text: string): number[] {
   return [...new Set([...String(text).matchAll(/\$\s?(\d[\d,]*(?:\.\d+)?)/g)].map((m) => Number(m[1].replace(/,/g, ''))))].sort((a, b) => a - b)
 }
 
+/**
+ * Explicit words that registration has closed. A deadline is not one: "no
+ * registrations will be accepted after February 18th" was read as closed in
+ * November (Blue Twilight, 2026-11-11).
+ */
+const REGISTRATION_CLOSED = /\bregistration\s+(?:is\s+|has\s+)?(?:now\s+)?closed\b|\b(?:is|are)\s+now\s+closed\b|\bclosed\s+(?:for|to)\s+(?:new\s+)?(?:registration|teams)\b|\bno\s+longer\s+(?:accepting|taking|open)\b|\b(?:event|registration)\s+is\s+(?:now\s+)?full\b|\bsold\s+out\b|\bat\s+capacity\b|\bregistration\s+(?:has\s+)?ended\b/i
+
+/**
+ * Money that is not US dollars. costUsd holds dollars only; a fee in another
+ * currency stays in the cost note (FIRST Israel's 2,000 shekels became
+ * $2,000, 2026-11-11).
+ */
+const OTHER_CURRENCY = /₪|ש"ח|\bshekels?\b|\b(?:ILS|NIS|CAD|AUD|NZD|EUR|GBP|MXN|BRL|TRY|CNY|JPY|INR|TWD|KRW)\b|[€£¥₺₹₩]|\b(?:C|CA|A|AU|NZ|MX|R)\$/i
+
 /** Explicit words that registration is open, not just a form that exists. */
 const REGISTRATION_OPEN = /\bregistration\s+(?:is\s+)?(?:now\s+)?open\b|\bnow\s+open\b|\bopen\s+(?:for|to)\s+registration\b|\bregister\s+(?:now|today)\b|\bregistration\s+(?:has\s+)?opened\b|\bspots?\s+(?:are\s+)?(?:still\s+)?available\b/i
 
@@ -273,6 +294,13 @@ export function eventFieldRefusal(
   }
   if (key === 'contactEmail' && (/volunteer/i.test(quote) || /volunteer/i.test(source))) return 'volunteer contact, not the event contact'
   if (key === 'registrationStatus' && next === 'open' && !REGISTRATION_OPEN.test(quote)) return 'no "registration is open" wording'
+  if (key === 'registrationStatus' && next === 'closed' && !REGISTRATION_CLOSED.test(quote)) return 'no "registration is closed" wording'
+  if (key === 'costUsd' && Number(next) > 0) {
+    if (OTHER_CURRENCY.test(quote)) return 'fee not in US dollars'
+    // "$300" on a page in Canada or Australia is that country's dollar.
+    const country = String(current.country ?? 'US').toUpperCase()
+    if (country !== 'US' && !/\b(?:USD|US\$|U\.S\.\s*dollars?)/i.test(quote)) return 'fee outside the US with no USD wording'
+  }
   if (key === 'teamListUrl' && typeof next === 'string') {
     // A hand-set list is not read from a page, so a link there changes nothing
     // but the link (Battle of the Bay got its registration page, 2026-10-28).
@@ -324,6 +352,23 @@ export function planEventRefresh(input: RefreshPlanInput): RefreshPlan {
   const applied: RefreshChange[] = []
   const held: HeldChange[] = []
 
+  // The pages that gave a past date for an event still to come: another
+  // edition. Every field read off them is held. A date with no source names
+  // no page, so it marks the whole read.
+  const upcoming = typeof current.startDate === 'string' && current.startDate >= today
+  const otherEditionPages = new Set<string>()
+  if (upcoming) {
+    for (const key of ['startDate', 'endDate'] as const) {
+      const v = fields[key]
+      if (typeof v === 'string' && v && v < today) otherEditionPages.add(evidence[key]?.source ?? '*')
+    }
+  }
+  // A field with no source could be from that page, so it is held too.
+  const fromOtherEdition = (key: RefreshKey) => {
+    const src = evidence[key]?.source
+    return !src || otherEditionPages.has('*') || otherEditionPages.has(src)
+  }
+
   for (const key of REFRESH_KEYS) {
     if (!(key in fields)) continue
     const raw = fields[key]
@@ -348,6 +393,7 @@ export function planEventRefresh(input: RefreshPlanInput): RefreshPlan {
     }
     if (key === 'eventStatus' && next !== 'tentative' && next !== 'confirmed') { hold('status_not_refreshable'); continue }
     if (DATE_KEYS.has(key) && String(next) < today) { hold('past_date'); continue }
+    if (otherEditionPages.size > 0 && fromOtherEdition(key)) { hold('other_edition'); continue }
     if (!changeIsProven(key, next, evidence[key], sources)) { hold('unproven'); continue }
     if (key === 'costUsd' && priceQuoteIsSecondRobot(evidence[key]?.quote)) { hold('unproven'); continue }
     // The old price still printed on the page means the page lists several

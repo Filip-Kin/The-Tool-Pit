@@ -190,3 +190,99 @@ describe('dry-run findings 2026-10-01', () => {
     expect(priceQuoteIsSecondRobot('Registration is $300 per team')).toBe(false)
   })
 })
+
+describe('wrong edits from the 2026-11-11 run', () => {
+  const twilight = {
+    ...listing,
+    name: 'Blue Twilight Week Zero',
+    startDate: '2027-02-20',
+    endDate: '2027-02-21',
+    seasonYear: 2027,
+    registrationStatus: 'not_open',
+    registrationUrl: null,
+    costUsd: null,
+    website: 'https://team2220.org/weekzero',
+  }
+  const src = 'https://team2220.org/weekzero'
+  const text =
+    'Blue Twilight Week Zero 2026 When : Saturday, February 21st, 2026 (and optionally Sunday, February 22nd) ' +
+    'Team Registration: Fill out the registration form with your team\u2019s information. ' +
+    'Registration is $200 if payment is received by February 13th ($225 otherwise). ' +
+    'Registration deadline is Wednesday, February 18th \u2014 no registrations will be accepted after that day.'
+
+  it('holds the fee, form and status read off last edition\'s page', () => {
+    const plan = planEventRefresh({
+      current: twilight,
+      fields: {
+        startDate: '2026-02-21',
+        endDate: '2026-02-22',
+        costUsd: 200,
+        registrationStatus: 'closed',
+        registrationUrl: 'https://docs.google.com/forms/d/e/1FAIpQLScsbQ/viewform',
+      },
+      evidence: {
+        startDate: { quote: 'Saturday, February 21st, 2026', source: src },
+        endDate: { quote: 'Sunday, February 22nd', source: src },
+        costUsd: { quote: 'Registration is $200 if payment is received by February 13th ($225 otherwise).', source: src },
+        registrationStatus: { quote: 'Registration deadline is Wednesday, February 18th', source: src },
+        registrationUrl: { quote: 'Fill out the registration form', source: src },
+      },
+      sources: [{ source: src, text: `${text} https://docs.google.com/forms/d/e/1FAIpQLScsbQ/viewform` }],
+      today: '2026-11-11',
+    })
+    expect(plan.patch).toEqual({})
+    expect(plan.held.filter((h) => h.reason === 'other_edition').map((h) => h.key).sort()).toEqual(['costUsd', 'registrationStatus', 'registrationUrl'])
+  })
+
+  it('still applies a field read off another page of the same run', () => {
+    const plan = planEventRefresh({
+      current: { ...twilight, contactEmail: null },
+      fields: { startDate: '2026-02-21', contactEmail: 'team2220@eaganrobotics.com' },
+      evidence: {
+        startDate: { quote: 'Saturday, February 21st, 2026', source: src },
+        contactEmail: { quote: 'Email team2220@eaganrobotics.com', source: 'https://team2220.org/contact' },
+      },
+      sources: [
+        { source: src, text },
+        { source: 'https://team2220.org/contact', text: 'Email team2220@eaganrobotics.com' },
+      ],
+      today: '2026-11-11',
+    })
+    expect(plan.patch).toEqual({ contactEmail: 'team2220@eaganrobotics.com' })
+  })
+
+  it('does not read a future deadline as closed', () => {
+    const plan = planEventRefresh({
+      current: { ...listing, registrationStatus: 'open' },
+      fields: { registrationStatus: 'closed' },
+      evidence: { registrationStatus: { quote: 'no registrations will be accepted after February 18th' } },
+      sources: page('Registration deadline is Wednesday, February 18th \u2014 no registrations will be accepted after February 18th'),
+      today: TODAY,
+    })
+    expect(plan.patch).toEqual({})
+    expect(plan.held[0]).toMatchObject({ key: 'registrationStatus', reason: 'refresh_rule' })
+  })
+
+  it('keeps a fee in shekels out of costUsd', () => {
+    const plan = planEventRefresh({
+      current: { ...listing, country: 'IL', costUsd: null },
+      fields: { costUsd: 2000 },
+      evidence: { costUsd: { quote: 'עלות ההשתתפות בתחרות לקבוצה: 2,000 ש"ח.' } },
+      sources: page('עלות ההשתתפות בתחרות לקבוצה: 2,000 ש"ח.'),
+      today: TODAY,
+    })
+    expect(plan.patch).toEqual({})
+    expect(plan.held[0]).toMatchObject({ key: 'costUsd', detail: 'fee not in US dollars' })
+  })
+
+  it('keeps a Canadian dollar fee out of costUsd', () => {
+    const plan = planEventRefresh({
+      current: { ...listing, country: 'CA', costUsd: null },
+      fields: { costUsd: 300 },
+      evidence: { costUsd: { quote: 'Registration fee is $300 per team.' } },
+      sources: page('Registration fee is $300 per team.'),
+      today: TODAY,
+    })
+    expect(plan.patch).toEqual({})
+  })
+})
