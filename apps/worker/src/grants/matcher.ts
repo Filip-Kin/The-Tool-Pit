@@ -349,6 +349,25 @@ function evaluateScope(grant: Grant, profile: MatchProfile): Evaluation[] {
     }
   }
 
+  // --- A place named only in words ---
+  // "John Deere home communities", "communities where TD operates": a real
+  // limit with no codes to check. Most teams are outside it, so the match says
+  // the place is unconfirmed (and the sweeper sends no email off it) rather
+  // than letting it read as open to every team.
+  if (listedRegions.length === 0 && grant.localityNote?.trim() && !(grant.firstDistricts ?? []).length) {
+    out.push({
+      reason: {
+        requirementId: 'scope:locality',
+        kind: 'locality',
+        label: grant.localityNote.trim(),
+        outcome: 'unknown',
+        isBlocking: false,
+      },
+      missingField: null,
+      blocking: false,
+    })
+  }
+
   // --- FIRST district, for an FRC team ---
   // A district is not a set of states (FIRST Mid-Atlantic is NJ, DE and only
   // eastern PA), so an FRC team is matched on the district TBA puts it in.

@@ -182,6 +182,8 @@ export interface GrantDeadlineSweepStats {
     notPublished: number
     /** A match on a grant marked invitation only: never emailed (matcher.ts excludedFromMatching). */
     invitationOnly: number
+    /** A place limit nobody could check: shown on the team page, not emailed. */
+    placeUnconfirmed: number
   }
   /** Matches whose team profile has no members, so there is nobody to tell. */
   matchesWithNoMembers: number
@@ -193,7 +195,7 @@ function emptyStats(): GrantDeadlineSweepStats {
     matches: 0,
     deadlineQueued: 0,
     newMatchQueued: 0,
-    skipped: { noCycle: 0, noDeadline: 0, estimatedCycle: 0, unverifiedCycle: 0, passed: 0, tooEarly: 0, notPublished: 0, invitationOnly: 0 },
+    skipped: { noCycle: 0, noDeadline: 0, estimatedCycle: 0, unverifiedCycle: 0, passed: 0, tooEarly: 0, notPublished: 0, invitationOnly: 0, placeUnconfirmed: 0 },
     matchesWithNoMembers: 0,
   }
 }
@@ -372,7 +374,19 @@ export async function processGrantDeadlineSweepJob(
     const check = usableCycle(cycle, now)
 
     // --- new_match: once per match, on the first sweep that sees it ---
-    if (!match.notifiedAt) {
+    // Not when the only thing standing between the team and the grant is a
+    // place nobody could check ("communities where TD operates", a district
+    // TBA has not placed the team in): most teams are outside it, and an email
+    // saying "you match" to them is the FIRST Mid-Atlantic mistake again
+    // (2026-11-11). The match still shows on the team's page as likely.
+    // A team that has not filled in its own state is 'missing_info' and is
+    // asked to finish its profile as before; this is about the listing's gap.
+    const placeUnconfirmed = match.verdict !== 'missing_info' && ((match.reasons ?? []) as MatchReason[]).some(
+      (r) => r.outcome === 'unknown' && (r.kind === 'locality' || r.kind === 'region' || r.kind === 'district'),
+    )
+    if (!match.notifiedAt && placeUnconfirmed) {
+      stats.skipped.placeUnconfirmed++
+    } else if (!match.notifiedAt) {
       const reasons = (match.reasons ?? []) as MatchReason[]
       const payload: NewMatchAlertPayload = {
         grantName: found.grant.name,

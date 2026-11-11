@@ -43,3 +43,12 @@ describe('FIRST district grants', () => {
     expect(matchProfileToGrant(team('MI', undefined), fma, [], null).verdict).toBe('ineligible')
   })
 })
+
+describe('a place named only in words', () => {
+  it('leaves the match likely with the place unconfirmed', () => {
+    const g = { geoScope: 'national', countries: ['US'], regions: [], firstDistricts: [], programs: ['frc'], localityNote: 'Communities where TD operates' } as never
+    const out = matchProfileToGrant({ program: 'frc', country: 'US', region: 'CA' } as never, g, [], null)
+    expect(out.verdict).toBe('likely')
+    expect(out.reasons.find((r) => r.kind === 'locality')?.outcome).toBe('unknown')
+  })
+})
