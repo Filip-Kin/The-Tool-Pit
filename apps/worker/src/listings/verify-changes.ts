@@ -69,6 +69,21 @@ The owner's rules, each from a real wrong edit:
 
 ${REPLY}`
 
+const FIELD_SYSTEM = `You check automatic edits to a public map of practice fields that FIRST robotics teams can book, before they are published. A reader model re-read the field's pages and proposed changes; each comes with the quote it relied on. The quote is genuinely on the page. Your job is whether the CHANGE IS RIGHT FOR THIS FIELD, not whether the words exist.
+
+Judge each change "right", "wrong" or "unsure". Answer "right" only when the page, read in full, clearly supports the new value and the new value is a better listing value than the old one.
+
+The owner's rules, each from a real wrong edit:
+- CONTACT. contactInfo is how a team reaches the host: an email, a phone number, a person's name, or a short label around one ("email contact@x.org"). A sentence about the booking process ("Your slot is not booked until a mentor emails you back", "Send us a message to request a time") is not contact info, and replacing an email or phone with one is "wrong".
+- NO LOSS. A new value that drops a fact the old one had (an email, a phone number, a unit number, a day of the week, an hour) is "wrong".
+- REWORDING. A new value that says the same thing in other words adds nothing: "wrong".
+- LINKS. A sign-up link must be the field's own booking form or page, not a home page or a page for something else. A website must be the host's own.
+- HOURS AND AVAILABILITY. Must be the hours of this field, now; not a past season's, not a different facility's, not the host team's meeting times.
+- STATUS. Closing a field needs the page to say it is closed or no longer offered.
+- SAME PAGE, OTHER THING. A page about several spaces or programmes: the value must belong to this field.
+
+${REPLY}`
+
 function contextBlock(ctx: Record<string, unknown>): string {
   return Object.entries(ctx)
     .filter(([, v]) => v !== null && v !== undefined && v !== '')
@@ -124,14 +139,14 @@ export function parseVerdicts(text: string, changes: ChangeToVerify[]): ChangeVe
 
 /** Ask. Null when the model could not be reached, which the caller treats as "write nothing". */
 export async function verifyChanges(
-  input: Parameters<typeof verifyPrompt>[0] & { vertical?: 'event' | 'grant' },
+  input: Parameters<typeof verifyPrompt>[0] & { vertical?: 'event' | 'grant' | 'field' },
 ): Promise<ChangeVerdict[] | null> {
   if (input.changes.length === 0) return []
   try {
     const res = await anthropic().messages.create({
       model: VERIFY_MODEL,
       max_tokens: 2000,
-      system: input.vertical === 'grant' ? GRANT_SYSTEM : EVENT_SYSTEM,
+      system: input.vertical === 'grant' ? GRANT_SYSTEM : input.vertical === 'field' ? FIELD_SYSTEM : EVENT_SYSTEM,
       messages: [{ role: 'user', content: verifyPrompt(input) }],
     })
     const text = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('')

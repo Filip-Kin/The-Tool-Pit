@@ -64,6 +64,7 @@ import { fetchWithRelayFallback } from '../grants/relay-fetch.js'
 import { normaliseForQuoteMatch, quoteSource, urlSource, type NamedText } from '../model/evidence.js'
 import { getRedis } from '../redis.js'
 import { applyLoggedPatch } from './change-log.js'
+import { verifyChanges } from './verify-changes.js'
 import {
   countryCode,
   guardRefusal,
@@ -477,6 +478,42 @@ export async function processFieldRefreshJob(payload: FieldRefreshPayload = {}):
         personSet,
       })
 
+      // THE SECOND READING (verify-changes.ts): every change the rules let
+      // through is read again against the pages and this field before it is
+      // written. Only "right" is written. Team 195's email became "Your slot
+      // is not booked until a mentor emails you back" (2026-11-12), and the
+      // STEM Gym's email became "Send us a message to request a time."
+      // (2026-10-15), both with real quotes. No answer writes nothing.
+      let unverified = false
+      if (!dry && plan.changes.length > 0) {
+        const show = (v: unknown) => (v === null || v === undefined || v === '' ? '-' : typeof v === 'string' ? v : JSON.stringify(v))
+        const verdicts = await verifyChanges({
+          vertical: 'field',
+          today: new Date().toISOString().slice(0, 10),
+          listing: {
+            name: field.name,
+            team: field.teamNumber,
+            city: field.city,
+            region: field.region,
+            contact: field.contactInfo,
+            sign_up_link: field.contactUrl,
+            website: field.website,
+            hours: field.hours,
+            availability: field.availability,
+          },
+          changes: plan.changes.map((c) => ({ key: c.key, label: REFRESH_LABELS[c.key], from: show(c.from), to: show(c.to), quote: c.quote, source: c.source })),
+          pages: [...sources, ...read.sources].map((s) => ({ url: s.source, text: s.text })),
+        })
+        const kept = plan.changes.filter((c) => verdicts?.find((v) => v.key === c.key)?.verdict === 'right')
+        for (const c of plan.changes) {
+          if (kept.includes(c)) continue
+          const v = verdicts?.find((x) => x.key === c.key)
+          plan.refused.push(`${c.key}: second reading ${verdicts ? `${v?.verdict ?? 'unsure'}: ${v?.reason ?? ''}` : 'unavailable'}`)
+          unverified = true
+        }
+        plan.changes = kept
+      }
+
       for (const why of plan.refused) console.log(`[field-refresh] ${field.name}: not applied, ${why}`)
       stats.refused += plan.refused.length
 
@@ -497,7 +534,9 @@ export async function processFieldRefreshJob(payload: FieldRefreshPayload = {}):
         }
       }
 
-      await redis.set(HASH_KEY(field.id), hash, 'EX', HASH_TTL_SECONDS)
+      // A change the second reading held is read again next week, so the
+      // page hash is not banked.
+      if (!unverified) await redis.set(HASH_KEY(field.id), hash, 'EX', HASH_TTL_SECONDS)
     } catch (err) {
       stats.failed++
       console.error(`[field-refresh] ${field.name} failed:`, err)
